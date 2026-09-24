@@ -33,6 +33,7 @@ import {
   Settings2,
   ShieldCheck,
   Terminal,
+  Wrench,
   X,
 } from "lucide-react";
 import { api, setCsrf } from "./api";
@@ -66,6 +67,7 @@ import type {
   Storage,
   User,
 } from "./contracts";
+import type { AgentStatus } from "./phase2-types";
 
 const navigation = [
   ["/", "Dashboard", LayoutDashboard],
@@ -644,6 +646,7 @@ function Shell({
               element={
                 <SettingsExtensions
                   general={<SettingsPage />}
+                  maintenance={<MaintenancePage />}
                   security={<SecuritySettings />}
                   advanced={advancedMode}
                 />
@@ -1532,6 +1535,200 @@ function SettingsPage() {
   );
 }
 
+type MaintenanceState = "healthy" | "degraded" | "unknown";
+
+function MaintenanceCard({
+  icon,
+  title,
+  state,
+  detail,
+}: {
+  icon: ReactNode;
+  title: string;
+  state: MaintenanceState;
+  detail: string;
+}) {
+  return (
+    <article className="maintenance-card">
+      <div className="maintenance-card-head">
+        <span className="maintenance-card-icon">{icon}</span>
+        <Badge value={state} />
+      </div>
+      <div>
+        <h3>{title}</h3>
+        <p>{detail}</p>
+      </div>
+    </article>
+  );
+}
+
+function MaintenancePage() {
+  const core = useData<{ status: string; version: string }>("/health");
+  const runtime = useData<AgentStatus>("/runtime");
+  const storage = useData<Storage[]>("/storage/locations");
+  const apps = useData<AppInfo[]>("/apps");
+  const [checking, setChecking] = useState(false);
+
+  const storageState: MaintenanceState = !storage.data
+    ? "unknown"
+    : storage.data.length > 0 &&
+        storage.data.every((location) => location.exists && location.readable)
+      ? "healthy"
+      : "degraded";
+  const appProblems =
+    apps.data?.filter((app) =>
+      ["degraded", "unhealthy"].includes(app.health.status),
+    ) || [];
+  const appsState: MaintenanceState = !apps.data
+    ? "unknown"
+    : appProblems.length === 0
+      ? apps.data.every((app) => app.health.status === "healthy")
+        ? "healthy"
+        : "unknown"
+      : "degraded";
+  const failure =
+    core.error || runtime.error || storage.error || apps.error || "";
+
+  const runCheck = () => {
+    setChecking(true);
+    core.reload();
+    runtime.reload();
+    storage.reload();
+    apps.reload();
+    window.setTimeout(() => setChecking(false), 900);
+  };
+
+  return (
+    <div className="stack">
+      <Section
+        title="Maintenance"
+        aside={
+          <button
+            className="maintenance-check"
+            type="button"
+            onClick={runCheck}
+            disabled={checking}
+          >
+            <RefreshCw size={15} className={checking ? "spin" : ""} />
+            {checking ? "Checking…" : "Run maintenance check"}
+          </button>
+        }
+      >
+        <div className="maintenance-hero">
+          <span className="maintenance-hero-icon">
+            <Wrench size={24} />
+          </span>
+          <div>
+            <h3>Keep MediaHub healthy</h3>
+            <p>
+              Check the platform, apps and storage from one safe workspace.
+              Nothing is deleted or restarted by this check.
+            </p>
+          </div>
+        </div>
+        {failure && <Notice>{failure}</Notice>}
+        <div className="maintenance-grid">
+          <MaintenanceCard
+            icon={<Server size={19} />}
+            title="MediaHub Core"
+            state={
+              !core.data
+                ? "unknown"
+                : core.data.status === "healthy"
+                  ? "healthy"
+                  : "degraded"
+            }
+            detail={
+              core.data
+                ? `Version ${core.data.version} is responding.`
+                : "Waiting for the Core health check."
+            }
+          />
+          <MaintenanceCard
+            icon={<ActivityIcon size={19} />}
+            title="Agent runtime"
+            state={
+              !runtime.data
+                ? "unknown"
+                : runtime.data.connected
+                  ? "healthy"
+                  : "degraded"
+            }
+            detail={
+              runtime.data?.connected
+                ? `${runtime.data.hostname || "Local agent"} is connected.`
+                : runtime.data?.message || "Waiting for the Agent health check."
+            }
+          />
+          <MaintenanceCard
+            icon={<HardDrive size={19} />}
+            title="Storage"
+            state={storageState}
+            detail={
+              storage.data
+                ? `${storage.data.filter((item) => item.exists && item.readable).length} of ${storage.data.length} locations are available.`
+                : "Waiting for the storage health check."
+            }
+          />
+          <MaintenanceCard
+            icon={<Box size={19} />}
+            title="Installed apps"
+            state={appsState}
+            detail={
+              apps.data
+                ? appProblems.length
+                  ? `${appProblems.length} app${appProblems.length === 1 ? " needs" : "s need"} attention.`
+                  : `${apps.data.length} app${apps.data.length === 1 ? " is" : "s are"} healthy.`
+                : "Waiting for the app health check."
+            }
+          />
+        </div>
+      </Section>
+
+      <Section title="Maintenance tools">
+        <div className="maintenance-actions">
+          <NavLink className="maintenance-action" to="/storage">
+            <HardDrive size={20} />
+            <span>
+              <strong>Storage</strong>
+              <small>Review capacity, folders and media files</small>
+            </span>
+            <ChevronRight size={17} />
+          </NavLink>
+          <NavLink className="maintenance-action" to="/updates">
+            <RefreshCw size={20} />
+            <span>
+              <strong>Updates</strong>
+              <small>Check verified MediaHub and app releases</small>
+            </span>
+            <ChevronRight size={17} />
+          </NavLink>
+          <NavLink className="maintenance-action" to="/backups">
+            <Database size={20} />
+            <span>
+              <strong>Configuration backups</strong>
+              <small>Protect settings without duplicating media</small>
+            </span>
+            <ChevronRight size={17} />
+          </NavLink>
+        </div>
+        <div className="maintenance-safety">
+          <ShieldCheck size={21} />
+          <div>
+            <strong>Media stays protected</strong>
+            <p>
+              Maintenance never removes movies, TV series, downloads or app data
+              automatically. Cleanup actions are limited to explicitly listed
+              disposable files and always ask for a clear confirmation before
+              anything is deleted.
+            </p>
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 const navigationHelp: Record<NavigationPath, string> = {
   "/": "Your front page",
   "/apps": "Plex, Seedbox and future apps",
@@ -1558,5 +1755,9 @@ const dashboardChoices: [DashboardSection, string, string][] = [
   ["core", "Core health", "Connection and runtime diagnostics"],
   ["runtime", "App runtime", "Technical Agent and Docker status"],
   ["integrations", "Integrations", "Status for optional connections"],
-  ["cloudflare", "Cloudflare Tunnel", "Tunnel connection and public route health"],
+  [
+    "cloudflare",
+    "Cloudflare Tunnel",
+    "Tunnel connection and public route health",
+  ],
 ];

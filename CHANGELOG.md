@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a safe Maintenance workspace under Settings with live Core, Agent,
+  storage and app checks, explicit movie/TV protection and direct links to
+  storage, updates and backups.
 - Storage browser folder-size totals and streamed, administrator-only uploads that
   stay inside approved media roots and never overwrite existing files.
 - Added encrypted, repository-scoped GitHub access for private release discovery.

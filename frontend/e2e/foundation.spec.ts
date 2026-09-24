@@ -75,6 +75,13 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     page.getByRole("heading", { name: "No media folders registered" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Maintenance", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Run maintenance check" }),
+  ).toBeVisible();
+  await expect(page.getByText("MediaHub Core", { exact: true })).toBeVisible();
+  await expect(page.getByText("Media stays protected")).toBeVisible();
+  await page.getByRole("tab", { name: "General", exact: true }).click();
   await page.getByLabel("Workspace name").fill("Test workspace");
   await page.getByRole("button", { name: "Save preferences" }).click();
   await expect(page.getByRole("status")).toHaveText(

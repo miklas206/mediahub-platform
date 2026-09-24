@@ -568,6 +568,135 @@ nav a.active {
   gap: 8px;
   align-items: center;
 }
+.maintenance-hero {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 22px 23px;
+  border-bottom: 1px solid var(--line);
+}
+.maintenance-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.maintenance-hero-icon,
+.maintenance-card-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+.maintenance-hero-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+}
+.maintenance-hero h3 {
+  margin-bottom: 5px;
+}
+.maintenance-hero p,
+.maintenance-card p,
+.maintenance-safety p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.maintenance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 22px 23px;
+}
+.maintenance-card {
+  display: flex;
+  min-height: 156px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 21px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.maintenance-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.maintenance-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.maintenance-card h3 {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+.maintenance-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 22px 23px;
+}
+.maintenance-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 82px;
+  padding: 16px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+.maintenance-action:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  transform: translateY(-1px);
+}
+.maintenance-action span {
+  min-width: 0;
+}
+.maintenance-action strong,
+.maintenance-action small {
+  display: block;
+}
+.maintenance-action strong {
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.maintenance-action small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+.maintenance-safety {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 17px 23px;
+  color: var(--accent);
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent-bg) 42%, transparent);
+}
+.maintenance-safety svg {
+  flex: none;
+}
+.maintenance-safety strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
 .status-rows {
   padding: 6px 23px;
 }
@@ -1376,6 +1505,9 @@ td time {
   .host-chip {
     display: none;
   }
+  .maintenance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 720px) {
   .choice-grid,
@@ -1469,6 +1601,21 @@ td time {
   }
   .panel-heading {
     padding: 18px;
+  }
+  .maintenance-hero,
+  .maintenance-grid,
+  .maintenance-actions {
+    padding: 18px;
+  }
+  .maintenance-grid,
+  .maintenance-actions {
+    grid-template-columns: 1fr;
+  }
+  .maintenance-card {
+    min-height: 140px;
+  }
+  .maintenance-safety {
+    padding: 16px 18px;
   }
   .app-row {
     padding: 18px;

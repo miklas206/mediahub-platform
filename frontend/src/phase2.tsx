@@ -609,16 +609,12 @@ export function MediaFiles() {
           { id, name: file.name, progress: 0, state: "uploading" },
         ]);
         try {
-          await uploadMediaFile(
-            locationId,
-            listing.path,
-            file,
-            (progress) =>
-              setUploads((current) =>
-                current.map((item) =>
-                  item.id === id ? { ...item, progress } : item,
-                ),
+          await uploadMediaFile(locationId, listing.path, file, (progress) =>
+            setUploads((current) =>
+              current.map((item) =>
+                item.id === id ? { ...item, progress } : item,
               ),
+            ),
           );
           setUploads((current) =>
             current.map((item) =>
@@ -651,7 +647,8 @@ export function MediaFiles() {
     <Panel title="Media files">
       <p className="muted">
         Browse the folders Plex and Seedbox use, and securely upload files from
-        this device. Existing files cannot be overwritten, moved or deleted here.
+        this device. Existing files cannot be overwritten, moved or deleted
+        here.
       </p>
       <ErrorBox error={locations.error || error} />
       {!locations.data ? (
@@ -715,7 +712,10 @@ export function MediaFiles() {
           {uploads.length > 0 && (
             <div className="media-upload-list" aria-live="polite">
               {uploads.map((item) => (
-                <div className={`media-upload-item ${item.state}`} key={item.id}>
+                <div
+                  className={`media-upload-item ${item.state}`}
+                  key={item.id}
+                >
                   <div>
                     <strong>{item.name}</strong>
                     <small>
@@ -1269,16 +1269,18 @@ export function ImportSummary() {
 
 export function SettingsExtensions({
   general,
+  maintenance,
   security,
   advanced = false,
 }: {
   general: ReactNode;
+  maintenance: ReactNode;
   security: ReactNode;
   advanced?: boolean;
 }) {
   const [tab, setTab] = useState("General");
   useEffect(() => {
-    if (!advanced && ["Network", "Agent", "Advanced"].includes(tab))
+    if (!advanced && ["Storage", "Network", "Agent", "Advanced"].includes(tab))
       setTab("General");
   }, [advanced, tab]);
   const network = useLoad<{ pending: NetworkConfig }>("/network");
@@ -1288,8 +1290,16 @@ export function SettingsExtensions({
     <div className="stack">
       <div className="settings-tabs" role="tablist">
         {(advanced
-          ? ["General", "Storage", "Network", "Agent", "Security", "Advanced"]
-          : ["General", "Security"]
+          ? [
+              "General",
+              "Maintenance",
+              "Storage",
+              "Network",
+              "Agent",
+              "Security",
+              "Advanced",
+            ]
+          : ["General", "Maintenance", "Security"]
         ).map((t) => (
           <button
             role="tab"
@@ -1303,6 +1313,7 @@ export function SettingsExtensions({
         ))}
       </div>
       {tab === "General" && general}
+      {tab === "Maintenance" && maintenance}
       {tab === "Storage" && <StorageWorkspace />}
       {tab === "Network" && (
         <Panel title="Network configuration">
