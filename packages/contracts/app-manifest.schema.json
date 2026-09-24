@@ -136,6 +136,61 @@
       "title": "Dependency",
       "type": "object"
     },
+    "DeviceRequirement": {
+      "additionalProperties": false,
+      "description": "Concrete selectors belong to installation config, never a shared catalog.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "usb",
+            "block"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "selectorRef": {
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Selectorref",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "missingHealth": {
+          "default": "critical",
+          "enum": [
+            "degraded",
+            "critical"
+          ],
+          "title": "Missinghealth",
+          "type": "string"
+        },
+        "mountRequired": {
+          "default": false,
+          "title": "Mountrequired",
+          "type": "boolean"
+        },
+        "writeRequired": {
+          "default": false,
+          "title": "Writerequired",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "selectorRef"
+      ],
+      "title": "DeviceRequirement",
+      "type": "object"
+    },
     "Environment": {
       "additionalProperties": false,
       "properties": {
@@ -721,12 +776,37 @@
       "title": "Requiredruntime",
       "type": "string"
     },
+    "recommendedIsolation": {
+      "default": "shared-host",
+      "enum": [
+        "shared-host",
+        "dedicated-host"
+      ],
+      "title": "Recommendedisolation",
+      "type": "string"
+    },
+    "hostCapabilities": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Hostcapabilities",
+      "type": "array"
+    },
     "configFields": {
       "default": [],
       "items": {
         "$ref": "#/$defs/ConfigField"
       },
       "title": "Configfields",
+      "type": "array"
+    },
+    "requiredDevices": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DeviceRequirement"
+      },
+      "title": "Requireddevices",
       "type": "array"
     }
   },

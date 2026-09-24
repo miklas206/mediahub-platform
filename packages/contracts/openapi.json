@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.1.0-dev"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/v1/health": {
@@ -211,6 +211,43 @@
         }
       }
     },
+    "/api/v1/apps/{app_id}/runtime": {
+      "get": {
+        "summary": "App Runtime",
+        "operationId": "app_runtime_api_v1_apps__app_id__runtime_get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps/{app_id}/actions/{action}": {
       "post": {
         "summary": "App Action",
@@ -233,13 +270,137 @@
               "enum": [
                 "start",
                 "stop",
-                "restart"
+                "restart",
+                "restart-vpn",
+                "restart-qbittorrent",
+                "test-vpn"
               ],
               "type": "string",
               "title": "Action"
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/logs": {
+      "get": {
+        "summary": "App Logs",
+        "operationId": "app_logs_api_v1_apps__app_id__logs_get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/update-check": {
+      "post": {
+        "summary": "App Update Check",
+        "operationId": "app_update_check_api_v1_apps__app_id__update_check_post",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/uninstall": {
+      "post": {
+        "summary": "Remove Runtime",
+        "operationId": "remove_runtime_api_v1_apps__app_id__uninstall_post",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveRuntimeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -444,6 +605,86 @@
         }
       }
     },
+    "/api/v1/updates/platform": {
+      "get": {
+        "summary": "Platform Update",
+        "operationId": "platform_update_api_v1_updates_platform_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/updates/platform/credentials": {
+      "get": {
+        "summary": "Platform Update Credentials",
+        "operationId": "platform_update_credentials_api_v1_updates_platform_credentials_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save Platform Update Credentials",
+        "operationId": "save_platform_update_credentials_api_v1_updates_platform_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitHubTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove Platform Update Credentials",
+        "operationId": "remove_platform_update_credentials_api_v1_updates_platform_credentials_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/logs": {
       "get": {
         "summary": "Logs",
@@ -470,6 +711,830 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/targets": {
+      "get": {
+        "summary": "Targets",
+        "operationId": "targets_api_v1_seedbox_wizard_targets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/target": {
+      "post": {
+        "summary": "Choose Target",
+        "operationId": "choose_target_api_v1_seedbox_wizard_target_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_seedbox_wizard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/review": {
+      "get": {
+        "summary": "Review",
+        "operationId": "review_api_v1_seedbox_wizard_review_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/configure": {
+      "post": {
+        "summary": "Configure",
+        "operationId": "configure_api_v1_seedbox_wizard_configure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WizardConfiguration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/advance": {
+      "post": {
+        "summary": "Advance",
+        "operationId": "advance_api_v1_seedbox_wizard_advance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WizardAdvance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/vpn": {
+      "post": {
+        "summary": "Vpn",
+        "operationId": "vpn_api_v1_seedbox_wizard_vpn_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VPNImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/client": {
+      "post": {
+        "summary": "Client",
+        "operationId": "client_api_v1_seedbox_wizard_client_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/preflight": {
+      "post": {
+        "summary": "Preflight",
+        "operationId": "preflight_api_v1_seedbox_wizard_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WizardExecute"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/install": {
+      "post": {
+        "summary": "Install",
+        "operationId": "install_api_v1_seedbox_wizard_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WizardExecute"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/adopt": {
+      "post": {
+        "summary": "Adopt",
+        "operationId": "adopt_api_v1_seedbox_wizard_adopt_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/rotate/client": {
+      "post": {
+        "summary": "Rotate Client",
+        "operationId": "rotate_client_api_v1_seedbox_wizard_rotate_client_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/rotate/vpn": {
+      "post": {
+        "summary": "Rotate Vpn",
+        "operationId": "rotate_vpn_api_v1_seedbox_wizard_rotate_vpn_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VPNImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/wizard/rollback": {
+      "post": {
+        "summary": "Rollback",
+        "operationId": "rollback_api_v1_seedbox_wizard_rollback_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/torrents": {
+      "get": {
+        "summary": "Torrents",
+        "operationId": "torrents_api_v1_seedbox_torrents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/torrents/add": {
+      "post": {
+        "summary": "Add",
+        "operationId": "add_api_v1_seedbox_torrents_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTorrent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/torrents/action": {
+      "post": {
+        "summary": "Action",
+        "operationId": "action_api_v1_seedbox_torrents_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TorrentAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/locations": {
+      "get": {
+        "summary": "Locations",
+        "operationId": "locations_api_v1_seedbox_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Change Location",
+        "operationId": "change_location_api_v1_seedbox_locations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VPNLocation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/install-options": {
+      "get": {
+        "summary": "Options",
+        "operationId": "options_api_v1_plex_install_options_get",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "local",
+              "title": "Host"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/install-plan": {
+      "post": {
+        "summary": "Plan",
+        "operationId": "plan_api_v1_plex_install_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlexInstallation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/install": {
+      "post": {
+        "summary": "Install",
+        "operationId": "install_api_v1_plex_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlexInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/update": {
+      "post": {
+        "summary": "Update",
+        "operationId": "update_api_v1_plex_update_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/rollback": {
+      "post": {
+        "summary": "Rollback",
+        "operationId": "rollback_api_v1_plex_rollback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/status": {
+      "get": {
+        "summary": "Seedbox Status",
+        "operationId": "seedbox_status_api_v1_seedbox_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/plan": {
+      "post": {
+        "summary": "Seedbox Install Plan",
+        "operationId": "seedbox_install_plan_api_v1_seedbox_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedboxInstallation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/configuration": {
+      "get": {
+        "summary": "Seedbox Configuration",
+        "operationId": "seedbox_configuration_api_v1_seedbox_configuration_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/install": {
+      "post": {
+        "summary": "Seedbox Install",
+        "operationId": "seedbox_install_api_v1_seedbox_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareSeedboxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seedbox/prepare": {
+      "post": {
+        "summary": "Seedbox Prepare",
+        "operationId": "seedbox_prepare_api_v1_seedbox_prepare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareSeedboxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -844,6 +1909,60 @@
         }
       }
     },
+    "/api/v1/storage/locations/{identifier}/files": {
+      "get": {
+        "summary": "Storage Files",
+        "description": "List media metadata below one registered location; never returns file contents.",
+        "operationId": "storage_files_api_v1_storage_locations__identifier__files_get",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/storage/locations/{identifier}": {
       "put": {
         "summary": "Update Storage",
@@ -1169,10 +2288,902 @@
           }
         }
       }
+    },
+    "/api/v1/hosts": {
+      "get": {
+        "summary": "Hosts",
+        "operationId": "hosts_api_v1_hosts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hosts/refresh": {
+      "post": {
+        "summary": "Refresh",
+        "operationId": "refresh_api_v1_hosts_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hosts/pairing": {
+      "post": {
+        "summary": "Invite",
+        "operationId": "invite_api_v1_hosts_pairing_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invitation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hosts/pair": {
+      "post": {
+        "summary": "Pair",
+        "operationId": "pair_api_v1_hosts_pair_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Pair"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/logical": {
+      "get": {
+        "summary": "Logical",
+        "operationId": "logical_api_v1_storage_logical_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add Logical",
+        "operationId": "add_logical_api_v1_storage_logical_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogicalInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/logical/{logical_id}/mapping": {
+      "put": {
+        "summary": "Mapping",
+        "operationId": "mapping_api_v1_storage_logical__logical_id__mapping_put",
+        "parameters": [
+          {
+            "name": "logical_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Logical Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/logical/{logical_id}/validate": {
+      "post": {
+        "summary": "Validate",
+        "operationId": "validate_api_v1_storage_logical__logical_id__validate_post",
+        "parameters": [
+          {
+            "name": "logical_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Logical Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations": {
+      "get": {
+        "summary": "Listing",
+        "operationId": "listing_api_v1_integrations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/fjordhub/defaults": {
+      "get": {
+        "summary": "Defaults",
+        "operationId": "defaults_api_v1_integrations_fjordhub_defaults_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/fjordhub/test": {
+      "post": {
+        "summary": "Test",
+        "operationId": "test_api_v1_integrations_fjordhub_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/fjordhub": {
+      "post": {
+        "summary": "Save",
+        "operationId": "save_api_v1_integrations_fjordhub_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{identifier}/refresh": {
+      "post": {
+        "summary": "Refresh",
+        "operationId": "refresh_api_v1_integrations__identifier__refresh_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{identifier}/disconnect": {
+      "post": {
+        "summary": "Disconnect",
+        "operationId": "disconnect_api_v1_integrations__identifier__disconnect_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_security_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/policy": {
+      "post": {
+        "summary": "Policy",
+        "operationId": "policy_api_v1_security_policy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecurityPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/totp/disable": {
+      "post": {
+        "summary": "Disable",
+        "operationId": "disable_api_v1_security_totp_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIdentity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/totp/enroll": {
+      "post": {
+        "summary": "Enroll",
+        "operationId": "enroll_api_v1_security_totp_enroll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIdentity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/totp/confirm": {
+      "post": {
+        "summary": "Confirm",
+        "operationId": "confirm_api_v1_security_totp_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/totp/recovery-codes": {
+      "post": {
+        "summary": "Recovery",
+        "operationId": "recovery_api_v1_security_totp_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIdentity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/password": {
+      "post": {
+        "summary": "Password",
+        "operationId": "password_api_v1_security_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/sessions": {
+      "get": {
+        "summary": "Sessions",
+        "operationId": "sessions_api_v1_security_sessions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/security/sessions/{session_id}": {
+      "delete": {
+        "summary": "Revoke",
+        "operationId": "revoke_api_v1_security_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backups": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_backups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backups/export": {
+      "post": {
+        "summary": "Export",
+        "operationId": "export_api_v1_backups_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/backups/apps/{application}/export": {
+      "post": {
+        "summary": "Export App",
+        "operationId": "export_app_api_v1_backups_apps__application__export_post",
+        "parameters": [
+          {
+            "name": "application",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "plex",
+                "seedbox"
+              ],
+              "type": "string",
+              "title": "Application"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AddTorrent": {
+        "properties": {
+          "magnet": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16384,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Magnet"
+          },
+          "torrentBase64": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2796204,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Torrentbase64"
+          },
+          "storageId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Storageid"
+          },
+          "startImmediately": {
+            "type": "boolean",
+            "title": "Startimmediately",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "storageId"
+        ],
+        "title": "AddTorrent"
+      },
+      "BackupRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Code",
+            "default": ""
+          },
+          "backupPassword": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 16,
+            "title": "Backuppassword"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password",
+          "backupPassword"
+        ],
+        "title": "BackupRequest"
+      },
       "Bootstrap": {
         "properties": {
           "username": {
@@ -1203,6 +3214,36 @@
         ],
         "title": "Bootstrap"
       },
+      "ClientImport": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "webUsername": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+            "title": "Webusername"
+          },
+          "webPassword": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 16,
+            "format": "password",
+            "title": "Webpassword",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "webUsername",
+          "webPassword"
+        ],
+        "title": "ClientImport"
+      },
       "ConfigValues": {
         "properties": {
           "values": {
@@ -1220,6 +3261,21 @@
         ],
         "title": "ConfigValues"
       },
+      "ConfirmCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "ConfirmCode"
+      },
       "Credentials": {
         "properties": {
           "username": {
@@ -1233,6 +3289,12 @@
             "maxLength": 256,
             "minLength": 1,
             "title": "Password"
+          },
+          "secondFactor": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Secondfactor",
+            "default": ""
           }
         },
         "additionalProperties": false,
@@ -1292,6 +3354,22 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Draft"
+      },
+      "GitHubTokenRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 20,
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "GitHubTokenRequest"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1355,11 +3433,152 @@
             "type": "object",
             "title": "Mappings",
             "default": {}
+          },
+          "host_id": {
+            "type": "string",
+            "title": "Host Id",
+            "default": "local"
+          },
+          "logical_mappings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Logical Mappings",
+            "default": {}
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "InstallPlan"
+      },
+      "IntegrationInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "default": "FjordHub"
+          },
+          "baseUrl": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 8,
+            "title": "Baseurl"
+          },
+          "accessToken": {
+            "type": "string",
+            "maxLength": 8192,
+            "minLength": 16,
+            "format": "password",
+            "title": "Accesstoken",
+            "writeOnly": true
+          },
+          "allowHttp": {
+            "type": "boolean",
+            "title": "Allowhttp",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "baseUrl",
+          "accessToken"
+        ],
+        "title": "IntegrationInput"
+      },
+      "Invitation": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Address"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "address"
+        ],
+        "title": "Invitation"
+      },
+      "LogicalInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "appdata",
+              "downloads",
+              "movies",
+              "tv",
+              "backups",
+              "temp",
+              "custom"
+            ],
+            "title": "Kind"
+          },
+          "dataset_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Dataset Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "dataset_ref"
+        ],
+        "title": "LogicalInput"
+      },
+      "MappingInput": {
+        "properties": {
+          "host_id": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Host Id"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "ro",
+              "rw"
+            ],
+            "title": "Access",
+            "default": "ro"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "host_id",
+          "path"
+        ],
+        "title": "MappingInput"
       },
       "NetworkSettings": {
         "properties": {
@@ -1402,6 +3621,64 @@
         "additionalProperties": false,
         "type": "object",
         "title": "NetworkSettings"
+      },
+      "NewPassword": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Code",
+            "default": ""
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "title": "Newpassword"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password",
+          "newPassword"
+        ],
+        "title": "NewPassword"
+      },
+      "Pair": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 40,
+            "title": "Token"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Address"
+          },
+          "agent_token": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 40,
+            "title": "Agent Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token",
+          "address",
+          "agent_token"
+        ],
+        "title": "Pair"
       },
       "PathBody": {
         "properties": {
@@ -1530,11 +3807,282 @@
             "minimum": 10.0,
             "title": "Activity Page Size",
             "default": 50
+          },
+          "advanced_mode": {
+            "type": "boolean",
+            "title": "Advanced Mode",
+            "default": false
+          },
+          "release_repository": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 201
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Repository"
+          },
+          "visible_navigation": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "/",
+                "/apps",
+                "/storage",
+                "/hosts",
+                "/activity",
+                "/logs",
+                "/updates",
+                "/backups",
+                "/integrations",
+                "/settings"
+              ]
+            },
+            "type": "array",
+            "title": "Visible Navigation",
+            "default": [
+              "/",
+              "/apps",
+              "/storage",
+              "/updates",
+              "/backups",
+              "/settings"
+            ]
+          },
+          "dashboard_sections": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "system",
+                "storage",
+                "apps",
+                "activity",
+                "network",
+                "core",
+                "runtime",
+                "integrations"
+              ]
+            },
+            "type": "array",
+            "title": "Dashboard Sections",
+            "default": [
+              "storage",
+              "apps",
+              "system"
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "PlatformSettings"
+      },
+      "PlexInstallRequest": {
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/PlexInstallation"
+          },
+          "reviewedPlanDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Reviewedplandigest"
+          },
+          "claimToken": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claimtoken"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installation",
+          "reviewedPlanDigest"
+        ],
+        "title": "PlexInstallRequest"
+      },
+      "PlexInstallation": {
+        "properties": {
+          "hostId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Hostid",
+            "default": "local"
+          },
+          "installationId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,40}$",
+            "title": "Installationid",
+            "default": "plex-main"
+          },
+          "moviesStorageIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Moviesstorageids"
+          },
+          "tvStorageIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Tvstorageids"
+          },
+          "otherStorageIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Otherstorageids"
+          },
+          "appdataStorageId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Appdatastorageid"
+          },
+          "serverName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Servername",
+            "default": "MediaHub"
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Timezone",
+            "default": "UTC"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "appdataStorageId"
+        ],
+        "title": "PlexInstallation"
+      },
+      "PrepareSeedboxRequest": {
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/SeedboxInstallation"
+          },
+          "reviewedPlanDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Reviewedplandigest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installation",
+          "reviewedPlanDigest"
+        ],
+        "title": "PrepareSeedboxRequest"
+      },
+      "QBitInitialSettings": {
+        "properties": {
+          "incompleteDownloads": {
+            "type": "boolean",
+            "title": "Incompletedownloads",
+            "default": true
+          },
+          "maxConnections": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 10.0,
+            "title": "Maxconnections",
+            "default": 100
+          },
+          "maxConnectionsPerTorrent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Maxconnectionspertorrent",
+            "default": 40
+          },
+          "maxActiveDownloads": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Maxactivedownloads",
+            "default": 1
+          },
+          "listenPort": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1024.0,
+            "title": "Listenport",
+            "default": 6881
+          },
+          "networkInterface": {
+            "type": "string",
+            "const": "tun0",
+            "title": "Networkinterface",
+            "default": "tun0"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "QBitInitialSettings"
+      },
+      "RemoveRuntimeRequest": {
+        "properties": {
+          "confirmedInstallationId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Confirmedinstallationid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirmedInstallationId"
+        ],
+        "title": "RemoveRuntimeRequest"
+      },
+      "ResolveInput": {
+        "properties": {
+          "host_id": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Host Id"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "ro",
+              "rw"
+            ],
+            "title": "Access",
+            "default": "ro"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "host_id"
+        ],
+        "title": "ResolveInput"
       },
       "Revision": {
         "properties": {
@@ -1569,6 +4117,130 @@
           "draft"
         ],
         "title": "SaveDraft"
+      },
+      "SecurityPolicy": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Code",
+            "default": ""
+          },
+          "requireTotp": {
+            "type": "boolean",
+            "title": "Requiretotp"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password",
+          "requireTotp"
+        ],
+        "title": "SecurityPolicy"
+      },
+      "SeedboxInstallation": {
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,40}$",
+            "title": "Installationid"
+          },
+          "hostId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Hostid"
+          },
+          "downloadsStorageId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Downloadsstorageid"
+          },
+          "provider": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,40}$",
+            "title": "Provider",
+            "default": "custom"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "wireguard",
+              "openvpn"
+            ],
+            "title": "Protocol",
+            "default": "wireguard"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "credentialRef": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{2,80}$",
+            "title": "Credentialref"
+          },
+          "uid": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1000.0,
+            "title": "Uid",
+            "default": 1000
+          },
+          "gid": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1000.0,
+            "title": "Gid",
+            "default": 1000
+          },
+          "webPort": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1024.0,
+            "title": "Webport",
+            "default": 18080
+          },
+          "vpnMemoryMiB": {
+            "type": "integer",
+            "maximum": 512.0,
+            "minimum": 128.0,
+            "title": "Vpnmemorymib",
+            "default": 256
+          },
+          "torrentMemoryMiB": {
+            "type": "integer",
+            "maximum": 1024.0,
+            "minimum": 256.0,
+            "title": "Torrentmemorymib",
+            "default": 512
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installationId",
+          "hostId",
+          "downloadsStorageId",
+          "credentialRef"
+        ],
+        "title": "SeedboxInstallation"
       },
       "StorageInput": {
         "properties": {
@@ -1609,6 +4281,95 @@
         ],
         "title": "StorageInput"
       },
+      "TargetSelection": {
+        "properties": {
+          "hostId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Hostid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hostId"
+        ],
+        "title": "TargetSelection"
+      },
+      "TorrentAction": {
+        "properties": {
+          "hash": {
+            "type": "string",
+            "pattern": "^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$",
+            "title": "Hash"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "pause",
+              "resume",
+              "recheck",
+              "remove"
+            ],
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "hash",
+          "action"
+        ],
+        "title": "TorrentAction"
+      },
+      "VPNImport": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "vpnConfig": {
+            "type": "string",
+            "maxLength": 65536,
+            "minLength": 1,
+            "format": "password",
+            "title": "Vpnconfig",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "vpnConfig"
+        ],
+        "title": "VPNImport"
+      },
+      "VPNLocation": {
+        "properties": {
+          "country": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Country"
+          },
+          "server": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Server",
+            "default": "automatic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "country"
+        ],
+        "title": "VPNLocation"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1648,6 +4409,97 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerifyIdentity": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Code",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "VerifyIdentity"
+      },
+      "WizardAdvance": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "direction": {
+            "type": "string",
+            "pattern": "^(next|back)$",
+            "title": "Direction"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "direction"
+        ],
+        "title": "WizardAdvance"
+      },
+      "WizardConfiguration": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "installation": {
+            "$ref": "#/components/schemas/SeedboxInstallation"
+          },
+          "qBittorrent": {
+            "$ref": "#/components/schemas/QBitInitialSettings"
+          },
+          "portForwardingAcknowledged": {
+            "type": "boolean",
+            "title": "Portforwardingacknowledged",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "installation"
+        ],
+        "title": "WizardConfiguration"
+      },
+      "WizardExecute": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Revision"
+          },
+          "reviewedPlanDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Reviewedplandigest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "reviewedPlanDigest"
+        ],
+        "title": "WizardExecute"
       }
     }
   }
