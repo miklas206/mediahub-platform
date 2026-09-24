@@ -17,9 +17,11 @@ write, workflow, package-delete or repository-administration permissions into
 MediaHub.
 
 Tagging a reviewed commit as `vX.Y.Z` runs the release workflow. It builds Core
-and Agent images, publishes immutable GHCR images, creates build attestations and
+and Agent images, publishes immutable GHCR images, attempts registry build
+attestations when the private repository's GitHub plan supports them, and always
 attaches `mediahub-release.json` plus digest-identified offline image bundles to
-the GitHub Release. GitHub's API reports the
+the GitHub Release. An unavailable optional registry attestation does not weaken
+or block the checksum-verified private release assets. GitHub's API reports the
 asset SHA-256 digest; MediaHub requires that digest before it calls a release
 verified.
 
