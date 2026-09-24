@@ -74,10 +74,29 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await expect(
     page.getByRole("heading", { name: "No media folders registered" }),
   ).toBeVisible();
+  await page.getByRole("link", { name: "Updates", exact: true }).click();
+  const githubCheck = page.getByRole("button", {
+    name: "Check GitHub",
+    exact: true,
+  });
+  await expect(githubCheck).toBeEnabled();
+  await githubCheck.click();
+  await expect(
+    page.getByRole("progressbar", { name: "Check MediaHub updates" }),
+  ).toHaveAttribute("aria-valuenow", "100");
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Maintenance", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Run maintenance check" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Run maintenance check", exact: true })
+    .click();
+  await expect(
+    page.getByRole("progressbar", { name: "Maintenance check" }),
+  ).toHaveAttribute("aria-valuenow", "100");
+  await expect(
+    page.getByText("Technical details", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("MediaHub Core", { exact: true })).toBeVisible();
   await expect(page.getByText("Media stays protected")).toBeVisible();

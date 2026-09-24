@@ -49,6 +49,11 @@ import { IntegrationsCard, IntegrationsPage } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
+  OperationProgress,
+  type OperationState,
+  type OperationStep,
+} from "./operation-progress";
+import {
   CatalogPage,
   RuntimePanel,
   StorageSummary,
@@ -1568,34 +1573,138 @@ function MaintenancePage() {
   const storage = useData<Storage[]>("/storage/locations");
   const apps = useData<AppInfo[]>("/apps");
   const [checking, setChecking] = useState(false);
+  const [operation, setOperation] = useState<OperationState>();
+  const [snapshot, setSnapshot] = useState<{
+    core?: { status: string; version: string };
+    runtime?: AgentStatus;
+    storage?: Storage[];
+    apps?: AppInfo[];
+  }>({});
 
-  const storageState: MaintenanceState = !storage.data
+  const coreData = snapshot.core || core.data;
+  const runtimeData = snapshot.runtime || runtime.data;
+  const storageData = snapshot.storage || storage.data;
+  const appsData = snapshot.apps || apps.data;
+
+  const storageState: MaintenanceState = !storageData
     ? "unknown"
-    : storage.data.length > 0 &&
-        storage.data.every((location) => location.exists && location.readable)
+    : storageData.length > 0 &&
+        storageData.every((location) => location.exists && location.readable)
       ? "healthy"
       : "degraded";
   const appProblems =
-    apps.data?.filter((app) =>
+    appsData?.filter((app) =>
       ["degraded", "unhealthy"].includes(app.health.status),
     ) || [];
-  const appsState: MaintenanceState = !apps.data
+  const appsState: MaintenanceState = !appsData
     ? "unknown"
     : appProblems.length === 0
-      ? apps.data.every((app) => app.health.status === "healthy")
+      ? appsData.every((app) => app.health.status === "healthy")
         ? "healthy"
         : "unknown"
       : "degraded";
   const failure =
     core.error || runtime.error || storage.error || apps.error || "";
 
-  const runCheck = () => {
+  const runCheck = async () => {
+    const steps: OperationStep[] = [
+      { label: "Check MediaHub Core", state: "pending" },
+      { label: "Check Agent runtime", state: "pending" },
+      { label: "Validate registered storage", state: "pending" },
+      { label: "Check installed apps", state: "pending" },
+    ];
+    const details: string[] = [];
+    let activeStep = 0;
+    const publish = (
+      progress: number,
+      status: OperationState["status"],
+      message: string,
+    ) =>
+      setOperation({
+        title: "Maintenance check",
+        status,
+        progress,
+        message,
+        steps: steps.map((step) => ({ ...step })),
+        details: [...details],
+      });
+
     setChecking(true);
-    core.reload();
-    runtime.reload();
-    storage.reload();
-    apps.reload();
-    window.setTimeout(() => setChecking(false), 900);
+    steps[0].state = "running";
+    publish(5, "running", "Checking MediaHub Core…");
+    try {
+      const coreResult = await api<{ status: string; version: string }>(
+        "/health",
+      );
+      setSnapshot((current) => ({ ...current, core: coreResult }));
+      steps[0].state = coreResult.status === "healthy" ? "complete" : "error";
+      details.push(`GET /health · ${coreResult.status}`);
+
+      activeStep = 1;
+      steps[1].state = "running";
+      publish(30, "running", "Checking the local Agent connection…");
+      const runtimeResult = await api<AgentStatus>("/runtime");
+      setSnapshot((current) => ({ ...current, runtime: runtimeResult }));
+      steps[1].state = runtimeResult.connected ? "complete" : "error";
+      details.push(
+        `GET /runtime · ${runtimeResult.connected ? "connected" : "disconnected"}`,
+      );
+
+      activeStep = 2;
+      steps[2].state = "running";
+      publish(55, "running", "Validating MediaHub storage locations…");
+      const storageResult = await api<Storage[]>("/storage/locations");
+      setSnapshot((current) => ({ ...current, storage: storageResult }));
+      const availableStorage = storageResult.filter(
+        (item) => item.exists && item.readable,
+      ).length;
+      steps[2].state =
+        storageResult.length > 0 && availableStorage === storageResult.length
+          ? "complete"
+          : "error";
+      details.push(
+        `GET /storage/locations · ${availableStorage}/${storageResult.length} available`,
+      );
+
+      activeStep = 3;
+      steps[3].state = "running";
+      publish(80, "running", "Checking installed app health…");
+      const appResult = await api<AppInfo[]>("/apps");
+      setSnapshot((current) => ({ ...current, apps: appResult }));
+      const unhealthyApps = appResult.filter(
+        (app) => app.health.status !== "healthy",
+      ).length;
+      steps[3].state = unhealthyApps === 0 ? "complete" : "error";
+      details.push(
+        `GET /apps · ${appResult.length - unhealthyApps}/${appResult.length} healthy`,
+      );
+
+      const degraded =
+        coreResult.status !== "healthy" ||
+        !runtimeResult.connected ||
+        storageResult.length === 0 ||
+        availableStorage !== storageResult.length ||
+        unhealthyApps > 0;
+      publish(
+        100,
+        degraded ? "error" : "success",
+        degraded
+          ? "The check completed and found items that need attention."
+          : "All maintenance checks completed successfully.",
+      );
+    } catch {
+      steps[activeStep].state = "error";
+      details.push(
+        "Request failed · see the warning above for the safe error message",
+      );
+      publish(100, "error", "The maintenance check could not be completed.");
+    } finally {
+      setChecking(false);
+      core.reload();
+      runtime.reload();
+      storage.reload();
+      apps.reload();
+    }
   };
 
   return (
@@ -1606,7 +1715,7 @@ function MaintenancePage() {
           <button
             className="maintenance-check"
             type="button"
-            onClick={runCheck}
+            onClick={() => void runCheck()}
             disabled={checking}
           >
             <RefreshCw size={15} className={checking ? "spin" : ""} />
@@ -1627,20 +1736,21 @@ function MaintenancePage() {
           </div>
         </div>
         {failure && <Notice>{failure}</Notice>}
+        {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">
           <MaintenanceCard
             icon={<Server size={19} />}
             title="MediaHub Core"
             state={
-              !core.data
+              !coreData
                 ? "unknown"
-                : core.data.status === "healthy"
+                : coreData.status === "healthy"
                   ? "healthy"
                   : "degraded"
             }
             detail={
-              core.data
-                ? `Version ${core.data.version} is responding.`
+              coreData
+                ? `Version ${coreData.version} is responding.`
                 : "Waiting for the Core health check."
             }
           />
@@ -1648,16 +1758,16 @@ function MaintenancePage() {
             icon={<ActivityIcon size={19} />}
             title="Agent runtime"
             state={
-              !runtime.data
+              !runtimeData
                 ? "unknown"
-                : runtime.data.connected
+                : runtimeData.connected
                   ? "healthy"
                   : "degraded"
             }
             detail={
-              runtime.data?.connected
-                ? `${runtime.data.hostname || "Local agent"} is connected.`
-                : runtime.data?.message || "Waiting for the Agent health check."
+              runtimeData?.connected
+                ? `${runtimeData.hostname || "Local agent"} is connected.`
+                : runtimeData?.message || "Waiting for the Agent health check."
             }
           />
           <MaintenanceCard
@@ -1665,8 +1775,8 @@ function MaintenancePage() {
             title="Storage"
             state={storageState}
             detail={
-              storage.data
-                ? `${storage.data.filter((item) => item.exists && item.readable).length} of ${storage.data.length} locations are available.`
+              storageData
+                ? `${storageData.filter((item) => item.exists && item.readable).length} of ${storageData.length} locations are available.`
                 : "Waiting for the storage health check."
             }
           />
@@ -1675,10 +1785,10 @@ function MaintenancePage() {
             title="Installed apps"
             state={appsState}
             detail={
-              apps.data
+              appsData
                 ? appProblems.length
                   ? `${appProblems.length} app${appProblems.length === 1 ? " needs" : "s need"} attention.`
-                  : `${apps.data.length} app${apps.data.length === 1 ? " is" : "s are"} healthy.`
+                  : `${appsData.length} app${appsData.length === 1 ? " is" : "s are"} healthy.`
                 : "Waiting for the app health check."
             }
           />

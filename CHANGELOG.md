@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added reusable operation progress with stages, completion percentage and
+  redacted technical details for Maintenance and update actions.
 - Added a safe Maintenance workspace under Settings with live Core, Agent,
   storage and app checks, explicit movie/TV protection and direct links to
   storage, updates and backups.

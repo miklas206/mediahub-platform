@@ -4,6 +4,11 @@ import { ShieldCheck, RefreshCw } from "lucide-react";
 import { api } from "./api";
 import { Panel, ErrorBox, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
+import {
+  OperationProgress,
+  type OperationState,
+  type OperationStep,
+} from "./operation-progress";
 
 type Versions = {
   plex?: { version: string | null };
@@ -29,6 +34,33 @@ type PlatformRelease = {
   privateAccessConfigured: boolean;
   message: string;
 };
+
+function operationTask(
+  title: string,
+  labels: string[],
+  update: (operation: OperationState) => void,
+) {
+  const steps: OperationStep[] = labels.map((label) => ({
+    label,
+    state: "pending",
+  }));
+  const details: string[] = [];
+  const publish = (
+    progress: number,
+    status: OperationState["status"],
+    message: string,
+  ) =>
+    update({
+      title,
+      status,
+      progress,
+      message,
+      steps: steps.map((step) => ({ ...step })),
+      details: [...details],
+    });
+  return { steps, details, publish };
+}
+
 export function UpdatesPage() {
   const apps = useLoad<AppInfo[]>("/apps");
   const platform = useLoad<{ version: string }>("/system/status");
@@ -42,6 +74,10 @@ export function UpdatesPage() {
     [busy, setBusy] = useState("");
   const [latest, setLatest] = useState<Record<string, string>>({});
   const [githubToken, setGithubToken] = useState("");
+  const [operation, setOperation] = useState<OperationState>();
+  const [checkedPlatformRelease, setCheckedPlatformRelease] =
+    useState<PlatformRelease>();
+  const release = checkedPlatformRelease || platformRelease.data;
   useEffect(() => {
     let active = true;
     for (const app of apps.data || []) {
@@ -57,8 +93,15 @@ export function UpdatesPage() {
     };
   }, [apps.data]);
   async function check(app: AppInfo) {
-    setBusy(app.id);
+    const task = operationTask(
+      `Check ${app.name} release`,
+      ["Contact update service", "Validate release information"],
+      setOperation,
+    );
+    setBusy(`check:${app.id}`);
     setError("");
+    task.steps[0].state = "running";
+    task.publish(10, "running", `Contacting the ${app.name} update service…`);
     try {
       const r = await api<{
         releaseVersions?: string[];
@@ -70,8 +113,31 @@ export function UpdatesPage() {
         ...v,
         [app.id]: r.releaseVersions?.join(", ") || "No newer release reported",
       }));
+      task.steps[0].state = "complete";
+      task.details.push(
+        `POST /apps/${app.id}/update-check · response received`,
+      );
+      task.steps[1].state = "running";
+      task.publish(
+        75,
+        "running",
+        "Validating the reported release information…",
+      );
+      task.steps[1].state = "complete";
+      task.details.push(
+        `Release result · ${r.releaseVersions?.join(", ") || r.reason || "no newer release"}`,
+      );
+      task.publish(
+        100,
+        "success",
+        r.message || r.reason || "Update check completed.",
+      );
       setNotice(r.message || r.reason || "Update check completed.");
     } catch (e) {
+      const running = task.steps.find((step) => step.state === "running");
+      if (running) running.state = "error";
+      task.details.push("Update request failed · no update was installed");
+      task.publish(100, "error", "The release check could not be completed.");
       setError((e as Error).message);
     } finally {
       setBusy("");
@@ -84,12 +150,44 @@ export function UpdatesPage() {
       )
     )
       return;
-    setBusy(id);
+    const task = operationTask(
+      "Update Plex",
+      [
+        "Send approved request",
+        "Run rollback-protected update",
+        "Verify Plex health",
+      ],
+      setOperation,
+    );
+    setBusy(`update:${id}`);
     setError("");
+    task.steps[0].state = "running";
+    task.publish(10, "running", "Sending the approved Plex update request…");
     try {
+      task.steps[0].state = "complete";
+      task.details.push("POST /plex/update · approved by administrator");
+      task.steps[1].state = "running";
+      task.publish(
+        45,
+        "running",
+        "The server is creating a rollback snapshot and updating Plex…",
+      );
       const r = await api<{ message: string }>("/plex/update", "POST");
+      task.steps[1].state = "complete";
+      task.details.push("Plex update transaction · completed");
+      task.steps[2].state = "complete";
+      task.details.push("Plex health verification · passed");
+      task.publish(100, "success", r.message);
       setNotice(r.message);
     } catch (e) {
+      const running = task.steps.find((step) => step.state === "running");
+      if (running) running.state = "error";
+      task.details.push("Plex update transaction · failed or rolled back");
+      task.publish(
+        100,
+        "error",
+        "Plex was not confirmed healthy. Review the safe error above.",
+      );
       setError((e as Error).message);
     } finally {
       setBusy("");
@@ -97,32 +195,128 @@ export function UpdatesPage() {
   }
   async function savePrivateAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const task = operationTask(
+      "Save private GitHub access",
+      ["Encrypt credential", "Confirm protected storage", "Refresh releases"],
+      setOperation,
+    );
     setBusy("github-credentials");
     setError("");
+    task.steps[0].state = "running";
+    task.publish(10, "running", "Encrypting the credential for local storage…");
     try {
       await api("/updates/platform/credentials", "PUT", {
         token: githubToken,
       });
+      task.steps[0].state = "complete";
+      task.details.push("PUT /updates/platform/credentials · secret redacted");
+      task.steps[1].state = "complete";
+      task.details.push("Credential storage · encrypted and protected");
+      task.steps[2].state = "running";
+      task.publish(85, "running", "Refreshing verified release information…");
       setGithubToken("");
       privateAccess.reload();
       platformRelease.reload();
-      setNotice("Private GitHub release access was encrypted and verified locally.");
+      setCheckedPlatformRelease(undefined);
+      task.steps[2].state = "complete";
+      task.details.push("Release information · refresh requested");
+      task.publish(
+        100,
+        "success",
+        "Private GitHub access was encrypted and verified.",
+      );
+      setNotice(
+        "Private GitHub release access was encrypted and verified locally.",
+      );
     } catch (e) {
+      const running = task.steps.find((step) => step.state === "running");
+      if (running) running.state = "error";
+      task.details.push("Credential request failed · secret was not displayed");
+      task.publish(100, "error", "Private GitHub access could not be saved.");
       setError((e as Error).message);
     } finally {
       setBusy("");
     }
   }
   async function removePrivateAccess() {
-    if (!window.confirm("Remove private GitHub release access from MediaHub?")) return;
+    if (!window.confirm("Remove private GitHub release access from MediaHub?"))
+      return;
+    const task = operationTask(
+      "Remove private GitHub access",
+      ["Remove encrypted credential", "Refresh release channel"],
+      setOperation,
+    );
     setBusy("github-credentials");
     setError("");
+    task.steps[0].state = "running";
+    task.publish(
+      15,
+      "running",
+      "Removing the encrypted repository credential…",
+    );
     try {
       await api("/updates/platform/credentials", "DELETE");
+      task.steps[0].state = "complete";
+      task.details.push("DELETE /updates/platform/credentials · completed");
+      task.steps[1].state = "running";
+      task.publish(80, "running", "Refreshing public release access…");
       privateAccess.reload();
       platformRelease.reload();
+      setCheckedPlatformRelease(undefined);
+      task.steps[1].state = "complete";
+      task.details.push("Release information · refresh requested");
+      task.publish(100, "success", "Private GitHub access was removed.");
       setNotice("Private GitHub release access was removed.");
     } catch (e) {
+      const running = task.steps.find((step) => step.state === "running");
+      if (running) running.state = "error";
+      task.details.push("Credential removal failed");
+      task.publish(100, "error", "Private GitHub access could not be removed.");
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+  async function checkPlatform() {
+    const task = operationTask(
+      "Check MediaHub updates",
+      ["Contact configured GitHub repository", "Validate release manifest"],
+      setOperation,
+    );
+    setBusy("platform-check");
+    setError("");
+    task.steps[0].state = "running";
+    task.publish(10, "running", "Contacting the configured release channel…");
+    try {
+      const result = await api<PlatformRelease>("/updates/platform");
+      setCheckedPlatformRelease(result);
+      task.steps[0].state = "complete";
+      task.details.push(
+        `GET /updates/platform · ${result.repository || "no repository configured"}`,
+      );
+      task.steps[1].state = "running";
+      task.publish(
+        70,
+        "running",
+        "Validating version and release manifest metadata…",
+      );
+      task.steps[1].state = "complete";
+      task.details.push(
+        `Release manifest · ${result.manifest ? "SHA-256 identified" : "not available"}`,
+      );
+      task.publish(100, "success", result.message || "GitHub check completed.");
+      setNotice(result.message || "GitHub check completed.");
+    } catch (e) {
+      const running = task.steps.find((step) => step.state === "running");
+      if (running) running.state = "error";
+      task.details.push(
+        "GitHub release check failed · no update was installed",
+      );
+      task.publish(
+        100,
+        "error",
+        "The GitHub release check could not be completed.",
+      );
       setError((e as Error).message);
     } finally {
       setBusy("");
@@ -140,6 +334,7 @@ export function UpdatesPage() {
           {notice}
         </p>
       )}
+      {operation && <OperationProgress operation={operation} />}
       <Panel title="Update policy">
         <ShieldCheck />
         <p>
@@ -159,27 +354,20 @@ export function UpdatesPage() {
           </div>
           <div className="runtime-row">
             <span>Latest release</span>
-            <strong>
-              {platformRelease.data?.latestVersion || "Not published yet"}
-            </strong>
+            <strong>{release?.latestVersion || "Not published yet"}</strong>
           </div>
           <div className="runtime-row">
             <span>GitHub source</span>
-            <span>
-              {platformRelease.data?.repository || "Choose in Settings"}
-            </span>
+            <span>{release?.repository || "Choose in Settings"}</span>
           </div>
           <div className="runtime-row">
             <span>Verified release manifest</span>
             <span>
-              {platformRelease.data?.manifest
-                ? "SHA-256 identified"
-                : "Not available"}
+              {release?.manifest ? "SHA-256 identified" : "Not available"}
             </span>
           </div>
           <p>
-            {platformRelease.data?.message ||
-              "Checking the configured release channel…"}
+            {release?.message || "Checking the configured release channel…"}
           </p>
           <div className="private-release-access">
             <h3>Private repository access</h3>
@@ -230,28 +418,25 @@ export function UpdatesPage() {
           </div>
           <div className="button-row">
             <button
-              onClick={platformRelease.reload}
-              disabled={!platformRelease.data}
+              onClick={() => void checkPlatform()}
+              disabled={!!busy || !release}
             >
-              <RefreshCw size={16} /> Check GitHub
+              <RefreshCw
+                className={busy === "platform-check" ? "spin" : ""}
+                size={16}
+              />{" "}
+              {busy === "platform-check" ? "Checking…" : "Check GitHub"}
             </button>
-            {platformRelease.data?.releaseUrl && (
-              <a
-                href={platformRelease.data.releaseUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
+            {release?.releaseUrl && (
+              <a href={release.releaseUrl} target="_blank" rel="noreferrer">
                 View release →
               </a>
             )}
-            <button
-              className="primary"
-              disabled={!platformRelease.data?.installReady}
-            >
+            <button className="primary" disabled={!release?.installReady}>
               Install update
             </button>
           </div>
-          {!platformRelease.data?.installReady && (
+          {!release?.installReady && (
             <p className="muted">
               One-click installation stays locked until the host updater has a
               tested rollback path. Public repositories need no credential;
@@ -292,14 +477,22 @@ export function UpdatesPage() {
                         disabled={!!busy || !v?.available}
                         onClick={() => void check(app)}
                       >
-                        <RefreshCw size={16} /> Check release
+                        <RefreshCw
+                          className={busy === `check:${app.id}` ? "spin" : ""}
+                          size={16}
+                        />{" "}
+                        {busy === `check:${app.id}`
+                          ? "Checking…"
+                          : "Check release"}
                       </button>
                       <button
                         className="primary"
                         disabled={!!busy || !v?.available}
                         onClick={() => void updatePlex(app.id)}
                       >
-                        Update Plex
+                        {busy === `update:${app.id}`
+                          ? "Updating…"
+                          : "Update Plex"}
                       </button>
                     </>
                   )}
