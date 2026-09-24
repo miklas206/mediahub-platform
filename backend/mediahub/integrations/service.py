@@ -157,13 +157,17 @@ class IntegrationService:
             return output
 
     def disconnect(self, identifier):
+        reference = None
         with self.sessions.begin() as db:
             row = db.get(ExternalIntegration, identifier)
             if row is None:
                 raise DomainError("not_found", "Integration not found", 404)
+            reference = row.secret_reference
             row.enabled, row.secret_reference = False, None
             row.snapshot = {"status": "disconnected"}
             output = self.public(row)
+        if reference:
+            self.store.delete(reference)
         self.events.record(
             "integration.disconnected", "FjordHub", "External integration disconnected"
         )

@@ -75,8 +75,14 @@ def test_test_save_sync_dynamic_and_disconnect(logged_in):
     data = client.post(f"/api/v1/integrations/{identifier}/refresh", json={}).json()["data"]
     assert data["snapshot"]["apps"][0]["name"] == "Dynamic future app"
     assert data["lastSuccessfulSync"]
+    svc = client.app.state.services
+    with svc.sessions() as db:
+        reference = db.get(ExternalIntegration, identifier).secret_reference
+    encrypted_record = svc.integrations.store.directory / f"{reference}.sealed"
+    assert encrypted_record.is_file()
     response = client.post(f"/api/v1/integrations/{identifier}/disconnect", json={})
     assert response.json()["data"]["tokenConfigured"] is False
+    assert not encrypted_record.exists()
     assert client.post(f"/api/v1/integrations/{identifier}/refresh", json={}).status_code == 409
 
 
