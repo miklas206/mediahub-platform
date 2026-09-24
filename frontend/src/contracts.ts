@@ -74,6 +74,7 @@ export type Settings = {
   activity_page_size: number;
   advanced_mode: boolean;
   release_repository: string | null;
+  update_check_interval_hours: 0 | 1 | 6 | 12 | 24 | 72 | 168;
   visible_navigation: NavigationPath[];
   dashboard_sections: DashboardSection[];
 };

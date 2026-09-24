@@ -18,6 +18,16 @@ class Config(BaseSettings):
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
     cloudflared_status_url: str | None = None
     cloudflared_probe_urls: list[str] = Field(default_factory=list)
+    platform_update_spool: Path | None = None
+
+    @field_validator("platform_update_spool")
+    @classmethod
+    def valid_update_spool(cls, value):
+        if value is None:
+            return None
+        if not value.is_absolute() or value == Path("/") or ".." in value.parts:
+            raise ValueError("Platform update spool must be a bounded absolute path")
+        return value
 
     @field_validator("operator_app_urls")
     @classmethod

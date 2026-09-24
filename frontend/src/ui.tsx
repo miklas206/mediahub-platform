@@ -358,7 +358,7 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.3.0</span>
+          <span>v0.4.0</span>
         </div>
       </div>
     </main>
@@ -396,6 +396,9 @@ function Shell({
     useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
   const { data: navigationApps } = useData<AppInfo[]>("/apps");
+  const { data: updateSummary, reload: reloadUpdateSummary } = useData<{
+    count: number;
+  }>("/updates/summary");
   const location = useLocation();
   useEffect(() => {
     setOpen(false);
@@ -427,12 +430,13 @@ function Shell({
     source.addEventListener("app.health.changed", () =>
       setRevision((n) => n + 1),
     );
+    source.addEventListener("updates.changed", () => reloadUpdateSummary());
     source.addEventListener("session.expired", () => {
       source.close();
       window.dispatchEvent(new Event("session-expired"));
     });
     return () => source.close();
-  }, []);
+  }, [reloadUpdateSummary]);
   const runtimePage = location.pathname.startsWith("/apps/");
   const title =
     navigation.find(([path]) => path === location.pathname)?.[1] ||
@@ -503,6 +507,14 @@ function Shell({
                   <Icon size={19} />
                   <span>{label}</span>
                   {path === "/" && <span className="nav-shortcut">01</span>}
+                  {path === "/updates" && !!updateSummary?.count && (
+                    <span
+                      className="nav-update-count"
+                      aria-label={`${updateSummary.count} updates available`}
+                    >
+                      {updateSummary.count > 99 ? "99+" : updateSummary.count}
+                    </span>
+                  )}
                 </NavLink>
               ),
             )}
@@ -551,7 +563,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.3.0"}</span>
+            <span className="version">v{metrics?.version || "0.4.0"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -664,7 +676,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.3.0"}
+              {metrics?.version || "0.4.0"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>
@@ -1402,6 +1414,33 @@ function SettingsPage() {
             <small>
               Public or private repository used only for verified MediaHub
               releases. Configure encrypted private access on the Updates page.
+            </small>
+          </label>
+          <label>
+            Automatic update checks
+            <select
+              name="update_check_interval_hours"
+              value={draft.update_check_interval_hours}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  update_check_interval_hours: Number(
+                    event.target.value,
+                  ) as Settings["update_check_interval_hours"],
+                })
+              }
+            >
+              <option value={0}>Off</option>
+              <option value={1}>Every hour</option>
+              <option value={6}>Every 6 hours</option>
+              <option value={12}>Every 12 hours</option>
+              <option value={24}>Every day</option>
+              <option value={72}>Every 3 days</option>
+              <option value={168}>Every week</option>
+            </select>
+            <small>
+              Checks only release metadata. Updates are installed only after
+              explicit approval.
             </small>
           </label>
           <label className="check-label">

@@ -39,7 +39,9 @@ as supported provisioning workflows until their adapters pass equivalent tests.
 
 ## Persistence and recovery
 
-The generated `compose.json` pins the exact built image IDs. Keep the
+The generated `compose.json` pins the exact built image IDs. The installation
+also creates a root-owned trusted release-image policy, installed-version marker,
+networkless transactional host updater and a systemd path watcher. Keep the
 installation root and data filesystem persistent. Missing media storage blocks
 Plex; missing Downloads storage blocks Seedbox. Before restarting a Docker host,
 ensure its data mount is configured to start before Docker and guard against a
@@ -52,11 +54,18 @@ does not provision a Proxmox VM or guess which disk is safe to mount.
 
 ## Updates
 
-Plex update/check/rollback is available in MediaHub. MediaHub Core and Seedbox
-deployment images are deliberately pinned. Before updating them, export verified
-configuration backups, record the current image IDs, build the reviewed release,
-and replace only the relevant deployment image. Verify HTTPS, storage and app
-health; roll back to the recorded image/config if checks fail. Do not use
+Plex update/check/rollback is available in MediaHub. Core and its local Agent can
+be updated from the Updates page when the configured GitHub Release contains all
+three bounded, digest-identified assets. Core verifies and stages the assets;
+the root-owned, networkless helper then snapshots configuration, loads both exact
+image digests, starts Agent and Core, verifies health, and restores the previous
+configuration automatically if verification fails. Media mounts are never part
+of that transaction.
+
+Automatic checks are configurable from Settings and only create a notification.
+They never install software. Every Core/Agent installation requires an explicit
+administrator click. Seedbox/VPN image updates remain pinned and separately
+coordinated because they must preserve fail-closed networking. Do not use an
 unattended `latest` image replacement for the VPN namespace or app databases.
-An upstream MediaHub release repository has not been assigned to this checkout;
-the UI explicitly reports that rather than inventing an available version.
+See [Platform updates](operations/platform-updates.md) for the trust model,
+status files and rollback procedure.

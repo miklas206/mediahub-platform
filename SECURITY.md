@@ -1,6 +1,6 @@
 # Security policy
 
-v0.3.0 targets authenticated private/LAN deployments over HTTPS. Public Internet
+v0.4.0 targets authenticated private/LAN deployments over HTTPS. Public Internet
 exposure has not been enabled or independently security-audited.
 Before a public GitHub release, maintainers must enable private vulnerability reporting and publish
 a monitored security contact. Do not post secrets or exploitable production details in public issues.
@@ -18,6 +18,10 @@ a monitored security contact. Do not post secrets or exploitable production deta
 - Verified TOTP enrollment, hashed one-use recovery codes and session management.
 - Encrypted durable application secrets and restricted RAM-backed runtime files.
 - Application-authored structured logs only; no passwords, headers or request bodies.
+- Core/Agent updates use bounded, digest-verified offline bundles. The root-owned
+  networkless helper enforces trusted image repositories, forward-only versions,
+  configuration backup, health verification and automatic rollback without
+  traversing media storage.
 
 Local development HTTP is unencrypted. Production browser HTTPS terminates in Core;
 internal Core–Agent HTTPS validates CA trust and hostname/IP. DNS and remote access

@@ -14,6 +14,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -74,6 +75,11 @@ def main():
     parser.add_argument("--lan-ip")
     parser.add_argument("--storage")
     parser.add_argument(
+        "--release-image-prefix",
+        default="ghcr.io/miklas206/mediahub-platform",
+        help="Trusted lowercase GHCR prefix for Core and Agent release images",
+    )
+    parser.add_argument(
         "--device-snapshot", help="Optional existing host-generated metadata file for an LXC"
     )
     args = parser.parse_args()
@@ -81,6 +87,14 @@ def main():
         raise ValueError("Run on the new Linux Docker host as root")
     if Path("/etc/pve").exists():
         raise ValueError("Do not install on the Proxmox hypervisor. Use a new guest")
+    image_prefix = args.release_image_prefix
+    if not re.fullmatch(r"ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+", image_prefix):
+        raise ValueError("Release image prefix must be a lowercase GHCR repository")
+    project_version = tomllib.loads((SOURCE / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]["version"]
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", project_version):
+        raise ValueError("Installer requires a stable semantic project version")
     for executable in ["docker", "openssl", "findmnt", "systemctl", "lsblk"]:
         if not shutil.which(executable):
             raise ValueError(f"Install prerequisite first: {executable}")
@@ -120,10 +134,20 @@ def main():
         return
     # All persistent writes below target this new installation or new subfolders.
     root.mkdir(mode=0o700)
-    for name in ["data", "agent", "tls-core", "tls-agent", "trust", "authority", "evidence"]:
+    for name in [
+        "data",
+        "agent",
+        "tls-core",
+        "tls-agent",
+        "trust",
+        "authority",
+        "evidence",
+        "updates",
+    ]:
         path = root / name
         path.mkdir(mode=0o700)
         os.chown(path, 10001, 10001)
+    (root / "update-backups").mkdir(mode=0o700)
     folders = {
         kind: choose_directory(kind.replace("_", " ").title(), storage / kind, storage)
         for kind in ["movies", "tv", "other", "downloads", "appdata"]
@@ -335,6 +359,7 @@ def main():
         "group_add": ["1000"],
         "volumes": [
             f"{root}/data:/data",
+            f"{root}/updates:/updates",
             f"{root}/agent/token:/agent-token:ro",
             f"{root}/tls-core:/tls:ro",
             f"{root}/trust:/trust:ro",
@@ -350,6 +375,7 @@ def main():
             "MEDIAHUB_BROWSER_TLS_KEY": "/tls/server.key",
             "MEDIAHUB_STORAGE_ROOTS": json.dumps([str(storage)]),
             "MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST": "true",
+            "MEDIAHUB_PLATFORM_UPDATE_SPOOL": "/updates",
         },
         "healthcheck": {
             "test": [
@@ -368,6 +394,57 @@ def main():
         "networks": {"control": {"internal": True}, "lan": {}},
     }
     new_file(root / "compose.json", json.dumps(compose, indent=2))
+    new_file(root / "installed-version", project_version + "\n", 0o600)
+    new_file(
+        root / "update-policy.json",
+        json.dumps(
+            {
+                "coreRepository": image_prefix + "-core",
+                "agentRepository": image_prefix + "-agent",
+            },
+            indent=2,
+        )
+        + "\n",
+        0o600,
+    )
+    updater_script = root / "platform_update_host.py"
+    new_file(
+        updater_script,
+        (SOURCE / "scripts/platform_update_host.py").read_text(encoding="utf-8"),
+        0o700,
+    )
+    updater_name = "mediahub-platform-update"
+    new_file(
+        Path("/etc/systemd/system") / (updater_name + ".service"),
+        "[Unit]\n"
+        "Description=MediaHub transactional platform update\n"
+        "Requires=docker.service\n"
+        "After=docker.service\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        f"ExecStart=/usr/bin/python3 {updater_script} --root {root}\n"
+        "User=root\n"
+        "Group=root\n"
+        "UMask=0077\n"
+        "NoNewPrivileges=true\n"
+        "PrivateTmp=true\n"
+        "ProtectHome=true\n"
+        "ProtectSystem=strict\n"
+        f"ReadWritePaths={root} /var/run/docker.sock\n"
+        "RestrictAddressFamilies=AF_UNIX\n",
+        0o644,
+    )
+    new_file(
+        Path("/etc/systemd/system") / (updater_name + ".path"),
+        "[Unit]\nDescription=Watch for verified MediaHub updates\n"
+        "[Path]\n"
+        f"PathExists={root}/updates/request.json\n"
+        f"Unit={updater_name}.service\n"
+        "[Install]\nWantedBy=multi-user.target\n",
+        0o644,
+    )
+    command("systemctl", "daemon-reload")
+    command("systemctl", "enable", "--now", updater_name + ".path")
     command("docker", "compose", "-f", root / "compose.json", "up", "-d", capture=False)
     print(f"Open https://{address}:18765 after importing ONLY {root}/trust/ca.pem on your client.")
     print("Never copy authority/ca.key or disable certificate validation.")

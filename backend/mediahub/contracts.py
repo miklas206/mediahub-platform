@@ -36,6 +36,7 @@ class PlatformSettings(StrictModel):
     activity_page_size: int = Field(default=50, ge=10, le=100)
     advanced_mode: bool = False
     release_repository: str | None = Field(default=None, max_length=201)
+    update_check_interval_hours: Literal[0, 1, 6, 12, 24, 72, 168] = 24
     visible_navigation: list[
         Literal[
             "/",

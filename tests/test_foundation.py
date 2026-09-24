@@ -283,7 +283,7 @@ def test_metrics_real_and_protected(logged_in):
 
 
 def test_mock_lifecycle_and_activity(logged_in):
-    app = logged_in.get("/api/apps").json()["data"][0]
+    app = next(item for item in logged_in.get("/api/apps").json()["data"] if item["isMock"])
     assert app["isMock"] and app["health"]["status"] == "healthy"
     app_id = app["id"]
     for action, expected in [
@@ -350,6 +350,7 @@ def test_settings_persist_and_reject_secrets(logged_in):
         **values,
         "advanced_mode": False,
         "release_repository": None,
+        "update_check_interval_hours": 24,
         "visible_navigation": [
             "/",
             "/apps",

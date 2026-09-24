@@ -1,11 +1,12 @@
 """Read-only GitHub release discovery for MediaHub itself.
 
 The provider never accepts a URL from the browser. It talks only to GitHub's
-fixed API origin and reports a release as installable only when the release
-contains the expected SHA-256 identified manifest. Applying the release is a
-separate host-updater responsibility with its own rollback boundary.
+fixed API origin and exposes only the three bounded, SHA-256 identified assets
+required by the transactional updater. Applying the release is a separate
+host-updater responsibility with its own rollback boundary.
 """
 
+import re
 from urllib.parse import urlsplit
 
 import httpx
@@ -30,6 +31,7 @@ class GitHubReleaseProvider:
             "releaseUrl": None,
             "publishedAt": None,
             "manifest": None,
+            "assets": {},
             "installReady": False,
             "privateAccessConfigured": bool(token),
         }
@@ -96,31 +98,43 @@ class GitHubReleaseProvider:
         parsed_release = urlsplit(release_url or "")
         if parsed_release.scheme != "https" or parsed_release.hostname != "github.com":
             release_url = None
-        manifest = None
+        accepted = {
+            "mediahub-release.json": 1024 * 1024,
+            "mediahub-core-image.tar.gz": 2 * 1024**3,
+            "mediahub-agent-image.tar.gz": 2 * 1024**3,
+        }
+        assets = {}
         for asset in payload.get("assets", []):
-            if not isinstance(asset, dict) or asset.get("name") != "mediahub-release.json":
+            if not isinstance(asset, dict) or asset.get("name") not in accepted:
                 continue
+            name = asset["name"]
             digest = asset.get("digest")
             download_url = asset.get("browser_download_url")
             api_url = asset.get("url")
+            size = asset.get("size")
             parsed_download = urlsplit(download_url or "")
             parsed_api = urlsplit(api_url or "")
             if (
                 isinstance(digest, str)
-                and digest.startswith("sha256:")
-                and len(digest) == 71
+                and re.fullmatch(r"sha256:[a-f0-9]{64}", digest)
+                and type(size) is int
+                and 0 < size <= accepted[name]
                 and parsed_download.scheme == "https"
                 and parsed_download.hostname == "github.com"
+                and parsed_download.path.startswith(f"/{repository}/releases/download/")
                 and parsed_api.scheme == "https"
                 and parsed_api.hostname == "api.github.com"
+                and parsed_api.path.startswith(f"/repos/{repository}/releases/assets/")
             ):
-                manifest = {
-                    "name": "mediahub-release.json",
+                assets[name] = {
+                    "name": name,
                     "digest": digest,
+                    "size": size,
                     "downloadUrl": download_url,
                     "apiUrl": api_url,
                 }
-            break
+        manifest = assets.get("mediahub-release.json")
+        complete = set(assets) == set(accepted)
         available = latest > installed
         return {
             **base,
@@ -129,12 +143,13 @@ class GitHubReleaseProvider:
             "releaseUrl": release_url,
             "publishedAt": payload.get("published_at"),
             "manifest": manifest,
+            "assets": assets,
             # A host-side transactional updater is deliberately a separate gate.
             "installReady": False,
             "message": (
-                "A newer verified release is available. Host update activation is still required."
-                if available and manifest
-                else "A newer release exists, but its verified MediaHub manifest is missing."
+                "A newer complete, digest-verified release is available."
+                if available and complete
+                else "A newer release exists, but one or more verified MediaHub assets are missing."
                 if available
                 else "MediaHub is up to date."
             ),

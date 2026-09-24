@@ -116,15 +116,13 @@ def register_cloudflared_app(svc):
     manifest = parse_manifest(svc.config.manifest_dir / "cloudflared" / "manifest.yaml")
     with svc.sessions.begin() as db:
         app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == manifest.id))
-        if app is None and not svc.config.cloudflared_status_url:
-            return
         created = app is None
         if app is None:
             app = InstalledApp(
                 package_id=manifest.id,
                 name=manifest.name,
                 version=manifest.version,
-                state="monitored",
+                state="monitored" if svc.config.cloudflared_status_url else "not_configured",
                 is_mock=False,
             )
             db.add(app)
@@ -133,11 +131,12 @@ def register_cloudflared_app(svc):
             app.name = manifest.name
             if Version(app.version) < Version(manifest.version):
                 app.version = manifest.version
+            app.state = "monitored" if svc.config.cloudflared_status_url else "not_configured"
         app_id = app.id
     svc.apps.adapters[app_id] = CloudflaredAppAdapter(svc.cloudflare_tunnel, svc.events, app_id)
     if created:
         svc.events.record(
             "app.registered",
             app_id,
-            "Cloudflare Tunnel registered as a read-only infrastructure app",
+            "Cloudflare Tunnel registered; monitoring stays read-only until configured",
         )

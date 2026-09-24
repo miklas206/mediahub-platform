@@ -1,7 +1,7 @@
 # Phase 2 setup
 
 > Historical development instructions, not the current production installer.
-> For v0.3.0 HTTPS installation, use [Install MediaHub](install.md).
+> For v0.4.0 HTTPS installation, use [Install MediaHub](install.md).
 
 Core and Agent run independently. Existing services are never imported or executed by Apply.
 Keep development bound to loopback. Do not reuse production databases/configuration.

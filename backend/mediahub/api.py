@@ -13,7 +13,6 @@ from mediahub.contracts import PlatformSettings, StorageInput, StrictModel
 from mediahub.errors import DomainError
 from mediahub.logging import recent_logs
 from mediahub.network import cookie_options
-from mediahub.platform_updates import GitHubReleaseProvider
 
 router = APIRouter()
 
@@ -183,7 +182,10 @@ async def app_logs(app_id: str, request: Request, user=Depends(authenticated)):
 
 @router.post("/apps/{app_id}/update-check")
 async def app_update_check(app_id: str, request: Request, user=Depends(administrator)):
-    return result(await services(request).apps.adapter(app_id).updateCheck())
+    svc = services(request)
+    checked = await svc.apps.adapter(app_id).updateCheck()
+    await svc.updates.record_app(svc.apps.get(app_id), checked)
+    return result(checked)
 
 
 @router.post("/apps/{app_id}/uninstall")
@@ -230,10 +232,53 @@ async def settings(request: Request, user=Depends(authenticated)):
 @router.get("/updates/platform")
 async def platform_update(request: Request, user=Depends(authenticated)):
     svc = services(request)
-    repository = svc.settings.get().release_repository
-    return result(
-        await GitHubReleaseProvider(__version__).check(repository, svc.release_credentials.token())
+    checked = await svc.updates.check_platform()
+    checked["installReady"] = bool(
+        svc.platform_update.available
+        and checked.get("updateAvailable")
+        and set(checked.get("assets") or {})
+        == {
+            "mediahub-release.json",
+            "mediahub-core-image.tar.gz",
+            "mediahub-agent-image.tar.gz",
+        }
     )
+    await svc.updates.record_platform(checked)
+    return result(checked)
+
+
+@router.post("/updates/platform/install", status_code=202)
+async def install_platform_update(request: Request, user=Depends(administrator)):
+    svc = services(request)
+    checked = await svc.updates.check_platform()
+    return result(await svc.platform_update.install(checked))
+
+
+@router.get("/updates/platform/operation")
+async def platform_update_operation(request: Request, user=Depends(authenticated)):
+    return result(services(request).platform_update.status())
+
+
+@router.get("/updates/summary")
+async def update_summary(request: Request, user=Depends(authenticated)):
+    return result(services(request).updates.summary())
+
+
+@router.post("/updates/check")
+async def check_all_updates(request: Request, user=Depends(administrator)):
+    return result(await services(request).updates.check_all())
+
+
+@router.get("/notifications")
+async def notifications(request: Request, user=Depends(authenticated)):
+    return result({"entries": services(request).events.notifications(limit=25)})
+
+
+@router.post("/notifications/{notification_id}/read")
+async def read_notification(notification_id: str, request: Request, user=Depends(authenticated)):
+    if not services(request).events.read_notification(notification_id):
+        raise DomainError("notification_not_found", "Notification not found", 404)
+    return result({"read": True})
 
 
 @router.get("/updates/platform/credentials")

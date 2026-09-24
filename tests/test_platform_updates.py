@@ -12,6 +12,16 @@ def response(payload, status=200):
     return httpx.MockTransport(lambda request: httpx.Response(status, json=payload))
 
 
+def asset(repository, tag, name, identifier, size=1024, digest=None):
+    return {
+        "name": name,
+        "digest": digest or "sha256:" + f"{identifier:x}"[-1] * 64,
+        "size": size,
+        "browser_download_url": f"https://github.com/{repository}/releases/download/{tag}/{name}",
+        "url": f"https://api.github.com/repos/{repository}/releases/assets/{identifier}",
+    }
+
+
 def test_unconfigured_release_provider_is_offline_and_honest():
     data = asyncio.run(GitHubReleaseProvider("0.2.0").check(None))
     assert data["configured"] is False
@@ -28,6 +38,7 @@ def test_release_check_requires_digest_identified_manifest():
             {
                 "name": "mediahub-release.json",
                 "digest": "sha256:" + "a" * 64,
+                "size": 752,
                 "browser_download_url": "https://github.com/example/mediahub/releases/download/v0.3.0/mediahub-release.json",
                 "url": "https://api.github.com/repos/example/mediahub/releases/assets/123",
             }
@@ -38,6 +49,48 @@ def test_release_check_requires_digest_identified_manifest():
     assert data["manifest"]["digest"] == "sha256:" + "a" * 64
     assert data["manifest"]["apiUrl"].endswith("/assets/123")
     assert data["installReady"] is False
+
+
+def test_release_provider_exposes_only_a_complete_bounded_asset_set():
+    repository = "example/mediahub"
+    payload = {
+        "tag_name": "v0.4.0",
+        "html_url": "https://github.com/example/mediahub/releases/tag/v0.4.0",
+        "published_at": "2026-09-25T10:00:00Z",
+        "assets": [
+            asset(repository, "v0.4.0", "mediahub-release.json", 11, 800),
+            asset(repository, "v0.4.0", "mediahub-core-image.tar.gz", 12, 80_000_000),
+            asset(repository, "v0.4.0", "mediahub-agent-image.tar.gz", 13, 120_000_000),
+            asset(repository, "v0.4.0", "unexpected.zip", 14, 20),
+        ],
+    }
+    data = asyncio.run(GitHubReleaseProvider("0.3.0", response(payload)).check(repository))
+    assert set(data["assets"]) == {
+        "mediahub-release.json",
+        "mediahub-core-image.tar.gz",
+        "mediahub-agent-image.tar.gz",
+    }
+    assert data["message"] == "A newer complete, digest-verified release is available."
+
+
+def test_release_provider_rejects_wrong_hosts_paths_sizes_and_non_hex_digests():
+    repository = "example/mediahub"
+    values = [
+        asset(repository, "v0.4.0", "mediahub-release.json", 21, 800),
+        asset(repository, "v0.4.0", "mediahub-core-image.tar.gz", 22, 80_000_000),
+        asset(repository, "v0.4.0", "mediahub-agent-image.tar.gz", 23, 120_000_000),
+    ]
+    values[0]["digest"] = "sha256:" + "z" * 64
+    values[1]["url"] = "https://attacker.example/assets/22"
+    values[2]["size"] = 3 * 1024**3
+    payload = {
+        "tag_name": "v0.4.0",
+        "html_url": "https://github.com/example/mediahub/releases/tag/v0.4.0",
+        "assets": values,
+    }
+    data = asyncio.run(GitHubReleaseProvider("0.3.0", response(payload)).check(repository))
+    assert data["assets"] == {}
+    assert "verified MediaHub assets are missing" in data["message"]
 
 
 def test_release_check_rejects_invalid_versions_without_leaking_payload():

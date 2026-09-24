@@ -258,6 +258,21 @@ nav a.active {
   font-size: 10px;
   opacity: 0.7;
 }
+.nav-update-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #071614;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 26px;
@@ -1001,6 +1016,65 @@ nav a.active {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
 }
+.updates-grid {
+  align-items: start;
+}
+.updates-grid > .panel {
+  align-self: start;
+}
+.updates-grid .operation-progress {
+  margin: 18px 0 0;
+}
+.update-policy-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.update-policy-heading > div:first-child {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+}
+.update-policy-heading > div:first-child .muted {
+  grid-column: 2;
+}
+.update-count-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 9px 12px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 999px;
+  background: var(--accent-bg);
+}
+.update-notifications {
+  display: grid;
+  gap: 10px;
+}
+.update-notification {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--raised);
+}
+.update-notification > div {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+}
+.update-notification span {
+  color: var(--muted);
+  font-size: 11px;
+}
 .app-detail {
   padding: 24px;
   min-height: 255px;
@@ -1045,13 +1119,19 @@ nav a.active {
 
 .private-release-access {
   margin-top: 1rem;
-  padding-top: 1rem;
+  padding: 1rem 0;
   border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
-.private-release-access h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
+.private-release-access summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.private-release-access[open] summary {
+  margin-bottom: 0.8rem;
 }
 
 .inline-secret-form {

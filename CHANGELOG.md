@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-25
+
+- Added compact update cards whose progress stays inside the app being checked
+  or updated, preventing layout jumps and hidden status at the top of the page.
+- Added configurable scheduled update checks, deduplicated notifications, live
+  SSE refresh and an available-update badge in the sidebar.
+- Added a complete, rollback-protected MediaHub Core and local Agent updater for
+  digest-verified private GitHub Release bundles. The networkless root helper
+  enforces trusted image repositories, stable forward-only versions, bounded
+  configuration snapshots, health verification and automatic rollback; media is
+  outside the transaction.
+- Cloudflare Tunnel is now always visible as an optional app. Without a local
+  helper it explains that monitoring is not configured; with one it reports
+  connections, route health and official cloudflared release information.
+
 ## 0.3.0 - 2026-09-25
 
 - Added reusable operation progress with stages, completion percentage and

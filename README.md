@@ -1,6 +1,6 @@
 # MediaHub
 
-**A local-first home for your media apps.** MediaHub 0.3.0 brings Plex,
+**A local-first home for your media apps.** MediaHub 0.4.0 brings Plex,
 protected downloads, storage, health and everyday controls into one interface.
 Dark mode, responsive layouts and simple controls come first; technical host and
 runtime details stay in Advanced mode.
@@ -24,6 +24,10 @@ an audited appliance. Review the security and operational limits before use.
   and remove a torrent **without deleting downloaded files**.
 - Encrypted Core, Plex and Seedbox configuration exports with offline verification
   and non-overwriting restore staging. Media backup remains separate.
+- Scheduled release checks, an update badge and a rollback-protected Core/Agent
+  updater that accepts only complete digest-verified GitHub Release bundles.
+- Optional Cloudflare Tunnel app visibility, local helper health, public-route
+  probes and official cloudflared release checks without granting tunnel control.
 - Optional read-only FjordHub Access Token adapter. No dependency on FjordHub,
   Cloudflare, a public address, or an exposed torrent-client WebUI.
 
@@ -81,10 +85,13 @@ Neither Plex account entitlements nor remote streaming are bypassed by MediaHub.
 
 ## Maintenance and limitations
 
-Plex has a UI update/rollback workflow. Core and Seedbox deployment images remain
-pinned and use reviewed deployment updates. No upstream MediaHub GitHub release
-repository is assumed; version checks report that truthfully. Automatic patching
-is disabled. Certificates require operator-managed renewal before their expiry.
+Plex has a UI update/rollback workflow. Core and local Agent updates use complete
+digest-verified release bundles, a root-owned trusted image policy, a configuration
+snapshot, health verification and automatic rollback. Release checks can be
+scheduled, but installation always requires administrator approval. Seedbox/VPN
+updates remain separately coordinated and fail-closed. No upstream MediaHub GitHub
+release repository is assumed; version checks report that truthfully. Certificates
+require operator-managed renewal before their expiry.
 
 Configuration exports do not back up media, deployment TLS identities or whole
 servers. App exports are bounded to 48 MiB; Core to 64 MiB. Restore stages a new

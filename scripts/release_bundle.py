@@ -43,7 +43,7 @@ DIRECTORIES = [
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="mediahub-v020")
+    parser.add_argument("--name", default="mediahub-v040")
     args = parser.parse_args()
     if not args.name.replace("-", "").isalnum():
         parser.error("Archive name must contain only letters, digits and hyphens")
