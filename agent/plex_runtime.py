@@ -287,7 +287,7 @@ class PlexRuntime:
                 mounts=[],
                 storageMarkers=policy.storageMarkers,
                 hostMountSnapshot=policy.hostMountSnapshot,
-                requiredMounts={},
+                requiredMounts=policy.requiredMounts,
                 requiredFilesystemUuids=policy.requiredFilesystemUuids,
             )
             if not await self.control.storage_verified(guard):

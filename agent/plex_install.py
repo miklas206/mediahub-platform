@@ -49,6 +49,7 @@ class PlexInstallPolicy(StrictModel):
     reuseEncryptedPreferences: bool = False
     controlNetwork: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,80}$")
     hostMountSnapshot: str
+    requiredMounts: dict[str, str] = Field(default_factory=dict)
     requiredFilesystemUuids: dict[str, str]
     storageMarkers: dict[str, str]
 
@@ -84,7 +85,7 @@ PMS_ROOT = "/config/Library/Application Support/Plex Media Server"
 def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
     if spec.hostId != policy.hostId:
         raise DomainError("plex_host_mismatch", "Plex host does not match the approved host", 409)
-    if not policy.requiredFilesystemUuids or not policy.storageMarkers:
+    if not (policy.requiredMounts or policy.requiredFilesystemUuids) or not policy.storageMarkers:
         raise DomainError(
             "plex_storage_guard_missing", "Verified media storage must be configured first", 409
         )
@@ -123,7 +124,9 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
         "org.mediahub.installation": spec.installationId,
     }
     app_root = str(Path(appdata.path) / spec.installationId)
-    protected_roots = [Path(path) for path in policy.requiredFilesystemUuids]
+    protected_roots = [
+        Path(path) for path in (*policy.requiredMounts, *policy.requiredFilesystemUuids)
+    ]
     for path in [app_root, *(mount["Source"] for mount in bindings)]:
         if not any(Path(path) == root or root in Path(path).parents for root in protected_roots):
             raise DomainError(

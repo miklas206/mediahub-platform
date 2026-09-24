@@ -54,6 +54,15 @@ def test_host_and_storage_guards_required(install_policy):
         installation_plan(install_policy, spec())
 
 
+def test_verified_pooled_mount_is_a_valid_storage_guard(install_policy, tmp_path):
+    install_policy.requiredFilesystemUuids = {}
+    install_policy.requiredMounts = {str(tmp_path): "mediahub-main"}
+
+    plan = installation_plan(install_policy, spec())
+
+    assert plan["installation"]["moviesStorageIds"] == ["movies"]
+
+
 def test_appdata_cannot_overlap_existing_media(install_policy):
     install_policy.storage["appdata"].path = install_policy.storage["movies"].path
     with pytest.raises(DomainError):
