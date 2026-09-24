@@ -206,7 +206,8 @@ async def storage_register(body: StorageInput, request: Request, user=Depends(au
     return result(services(request).storage.register(body))
 
 
-@router.get("/activity")
+@router.get("/activity", include_in_schema=False)
+@router.get("/events/history")
 async def activity(
     request: Request, limit: int | None = Query(None, ge=1, le=100), user=Depends(authenticated)
 ):

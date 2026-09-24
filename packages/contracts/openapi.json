@@ -509,10 +509,10 @@
         }
       }
     },
-    "/api/v1/activity": {
+    "/api/v1/events/history": {
       "get": {
         "summary": "Activity",
-        "operationId": "activity_api_v1_activity_get",
+        "operationId": "activity_api_v1_events_history_get",
         "parameters": [
           {
             "name": "limit",

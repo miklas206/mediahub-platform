@@ -262,7 +262,7 @@ def test_mock_lifecycle_and_activity(logged_in):
         )
     assert logged_in.get(f"/api/apps/{app_id}/health").json()["data"]["status"] == "healthy"
     assert logged_in.get("/api/apps/missing").status_code == 404
-    events = logged_in.get("/api/activity").json()["data"]
+    events = logged_in.get("/api/events/history").json()["data"]
     assert {"system.started", "app.registered", "user.logged_in", "app.health.changed"} <= {
         e["event"] for e in events
     }

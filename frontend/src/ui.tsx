@@ -734,7 +734,7 @@ function Dashboard({
     data: recentActivity,
     error: activityError,
     reload: reloadActivity,
-  } = useData<Activity[]>("/activity?limit=4");
+  } = useData<Activity[]>("/events/history?limit=4");
   useEffect(() => {
     reloadActivity();
   }, [revision, reloadActivity]);
@@ -1180,7 +1180,7 @@ export function LegacyStoragePage() {
 }
 
 function ActivityPage({ revision }: { revision: number }) {
-  const { data, error, reload } = useData<Activity[]>("/activity");
+  const { data, error, reload } = useData<Activity[]>("/events/history");
   useEffect(reload, [revision, reload]);
   return (
     <Section
