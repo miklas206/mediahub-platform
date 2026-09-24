@@ -3,9 +3,10 @@
 ## Decision
 
 Prefer **NFSv4 for Linux hosts**, supplied by one explicitly managed storage owner.
-Keep SMB for Windows Explorer. Both protocols must expose the same underlying
-directories; they are not replication mechanisms. Phase 3 registers metadata only:
-it does not create exports, mount media, change ownership, or migrate files.
+Keep SMB for Windows Explorer. Both protocols may expose the same underlying
+directories; they are not replication mechanisms. MediaHub's logical registry
+does not format disks, move media or infer ownership changes. Host-level exports
+and mounts remain explicit, reviewed deployment operations.
 
 | Method | Appropriate use | Trade-offs |
 | --- | --- | --- |
@@ -15,8 +16,8 @@ it does not create exports, mount media, change ownership, or migrate files.
 | Bind mount | PVE-owned directory into unprivileged LXC | Low overhead, but LXC UID mapping and backup inclusion are explicit responsibilities. A bind mount is not a cross-host protocol. |
 
 NFS is the recommended direction, **not an instruction to replace current exports**.
-The present storage owner may remain in service during a later migration. Moving
-ownership from a source VM to NAS/storage host requires its own approved cutover.
+Moving ownership from a source VM to a NAS or storage host requires its own
+approved, backed-up and verified cutover.
 Never attach the same ordinary ext4 block filesystem read/write to two guests.
 
 ## Logical model
@@ -95,12 +96,14 @@ Agent identity separately. Shared mounts are not automatically included in LXC/V
 backups, and a second mount is not a backup. Coordinate SQLite backups correctly;
 copying an active database without its transaction state is not a backup strategy.
 
-## Phase 3 boundary
+## Implementation boundary
 
 Implemented: registry and API/UI for logical metadata, host paths, access ceilings,
-Agent validation and host-specific app-plan resolution. Not implemented: NFS/SMB
-provisioning, production media mounts, automatic dataset identity verification,
-copy/move/import execution or Seedbox VM creation.
+Agent validation, host-specific app-plan resolution and fail-closed mount checks.
+Deployment documentation supports narrow NFSv4 sharing between a storage owner
+and an isolated Seedbox. MediaHub itself deliberately does not format disks,
+invent exports, migrate media, rewrite ownership recursively or attach writable
+raw filesystems to multiple guests.
 
 References: [NFS administration](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_and_using_network_file_services/deploying-an-nfs-server_configuring-and-using-network-file-services),
 [Servarr Docker storage guidance](https://github.com/Servarr/Wiki/blob/master/docker-guide.md).

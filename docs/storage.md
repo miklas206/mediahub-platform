@@ -21,14 +21,15 @@ Agent creation enabled, and Apply. Existing folders are reused without deleting 
 Interrupted Apply may leave a newly created empty directory: retries inspect/reuse it, never delete
 it as rollback. Registering or editing a mapping does not move any media or change filesystem owners.
 
-Capacity is per filesystem, not the sum of logical folders on the same disk. No SMB/NFS mounts,
-formatting, USB passthrough or production mounts are created. Future container paths must be mapped
-explicitly; appdata and VPN appdata slots are separate to avoid config collisions.
-# Phase 4 test boundary
+Capacity is per filesystem, not the sum of logical folders on the same disk. MediaHub does not
+format disks or attach raw filesystems. Container paths and host mounts must be mapped explicitly;
+appdata and VPN appdata slots are separate to avoid configuration collisions.
 
-The new Seedbox uses only an explicitly delegated NFS test mapping. It does not
-gain access to existing downloads, movies or TV. Missing host mount observations,
-wrong source/marker or failed app-UID permissions block startup. The backing
-local mountpoint must not become a writable fallback, even for a root process.
-Tests withdraw only the new VM's test mount; they do not modify source exports.
-Shared media migration remains a separate, explicitly approved operation.
+## Seedbox isolation
+
+The Seedbox receives only its explicitly delegated Downloads mapping. It does
+not need Movies, TV or App Data access. Missing mount observations, an unexpected
+source or marker, and failed app-UID permissions block startup. The local backing
+mountpoint must not become a writable fallback, even for root. Restore storage
+first, verify its identity and permissions, then let the Agent restart VPN and
+qBittorrent through the normal fail-closed sequence.
