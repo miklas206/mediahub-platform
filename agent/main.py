@@ -76,6 +76,10 @@ class AgentConfig(BaseSettings):
         return self
 
 
+class PlexVPNImport(StrictModel):
+    vpnConfig: SecretStr = Field(exclude=True, min_length=100, max_length=65536)
+
+
 def initialize(config: AgentConfig):
     config.state_dir.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
@@ -258,7 +262,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.get("/v1/version")
     async def version():
-        return {"version": "0.2.0-dev", "protocolVersion": 1}
+        return {"version": "0.3.0", "protocolVersion": 1}
 
     @app.get("/v1/status")
     async def status():
@@ -291,7 +295,7 @@ def create_agent(config: AgentConfig | None = None):
             except OSError:
                 pass
         return {
-            "version": "0.2.0-dev",
+            "version": "0.3.0",
             "protocolVersion": 1,
             "hostname": platform.node(),
             "os": os_name,
@@ -361,6 +365,10 @@ def create_agent(config: AgentConfig | None = None):
     @app.post("/v1/plex/actions/{action}", dependencies=[Depends(secure_workflow)])
     async def plex_action(action: str):
         return await plex.action(action)
+
+    @app.post("/v1/plex/vpn/enable", dependencies=[Depends(secure_workflow)], status_code=202)
+    async def plex_vpn_enable(body: PlexVPNImport):
+        return await plex_runtime.enable_vpn(body.vpnConfig.get_secret_value().encode())
 
     @app.get("/v1/plex/logs")
     async def plex_logs():

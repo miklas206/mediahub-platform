@@ -108,6 +108,45 @@
           ],
           "default": null,
           "title": "Default"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "helpUrl": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helpurl"
         }
       },
       "required": [
@@ -259,6 +298,56 @@
         "repository"
       ],
       "title": "Image",
+      "type": "object"
+    },
+    "InstallGuideStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "helpUrl": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Helpurl"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description"
+      ],
+      "title": "InstallGuideStep",
       "type": "object"
     },
     "Maintainer": {
@@ -799,6 +888,14 @@
         "$ref": "#/$defs/ConfigField"
       },
       "title": "Configfields",
+      "type": "array"
+    },
+    "installGuide": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/InstallGuideStep"
+      },
+      "title": "Installguide",
       "type": "array"
     },
     "requiredDevices": {

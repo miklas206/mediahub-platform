@@ -36,6 +36,29 @@ class PlexStorageChoice(StrictModel):
         return value
 
 
+class PlexVPNInstallPolicy(StrictModel):
+    """Operator-owned Plex egress policy; browser callers cannot override it."""
+
+    provider: str = Field(default="protonvpn", pattern=r"^[a-z][a-z0-9_-]{2,40}$")
+    image: str = Field(pattern=r"^qmcgaw/gluetun@sha256:[a-f0-9]{64}$")
+    container: str = Field(default="mediahub-plex-main-vpn", pattern=r"^[a-z][a-z0-9_-]{2,80}$")
+    configVolume: str = Field(
+        default="mediahub-plex-main-vpn-config", pattern=r"^[a-z][a-z0-9_-]{2,80}$"
+    )
+    secretReference: str = Field(default="plex-vpn-profile", pattern=r"^[a-z][a-z0-9_-]{2,80}$")
+    expectedCountryCode: str = Field(default="DK", pattern=r"^[A-Z]{2}$")
+    lanSubnet: str = "192.168.1.0/24"
+    memoryBytes: int = Field(default=256 * 1024**2, ge=128 * 1024**2, le=1024**3)
+
+    @field_validator("lanSubnet")
+    @classmethod
+    def private_lan_subnet(cls, value):
+        network = ipaddress.ip_network(value, strict=True)
+        if network.version != 4 or not network.is_private or network.prefixlen < 16:
+            raise ValueError("Plex VPN requires a bounded private IPv4 LAN subnet")
+        return value
+
+
 class PlexInstallPolicy(StrictModel):
     hostId: str
     bindAddress: str
@@ -52,6 +75,7 @@ class PlexInstallPolicy(StrictModel):
     requiredMounts: dict[str, str] = Field(default_factory=dict)
     requiredFilesystemUuids: dict[str, str]
     storageMarkers: dict[str, str]
+    vpn: PlexVPNInstallPolicy | None = None
 
     @field_validator("bindAddress")
     @classmethod
@@ -172,7 +196,7 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
         "ExposedPorts": {"32400/tcp": {}},
         "HostConfig": {
             "Mounts": mounts,
-            "NetworkMode": "bridge",
+            "NetworkMode": "container:" + policy.vpn.container if policy.vpn else "bridge",
             "Privileged": False,
             "CapDrop": ["ALL"],
             "SecurityOpt": ["no-new-privileges:true"],
@@ -181,7 +205,6 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
                 "/run": f"rw,exec,{('noswap,' if policy.tmpfsNoSwap else '')}nosuid,nodev,size=64m,mode=0755,uid={policy.uid},gid={policy.gid}",
                 "/tmp": f"rw,{('noswap,' if policy.tmpfsNoSwap else '')}nosuid,nodev,size=128m,mode=1777",
             },
-            "PortBindings": {"32400/tcp": [{"HostIp": policy.bindAddress, "HostPort": "32400"}]},
             "Memory": policy.memoryBytes,
             "MemorySwap": policy.memoryBytes,
             "PidsLimit": 512,
@@ -190,7 +213,15 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
             "LogConfig": {"Type": "none", "Config": {}},
         },
     }
-    if policy.controlNetwork:
+    if policy.vpn is None:
+        container["HostConfig"]["PortBindings"] = {
+            "32400/tcp": [{"HostIp": policy.bindAddress, "HostPort": "32400"}]
+        }
+    else:
+        # Docker rejects exposed/published ports when another container owns
+        # the network namespace.  The VPN gateway publishes the LAN port.
+        container.pop("ExposedPorts", None)
+    if policy.controlNetwork and policy.vpn is None:
         container["NetworkingConfig"] = {
             "EndpointsConfig": {
                 "bridge": {},
@@ -207,6 +238,15 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
             kind: [m["Target"] for m in bindings if m["Target"].startswith("/media/" + kind + "/")]
             for kind in ("movies", "tv", "other")
         },
+        "vpn": (
+            {
+                "provider": policy.vpn.provider,
+                "container": policy.vpn.container,
+                "expectedCountryCode": policy.vpn.expectedCountryCode,
+            }
+            if policy.vpn
+            else None
+        ),
     }
     digest = hashlib.sha256(
         json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()

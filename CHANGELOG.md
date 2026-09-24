@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-25
+
 - Added reusable operation progress with stages, completion percentage and
   redacted technical details for Maintenance and update actions.
 - Added a safe Maintenance workspace under Settings with live Core, Agent,
@@ -17,6 +19,10 @@
 - Configurable public GitHub release discovery requiring a SHA-256 identified release manifest.
 - GHCR release workflow with immutable image digests and build attestations; host installation
   remains gated until the transactional updater and rollback path are deployed.
+- Added dedicated fail-closed Proton WireGuard networking for Plex remote access,
+  renewable NAT-PMP port forwarding and actual public-port reachability checks.
+- Added Cloudflare Tunnel health and official release monitoring plus a guided,
+  provider-safe App Store setup foundation for a future installer.
 
 ## 0.2.0
 

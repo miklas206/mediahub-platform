@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { Link, useParams } from "react-router-dom";
-import { Activity, HardDrive, ShieldCheck, Server } from "lucide-react";
+import { Activity, Cloud, HardDrive, ShieldCheck, Server } from "lucide-react";
 import { useLoad, Panel, ErrorBox } from "./phase2";
 import { bytes, uptime } from "./format";
 import "./runtime.css";
@@ -16,12 +16,12 @@ type Runtime = {
   health: string; available: boolean; observedAt?: number; cached: boolean;
   agentOnline: boolean; dockerHealthy?: boolean;
   portForwarding?: {status: string; currentPort: number | null; lastRenewed: number | null;
-    expiresAt: number | null; qBittorrentVerified: boolean};
+    expiresAt: number | null; qBittorrentVerified: boolean; plexVerified?: boolean};
   control?: {desiredRunning: boolean; manualIntervention: string[];
     operation: {state: string; action: string | null; message?: string};
     events: {timestamp: number; type: string; severity: string; message: string}[]};
   vpn?: {verified: boolean; externalIp: string | null; provider: string; protocol: string;
-    connectedSince: string | null; lastVerified: number | null};
+    connectedSince: string | null; lastVerified: number | null; countryCode?: string | null};
   qBittorrent?: {healthy: boolean; running: boolean; version: string | null; apiAuthenticated: boolean;
     bindingVerified: boolean; namespaceVerified: boolean; downloadSpeed: number; uploadSpeed: number;
     torrents: number; downloading: number; seeding: number; paused: number; errors: number};
@@ -32,6 +32,10 @@ type Runtime = {
   deviceChecks?: {id: string; connected: boolean; status: string; message: string}[];
   deviceInventory?: {stableIdentity: string | null; model: string | null; sizeBytes: number | null;
     connected: boolean; mounted: boolean; mounts: {path: string; readOnly: boolean}[]}[];
+  cloudflare?: {configured: boolean; status: string; checkedAt: number; cached?: boolean;
+    metricsReachable: boolean; connections: number; totalRequests?: number; requestErrors?: number;
+    version?: string | null; message: string; routes: {url: string; hostname: string;
+      reachable: boolean; statusCode: number | null; latencyMs: number; message: string}[]};
 };
 const stamp = (n?: number | null) => n ? new Date(n * 1000).toLocaleString() : "Not verified";
 const size = (n?: number | null) => n == null ? "Unavailable" : bytes(n);
@@ -106,13 +110,49 @@ function PlexPanel({report: r}: {report: Runtime}) {
       <Row label="Transcoding" value={p?.transcodingStreams ?? "Unavailable"}/>
       <Row label="RAM" value={size(p?.memoryBytes)}/>
       <Row label="CPU" value={p?.cpuPercent == null ? "Sampling / unavailable" : `${p.cpuPercent.toFixed(1)}%`}/>
-    </dl></Panel><Panel title="Libraries and storage"><p><Verified value={r.storage?.mounted}/> Required media mounts</p>
+    </dl></Panel><Panel title="Secure remote access"><div className="runtime-panel-title"><ShieldCheck/><strong>{r.vpn?.verified ? "Protected by VPN" : "VPN unavailable"}</strong></div>
+      <dl><Row label="Provider" value={r.vpn?.provider || "Unavailable"}/><Row label="Country" value={r.vpn?.countryCode || "Not verified"}/>
+      <Row label="External IP" value={r.vpn?.externalIp || "Not verified"}/><Row label="Public Plex port" value={r.portForwarding?.currentPort ?? "Not assigned"}/>
+      <Row label="Port lease" value={r.portForwarding?.status || "Not checked"}/><Row label="Last renewed" value={stamp(r.portForwarding?.lastRenewed)}/>
+      <div className="runtime-row"><dt>Public Plex port reachable</dt><dd><Verified value={r.portForwarding?.plexVerified}/></dd></div></dl>
+      <p className="muted">Internet traffic is fail-closed through the dedicated Plex VPN. Local access remains on 192.168.1.185:32400.</p>
+    </Panel><Panel title="Libraries and storage"><p><Verified value={r.storage?.mounted}/> Required media mounts</p>
       {p?.libraries.map(l=><div className="runtime-row" key={l.id}><strong>{l.name}</strong><span>{l.count === undefined ? l.type : `${l.count} items · ${l.type}`}</span></div>)}
       {!p?.libraries.length && <p>No verified library information available.</p>}
       <p className="muted">Media files are read-only. Plex configuration and transcode data use separate writable storage.</p>
     </Panel></div></div>;
 }
-const views: Record<string, typeof SeedboxPanel> = {seedbox: SeedboxPanel, plex: PlexPanel};
+function CloudflaredPanel({report: r}: {report: Runtime}) {
+  const c = r.cloudflare;
+  return <div className="runtime-workspace"><header className="runtime-summary">
+    <div><p className="eyebrow">INSTALLED APP · INFRASTRUCTURE</p><h1>Cloudflare Tunnel</h1>
+      <p>Optional domain access · read-only monitoring · no Cloudflare account token</p></div>
+    <div className={`runtime-health ${r.health}`}><Cloud size={22}/>{r.health}</div></header>
+    <div className="runtime-observed"><span>Last observation: {stamp(c?.checkedAt || r.observedAt)}</span>
+      <span>{c?.cached ? "Cached observation" : "Fresh observation"} · updates every 10s</span></div>
+    {!c?.configured && <div role="alert" className="notice">Cloudflare Tunnel monitoring is not configured for this installation.</div>}
+    <div className="runtime-panels">
+      <Panel title="Tunnel connection"><div className="runtime-panel-title"><Cloud/><strong>{c?.connections ? "Connected" : "Disconnected / unavailable"}</strong></div>
+        <dl><Row label="cloudflared version" value={c?.version || "Not observed"}/>
+          <Row label="Cloudflare links" value={c?.connections ?? "Unavailable"}/>
+          <Row label="Metrics helper" value={c?.metricsReachable ? "Reachable" : "Unavailable"}/>
+          <Row label="Requests observed" value={c?.totalRequests?.toLocaleString() ?? "Unavailable"}/>
+          <Row label="Errors observed" value={c?.requestErrors?.toLocaleString() ?? "Unavailable"}/></dl>
+      </Panel>
+      <Panel title="Published routes">{c?.routes.length ? <dl>{c.routes.map(route=><div className="runtime-row" key={route.url}>
+        <dt><strong>{route.hostname}</strong><small>{route.message}</small></dt>
+        <dd><Verified value={route.reachable}/><small>{route.statusCode || "No response"} · {route.latencyMs} ms</small></dd>
+      </div>)}</dl> : <p>No public route probes are configured.</p>}
+        <p className="muted">A login response or redirect still proves that Cloudflare can reach the origin. Server errors and connection failures are reported as unavailable.</p>
+      </Panel>
+    </div>
+    <Panel title="Security model"><div className="runtime-panel-title"><ShieldCheck/><strong>Least-privilege monitoring</strong></div>
+      <p>MediaHub receives only a sanitized local status document. Tunnel tokens, Cloudflare API keys, DNS changes and public route configuration stay outside MediaHub.</p>
+      <p className="muted">Release checks read only Cloudflare’s official public release metadata. Updates remain manual because the correct procedure depends on whether cloudflared was installed with Docker, a package manager or a standalone binary.</p>
+    </Panel>
+  </div>;
+}
+const views: Record<string, typeof SeedboxPanel> = {seedbox: SeedboxPanel, plex: PlexPanel, cloudflare: CloudflaredPanel};
 export function RemoteRuntimeLogs({appId}: {appId: string}) {
   const {data,error,reload}=useLoad<{entries:{timestamp:number;hostId:string;app:string;type:string;severity:string;message:string}[]}>(`/apps/${appId}/logs`);
   const [component,setComponent]=useState("all"),[severity,setSeverity]=useState("all");
@@ -130,7 +170,7 @@ export function AppRuntimePage() {
   useEffect(()=>{const timer=setInterval(reload,10000);return ()=>clearInterval(timer);},[reload]);
   const View = data && views[data.view];
   const [busy,setBusy] = useState(false), [actionError,setActionError] = useState("");
-  const [updateResult,setUpdateResult] = useState("");
+  const [updateResult,setUpdateResult] = useState(""), [releaseUrl,setReleaseUrl] = useState("");
   const [showLogs,setShowLogs] = useState(false), [component,setComponent] = useState("all");
   const act = async (action: string) => {
     if (action !== "test-vpn" && !window.confirm(`${action}: this can interrupt ${data?.view === 'plex' ? 'Plex playback' : 'Seedbox transfers'}. Continue?`)) return;
@@ -143,8 +183,11 @@ export function AppRuntimePage() {
   const checkUpdate = async () => {
     setBusy(true); setActionError(""); setUpdateResult("");
     try {
-      const result = await api<{message?: string; reason?: string; releaseVersions?: string[]}>(`/apps/${appId}/update-check`, "POST");
-      setUpdateResult([result.message || result.reason || "Update check completed", ...(result.releaseVersions || [])].join(" · "));
+      const result = await api<{message?: string; reason?: string; releaseVersions?: string[];
+        installedVersion?: string | null; latestVersion?: string | null; releaseUrl?: string | null}>(`/apps/${appId}/update-check`, "POST");
+      const versions = result.latestVersion ? `Installed ${result.installedVersion || "not observed"} · Latest ${result.latestVersion}` : "";
+      setUpdateResult([result.message || result.reason || "Update check completed", versions, ...(result.releaseVersions || [])].filter(Boolean).join(" · "));
+      setReleaseUrl(result.releaseUrl || "");
     } catch(e) {setActionError(e instanceof Error ? e.message : "Update check failed");}
     finally {setBusy(false);}
   };
@@ -160,7 +203,14 @@ export function AppRuntimePage() {
   return <div className="stack"><div className="runtime-toolbar"><Link to="/apps">← All apps</Link><button onClick={reload}>Refresh status</button>{data?.view === 'seedbox' && <Link to={`/apps/${appId}/install`}>Review installation</Link>}</div><ErrorBox error={error}/>
     {View && data ? <View report={error ? {health:"offline",available:false,agentOnline:false,cached:false}:data.report}/> : <p role="status">Loading app status…</p>}
     {data?.view==='seedbox'&&<SeedboxDaily externalIp={data.report.vpn?.externalIp} forwarding={data.report.portForwarding?.status}/>}
-    {data && <Panel title="Runtime controls"><p>Actions use the paired Agent. Starting revalidates the required storage and app safety checks.</p>
+    {data?.view === 'cloudflare' && <Panel title="Updates and safety"><p>MediaHub can check Cloudflare’s official stable release without receiving access to your Cloudflare account.</p>
+      <div className="runtime-toolbar"><button disabled={busy} onClick={checkUpdate}>{busy ? "Checking…" : "Check official release"}</button>
+        {releaseUrl && <a href={releaseUrl} target="_blank" rel="noreferrer">View official release →</a>}</div>
+      <p role="status">{updateResult || "No release check has been run in this session."}</p>
+      {actionError && <div role="alert">{actionError}</div>}
+      <p className="muted">No automatic update or restart is performed. That avoids choosing the wrong installation method and unexpectedly interrupting the tunnel.</p>
+    </Panel>}
+    {data && data.view !== 'cloudflare' && <Panel title="Runtime controls"><p>Actions use the paired Agent. Starting revalidates the required storage and app safety checks.</p>
       <div className="runtime-toolbar">{(data.view === 'plex' ? [["start","Start Plex"],["stop","Stop Plex"],["restart","Restart Plex"]] : [["start","Start Seedbox"],["stop","Stop Seedbox"],["restart","Restart Seedbox"],["restart-vpn","Restart VPN"],["restart-qbittorrent","Restart qBittorrent"],["test-vpn","Test VPN"]]).map(([action,label])=><button key={action} disabled={busy || !!error || !data.report.available || control?.operation.state === "running"} onClick={()=>act(action)}>{label}</button>)}</div>
       {actionError && <div role="alert">{actionError}</div>}
       {data.view === 'plex' && <><div className="runtime-toolbar"><button disabled={busy || !!error || !data.report.available} onClick={checkUpdate}>Check for updates</button>

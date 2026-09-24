@@ -14,6 +14,7 @@ type Versions = {
   plex?: { version: string | null };
   qBittorrent?: { version: string | null };
   vpn?: { version?: string | null };
+  cloudflare?: { version?: string | null };
   available: boolean;
 };
 type PlatformRelease = {
@@ -105,13 +106,18 @@ export function UpdatesPage() {
     try {
       const r = await api<{
         releaseVersions?: string[];
+        latestVersion?: string | null;
+        installedVersion?: string | null;
         supported?: boolean;
         message?: string;
         reason?: string;
       }>(`/apps/${app.id}/update-check`, "POST");
       setLatest((v) => ({
         ...v,
-        [app.id]: r.releaseVersions?.join(", ") || "No newer release reported",
+        [app.id]:
+          r.latestVersion ||
+          r.releaseVersions?.join(", ") ||
+          "No newer release reported",
       }));
       task.steps[0].state = "complete";
       task.details.push(
@@ -450,6 +456,7 @@ export function UpdatesPage() {
           .map((app) => {
             const v = versions[app.id];
             const isPlex = app.packageId === "org.mediahub.plex";
+            const isCloudflare = app.packageId === "org.mediahub.cloudflared";
             return (
               <Panel key={app.id} title={app.name}>
                 <div className="runtime-row">
@@ -457,10 +464,11 @@ export function UpdatesPage() {
                   <strong>
                     {v?.plex?.version ||
                       v?.qBittorrent?.version ||
+                      v?.cloudflare?.version ||
                       "Not verified"}
                   </strong>
                 </div>
-                {!isPlex && (
+                {!isPlex && !isCloudflare && (
                   <div className="runtime-row">
                     <span>VPN runtime</span>
                     <span>{v?.vpn?.version || "Pinned Gluetun image"}</span>
@@ -471,7 +479,7 @@ export function UpdatesPage() {
                   <span>{latest[app.id] || "Not checked"}</span>
                 </div>
                 <div className="button-row">
-                  {isPlex && (
+                  {(isPlex || isCloudflare) && (
                     <>
                       <button
                         disabled={!!busy || !v?.available}
@@ -485,7 +493,7 @@ export function UpdatesPage() {
                           ? "Checking…"
                           : "Check release"}
                       </button>
-                      <button
+                      {isPlex && <button
                         className="primary"
                         disabled={!!busy || !v?.available}
                         onClick={() => void updatePlex(app.id)}
@@ -493,18 +501,23 @@ export function UpdatesPage() {
                         {busy === `update:${app.id}`
                           ? "Updating…"
                           : "Update Plex"}
-                      </button>
+                      </button>}
                     </>
                   )}
                   <Link to={app.detailPath || "/apps"}>
                     Open app & recovery →
                   </Link>
                 </div>
-                {!isPlex && (
+                {!isPlex && !isCloudflare && (
                   <p className="muted">
                     VPN and torrent-client updates require a coordinated,
                     fail-closed deployment. Routine restarts are available from
                     the app page.
+                  </p>
+                )}
+                {isCloudflare && (
+                  <p className="muted">
+                    Release checks use Cloudflare’s official public release metadata. Installation stays manual so the active tunnel is not interrupted with the wrong update method.
                   </p>
                 )}
               </Panel>

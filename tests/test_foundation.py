@@ -43,6 +43,42 @@ def test_manifest_valid():
     assert "properties" in Manifest.model_json_schema()
 
 
+def test_cloudflared_manifest_has_guided_secret_setup():
+    manifest = parse_manifest(ROOT / "apps/cloudflared/manifest.yaml")
+    assert manifest.availability == "coming-soon"
+    assert [step.id for step in manifest.installGuide] == [
+        "prepare-domain",
+        "create-tunnel",
+        "connect-origin",
+        "verify-route",
+    ]
+    fields = {field.name: field for field in manifest.configFields}
+    assert fields["tunnel_token"].secret is True
+    assert fields["tunnel_token"].required is True
+    assert all(
+        not step.helpUrl or step.helpUrl.startswith("https://developers.cloudflare.com/")
+        for step in manifest.installGuide
+    )
+
+
+def test_install_guide_rejects_unknown_fields_and_unsafe_help_links():
+    data = manifest_data()
+    data["installGuide"] = [
+        {
+            "id": "setup",
+            "title": "Setup",
+            "description": "Guided setup",
+            "fields": ["missing"],
+        }
+    ]
+    with pytest.raises(ValidationError):
+        Manifest.model_validate(data)
+    data["installGuide"][0]["fields"] = []
+    data["installGuide"][0]["helpUrl"] = "https://user:secret@example.com/help"
+    with pytest.raises(ValidationError):
+        Manifest.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

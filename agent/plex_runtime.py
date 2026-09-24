@@ -21,6 +21,7 @@ from mediahub.secret_store import SecretStore
 from agent.install_files import read_json, save_json
 from agent.plex_control import PlexMount, PlexPolicy
 from agent.plex_install import PMS_ROOT, PlexInstallPolicy, installation_plan
+from agent.plex_vpn import PlexVPN
 
 
 class PlexRuntime:
@@ -33,6 +34,7 @@ class PlexRuntime:
         self.operation = {"state": "idle", "message": "No operation running"}
         self.update_task = None
         self.libraries_ready = False
+        self.vpn = PlexVPN(self)
 
     def policy(self):
         try:
@@ -365,7 +367,9 @@ class PlexRuntime:
             )
         plan = read_json(self.state_dir / "plex-plan.json")
         install_policy = self.policy()
+        vpn_port = await self.vpn.prepare(policy) if policy.vpnEnabled else None
         helper = await self.helper(install_policy, plan)
+        started = False
         try:
             content = self.vault.get(policy.installationId)
             await self.archive_write(
@@ -378,6 +382,22 @@ class PlexRuntime:
                 install_policy.gid,
             )
             await self.request("POST", f"/containers/{policy.container}/start")
+            started = True
+            if policy.vpnEnabled:
+                await self.vpn.activate(policy, vpn_port)
+        except Exception as error:
+            if policy.vpnEnabled:
+                self.vpn.current["lastErrorCode"] = (
+                    error.code
+                    if isinstance(error, DomainError)
+                    else "plex_start_" + type(error).__name__.lower()
+                )
+            if started:
+                with contextlib.suppress(DomainError):
+                    await self.request("POST", f"/containers/{policy.container}/stop?t=10")
+            if policy.vpnEnabled:
+                await self.vpn.stop()
+            raise
         finally:
             await self.remove_helper(helper)
 
@@ -400,6 +420,117 @@ class PlexRuntime:
         finally:
             if helper:
                 await self.remove_helper(helper)
+            if policy.vpnEnabled:
+                await self.vpn.stop()
+
+    async def enable_vpn(self, profile: bytes):
+        """One-time, rollback-safe conversion of an existing Plex runtime."""
+
+        async with self.control.lock:
+            policy = self.control.policy()
+            install_policy = self.policy()
+            if install_policy.vpn is None:
+                raise DomainError(
+                    "plex_vpn_policy_missing", "Plex VPN is not approved on this host", 409
+                )
+            if policy.vpnEnabled:
+                raise DomainError("plex_vpn_already_enabled", "Plex VPN is already enabled", 409)
+            before = await self.control.inspect(policy)
+            plan = read_json(self.state_dir / "plex-plan.json")
+            old_policy = policy.model_copy(deep=True)
+            old_plan = json.loads(json.dumps(plan))
+            desired = self.control.intent(policy)
+            backup_name = policy.container + "-pre-vpn"
+            rows = await self.request("GET", "/containers/json?all=1")
+            if any("/" + backup_name in row.get("Names", []) for row in rows):
+                raise DomainError(
+                    "plex_vpn_migration_conflict", "A previous Plex VPN migration needs review", 409
+                )
+            self.vpn.store_profile(profile)
+            self.operation = {"state": "running", "message": "Saving Plex configuration"}
+            if before["State"].get("Running"):
+                await self.checkpoint(policy)
+                await self.stop(policy)
+            self.control.save_intent(policy, False)
+            renamed = False
+            created = False
+            try:
+                await self.request(
+                    "POST", f"/containers/{policy.container}/rename?name={backup_name}"
+                )
+                renamed = True
+                plan["container"]["HostConfig"]["NetworkMode"] = (
+                    "container:" + install_policy.vpn.container
+                )
+                plan["container"]["HostConfig"].pop("PortBindings", None)
+                plan["container"].pop("ExposedPorts", None)
+                plan["container"].pop("NetworkingConfig", None)
+                plan["vpn"] = {
+                    "provider": install_policy.vpn.provider,
+                    "container": install_policy.vpn.container,
+                    "expectedCountryCode": install_policy.vpn.expectedCountryCode,
+                }
+                plan["planDigest"] = hashlib.sha256(
+                    json.dumps(
+                        {key: value for key, value in plan.items() if key != "planDigest"},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode()
+                ).hexdigest()
+                policy.vpnEnabled = True
+                policy.apiNetwork = install_policy.controlNetwork
+                save_json(self.state_dir / "plex-plan.json", plan)
+                save_json(Path(self.control.policy_file), policy.model_dump())
+                self.operation = {"state": "running", "message": "Verifying the Danish VPN"}
+                await self.vpn.prepare(policy)
+                await self.request(
+                    "POST", "/containers/create?name=" + policy.container, body=plan["container"]
+                )
+                created = True
+                self.operation = {
+                    "state": "running",
+                    "message": "Starting Plex through the verified VPN",
+                }
+                await self.start(policy)
+                await self.control.plex_get(policy, "/identity")
+                await self.checkpoint(policy)
+                await self.request("DELETE", f"/containers/{backup_name}?v=false")
+                renamed = False
+                self.control.save_intent(policy, desired)
+                if not desired:
+                    await self.stop(policy)
+                self.operation = {
+                    "state": "succeeded",
+                    "message": "Plex remote access is protected by the Danish VPN",
+                }
+                self.control.record("vpn_enabled")
+                return {
+                    "state": "succeeded",
+                    "message": "Plex VPN enabled and verified",
+                }
+            except Exception:
+                self.operation = {
+                    "state": "failed",
+                    "message": "Plex VPN activation failed; the original Plex runtime was restored",
+                }
+                if created:
+                    with contextlib.suppress(DomainError):
+                        current = await self.request("GET", f"/containers/{policy.container}/json")
+                        if current["State"].get("Running"):
+                            await self.request("POST", f"/containers/{policy.container}/stop?t=10")
+                        await self.request("DELETE", f"/containers/{policy.container}?v=false")
+                await self.vpn.stop()
+                save_json(self.state_dir / "plex-plan.json", old_plan)
+                save_json(Path(self.control.policy_file), old_policy.model_dump())
+                if renamed:
+                    await self.request(
+                        "POST", f"/containers/{backup_name}/rename?name={old_policy.container}"
+                    )
+                self.control.save_intent(old_policy, desired)
+                if desired:
+                    await self.start(old_policy)
+                self.control.record("vpn_enable_failed")
+                raise
 
     async def update(self):
         if self.update_task and not self.update_task.done():

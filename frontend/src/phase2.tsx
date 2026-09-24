@@ -928,7 +928,7 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
                   ? loaded.data?.secrets[field.name]?.configured
                     ? "Configured — leave blank to keep"
                     : "Not configured"
-                  : undefined
+                  : field.placeholder || undefined
               }
               onChange={(e) =>
                 setValues({ ...values, [field.name]: e.target.value })
@@ -942,6 +942,8 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
                 : "Configured: no"}
             </small>
           )}
+          {field.description && <small>{field.description}</small>}
+          {field.helpUrl && <a href={field.helpUrl} target="_blank" rel="noreferrer">Open official guidance →</a>}
         </label>
       ))}
       <button>Save app configuration</button>
@@ -1007,6 +1009,13 @@ export function CatalogPage({
               </p>
               <details>
                 <summary>Advanced requirements and configuration</summary>
+                {!!app.installGuide?.length && <div className="install-guide">
+                  <h3>Guided setup</h3>
+                  <ol>{app.installGuide.map(step=><li key={step.id}><strong>{step.title}</strong><p>{step.description}</p>
+                    {step.helpUrl && <a href={step.helpUrl} target="_blank" rel="noreferrer">Official instructions →</a>}
+                  </li>)}</ol>
+                  <p className="muted">Preview only. MediaHub will ask for confirmation before a future installer creates a container or publishes a hostname.</p>
+                </div>}
                 <p>Runtime: {app.requiredRuntime}</p>
                 <label>
                   Target host

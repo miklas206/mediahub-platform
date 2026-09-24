@@ -171,9 +171,7 @@ class DirectoryPolicy:
                     except (DomainError, OSError):
                         continue
                     size, complete = (
-                        self._directory_size(checked)
-                        if is_directory
-                        else (details.st_size, True)
+                        self._directory_size(checked) if is_directory else (details.st_size, True)
                     )
                     items.append(
                         {
@@ -293,11 +291,11 @@ class DirectoryPolicy:
             await asyncio.to_thread(stream.close)
             stream = None
             if expected_size is not None and written != expected_size:
-                raise DomainError("upload_incomplete", "The upload ended before the file was complete")
-            try:
-                await asyncio.to_thread(
-                    os.link, temporary, destination, follow_symlinks=False
+                raise DomainError(
+                    "upload_incomplete", "The upload ended before the file was complete"
                 )
+            try:
+                await asyncio.to_thread(os.link, temporary, destination, follow_symlinks=False)
             except FileExistsError:
                 raise DomainError(
                     "file_exists",
@@ -318,7 +316,9 @@ class DirectoryPolicy:
             raise
         except OSError as error:
             if getattr(error, "errno", None) == 28:
-                raise DomainError("storage_full", "Storage became full during upload", 507) from None
+                raise DomainError(
+                    "storage_full", "Storage became full during upload", 507
+                ) from None
             raise DomainError("upload_failed", "The file could not be stored", 500) from None
         finally:
             if stream is not None:

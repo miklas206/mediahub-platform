@@ -1,0 +1,75 @@
+schemaVersion: 1
+id: org.mediahub.cloudflared
+name: Cloudflare Tunnel
+description: Optional read-only tunnel, route health and official release monitoring for MediaHub.
+category: infrastructure
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: cloudflared.svg
+homepage: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+repository: https://github.com/cloudflare/cloudflared
+availability: coming-soon
+requiredRuntime: none
+recommendedIsolation: shared-host
+hostCapabilities: []
+images: {}
+services: {}
+storageRequirements: []
+secrets: []
+dependencies: []
+healthChecks: [{id: tunnel, check: cloudflared.status}]
+capabilities: [metrics.read]
+updateSource: {type: none}
+adapter: {id: org.mediahub.cloudflared, protocolVersion: 1}
+configFields:
+  - name: setup_mode
+    label: Tunnel setup
+    type: select
+    options: [new-tunnel, existing-tunnel]
+    default: new-tunnel
+    required: true
+    description: Choose whether the guided installer should attach an existing Cloudflare Tunnel or help prepare a new one.
+  - name: public_hostname
+    label: Public hostname
+    type: text
+    required: true
+    placeholder: media.example.com
+    description: The hostname you will create in Cloudflare for this MediaHub installation.
+  - name: origin_url
+    label: Internal MediaHub URL
+    type: text
+    required: true
+    placeholder: https://192.168.1.185:18765
+    description: The private HTTPS address cloudflared should reach on your LAN. It is never published as a router port.
+  - name: tunnel_token
+    label: Cloudflare Tunnel connector token
+    type: password
+    secret: true
+    required: true
+    description: Paste only the connector token from the Cloudflare dashboard. Do not provide an account API token.
+  - name: probe_url
+    label: Public health-check URL
+    type: text
+    required: false
+    placeholder: https://media.example.com
+    description: Optional HTTPS address MediaHub can probe after installation to verify the complete route.
+installGuide:
+  - id: prepare-domain
+    title: Prepare your domain
+    description: Add or select a domain in Cloudflare. MediaHub will not modify nameservers, billing, account permissions or DNS automatically.
+    fields: [public_hostname]
+    helpUrl: https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/
+  - id: create-tunnel
+    title: Create or select a Tunnel
+    description: In Cloudflare Zero Trust, create a remotely managed Tunnel or select an existing dedicated Tunnel. Copy its connector token when Cloudflare displays it.
+    fields: [setup_mode, tunnel_token]
+    helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/
+  - id: connect-origin
+    title: Connect the private MediaHub origin
+    description: Point the public hostname at MediaHub's private HTTPS origin. The future installer will verify certificate trust, WebSocket/SSE support and the exact origin before starting cloudflared.
+    fields: [origin_url]
+    helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/ingress/
+  - id: verify-route
+    title: Verify end to end
+    description: MediaHub checks the local connector, Cloudflare links and the optional public URL without receiving a Cloudflare account API token.
+    fields: [probe_url]

@@ -385,9 +385,7 @@ async def upload_storage_file(
         expected_size = int(raw_length) if raw_length is not None else None
     except ValueError:
         raise DomainError("invalid_upload", "Upload size is invalid", 400) from None
-    uploaded = await svc.agent.upload(
-        str(selected), filename, request.stream(), expected_size
-    )
+    uploaded = await svc.agent.upload(str(selected), filename, request.stream(), expected_size)
     svc.events.record(
         "storage.file.uploaded",
         "storage",

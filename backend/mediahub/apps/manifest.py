@@ -1,5 +1,6 @@
 from pathlib import Path, PurePosixPath
 from typing import Literal
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import Field, field_validator, model_validator
@@ -152,6 +153,25 @@ class ConfigField(StrictModel):
     required: bool = False
     options: list[str] = []
     default: str | None = None
+    description: str | None = Field(default=None, max_length=500)
+    placeholder: str | None = Field(default=None, max_length=200)
+    helpUrl: str | None = Field(default=None, max_length=500)
+
+    @field_validator("helpUrl")
+    @classmethod
+    def safe_help_url(cls, value):
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.fragment
+        ):
+            raise ValueError("Help links require HTTPS without credentials or fragments")
+        return value
 
     @model_validator(mode="after")
     def secret_policy(self):
@@ -160,6 +180,19 @@ class ConfigField(StrictModel):
         if self.type == "password" and not self.secret:
             raise ValueError("Password fields must be marked secret")
         return self
+
+
+class InstallGuideStep(StrictModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=1000)
+    fields: list[str] = []
+    helpUrl: str | None = Field(default=None, max_length=500)
+
+    @field_validator("helpUrl")
+    @classmethod
+    def safe_help_url(cls, value):
+        return ConfigField.safe_help_url(value)
 
 
 class DeviceRequirement(StrictModel):
@@ -210,6 +243,7 @@ class Manifest(StrictModel):
     recommendedIsolation: Literal["shared-host", "dedicated-host"] = "shared-host"
     hostCapabilities: list[str] = []
     configFields: list[ConfigField] = []
+    installGuide: list[InstallGuideStep] = []
     requiredDevices: list[DeviceRequirement] = []
 
     @model_validator(mode="after")
@@ -226,6 +260,12 @@ class Manifest(StrictModel):
             raise ValueError("Available apps require pinned image digests")
         if len({field.name for field in self.configFields}) != len(self.configFields):
             raise ValueError("Configuration field names must be unique")
+        guide_ids = [step.id for step in self.installGuide]
+        if len(set(guide_ids)) != len(guide_ids):
+            raise ValueError("Installation guide step identifiers must be unique")
+        field_names = {field.name for field in self.configFields}
+        if any(field not in field_names for step in self.installGuide for field in step.fields):
+            raise ValueError("Installation guide references an unknown configuration field")
         secrets = {s.id for s in self.secrets}
         if len(slots) != len(self.storageRequirements) or len(secrets) != len(self.secrets):
             raise ValueError("Duplicate storage or secret identifier")

@@ -98,6 +98,16 @@ export type CatalogApp = {
     required: boolean;
     options: string[];
     default: string | null;
+    description?: string | null;
+    placeholder?: string | null;
+    helpUrl?: string | null;
+  }[];
+  installGuide?: {
+    id: string;
+    title: string;
+    description: string;
+    fields: string[];
+    helpUrl?: string | null;
   }[];
 };
 export type Discovery = {

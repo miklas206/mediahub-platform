@@ -18,6 +18,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from mediahub import __version__
 from mediahub.agent_client import AgentClient
 from mediahub.api import router
+from mediahub.apps.cloudflared import register_cloudflared_app
 from mediahub.apps.framework import AppManager
 from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.auth import AuthService
@@ -80,6 +81,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.hosts = HostRegistry(svc)
         register_remote_apps(svc)
+        register_cloudflared_app(svc)
         svc.imports = ImportPlanner(sessions, svc.agent, svc.apps)
         svc.snapshot = svc.system.status()
         app.state.services = svc

@@ -358,7 +358,7 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.2.0</span>
+          <span>v0.3.0</span>
         </div>
       </div>
     </main>
@@ -551,7 +551,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.2.0"}</span>
+            <span className="version">v{metrics?.version || "0.3.0"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -664,7 +664,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.2.0"}
+              {metrics?.version || "0.3.0"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>
@@ -818,7 +818,7 @@ function Dashboard({
                   {apps?.some((a) => a.isMock)
                     ? "Development mock only. No real services controlled."
                     : apps?.length
-                      ? "Apps are monitored through their paired MediaHub Agents."
+                      ? "Apps are monitored through paired Agents or restricted read-only integrations."
                       : "No apps installed."}
                 </div>
               </Section>
@@ -1054,7 +1054,11 @@ function Apps({ revision }: { revision: number }) {
                   </div>
                 )}
                 {!app.isMock && (
-                  <p className="muted">Installed · Paired Agent runtime</p>
+                  <p className="muted">
+                    {app.packageId === "org.mediahub.cloudflared"
+                      ? "Installed · Read-only infrastructure monitor"
+                      : "Installed · Paired Agent runtime"}
+                  </p>
                 )}
                 {app.detailPath && (
                   <NavLink className="text-link" to={app.detailPath}>

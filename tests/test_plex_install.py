@@ -2,7 +2,7 @@ import pytest
 from mediahub.apps.plex import PlexInstallation
 from mediahub.errors import DomainError
 
-from agent.plex_install import PlexInstallPolicy, installation_plan
+from agent.plex_install import PlexInstallPolicy, PlexVPNInstallPolicy, installation_plan
 
 
 @pytest.fixture
@@ -67,3 +67,18 @@ def test_appdata_cannot_overlap_existing_media(install_policy):
     install_policy.storage["appdata"].path = install_policy.storage["movies"].path
     with pytest.raises(DomainError):
         installation_plan(install_policy, spec())
+
+
+def test_vpn_plan_moves_host_port_to_owned_gateway(install_policy):
+    install_policy.vpn = PlexVPNInstallPolicy(
+        image="qmcgaw/gluetun@sha256:" + "c" * 64,
+        lanSubnet="192.168.1.0/24",
+    )
+
+    plan = installation_plan(install_policy, spec())
+
+    assert plan["container"]["HostConfig"]["NetworkMode"] == ("container:mediahub-plex-main-vpn")
+    assert "PortBindings" not in plan["container"]["HostConfig"]
+    assert "ExposedPorts" not in plan["container"]
+    assert "NetworkingConfig" not in plan["container"]
+    assert plan["vpn"]["expectedCountryCode"] == "DK"

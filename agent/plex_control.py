@@ -38,6 +38,7 @@ class PlexPolicy(StrictModel):
     requiredFilesystemUuids: dict[str, str] = Field(default_factory=dict)
     controlStatePath: str | None = None
     apiNetwork: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,80}$")
+    vpnEnabled: bool = False
 
     @field_validator("apiUrl")
     @classmethod
@@ -100,13 +101,23 @@ class PlexControl:
                     data = await self.inspect(policy)
                     running = data["State"].get("Running") is True
                     mounted = await self.storage_verified(policy)
-                    if running and (not mounted or not desired):
+                    vpn_ready = True
+                    if desired and mounted and self.runtime and policy.vpnEnabled:
+                        vpn_ready = await self.runtime.vpn.reconcile(policy, running)
+                    if running and (not mounted or not desired or not vpn_ready):
                         if self.runtime:
                             await self.runtime.stop(policy)
                         else:
                             await self.docker("POST", f"/containers/{policy.container}/stop?t=30")
-                        self.record("storage_blocked" if not mounted else "stopped")
-                    elif desired and mounted and not running:
+                        reason = (
+                            "storage_blocked"
+                            if not mounted
+                            else "vpn_blocked"
+                            if not vpn_ready
+                            else "stopped"
+                        )
+                        self.record(reason)
+                    elif desired and mounted and vpn_ready and not running:
                         if self.runtime:
                             await self.runtime.start(policy)
                         else:
@@ -211,7 +222,11 @@ class PlexControl:
         try:
             api_url = policy.apiUrl
             if policy.apiNetwork:
-                inspected = await self.inspect(policy)
+                inspected = (
+                    await self.runtime.vpn._container()
+                    if policy.vpnEnabled and self.runtime
+                    else await self.inspect(policy)
+                )
                 address = inspected["NetworkSettings"]["Networks"][policy.apiNetwork]["IPAddress"]
                 api_url = PlexPolicy.internal_api_only(f"http://{address}:32400")
             if self.runtime:
@@ -220,8 +235,14 @@ class PlexControl:
                 token = ET.parse(policy.preferencesPath).getroot().get("PlexOnlineToken")
             if not token and endpoint != "/identity":
                 raise ValueError()
+            # Plex may spend roughly ten seconds publishing a changed manual
+            # remote-access port to plex.tv.  Read-only health requests remain
+            # tightly bounded, while authenticated mutations get enough time
+            # to finish instead of triggering the fail-closed recovery loop.
             async with httpx.AsyncClient(
-                timeout=8, trust_env=False, follow_redirects=False
+                timeout=30 if method != "GET" else 8,
+                trust_env=False,
+                follow_redirects=False,
             ) as client:
                 response = await client.request(
                     method,
@@ -278,6 +299,12 @@ class PlexControl:
             "checks": [],
             "operation": self.runtime.operation if self.runtime else {"state": "idle"},
         }
+        if self.runtime and policy.vpnEnabled:
+            vpn_status = await self.runtime.vpn.status(policy)
+            report["vpn"] = vpn_status["vpn"]
+            report["portForwarding"] = vpn_status["portForwarding"]
+            if not vpn_status["vpn"]["verified"]:
+                report["health"] = "critical"
         if running and mounted:
             try:
                 identity = await self.plex_get(policy, "/identity")
@@ -293,7 +320,8 @@ class PlexControl:
                         "activeStreams": int(sessions.get("size", "0")),
                     }
                 )
-                report["health"] = "healthy"
+                if not policy.vpnEnabled or report.get("vpn", {}).get("verified"):
+                    report["health"] = "healthy"
                 transcodes = sessions.findall(".//TranscodeSession")
                 report["plex"]["transcodingStreams"] = sum(
                     s.get("videoDecision") == "transcode" or s.get("audioDecision") == "transcode"
@@ -333,6 +361,13 @@ class PlexControl:
             {"name": "storage", "status": "healthy" if mounted else "critical"},
             {"name": "plex", "status": report["health"]},
         ]
+        if policy.vpnEnabled:
+            report["checks"].append(
+                {
+                    "name": "plex-vpn",
+                    "status": "healthy" if report.get("vpn", {}).get("verified") else "critical",
+                }
+            )
         return report
 
     async def action(self, action):

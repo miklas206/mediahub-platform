@@ -17,6 +17,7 @@ class VPNStatus(PublicModel):
     protocol: str | None = None
     connectedSince: str | None = None  # Container start, NOT tunnel uptime.
     lastVerified: float | None = None
+    countryCode: str | None = None
 
 
 class TorrentStatus(PublicModel):
@@ -41,6 +42,7 @@ class PortForwardStatus(PublicModel):
     lastRenewed: float | None = None
     expiresAt: float | None = None
     qBittorrentVerified: bool = False
+    plexVerified: bool = False
 
 
 class StorageStatus(PublicModel):

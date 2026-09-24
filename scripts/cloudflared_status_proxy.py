@@ -10,9 +10,7 @@ LISTEN = os.environ.get("MEDIAHUB_CLOUDFLARED_LISTEN", "127.0.0.1")
 PORT = int(os.environ.get("MEDIAHUB_CLOUDFLARED_PORT", "20242"))
 ALLOWED_SOURCE = os.environ.get("MEDIAHUB_CLOUDFLARED_ALLOWED_SOURCE", "127.0.0.1")
 UPSTREAM = os.environ.get("MEDIAHUB_CLOUDFLARED_METRICS", "http://127.0.0.1:20241/metrics")
-METRIC = re.compile(
-    r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{[^}]*\})?\s+(?P<value>[-+0-9.eE]+)$"
-)
+METRIC = re.compile(r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{[^}]*\})?\s+(?P<value>[-+0-9.eE]+)$")
 
 
 def summarize(text):

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Cloudflare Tunnel</title>
+  <path fill="#f48120" d="M44.6 43.7H12.9a9 9 0 0 1 1.1-17.9 15.6 15.6 0 0 1 29.4-4.5 11.3 11.3 0 0 1 1.2 22.4Z"/>
+  <path fill="#faae40" d="M50.7 43.7H29.3a7.1 7.1 0 0 1 .9-14.1 12.3 12.3 0 0 1 23.2-3.5 8.9 8.9 0 0 1-2.7 17.6Z"/>
+  <path fill="#fff" d="M18 48h34v4H18z" opacity=".9"/>
+</svg>
