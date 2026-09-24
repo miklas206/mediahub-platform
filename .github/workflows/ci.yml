@@ -1,0 +1,30 @@
+name: MediaHub CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - run: pip install -r requirements.lock && pip install --no-deps -e .
+      - run: python -m pytest -q
+      - run: python -m ruff check backend agent tests scripts
+      - run: python -m ruff format --check backend agent tests scripts
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir frontend lint && pnpm --dir frontend typecheck && pnpm --dir frontend test
+      - run: pnpm --dir frontend build
+      - run: python scripts/qa.py
+      - run: python scripts/qa.py --phase2
+      - run: python scripts/export_contracts.py && git diff --exit-code packages/contracts
+      - run: docker compose -f compose.dev.yaml up --build --wait
+      - run: curl --fail http://127.0.0.1:18765/api/health && curl --fail http://127.0.0.1:18765/
+      - if: always()
+        run: docker compose -f compose.dev.yaml down

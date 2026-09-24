@@ -1,0 +1,24 @@
+schemaVersion: 1
+id: org.mediahub.mock
+name: Foundation Test App
+description: Database-only adapter to validate lifecycle and health. Controls no real service.
+category: development
+version: 0.1.0
+maintainer:
+  name: MediaHub contributors
+icon: mock.svg
+images: {}
+services: {}
+storageRequirements: []
+secrets: []
+dependencies: []
+healthChecks:
+  - id: adapter
+    check: mock.status
+capabilities:
+  - mock.lifecycle
+updateSource:
+  type: none
+adapter:
+  id: org.mediahub.mock
+  protocolVersion: 1

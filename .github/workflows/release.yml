@@ -1,0 +1,97 @@
+name: MediaHub release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v6
+
+      - name: Resolve lowercase image names
+        id: names
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Core
+        id: core
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.base }}-core:${{ github.ref_name }}
+
+      - name: Build and publish Agent
+        id: agent
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: docker/Agent.Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.base }}-agent:${{ github.ref_name }}
+
+      - name: Attest Core image
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.names.outputs.base }}-core
+          subject-digest: ${{ steps.core.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Agent image
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.names.outputs.base }}-agent
+          subject-digest: ${{ steps.agent.outputs.digest }}
+          push-to-registry: true
+
+      - name: Export private-repository update bundles
+        env:
+          CORE_IMAGE: ${{ steps.names.outputs.base }}-core@${{ steps.core.outputs.digest }}
+          AGENT_IMAGE: ${{ steps.names.outputs.base }}-agent@${{ steps.agent.outputs.digest }}
+        shell: bash
+        run: |
+          docker pull "$CORE_IMAGE"
+          docker pull "$AGENT_IMAGE"
+          docker save "$CORE_IMAGE" | gzip -9 > mediahub-core-image.tar.gz
+          docker save "$AGENT_IMAGE" | gzip -9 > mediahub-agent-image.tar.gz
+
+      - name: Build release manifest
+        shell: bash
+        run: |
+          python scripts/release_manifest.py \
+            --version "${GITHUB_REF_NAME}" \
+            --core "${{ steps.names.outputs.base }}-core@${{ steps.core.outputs.digest }}" \
+            --agent "${{ steps.names.outputs.base }}-agent@${{ steps.agent.outputs.digest }}" \
+            --core-bundle mediahub-core-image.tar.gz \
+            --agent-bundle mediahub-agent-image.tar.gz \
+            --output mediahub-release.json
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          gh release upload "$GITHUB_REF_NAME" \
+            mediahub-release.json \
+            mediahub-core-image.tar.gz \
+            mediahub-agent-image.tar.gz \
+            --clobber

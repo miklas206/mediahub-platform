@@ -1,0 +1,754 @@
+{
+  "$defs": {
+    "Adapter": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "protocolVersion": {
+          "const": 1,
+          "default": 1,
+          "title": "Protocolversion",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Adapter",
+      "type": "object"
+    },
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "adapter",
+          "default": "adapter",
+          "title": "Type",
+          "type": "string"
+        },
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "intervalSeconds": {
+          "default": 15,
+          "minimum": 1,
+          "title": "Intervalseconds",
+          "type": "integer"
+        },
+        "timeoutSeconds": {
+          "default": 5,
+          "minimum": 1,
+          "title": "Timeoutseconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "check"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "ConfigField": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "type": {
+          "default": "text",
+          "enum": [
+            "text",
+            "select",
+            "password"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "secret": {
+          "default": false,
+          "title": "Secret",
+          "type": "boolean"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "name",
+        "label"
+      ],
+      "title": "ConfigField",
+      "type": "object"
+    },
+    "Dependency": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    },
+    "Environment": {
+      "additionalProperties": false,
+      "properties": {
+        "literal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Literal"
+        },
+        "settingRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Settingref"
+        },
+        "secretRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secretref"
+        }
+      },
+      "title": "Environment",
+      "type": "object"
+    },
+    "Image": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        }
+      },
+      "required": [
+        "repository"
+      ],
+      "title": "Image",
+      "type": "object"
+    },
+    "Maintainer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "contact": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contact"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Maintainer",
+      "type": "object"
+    },
+    "Network": {
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "default": "isolated",
+          "enum": [
+            "isolated",
+            "lan",
+            "vpn-required"
+          ],
+          "title": "Policy",
+          "type": "string"
+        },
+        "role": {
+          "default": "client",
+          "enum": [
+            "gateway",
+            "client"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "shareWith": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sharewith"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "Port": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "containerPort": {
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "Containerport",
+          "type": "integer"
+        },
+        "protocol": {
+          "default": "tcp",
+          "enum": [
+            "tcp",
+            "udp"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "exposure": {
+          "default": "internal",
+          "enum": [
+            "internal",
+            "proxy-only",
+            "lan"
+          ],
+          "title": "Exposure",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "containerPort"
+      ],
+      "title": "Port",
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "properties": {
+        "memoryMiB": {
+          "default": 256,
+          "maximum": 262144,
+          "minimum": 64,
+          "title": "Memorymib",
+          "type": "integer"
+        }
+      },
+      "title": "Resources",
+      "type": "object"
+    },
+    "Secret": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "text"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Secret",
+      "type": "object"
+    },
+    "SecretFile": {
+      "additionalProperties": false,
+      "properties": {
+        "secret": {
+          "title": "Secret",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "secret",
+        "target"
+      ],
+      "title": "SecretFile",
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "network": {
+          "$ref": "#/$defs/Network",
+          "default": {
+            "policy": "isolated",
+            "role": "client",
+            "shareWith": null
+          }
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources",
+          "default": {
+            "memoryMiB": 256
+          }
+        },
+        "ports": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Port"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "volumes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Volume"
+          },
+          "title": "Volumes",
+          "type": "array"
+        },
+        "environment": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Environment"
+          },
+          "default": {},
+          "title": "Environment",
+          "type": "object"
+        },
+        "secretFiles": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SecretFile"
+          },
+          "title": "Secretfiles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "title": "Service",
+      "type": "object"
+    },
+    "StorageRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "appdata",
+            "downloads",
+            "incomplete_downloads",
+            "completed_downloads",
+            "movies",
+            "tv",
+            "backups",
+            "temp",
+            "custom"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "access": {
+          "enum": [
+            "ro",
+            "rw"
+          ],
+          "title": "Access",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "access"
+      ],
+      "title": "StorageRequirement",
+      "type": "object"
+    },
+    "UpdateSource": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "catalog",
+            "none"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "channel": {
+          "default": "stable",
+          "title": "Channel",
+          "type": "string"
+        },
+        "package": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Package"
+        },
+        "signingIdentity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signingidentity"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "UpdateSource",
+      "type": "object"
+    },
+    "Volume": {
+      "additionalProperties": false,
+      "properties": {
+        "slot": {
+          "title": "Slot",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "access": {
+          "default": "ro",
+          "enum": [
+            "ro",
+            "rw"
+          ],
+          "title": "Access",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "target"
+      ],
+      "title": "Volume",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "maintainer": {
+      "$ref": "#/$defs/Maintainer"
+    },
+    "icon": {
+      "title": "Icon",
+      "type": "string"
+    },
+    "repository": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repository"
+    },
+    "homepage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Homepage"
+    },
+    "coreCompatibility": {
+      "default": ">=0.1.0.dev0,<0.2.0",
+      "title": "Corecompatibility",
+      "type": "string"
+    },
+    "settingsSchema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Settingsschema"
+    },
+    "images": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Image"
+      },
+      "title": "Images",
+      "type": "object"
+    },
+    "services": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Service"
+      },
+      "title": "Services",
+      "type": "object"
+    },
+    "storageRequirements": {
+      "items": {
+        "$ref": "#/$defs/StorageRequirement"
+      },
+      "title": "Storagerequirements",
+      "type": "array"
+    },
+    "secrets": {
+      "items": {
+        "$ref": "#/$defs/Secret"
+      },
+      "title": "Secrets",
+      "type": "array"
+    },
+    "dependencies": {
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "optionalDependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Optionaldependencies",
+      "type": "array"
+    },
+    "healthChecks": {
+      "items": {
+        "$ref": "#/$defs/Check"
+      },
+      "title": "Healthchecks",
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "enum": [
+          "metrics.read",
+          "storage.mapped.read",
+          "storage.mapped.write",
+          "network.vpn",
+          "network.port-forwarding",
+          "gpu",
+          "mock.lifecycle"
+        ],
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "updateSource": {
+      "$ref": "#/$defs/UpdateSource"
+    },
+    "adapter": {
+      "$ref": "#/$defs/Adapter"
+    },
+    "availability": {
+      "default": "development",
+      "enum": [
+        "coming-soon",
+        "development",
+        "available"
+      ],
+      "title": "Availability",
+      "type": "string"
+    },
+    "requiredRuntime": {
+      "default": "none",
+      "enum": [
+        "none",
+        "docker"
+      ],
+      "title": "Requiredruntime",
+      "type": "string"
+    },
+    "configFields": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConfigField"
+      },
+      "title": "Configfields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "description",
+    "category",
+    "version",
+    "maintainer",
+    "icon",
+    "images",
+    "services",
+    "storageRequirements",
+    "secrets",
+    "dependencies",
+    "healthChecks",
+    "capabilities",
+    "updateSource",
+    "adapter"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}

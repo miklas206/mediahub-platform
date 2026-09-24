@@ -1,0 +1,82 @@
+# Advanced HTTPS template. Prefer install.sh, which provisions certificates and storage policy.
+# Requires pre-provisioned keys/certificates, token and a separately mounted DATA_ROOT.
+# Never point DATA_ROOT at a directory on the system disk. No files are formatted here.
+name: mediahub-platform
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: docker/Agent.Dockerfile
+    environment:
+      MEDIAHUB_AGENT_STATE_DIR: /state
+      MEDIAHUB_AGENT_TOKEN_FILE: /state/token
+      MEDIAHUB_AGENT_STORAGE_ROOTS: '["/storage"]'
+      MEDIAHUB_AGENT_CREATE_ENABLED: "true"
+      MEDIAHUB_AGENT_LISTEN_HOST: 0.0.0.0
+      MEDIAHUB_AGENT_DOCKER_SOCKET: /var/run/docker.sock
+      MEDIAHUB_AGENT_HOST_OS_RELEASE: /host-os-release
+      MEDIAHUB_AGENT_TLS_CERT: /tls/server.pem
+      MEDIAHUB_AGENT_TLS_KEY: /tls/server.key
+    group_add: ["${DOCKER_GID:?Set Docker socket numeric group}"]
+    volumes:
+      - ${MEDIAHUB_ROOT:?Set new installation root}/secrets/agent:/state
+      - ${DATA_ROOT:?Set separately mounted data storage}:/storage
+      - ${MEDIAHUB_ROOT}/tls-agent:/tls:ro
+      - ${MEDIAHUB_ROOT}/trust:/trust:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/os-release:/host-os-release:ro
+    networks: [control]
+    mem_limit: 512m
+    memswap_limit: 512m
+    ulimits:
+      core: {soft: 0, hard: 0}
+    cpus: 0.5
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, python, -c, "import pathlib,ssl,urllib.request; r=urllib.request.Request('https://127.0.0.1:18767/v1/health',headers={'Authorization':'Bearer '+pathlib.Path('/state/token').read_text().strip()}); urllib.request.urlopen(r,context=ssl.create_default_context(cafile='/trust/ca.pem'),timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+  core:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      MEDIAHUB_AGENT_URL: https://agent:18767
+      MEDIAHUB_AGENT_TOKEN_FILE: /agent-token
+      MEDIAHUB_AGENT_CA_FILE: /trust/ca.pem
+      MEDIAHUB_BROWSER_TLS_CERT: /tls/server.pem
+      MEDIAHUB_BROWSER_TLS_KEY: /tls/server.key
+      MEDIAHUB_BASE_URL: https://${LAN_IP:?Set explicit LAN IPv4}:18765
+      MEDIAHUB_ALLOWED_ORIGINS: '["https://${LAN_IP}:18765"]'
+      MEDIAHUB_DEV_MODE: "false"
+      MEDIAHUB_MOCK_APP: "false"
+      MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST: "true"
+    ports: ["${LAN_IP}:18765:18765"]
+    volumes:
+      - ${MEDIAHUB_ROOT}/data:/data
+      - ${MEDIAHUB_ROOT}/secrets/agent/token:/agent-token:ro
+      - ${MEDIAHUB_ROOT}/tls-core:/tls:ro
+      - ${MEDIAHUB_ROOT}/trust:/trust:ro
+    networks: [control, lan]
+    mem_limit: 512m
+    memswap_limit: 512m
+    ulimits:
+      core: {soft: 0, hard: 0}
+    cpus: 1.0
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+networks:
+  control:
+    internal: true
+  lan:
+    driver: bridge

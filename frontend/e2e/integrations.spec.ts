@@ -1,0 +1,35 @@
+import {expect,test} from "@playwright/test";
+
+test("FjordHub token submission, dynamic apps, disconnect and responsive layout",async({page})=>{
+  const errors:string[]=[];
+  page.on("pageerror",e=>errors.push(e.message));
+  await page.goto("/");
+  await page.getByLabel("Username",{exact:true}).fill(process.env.MEDIAHUB_QA_USER!);
+  await page.getByLabel("Password",{exact:true}).fill(process.env.MEDIAHUB_QA_PASSWORD!);
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await page.getByRole("link",{name:"Integrations",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"No integrations yet"})).toBeVisible();
+  await page.getByLabel("FjordHub URL",{exact:true}).fill("https://192.168.50.20:8443");
+  await page.getByLabel("Access Token",{exact:true}).fill("wrong-fixture-token-123456");
+  await page.getByRole("button",{name:"Test Connection",exact:true}).click();
+  await expect(page.getByRole("status")).toContainText("Authentication failed");
+  await page.getByLabel("Access Token",{exact:true}).fill("valid-fixture-token-123456");
+  await page.getByRole("button",{name:"Test Connection",exact:true}).click();
+  await expect(page.getByRole("status")).toContainText("Connected");
+  await page.getByRole("button",{name:"Save",exact:true}).click();
+  await expect(page.getByLabel("Access Token",{exact:true})).toHaveValue("");
+  await page.getByRole("button",{name:"Refresh",exact:true}).click();
+  await expect(page.getByText("Dynamic future app",{exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Access Token",{exact:true})).toHaveValue("");
+  expect(await page.evaluate(()=>JSON.stringify([localStorage,sessionStorage]))).not.toContain("fixture-token");
+  await page.setViewportSize({width:390,height:844});
+  await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:"../.qa/fjordhub-mobile.png",fullPage:true,animations:"disabled"});
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:"../.qa/fjordhub-desktop.png",fullPage:true});
+  await page.getByRole("button",{name:"Disconnect",exact:true}).click();
+  await expect(page.getByText("Disconnected",{exact:true})).toBeVisible();
+  expect(errors).toEqual([]);
+});

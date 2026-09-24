@@ -1,0 +1,41 @@
+schemaVersion: 1
+id: org.mediahub.seedbox
+name: Seedbox
+description: Protected downloads with Proton WireGuard, verified port forwarding and everyday torrent controls.
+category: downloads
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: seedbox.svg
+availability: available
+requiredRuntime: docker
+recommendedIsolation: dedicated-host
+hostCapabilities: [network.vpn, network.control]
+images:
+  vpn: {repository: qmcgaw/gluetun, digest: 'sha256:12df8b20528d4cd5e9b6e827d40f2886cf78e53e7e9afc750050648c31183793'}
+  torrent: {repository: lscr.io/linuxserver/qbittorrent, digest: 'sha256:2be038f3421f60f62e8e4bf201f66f385b68e4fbc9ed3ab79051069ea22e2650'}
+services:
+  vpn:
+    image: vpn
+    network: {policy: vpn-required, role: gateway}
+    volumes: [{slot: vpn_appdata, target: /gluetun, access: rw}]
+  torrent:
+    image: torrent
+    network: {policy: vpn-required, shareWith: vpn}
+    ports: [{id: web, containerPort: 8080, exposure: internal}]
+    volumes:
+      - {slot: appdata, target: /config, access: rw}
+      - {slot: downloads, target: /downloads, access: rw}
+storageRequirements:
+  - {id: vpn_appdata, type: appdata, access: rw, required: true}
+  - {id: appdata, type: appdata, access: rw, required: true}
+  - {id: downloads, type: downloads, access: rw, required: true}
+secrets: [{id: credential, kind: text, required: true}]
+dependencies: []
+healthChecks: [{id: protected, check: vpn.protected}]
+capabilities: [storage.mapped.read, storage.mapped.write, network.vpn, network.port-forwarding]
+updateSource: {type: none}
+adapter: {id: org.mediahub.seedbox, protocolVersion: 1}
+configFields:
+  - {name: provider, label: VPN provider, type: select, options: [custom, protonvpn], default: custom, required: true}
+  - {name: protocol, label: VPN protocol, type: select, options: [wireguard], default: wireguard, required: true}
+  - {name: credential, label: Encrypted VPN credential, type: password, secret: true, required: true}

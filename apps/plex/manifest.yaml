@@ -1,0 +1,36 @@
+schemaVersion: 1
+id: org.mediahub.plex
+name: Plex
+description: Organize and stream your own media, with persistent configuration and read-only media access.
+category: media
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: plex.svg
+availability: available
+requiredRuntime: docker
+images:
+  plex: {repository: lscr.io/linuxserver/plex, digest: "sha256:be083133dfe001b6caed5a321720e6db9d38fdde1ea8f9d29340d40057a7fa53"}
+services:
+  plex:
+    image: plex
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 32400, exposure: lan}]
+    volumes:
+      - {slot: appdata, target: /config, access: rw}
+      - {slot: movies, target: /media/movies, access: ro}
+      - {slot: tv, target: /media/tv, access: ro}
+    environment:
+      TZ: {settingRef: timezone}
+storageRequirements:
+  - {id: appdata, type: appdata, access: rw, required: true}
+  - {id: movies, type: movies, access: ro, required: false}
+  - {id: tv, type: tv, access: ro, required: false}
+secrets: [{id: claim, kind: text, required: false}]
+dependencies: []
+healthChecks: [{id: api, check: plex.api}]
+capabilities: [storage.mapped.read, gpu]
+updateSource: {type: none}
+adapter: {id: org.mediahub.plex, protocolVersion: 1}
+configFields:
+  - {name: timezone, label: Timezone, type: text, default: UTC, required: true}
+  - {name: claim, label: "Plex claim token (optional, short-lived)", type: password, secret: true}

@@ -1,0 +1,70 @@
+from fastapi import APIRouter, Depends, Request
+from pydantic import Field, SecretStr, field_validator
+
+from mediahub.api import authenticated, result, services
+from mediahub.contracts import StrictModel
+from mediahub.errors import DomainError
+
+router = APIRouter(prefix="/integrations")
+
+
+class IntegrationInput(StrictModel):
+    name: str = Field(default="FjordHub", min_length=1, max_length=80)
+    baseUrl: str = Field(min_length=8, max_length=500)
+    accessToken: SecretStr = Field(min_length=16, max_length=8192, exclude=True)
+    allowHttp: bool = False
+
+    @field_validator("accessToken")
+    @classmethod
+    def token_header(cls, value):
+        if any(ord(c) < 33 or ord(c) > 126 for c in value.get_secret_value()):
+            raise ValueError("Invalid Access Token format")
+        return value
+
+
+def require_https(request):
+    if request.url.scheme != "https" and not services(request).config.dev_mode:
+        raise DomainError("https_required", "Credential submission requires HTTPS", 403)
+
+
+def require_admin(user):
+    if user.get("role") != "administrator":
+        raise DomainError(
+            "administrator_required", "Integration changes require administrator access", 403
+        )
+
+
+@router.get("")
+async def listing(request: Request, user=Depends(authenticated)):
+    return result(services(request).integrations.list())
+
+
+@router.get("/fjordhub/defaults")
+async def defaults(request: Request, user=Depends(authenticated)):
+    return result({"baseUrl": services(request).config.fjordhub_url})
+
+
+@router.post("/fjordhub/test")
+async def test(body: IntegrationInput, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    require_https(request)
+    return result(await services(request).integrations.test(body))
+
+
+@router.post("/fjordhub")
+async def save(body: IntegrationInput, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    require_https(request)
+    return result(services(request).integrations.save(body))
+
+
+@router.post("/{identifier}/refresh")
+async def refresh(identifier: str, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    return result(await services(request).integrations.refresh(identifier))
+
+
+@router.post("/{identifier}/disconnect")
+async def disconnect(identifier: str, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    return result(services(request).integrations.disconnect(identifier))
