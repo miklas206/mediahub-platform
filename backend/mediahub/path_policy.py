@@ -1,12 +1,16 @@
 """Storage path policy shared by the agent and tests.
 
-Directory management never reads file contents.  The media listing endpoint only
-returns bounded metadata for entries below an approved storage root.
+Directory management never reads file contents. The media browser returns bounded
+metadata below approved roots, and uploads are streamed into an approved directory
+without ever overwriting an existing file.
 """
 
+import asyncio
 import os
+import secrets
 import shutil
 import stat
+from collections.abc import AsyncIterable
 from pathlib import Path
 
 import psutil
@@ -15,6 +19,8 @@ from mediahub.errors import DomainError
 
 
 class DirectoryPolicy:
+    max_upload_bytes = 512 * 1024**3
+
     def __init__(self, roots: list[Path], create_enabled: bool = False):
         self.roots = [r.absolute() for r in roots]
         self.create_enabled = create_enabled
@@ -138,7 +144,7 @@ class DirectoryPolicy:
             raise DomainError("permission_denied", "Cannot list this directory", 403) from None
 
     def list_entries(self, value: str):
-        """Return bounded, read-only metadata without opening file contents."""
+        """Return bounded metadata without opening file contents."""
 
         path = self.allowed(value)
         if not path.is_dir():
@@ -164,12 +170,18 @@ class DirectoryPolicy:
                         details = entry.stat(follow_symlinks=False)
                     except (DomainError, OSError):
                         continue
+                    size, complete = (
+                        self._directory_size(checked)
+                        if is_directory
+                        else (details.st_size, True)
+                    )
                     items.append(
                         {
                             "name": checked.name,
                             "path": str(checked),
                             "type": "folder" if is_directory else "file",
-                            "sizeBytes": None if is_directory else details.st_size,
+                            "sizeBytes": size,
+                            "sizeComplete": complete,
                             "modifiedAt": details.st_mtime,
                         }
                     )
@@ -181,6 +193,140 @@ class DirectoryPolicy:
             }
         except OSError:
             raise DomainError("permission_denied", "Cannot list this directory", 403) from None
+
+    @staticmethod
+    def _directory_size(path: Path) -> tuple[int, bool]:
+        """Measure regular files recursively without following links or opening contents."""
+
+        total = 0
+        complete = True
+        pending = [path]
+        while pending:
+            current = pending.pop()
+            try:
+                with os.scandir(current) as entries:
+                    for entry in entries:
+                        if entry.name.startswith(".mediahub-upload-") or entry.is_symlink():
+                            continue
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                pending.append(Path(entry.path))
+                            elif entry.is_file(follow_symlinks=False):
+                                total += entry.stat(follow_symlinks=False).st_size
+                        except OSError:
+                            complete = False
+            except OSError:
+                complete = False
+        return total, complete
+
+    @staticmethod
+    def _upload_filename(value: str) -> str:
+        if (
+            not value
+            or len(value.encode("utf-8")) > 255
+            or value in {".", ".."}
+            or "/" in value
+            or "\\" in value
+            or "\x00" in value
+            or any(ord(character) < 32 for character in value)
+        ):
+            raise DomainError("invalid_filename", "Choose a valid file name")
+        return value
+
+    @staticmethod
+    def _write_all(stream, chunk: bytes):
+        view = memoryview(chunk)
+        while view:
+            written = stream.write(view)
+            if not written:
+                raise OSError("Upload write returned no progress")
+            view = view[written:]
+
+    async def upload(
+        self,
+        directory_value: str,
+        filename_value: str,
+        chunks: AsyncIterable[bytes],
+        expected_size: int | None = None,
+    ):
+        """Stream one new file into approved storage and never replace existing data."""
+
+        directory = self.allowed(directory_value)
+        if not directory.is_dir():
+            raise DomainError("not_directory", "Upload destination must be a directory")
+        if not os.access(directory, os.W_OK | os.X_OK):
+            raise DomainError("permission_denied", "Upload destination is not writable", 403)
+        filename = self._upload_filename(filename_value)
+        destination = directory / filename
+        self.allowed(str(destination), missing=not destination.exists())
+        if destination.exists():
+            raise DomainError(
+                "file_exists", "A file with this name already exists; nothing was overwritten", 409
+            )
+        if expected_size is not None and (
+            expected_size < 0 or expected_size > self.max_upload_bytes
+        ):
+            raise DomainError("upload_too_large", "This file exceeds the upload limit", 413)
+        if expected_size is not None:
+            free = shutil.disk_usage(directory).free
+            if expected_size + 64 * 1024**2 > free:
+                raise DomainError("storage_full", "Not enough free space for this upload", 507)
+
+        temporary = directory / f".mediahub-upload-{secrets.token_hex(12)}.part"
+        written = 0
+        stream = None
+        try:
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o640,
+            )
+            stream = os.fdopen(descriptor, "wb", buffering=0)
+            async for chunk in chunks:
+                if not chunk:
+                    continue
+                written += len(chunk)
+                if written > self.max_upload_bytes:
+                    raise DomainError("upload_too_large", "This file exceeds the upload limit", 413)
+                await asyncio.to_thread(self._write_all, stream, chunk)
+            await asyncio.to_thread(os.fsync, stream.fileno())
+            await asyncio.to_thread(stream.close)
+            stream = None
+            if expected_size is not None and written != expected_size:
+                raise DomainError("upload_incomplete", "The upload ended before the file was complete")
+            try:
+                await asyncio.to_thread(
+                    os.link, temporary, destination, follow_symlinks=False
+                )
+            except FileExistsError:
+                raise DomainError(
+                    "file_exists",
+                    "A file with this name already exists; nothing was overwritten",
+                    409,
+                ) from None
+            await asyncio.to_thread(temporary.unlink)
+            details = destination.stat()
+            return {
+                "name": destination.name,
+                "path": str(destination),
+                "type": "file",
+                "sizeBytes": details.st_size,
+                "sizeComplete": True,
+                "modifiedAt": details.st_mtime,
+            }
+        except DomainError:
+            raise
+        except OSError as error:
+            if getattr(error, "errno", None) == 28:
+                raise DomainError("storage_full", "Storage became full during upload", 507) from None
+            raise DomainError("upload_failed", "The file could not be stored", 500) from None
+        finally:
+            if stream is not None:
+                stream.close()
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def create(self, value: str, confirmed_path: str):
         if not self.create_enabled:

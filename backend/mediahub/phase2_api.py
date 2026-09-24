@@ -349,6 +349,53 @@ async def storage_files(
     )
 
 
+@router.post("/storage/locations/{identifier}/files/upload")
+async def upload_storage_file(
+    identifier: str,
+    request: Request,
+    filename: str,
+    path: str | None = None,
+    user=Depends(administrator),
+):
+    """Stream one new file to an approved media location without overwriting data."""
+
+    svc = services(request)
+    with svc.sessions() as db:
+        record = db.get(StorageLocation, identifier)
+        if not record:
+            raise DomainError("not_found", "Storage location not found", 404)
+        location = {
+            "id": record.id,
+            "name": record.name,
+            "kind": record.kind,
+            "path": record.path,
+        }
+    if location["kind"] in {"appdata", "backups", "temp"}:
+        raise DomainError(
+            "storage_not_writable",
+            "Technical storage cannot receive browser uploads",
+            403,
+        )
+    root = Path(location["path"])
+    selected = Path(path) if path is not None else root
+    if not selected.is_absolute() or ".." in selected.parts or not selected.is_relative_to(root):
+        raise DomainError("path_not_allowed", "Choose a folder inside this media location", 403)
+    raw_length = request.headers.get("content-length")
+    try:
+        expected_size = int(raw_length) if raw_length is not None else None
+    except ValueError:
+        raise DomainError("invalid_upload", "Upload size is invalid", 400) from None
+    uploaded = await svc.agent.upload(
+        str(selected), filename, request.stream(), expected_size
+    )
+    svc.events.record(
+        "storage.file.uploaded",
+        "storage",
+        f"File uploaded to {location['name']} ({uploaded['sizeBytes']} bytes)",
+    )
+    return result(uploaded)
+
+
 @router.put("/storage/locations/{identifier}")
 async def update_storage(
     identifier: str, body: StorageInput, request: Request, user=Depends(authenticated)

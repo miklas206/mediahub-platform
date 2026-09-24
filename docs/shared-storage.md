@@ -51,6 +51,15 @@ missing mappings and inaccessible directories block the plan. Directory inspecti
 is advisory and does not prove the future app UID can write; app-user checks are
 required before any future installation. No file contents are read by inspection.
 
+The Storage media browser reports recursive folder sizes as metadata and can
+stream administrator-approved uploads from the browser to the local Agent. Core
+does not mount the media filesystem and does not buffer an entire upload in RAM
+or on its system disk. The Agent accepts only a single basename inside the
+selected registered media root, writes a hidden same-directory partial file,
+and publishes it atomically only after the complete body is durable. Existing
+files are never overwritten. Technical `appdata`, `backups` and `temp` locations
+cannot receive browser uploads.
+
 ## Permissions and isolation
 
 - Seedbox gets a downloads-only server-side export/share. Do not export the whole
@@ -99,7 +108,8 @@ copying an active database without its transaction state is not a backup strateg
 ## Implementation boundary
 
 Implemented: registry and API/UI for logical metadata, host paths, access ceilings,
-Agent validation, host-specific app-plan resolution and fail-closed mount checks.
+Agent validation, host-specific app-plan resolution, bounded media browsing,
+streamed no-overwrite uploads and fail-closed mount checks.
 Deployment documentation supports narrow NFSv4 sharing between a storage owner
 and an isolated Seedbox. MediaHub itself deliberately does not format disks,
 invent exports, migrate media, rewrite ownership recursively or attach writable

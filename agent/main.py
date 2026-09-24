@@ -497,7 +497,16 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.get("/v1/files")
     async def files(path: str):
-        return policy.list_entries(path)
+        return await asyncio.to_thread(policy.list_entries, path)
+
+    @app.put("/v1/files/upload")
+    async def upload_file(
+        request: Request,
+        path: str,
+        filename: str,
+        expected_size: int | None = None,
+    ):
+        return await policy.upload(path, filename, request.stream(), expected_size)
 
     @app.post("/v1/directories/inspect")
     async def inspect(body: DirectoryRequest):

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -14,9 +15,10 @@ import {
   HardDrive,
   RefreshCw,
   Server,
+  Upload,
   X,
 } from "lucide-react";
-import { api } from "./api";
+import { api, uploadMediaFile } from "./api";
 import { Link } from "react-router-dom";
 import { bytes } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
@@ -552,6 +554,16 @@ export function MediaFiles() {
   const [listing, setListing] = useState<MediaFileListing>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploads, setUploads] = useState<
+    {
+      id: string;
+      name: string;
+      progress: number;
+      state: "uploading" | "complete" | "error";
+      message?: string;
+    }[]
+  >([]);
+  const fileInput = useRef<HTMLInputElement>(null);
   const available = (locations.data || []).filter((item) =>
     mediaKinds.has(item.kind),
   );
@@ -585,12 +597,61 @@ export function MediaFiles() {
     ? listing.path.slice(listing.location.path.length).replace(/^\/+/, "") ||
       "Top folder"
     : "Top folder";
+  const selectedLocation = available.find((item) => item.id === locationId);
+
+  const uploadFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length || !listing) return;
+      for (const [index, file] of Array.from(files).entries()) {
+        const id = `${Date.now()}-${index}-${file.name}`;
+        setUploads((current) => [
+          ...current,
+          { id, name: file.name, progress: 0, state: "uploading" },
+        ]);
+        try {
+          await uploadMediaFile(
+            locationId,
+            listing.path,
+            file,
+            (progress) =>
+              setUploads((current) =>
+                current.map((item) =>
+                  item.id === id ? { ...item, progress } : item,
+                ),
+              ),
+          );
+          setUploads((current) =>
+            current.map((item) =>
+              item.id === id
+                ? { ...item, progress: 100, state: "complete" }
+                : item,
+            ),
+          );
+        } catch (caught) {
+          setUploads((current) =>
+            current.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    state: "error",
+                    message: (caught as Error).message,
+                  }
+                : item,
+            ),
+          );
+        }
+      }
+      await open(locationId, listing.path);
+      if (fileInput.current) fileInput.current.value = "";
+    },
+    [listing, locationId, open],
+  );
 
   return (
     <Panel title="Media files">
       <p className="muted">
-        A safe, read-only view of the folders Plex and Seedbox use. Nothing can
-        be moved or deleted here.
+        Browse the folders Plex and Seedbox use, and securely upload files from
+        this device. Existing files cannot be overwritten, moved or deleted here.
       </p>
       <ErrorBox error={locations.error || error} />
       {!locations.data ? (
@@ -634,8 +695,44 @@ export function MediaFiles() {
                 <RefreshCw className={loading ? "spin" : ""} size={16} />
                 Refresh
               </button>
+              <input
+                aria-label="Choose files to upload"
+                className="visually-hidden"
+                multiple
+                onChange={(event) => uploadFiles(event.target.files)}
+                ref={fileInput}
+                type="file"
+              />
+              <button
+                className="primary"
+                disabled={!listing || !selectedLocation?.writable || loading}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Upload size={16} /> Upload files
+              </button>
             </div>
           </div>
+          {uploads.length > 0 && (
+            <div className="media-upload-list" aria-live="polite">
+              {uploads.map((item) => (
+                <div className={`media-upload-item ${item.state}`} key={item.id}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.state === "complete"
+                        ? "Upload complete"
+                        : item.state === "error"
+                          ? item.message
+                          : `${item.progress}% uploaded`}
+                    </small>
+                  </div>
+                  <div className="media-upload-progress">
+                    <span style={{ width: `${item.progress}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="media-path">
             <Folder size={16} />
             <span>{relative}</span>
@@ -659,7 +756,7 @@ export function MediaFiles() {
                   <strong>{item.name}</strong>
                   <small>
                     {item.type === "folder"
-                      ? "Folder"
+                      ? `${item.sizeComplete ? "" : "At least "}${bytes(item.sizeBytes)} · Folder`
                       : `${bytes(item.sizeBytes)} · ${new Date(
                           item.modifiedAt * 1000,
                         ).toLocaleDateString()}`}

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Storage browser folder-size totals and streamed, administrator-only uploads that
+  stay inside approved media roots and never overwrite existing files.
 - Added encrypted, repository-scoped GitHub access for private release discovery.
 
 - Stable app-card loading with reserved layout space and direct app shortcuts in the sidebar.

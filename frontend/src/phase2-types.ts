@@ -58,6 +58,7 @@ export type MediaFileListing = {
     path: string;
     type: "folder" | "file";
     sizeBytes: number | null;
+    sizeComplete: boolean;
     modifiedAt: number;
   }[];
   truncated: boolean;

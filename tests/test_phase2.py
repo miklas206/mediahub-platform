@@ -51,6 +51,10 @@ class LocalAgent:
             return self.policy.browse(query.get("path", [None])[0])
         raise DomainError("unexpected_agent_call", "Unexpected agent operation")
 
+    async def upload(self, path, filename, content, expected_size=None):
+        self.calls.append(("PUT", "/v1/files/upload"))
+        return await self.policy.upload(path, filename, content, expected_size)
+
 
 @pytest.fixture
 def setup_client(tmp_path):
@@ -211,6 +215,7 @@ def test_directory_browser_only_directories_and_safe_paths(tmp_path):
 def test_media_file_listing_is_bounded_metadata_only(tmp_path):
     policy = DirectoryPolicy([tmp_path], True)
     (tmp_path / "Movies").mkdir()
+    (tmp_path / "Movies" / "nested.mkv").write_bytes(b"nested-media")
     media = tmp_path / "movie.mkv"
     media.write_bytes(b"sample-media")
     (tmp_path / ".mediahub-write-probe-test").write_text("internal")
@@ -222,7 +227,17 @@ def test_media_file_listing_is_bounded_metadata_only(tmp_path):
     ]
     file_item = listing["items"][1]
     assert file_item["sizeBytes"] == len(b"sample-media")
-    assert set(file_item) == {"name", "path", "type", "sizeBytes", "modifiedAt"}
+    folder_item = listing["items"][0]
+    assert folder_item["sizeBytes"] == len(b"nested-media")
+    assert folder_item["sizeComplete"] is True
+    assert set(file_item) == {
+        "name",
+        "path",
+        "type",
+        "sizeBytes",
+        "sizeComplete",
+        "modifiedAt",
+    }
     assert "sample-media" not in json.dumps(listing)
 
 
@@ -251,6 +266,53 @@ def test_registered_media_location_can_be_browsed_read_only(setup_client):
         params={"path": str(setup_client.storage_root)},
     )
     assert escaped.status_code == 403
+
+
+def test_media_upload_streams_to_approved_folder_without_overwrite(setup_client):
+    bootstrap(setup_client)
+    movies = setup_client.storage_root / "movies"
+    movies.mkdir()
+    response = setup_client.post(
+        "/api/v1/storage/locations",
+        json={"name": "Movies", "kind": "movies", "path": str(movies)},
+    )
+    identifier = response.json()["data"]["id"]
+
+    uploaded = setup_client.post(
+        f"/api/v1/storage/locations/{identifier}/files/upload",
+        params={"path": str(movies), "filename": "Example.mkv"},
+        content=b"streamed-media",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.json()["data"]["sizeBytes"] == len(b"streamed-media")
+    assert (movies / "Example.mkv").read_bytes() == b"streamed-media"
+
+    duplicate = setup_client.post(
+        f"/api/v1/storage/locations/{identifier}/files/upload",
+        params={"path": str(movies), "filename": "Example.mkv"},
+        content=b"replacement",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert duplicate.status_code == 409
+    assert (movies / "Example.mkv").read_bytes() == b"streamed-media"
+
+    escaped = setup_client.post(
+        f"/api/v1/storage/locations/{identifier}/files/upload",
+        params={"path": str(setup_client.storage_root), "filename": "escape.mkv"},
+        content=b"blocked",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert escaped.status_code == 403
+    assert not (setup_client.storage_root / "escape.mkv").exists()
+
+    invalid_name = setup_client.post(
+        f"/api/v1/storage/locations/{identifier}/files/upload",
+        params={"path": str(movies), "filename": "../escape.mkv"},
+        content=b"blocked",
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert invalid_name.status_code == 400
 
 
 def test_agent_auth_and_readonly_runtime(tmp_path):
