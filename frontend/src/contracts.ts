@@ -96,7 +96,8 @@ export type DashboardSection =
   | "network"
   | "core"
   | "runtime"
-  | "integrations";
+  | "integrations"
+  | "cloudflare";
 export type Log = {
   timestamp: string;
   level: string;

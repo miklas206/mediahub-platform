@@ -23,6 +23,7 @@ from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.auth import AuthService
 from mediahub.backups_api import router as backups_router
 from mediahub.catalog import Catalog
+from mediahub.cloudflare_tunnel import CloudflareTunnelMonitor
 from mediahub.config import Config
 from mediahub.db import connect, migrate
 from mediahub.errors import DomainError
@@ -75,6 +76,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.agent = AgentClient(config)
         svc.catalog = Catalog(config, sessions, svc.agent)
         svc.integrations = IntegrationService(config, sessions, events)
+        svc.cloudflare_tunnel = CloudflareTunnelMonitor(config)
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.hosts = HostRegistry(svc)
         register_remote_apps(svc)

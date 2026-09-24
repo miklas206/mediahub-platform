@@ -60,6 +60,7 @@ class PlatformSettings(StrictModel):
             "core",
             "runtime",
             "integrations",
+            "cloudflare",
         ]
     ] = ["storage", "apps", "system"]
 

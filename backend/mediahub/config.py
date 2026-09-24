@@ -1,4 +1,5 @@
 import os
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -15,6 +16,8 @@ class Config(BaseSettings):
     public_url: str | None = None
     fjordhub_url: str | None = None  # Optional operator-discovered normal LAN URL.
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
+    cloudflared_status_url: str | None = None
+    cloudflared_probe_urls: list[str] = Field(default_factory=list)
 
     @field_validator("operator_app_urls")
     @classmethod
@@ -29,6 +32,48 @@ class Config(BaseSettings):
             ):
                 raise ValueError("Operator app URLs require HTTP(S), without embedded credentials")
         return values
+
+    @field_validator("cloudflared_status_url")
+    @classmethod
+    def valid_cloudflared_status_url(cls, value):
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        try:
+            address = ip_address(parsed.hostname or "")
+        except ValueError:
+            raise ValueError("Cloudflared status requires an explicit private IP") from None
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not (address.is_private or address.is_loopback)
+            or parsed.username
+            or parsed.password
+            or parsed.path not in {"", "/", "/status"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("Cloudflared status URL must be a private HTTP(S) status endpoint")
+        return value.rstrip("/")
+
+    @field_validator("cloudflared_probe_urls")
+    @classmethod
+    def valid_cloudflared_probe_urls(cls, values):
+        if len(values) > 20:
+            raise ValueError("At most 20 Cloudflare routes can be monitored")
+        output = []
+        for value in values:
+            parsed = urlsplit(value)
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("Cloudflare route probes require HTTPS URLs without credentials")
+            output.append(value.rstrip("/"))
+        return output
 
     cookie_samesite: Literal["strict", "lax", "none"] = "strict"
     agent_ca_file: Path | None = None

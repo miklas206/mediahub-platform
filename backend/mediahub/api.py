@@ -112,6 +112,13 @@ async def system_status(request: Request, user=Depends(authenticated)):
     return result(services(request).snapshot)
 
 
+@router.get("/cloudflare/status")
+async def cloudflare_status(
+    request: Request, refresh: bool = Query(default=False), user=Depends(authenticated)
+):
+    return result(await services(request).cloudflare_tunnel.status(force=refresh))
+
+
 @router.get("/apps")
 async def apps(request: Request, user=Depends(authenticated)):
     svc = services(request)

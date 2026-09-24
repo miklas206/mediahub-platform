@@ -45,6 +45,7 @@ import { SeedboxInstallPage } from "./seedbox-install";
 import { PlexInstallPage } from "./plex-install";
 import { SecuritySettings } from "./security";
 import { IntegrationsCard, IntegrationsPage } from "./integrations";
+import { CloudflareTunnelCard } from "./cloudflare";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   CatalogPage,
@@ -98,6 +99,7 @@ const detailedDashboard: DashboardSection[] = [
   "core",
   "runtime",
   "integrations",
+  "cloudflare",
 ];
 
 function useData<T>(path: string) {
@@ -891,6 +893,7 @@ function Dashboard({
             )}
             {visible.has("runtime") && <RuntimePanel />}
             {visible.has("integrations") && <IntegrationsCard />}
+            {visible.has("cloudflare") && <CloudflareTunnelCard />}
           </div>
           {hasRightColumn && (
             <div className="stack">
@@ -1555,4 +1558,5 @@ const dashboardChoices: [DashboardSection, string, string][] = [
   ["core", "Core health", "Connection and runtime diagnostics"],
   ["runtime", "App runtime", "Technical Agent and Docker status"],
   ["integrations", "Integrations", "Status for optional connections"],
+  ["cloudflare", "Cloudflare Tunnel", "Tunnel connection and public route health"],
 ];
