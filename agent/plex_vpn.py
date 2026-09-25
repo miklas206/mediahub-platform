@@ -22,7 +22,6 @@ import time
 import uuid
 from pathlib import Path
 
-import httpx
 from mediahub.errors import DomainError
 from mediahub.secret_store import SecretStore
 
@@ -527,20 +526,78 @@ class PlexVPN:
             await self._exec(vpn, ["iptables", *tokens])
 
     async def _probe_public(self, address, port):
+        identifier = None
         try:
             if not ipaddress.ip_address(address).is_global or not 1024 <= int(port) <= 65535:
                 raise ValueError()
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(6, connect=4),
-                follow_redirects=False,
-                trust_env=False,
-            ) as client:
-                response = await client.get(f"http://{address}:{port}/identity")
-            if len(response.content) > 64 * 1024 or response.status_code != 200:
-                raise ValueError()
-            return b"MediaContainer" in response.content
-        except (httpx.HTTPError, ValueError, TypeError):
+            self_container = await self.runtime.request(
+                "GET", f"/containers/{socket.gethostname()}/json"
+            )
+            name = "mediahub-plex-public-probe-" + uuid.uuid4().hex
+            script = """
+import ipaddress
+import sys
+import urllib.request
+
+try:
+    address = str(ipaddress.ip_address(sys.argv[1]))
+    port = int(sys.argv[2])
+    if not ipaddress.ip_address(address).is_global or not 1024 <= port <= 65535:
+        raise ValueError()
+    host = f"[{address}]" if ":" in address else address
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(f"http://{host}:{port}/identity", timeout=6) as response:
+        body = response.read(65537)
+    ok = response.status == 200 and len(body) <= 65536 and b"MediaContainer" in body
+except Exception:
+    ok = False
+print("reachable" if ok else "unreachable")
+"""
+            body = {
+                "Image": self_container["Image"],
+                "User": "65534:65534",
+                "Tty": True,
+                "Entrypoint": ["python3", "-c", script, str(address), str(port)],
+                "Labels": {
+                    "org.mediahub.package": "org.mediahub.plex",
+                    "org.mediahub.component": "public-reachability-probe",
+                },
+                "HostConfig": {
+                    "NetworkMode": "bridge",
+                    "ReadonlyRootfs": True,
+                    "CapDrop": ["ALL"],
+                    "SecurityOpt": ["no-new-privileges:true"],
+                    "Memory": 64 * 1024**2,
+                    "MemorySwap": 64 * 1024**2,
+                    "PidsLimit": 16,
+                    "Ulimits": [{"Name": "core", "Soft": 0, "Hard": 0}],
+                    "LogConfig": {
+                        "Type": "json-file",
+                        "Config": {"max-size": "16k", "max-file": "1"},
+                    },
+                },
+            }
+            identifier = (
+                await self.runtime.request("POST", f"/containers/create?name={name}", body=body)
+            )["Id"]
+            await self.runtime.request("POST", f"/containers/{identifier}/start")
+            waited = await self.runtime.request("POST", f"/containers/{identifier}/wait")
+            if waited.get("StatusCode") != 0:
+                return False
+            output = await self.runtime.request(
+                "GET",
+                f"/containers/{identifier}/logs?stdout=true&stderr=false",
+                binary=True,
+            )
+            return output.strip() == b"reachable"
+        except (DomainError, OSError, ValueError, KeyError, TypeError):
             return False
+        finally:
+            if identifier:
+                with contextlib.suppress(DomainError):
+                    await self.runtime.request(
+                        "DELETE", f"/containers/{identifier}?force=true&v=false"
+                    )
 
     async def prepare(self, plex_policy):
         vpn = await self._create_container()

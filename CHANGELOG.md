@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.3 - 2026-09-25
+
+- Fixed the Plex remote-reachability status check when the Agent correctly runs
+  on an internal-only control network. The check now uses a short-lived,
+  secretless, read-only bridge helper with no mounts or capabilities, while the
+  Agent itself remains isolated.
+
 ## 0.4.2 - 2026-09-25
 
 - Fixed Plex remote access through Proton NAT-PMP. Proton translates the

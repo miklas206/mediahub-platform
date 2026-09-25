@@ -70,3 +70,34 @@ def test_forwarded_port_is_redirected_and_allowed_only_on_vpn_interface():
     assert allowed[allowed.index("-i") + 1] == "tun0"
     assert allowed[allowed.index("--dport") + 1] == str(PLEX_PORT)
     assert allowed[-1] == "ACCEPT"
+
+
+def test_public_probe_uses_isolated_secretless_bridge_helper():
+    calls = []
+
+    async def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == "GET" and path.startswith("/containers/") and path.endswith("/json"):
+            return {"Image": "sha256:" + "a" * 64}
+        if method == "POST" and path.startswith("/containers/create?"):
+            return {"Id": "probe"}
+        if method == "POST" and path == "/containers/probe/wait":
+            return {"StatusCode": 0}
+        if method == "GET" and path.endswith("/logs?stdout=true&stderr=false"):
+            return b"reachable\n"
+        return {}
+
+    fake = SimpleNamespace(runtime=SimpleNamespace(request=request))
+    assert asyncio.run(PlexVPN._probe_public(fake, "1.1.1.1", 42264)) is True
+
+    create = next(item for item in calls if item[1].startswith("/containers/create?"))
+    body = create[2]["body"]
+    host = body["HostConfig"]
+    assert host["NetworkMode"] == "bridge"
+    assert host["ReadonlyRootfs"] is True
+    assert host["CapDrop"] == ["ALL"]
+    assert "Mounts" not in host
+    assert body["Entrypoint"][-2:] == ["1.1.1.1", "42264"]
+    assert any(
+        method == "DELETE" and path.startswith("/containers/probe?") for method, path, _ in calls
+    )
