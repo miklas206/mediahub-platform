@@ -32,6 +32,7 @@ import {
   Server,
   Settings2,
   ShieldCheck,
+  Store,
   Terminal,
   Wrench,
   X,
@@ -47,6 +48,7 @@ import { PlexInstallPage } from "./plex-install";
 import { SecuritySettings } from "./security";
 import { IntegrationsCard, IntegrationsPage } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
+import { AppStorePage, CloudflareStorePage, FjordHubStorePage } from "./store";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   OperationProgress,
@@ -54,7 +56,6 @@ import {
   type OperationStep,
 } from "./operation-progress";
 import {
-  CatalogPage,
   RuntimePanel,
   StorageSummary,
   SettingsExtensions,
@@ -77,6 +78,7 @@ import type { AgentStatus } from "./phase2-types";
 const navigation = [
   ["/", "Dashboard", LayoutDashboard],
   ["/apps", "Apps", Box],
+  ["/store", "App Store", Store],
   ["/storage", "Storage", HardDrive],
   ["/hosts", "Hosts", Server],
   ["/activity", "Activity", ActivityIcon],
@@ -90,6 +92,7 @@ const navigation = [
 const simpleNavigation: NavigationPath[] = [
   "/",
   "/apps",
+  "/store",
   "/storage",
   "/updates",
   "/backups",
@@ -358,7 +361,7 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.4.6</span>
+          <span>v0.4.7</span>
         </div>
       </div>
     </main>
@@ -438,9 +441,10 @@ function Shell({
     return () => source.close();
   }, [reloadUpdateSummary]);
   const runtimePage = location.pathname.startsWith("/apps/");
+  const storePage = location.pathname.startsWith("/store/");
   const title =
     navigation.find(([path]) => path === location.pathname)?.[1] ||
-    (runtimePage ? "App runtime" : "Dashboard");
+    (runtimePage ? "App runtime" : storePage ? "App Store" : "Dashboard");
   return (
     <div className="app-shell">
       {open && (
@@ -563,7 +567,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.4.6"}</span>
+            <span className="version">v{metrics?.version || "0.4.7"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -613,6 +617,9 @@ function Shell({
               element={<SeedboxInstallPage />}
             />
             <Route path="/apps/:appId" element={<AppRuntimePage />} />
+            <Route path="/store/cloudflare" element={<CloudflareStorePage />} />
+            <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
+            <Route path="/store" element={<AppStorePage />} />
             <Route
               path="/"
               element={
@@ -629,7 +636,18 @@ function Shell({
               element={
                 <div className="stack">
                   <Apps revision={revision} />
-                  <CatalogPage />
+                  <section className="store-callout">
+                    <div>
+                      <strong>Looking for another app?</strong>
+                      <p>
+                        Browse guided installations without mixing them into the
+                        apps you already run.
+                      </p>
+                    </div>
+                    <NavLink className="primary" to="/store">
+                      Open App Store →
+                    </NavLink>
+                  </section>
                 </div>
               }
             />
@@ -676,7 +694,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.4.6"}
+              {metrics?.version || "0.4.7"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>
@@ -690,6 +708,7 @@ function pageDescription(title: string) {
   return (
     {
       Apps: "One place for your apps, their status and controls.",
+      "App Store": "Add apps through guided, security-aware setup flows.",
       Storage: "Registered locations. Your files stay exactly where they are.",
       Activity: "A timeline of events in this MediaHub installation.",
       Logs: "Recent Core diagnostics, without secrets or production logs.",
@@ -1885,6 +1904,7 @@ function MaintenancePage() {
 const navigationHelp: Record<NavigationPath, string> = {
   "/": "Your front page",
   "/apps": "Plex, Seedbox and future apps",
+  "/store": "Add apps with guided setup",
   "/storage": "Browse media and check disk space",
   "/hosts": "Technical server and container details",
   "/activity": "A timeline of changes",

@@ -41,6 +41,7 @@ class PlatformSettings(StrictModel):
         Literal[
             "/",
             "/apps",
+            "/store",
             "/storage",
             "/hosts",
             "/activity",
@@ -50,7 +51,7 @@ class PlatformSettings(StrictModel):
             "/integrations",
             "/settings",
         ]
-    ] = ["/", "/apps", "/storage", "/updates", "/backups", "/settings"]
+    ] = ["/", "/apps", "/store", "/storage", "/updates", "/backups", "/settings"]
     dashboard_sections: list[
         Literal[
             "system",

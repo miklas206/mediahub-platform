@@ -141,3 +141,23 @@ def register_cloudflared_app(svc):
             app_id,
             "Cloudflare Tunnel registered; monitoring stays read-only until configured",
         )
+
+
+def should_register_cloudflared_app(svc):
+    """Keep upgrades registered, but leave a fresh install in the App Store.
+
+    A clean MediaHub installation must not pretend that Cloudflare Tunnel is
+    installed before the administrator has completed the assisted setup. An
+    existing installation keeps its app record across upgrades, including when
+    monitoring is temporarily incomplete.
+    """
+
+    with svc.sessions() as db:
+        existing = db.scalar(
+            select(InstalledApp).where(
+                InstalledApp.package_id == CloudflaredAppDefinition.package_id
+            )
+        )
+    return existing is not None or bool(
+        svc.cloudflare_tunnel.status_url or svc.cloudflare_tunnel.probe_urls
+    )

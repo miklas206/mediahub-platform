@@ -97,11 +97,14 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
     assert setup_client.get("/api/v1/setup/public-checks").status_code == 200
     bootstrap(setup_client)
     apps = setup_client.get("/api/v1/apps").json()["data"]
-    assert len(apps) == 1
-    assert apps[0]["packageId"] == "org.mediahub.cloudflared"
-    assert apps[0]["state"] == "not_configured"
+    assert apps == []
     catalog = setup_client.get("/api/v1/catalog").json()["data"]
-    assert {a["name"] for a in catalog} == {"Cloudflare Tunnel", "Plex", "Seedbox"}
+    assert {a["name"] for a in catalog} == {
+        "Cloudflare Tunnel",
+        "FjordHub",
+        "Plex",
+        "Seedbox",
+    }
     assert next(a for a in catalog if a["id"] == "org.mediahub.plex")["availability"] == "available"
     assert all(a["availability"] in {"coming-soon", "available"} for a in catalog)
 

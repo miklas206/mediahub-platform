@@ -3,7 +3,7 @@ id: org.mediahub.cloudflared
 name: Cloudflare Tunnel
 description: Guided, least-privilege setup for Cloudflare Tunnel route health, connector metrics and official release monitoring.
 category: infrastructure
-version: 0.3.0
+version: 0.4.0
 maintainer: {name: MediaHub contributors}
 icon: cloudflared.svg
 homepage: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
@@ -53,6 +53,13 @@ configFields:
     required: false
     placeholder: http://192.168.1.50:20241/metrics
     description: Optional private-LAN Prometheus metrics endpoint. It reveals connector health but never a tunnel token.
+  - name: origin_ca_pool
+    label: Public CA certificate path on the connector host
+    type: text
+    required: false
+    default: /etc/cloudflared/mediahub-ca.pem
+    placeholder: /etc/cloudflared/mediahub-ca.pem
+    description: When MediaHub uses an internal CA, copy only its public CA certificate to this path on the cloudflared host. Keep TLS verification enabled.
   - name: tunnel_profiles
     label: Saved tunnel profiles
     type: text
@@ -72,8 +79,8 @@ installGuide:
     helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/
   - id: connect-origin
     title: Connect the private MediaHub origin
-    description: Point the MediaHub hostname at its private HTTPS origin. The assistant checks the public route but never opens a router port.
-    fields: [origin_url]
+    description: Point the MediaHub hostname at its private HTTPS origin. If it uses an internal CA, configure Origin Server Name and CA Pool while keeping certificate verification enabled.
+    fields: [origin_url, origin_ca_pool]
     helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/ingress/
   - id: verify-route
     title: Verify end to end

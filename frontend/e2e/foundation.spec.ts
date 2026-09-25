@@ -85,7 +85,7 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     page.getByRole("progressbar", { name: "Check MediaHub updates" }),
   ).toHaveAttribute("aria-valuenow", "100");
   const updateCards = page.locator(".updates-grid > .panel");
-  await expect(updateCards).toHaveCount(2);
+  await expect(updateCards).toHaveCount(1);
   const updateCardHeights = await updateCards.evaluateAll((cards) =>
     cards.map((card) => card.getBoundingClientRect().height),
   );
@@ -97,15 +97,29 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     fullPage: true,
     animations: "disabled",
   });
-  await page
-    .getByRole("link", { name: "Cloudflare Tunnel", exact: true })
-    .click();
+  await page.getByRole("link", { name: "App Store", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Add only what you need." }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "FjordHub" })).toBeVisible();
+  const storeCards = page.locator(".store-grid > .store-card");
+  await expect(storeCards).toHaveCount(4);
+  const storeCardHeights = await storeCards.evaluateAll((cards) =>
+    cards.map((card) => card.getBoundingClientRect().height),
+  );
+  expect(
+    Math.max(...storeCardHeights) - Math.min(...storeCardHeights),
+  ).toBeLessThan(2);
+  await page.getByRole("link", { name: "Set up Cloudflare" }).click();
   await expect(
     page.getByText("Assisted Cloudflare setup", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Tunnel name").fill("QA home tunnel");
   await page.getByRole("button", { name: /Continue/ }).click();
   await page.getByLabel("Public hostnames").fill("media.example.com");
+  await expect(page.getByLabel("CA Pool path on cloudflared host")).toHaveValue(
+    "/etc/cloudflared/mediahub-ca.pem",
+  );
   await page.getByRole("button", { name: /Continue/ }).click();
   await expect(page.getByLabel("Private metrics URL")).toBeVisible();
   await page.getByRole("button", { name: /Continue/ }).click();
@@ -114,14 +128,14 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     setupReview.getByText("Published routes", { exact: true }),
   ).toBeVisible();
   await expect(setupReview.getByText("1", { exact: true })).toBeVisible();
-  const activeShortcut = page.locator(".app-shortcuts a.active");
-  const shortcutGroup = page.locator(".app-shortcuts");
-  await expect(activeShortcut).toBeVisible();
-  const [shortcutBox, groupBox] = await Promise.all([
-    activeShortcut.boundingBox(),
-    shortcutGroup.boundingBox(),
+  const activeStoreNavigation = page.locator('nav a.active[href="/store"]');
+  const navigationGroup = page.locator(".sidebar nav");
+  await expect(activeStoreNavigation).toBeVisible();
+  const [activeNavigationBox, navigationBox] = await Promise.all([
+    activeStoreNavigation.boundingBox(),
+    navigationGroup.boundingBox(),
   ]);
-  expect(shortcutBox?.width).toBeCloseTo(groupBox?.width || 0, 0);
+  expect(activeNavigationBox?.width).toBeCloseTo(navigationBox?.width || 0, 0);
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Maintenance", exact: true }).click();
   await expect(

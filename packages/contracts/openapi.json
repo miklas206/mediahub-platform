@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.4.6"
+    "version": "0.4.7"
   },
   "paths": {
     "/api/v1/health": {
@@ -4063,6 +4063,7 @@
               "enum": [
                 "/",
                 "/apps",
+                "/store",
                 "/storage",
                 "/hosts",
                 "/activity",
@@ -4078,6 +4079,7 @@
             "default": [
               "/",
               "/apps",
+              "/store",
               "/storage",
               "/updates",
               "/backups",

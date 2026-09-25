@@ -83,6 +83,8 @@ export type CatalogApp = {
   recommendedIsolation?: string;
   hostCapabilities?: string[];
   maintainer: { name: string };
+  repository?: string | null;
+  homepage?: string | null;
   capabilities: string[];
   storageRequirements: {
     id: string;

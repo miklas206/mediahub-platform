@@ -27,6 +27,14 @@ def certificates(tmp_path, *, expired=False, san="127.0.0.1"):
         .not_valid_after(now + dt.timedelta(days=2))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
             x509.KeyUsage(False, False, False, False, False, True, True, None, None), critical=True
         )
         .sign(ca_key, hashes.SHA256())
@@ -41,6 +49,14 @@ def certificates(tmp_path, *, expired=False, san="127.0.0.1"):
         .not_valid_before(now - dt.timedelta(days=2))
         .not_valid_after(now - dt.timedelta(days=1) if expired else now + dt.timedelta(days=1))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
         .add_extension(
             x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address(san))]), critical=False
         )

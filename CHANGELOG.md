@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.4.7 - 2026-09-25
+
+- Add a dedicated App Store navigation entry with stable, equal-height catalog
+  cards and loading placeholders that prevent content from moving while data
+  arrives.
+- Keep a fresh installation's Apps page limited to actually installed apps;
+  Cloudflare Tunnel moves from the installed list into its guided App Store
+  flow until the administrator saves a configuration.
+- Add a complete Cloudflare setup and edit flow for multiple tunnels, public
+  routes, private HTTPS origins, internal CA validation and optional connector
+  metrics without requesting an account-wide Cloudflare token.
+- Add FjordHub to the App Store with a guided deployment from its official
+  GitHub source and a separate least-privilege, read-only Access Token
+  integration step.
+- Add a one-time navigation migration so existing installations receive the
+  App Store entry without overriding later user customisation.
+
 ## 0.4.6 - 2026-09-25
 
 - Turn the completed update check into a clear green "Everything is up to date" state.

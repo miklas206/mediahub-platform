@@ -43,24 +43,30 @@ Cloudflare Tunnel remains optional. Adding this app does not create a tunnel,
 publish a hostname, modify DNS, open a router port or make Cloudflare a runtime
 dependency for MediaHub.
 
-## Planned App Store installation
+## App Store setup and configuration
 
-The catalog entry is marked **coming soon** until a rollback-safe installer is
-implemented. Its guided setup metadata already describes the intended flow:
+On a fresh installation, Cloudflare Tunnel appears in **App Store**, not in the
+installed Apps list. The guided flow makes every external choice explicit:
 
-1. The user selects a new or existing remotely managed Tunnel.
-2. The user supplies a public hostname and MediaHub's private HTTPS origin.
-3. The user pastes only the Tunnel connector token. MediaHub does not request a
-   Cloudflare account API token.
-4. The connector token is encrypted at rest and materialized only for the
-   cloudflared runtime when the installer is implemented.
-5. MediaHub verifies local connector health, Cloudflare links, the public route,
-   HTTPS origin validation and realtime WebSocket/SSE behavior.
+1. The user selects an existing Tunnel or follows Cloudflare's official flow to
+   create and deploy a connector.
+2. The user supplies the Tunnel name, published hostnames and MediaHub's private
+   HTTPS origin.
+3. If MediaHub uses its internal CA, the user copies only the public CA
+   certificate to the connector host, configures the CA Pool path and sets the
+   Origin Server Name to the certificate SAN. TLS verification remains enabled.
+4. The user may provide a private cloudflared Prometheus URL for connector
+   health. This endpoint must never be exposed publicly.
+5. MediaHub stores the non-secret monitoring profile and verifies the public
+   routes. It then appears under installed Apps, where the same data can be
+   edited without repeating first-time setup.
 
-The future installer must require explicit confirmation before creating a
-container or publishing a hostname. Until that lifecycle exists, the catalog
-can save encrypted draft configuration and preview requirements, but it cannot
-execute an installation.
+The guided flow does not receive a Cloudflare account token, create DNS records,
+install a connector process or change a remote Tunnel automatically. Connector
+deployment remains an explicit Cloudflare step because it requires credentials
+and host-level choices that MediaHub cannot safely infer. Multiple routes are
+stored under their real Tunnel profile rather than being presented as separate
+Tunnels.
 
 The supplied `docker/mediahub-cloudflared-status.service` runs as `nobody` with
 a read-only filesystem and no elevated capabilities. Put only the listen IP,

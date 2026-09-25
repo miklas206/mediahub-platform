@@ -943,7 +943,11 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
             </small>
           )}
           {field.description && <small>{field.description}</small>}
-          {field.helpUrl && <a href={field.helpUrl} target="_blank" rel="noreferrer">Open official guidance →</a>}
+          {field.helpUrl && (
+            <a href={field.helpUrl} target="_blank" rel="noreferrer">
+              Open official guidance →
+            </a>
+          )}
         </label>
       ))}
       <button>Save app configuration</button>
@@ -959,12 +963,16 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
 export function CatalogPage({
   selected,
   onSelect,
+  showInstalled = false,
 }: {
   selected?: string[];
   onSelect?: (ids: string[]) => void;
+  showInstalled?: boolean;
 }) {
   const { data, error } = useLoad<CatalogApp[]>("/catalog");
   const installed = useLoad<AppInfo[]>("/apps");
+  const integrations =
+    useLoad<{ id: string; enabled: boolean }[]>("/integrations");
   const hosts = useLoad<HostInfo[]>("/hosts");
   const logical = useLoad<LogicalStorage[]>("/storage/logical");
   const [targets, setTargets] = useState<Record<string, string>>({});
@@ -974,175 +982,254 @@ export function CatalogPage({
   const [mappings, setMappings] = useState<
     Record<string, Record<string, string>>
   >({});
+  const ready = !!data && !!installed.data && !!integrations.data;
+  const fjordHubConnected = !!integrations.data?.some((item) => item.enabled);
+  const visibleApps = data
+    ?.filter((app) => app.availability !== "development")
+    .filter((app) => {
+      if (showInstalled) return true;
+      if (app.id === "org.mediahub.fjordhub" && fjordHubConnected) return false;
+      return !installed.data?.some((item) => item.packageId === app.id);
+    });
   return (
     <div className="stack">
-      <ErrorBox error={error || planError} />
-      <div className="apps-grid">
-        {data
-          ?.filter(
-            (app) =>
-              app.availability !== "development" &&
-              !installed.data?.some((i) => i.packageId === app.id),
-          )
-          .map((app) => (
-            <section className="panel app-detail" key={app.id}>
-              <div className="panel-heading">
-                <div className="app-icon">
-                  <Box />
-                </div>
-                <span className="badge">
-                  {app.availability === "available"
-                    ? "Guided installation"
-                    : "Coming soon"}
-                </span>
-              </div>
-              <h2>{app.name}</h2>
-              {app.id === "org.mediahub.plex" && (
-                <Link to="/apps/install/plex">Install Plex →</Link>
-              )}
-              {app.id === "org.mediahub.seedbox" && (
-                <Link to="/apps/install/seedbox">Install Seedbox →</Link>
-              )}
-              <p>{app.description}</p>
-              <p className="muted">
-                {app.category} · v{app.version} · {app.maintainer.name}
-              </p>
-              <details>
-                <summary>Advanced requirements and configuration</summary>
-                {!!app.installGuide?.length && <div className="install-guide">
-                  <h3>Guided setup</h3>
-                  <ol>{app.installGuide.map(step=><li key={step.id}><strong>{step.title}</strong><p>{step.description}</p>
-                    {step.helpUrl && <a href={step.helpUrl} target="_blank" rel="noreferrer">Official instructions →</a>}
-                  </li>)}</ol>
-                  <p className="muted">Preview only. MediaHub will ask for confirmation before a future installer creates a container or publishes a hostname.</p>
-                </div>}
-                <p>Runtime: {app.requiredRuntime}</p>
-                <label>
-                  Target host
-                  <select
-                    value={targets[app.id] || "local"}
-                    onChange={(e) => {
-                      setTargets({ ...targets, [app.id]: e.target.value });
-                      setPlan(undefined);
-                    }}
-                  >
-                    {hosts.data?.map((host) => (
-                      <option value={host.id} key={host.id}>
-                        {host.name}
-                        {host.status !== "online" ? " · Offline" : ""}
-                        {(app.hostCapabilities || []).some(
-                          (c) => !host.capabilities?.includes(c),
-                        )
-                          ? " · Missing capabilities"
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {app.recommendedIsolation === "dedicated-host" && (
-                  <p className="notice">
-                    Dedicated host recommended. This preview never installs the
-                    app; host compatibility is checked by the Agent.
-                  </p>
-                )}
-                <p className="muted">
-                  Storage:{" "}
-                  {app.storageRequirements
-                    .map((s) => `${s.type} (${s.access})`)
-                    .join(", ")}
-                </p>
-                <small>{app.capabilities.join(" · ")}</small>
-                {onSelect && (
-                  <label className="check-label">
-                    <input
-                      type="checkbox"
-                      checked={selected?.includes(app.id) || false}
-                      onChange={(e) =>
-                        onSelect(
-                          e.target.checked
-                            ? [...(selected || []), app.id]
-                            : (selected || []).filter((id) => id !== app.id),
-                        )
-                      }
-                    />
-                    Plan for later — do not install
-                  </label>
-                )}
-                <div className="button-row">
-                  <button
-                    onClick={() =>
-                      setExpanded(expanded === app.id ? "" : app.id)
-                    }
-                  >
-                    Configure
-                  </button>
-                  <button
-                    onClick={async () => {
-                      try {
-                        setPlan(
-                          await api("/catalog/" + app.id + "/plan", "POST", {
-                            logical_mappings: mappings[app.id] || {},
-                            host_id: targets[app.id] || "local",
-                          }),
-                        );
-                        setError("");
-                      } catch (e) {
-                        setError((e as Error).message);
-                      }
-                    }}
-                  >
-                    Preview plan
-                  </button>
-                </div>
-                {expanded === app.id && (
-                  <>
-                    <ConfigurationForm app={app} />
-                    <div className="dynamic-form">
-                      <p className="muted">
-                        Storage preview mappings only. Nothing is created or
-                        mounted.
-                      </p>
-                      {app.storageRequirements.map((slot) => (
-                        <label key={slot.id}>
-                          {slot.id} · {slot.access}
-                          {slot.required ? " (required)" : ""}
-                          <select
-                            value={mappings[app.id]?.[slot.id] || ""}
-                            onChange={(e) =>
-                              setMappings({
-                                ...mappings,
-                                [app.id]: {
-                                  ...mappings[app.id],
-                                  [slot.id]: e.target.value,
-                                },
-                              })
-                            }
-                          >
-                            <option value="">Choose logical storage</option>
-                            {logical.data
-                              ?.filter((s) =>
-                                s.mappings.some(
-                                  (m) =>
-                                    m.host_id ===
-                                      (targets[app.id] || "local") &&
-                                    (slot.access !== "rw" || m.access === "rw"),
-                                ),
-                              )
-                              .map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </details>
-            </section>
+      <ErrorBox
+        error={error || installed.error || integrations.error || planError}
+      />
+      {!ready ? (
+        <div
+          className="apps-grid app-skeleton-grid"
+          aria-busy="true"
+          aria-label="Loading App Store"
+        >
+          {[0, 1, 2, 3].map((item) => (
+            <div className="panel app-skeleton" key={item}>
+              <span />
+              <span />
+              <span />
+            </div>
           ))}
-      </div>
+        </div>
+      ) : (
+        <div className="apps-grid store-grid">
+          {visibleApps?.map((app) => {
+            const installedApp = installed.data?.find(
+              (item) => item.packageId === app.id,
+            );
+            const connected =
+              app.id === "org.mediahub.fjordhub" && fjordHubConnected;
+            return (
+              <section className="panel app-detail store-card" key={app.id}>
+                <div className="panel-heading">
+                  <div className="app-icon">
+                    <Box />
+                  </div>
+                  <span className="badge">
+                    {installedApp
+                      ? "Installed"
+                      : connected
+                        ? "Connected"
+                        : app.availability === "available"
+                          ? "Guided setup"
+                          : "Coming soon"}
+                  </span>
+                </div>
+                <h2>{app.name}</h2>
+                <p>{app.description}</p>
+                <p className="muted">
+                  {app.category} · v{app.version} · {app.maintainer.name}
+                </p>
+                <div className="store-card-action">
+                  {installedApp?.detailPath ? (
+                    <Link className="primary" to={installedApp.detailPath}>
+                      Open {app.name} →
+                    </Link>
+                  ) : connected ? (
+                    <Link className="primary" to="/integrations">
+                      Manage FjordHub →
+                    </Link>
+                  ) : app.id === "org.mediahub.plex" ? (
+                    <Link className="primary" to="/apps/install/plex">
+                      Install Plex →
+                    </Link>
+                  ) : app.id === "org.mediahub.seedbox" ? (
+                    <Link className="primary" to="/apps/install/seedbox">
+                      Install Seedbox →
+                    </Link>
+                  ) : app.id === "org.mediahub.cloudflared" ? (
+                    <Link className="primary" to="/store/cloudflare">
+                      Set up Cloudflare →
+                    </Link>
+                  ) : app.id === "org.mediahub.fjordhub" ? (
+                    <Link className="primary" to="/store/fjordhub">
+                      Set up FjordHub →
+                    </Link>
+                  ) : null}
+                  {app.repository && (
+                    <a href={app.repository} target="_blank" rel="noreferrer">
+                      Source →
+                    </a>
+                  )}
+                </div>
+                <details>
+                  <summary>Advanced requirements and configuration</summary>
+                  {!!app.installGuide?.length && (
+                    <div className="install-guide">
+                      <h3>Guided setup</h3>
+                      <ol>
+                        {app.installGuide.map((step) => (
+                          <li key={step.id}>
+                            <strong>{step.title}</strong>
+                            <p>{step.description}</p>
+                            {step.helpUrl && (
+                              <a
+                                href={step.helpUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Official instructions →
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                      <p className="muted">
+                        The dedicated guided page explains every value the user
+                        must supply. Advanced previews below never change a host
+                        by themselves.
+                      </p>
+                    </div>
+                  )}
+                  <p>Runtime: {app.requiredRuntime}</p>
+                  <label>
+                    Target host
+                    <select
+                      value={targets[app.id] || "local"}
+                      onChange={(e) => {
+                        setTargets({ ...targets, [app.id]: e.target.value });
+                        setPlan(undefined);
+                      }}
+                    >
+                      {hosts.data?.map((host) => (
+                        <option value={host.id} key={host.id}>
+                          {host.name}
+                          {host.status !== "online" ? " · Offline" : ""}
+                          {(app.hostCapabilities || []).some(
+                            (c) => !host.capabilities?.includes(c),
+                          )
+                            ? " · Missing capabilities"
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {app.recommendedIsolation === "dedicated-host" && (
+                    <p className="notice">
+                      Dedicated host recommended. This preview never installs
+                      the app; host compatibility is checked by the Agent.
+                    </p>
+                  )}
+                  <p className="muted">
+                    Storage:{" "}
+                    {app.storageRequirements
+                      .map((s) => `${s.type} (${s.access})`)
+                      .join(", ")}
+                  </p>
+                  <small>{app.capabilities.join(" · ")}</small>
+                  {onSelect && (
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={selected?.includes(app.id) || false}
+                        onChange={(e) =>
+                          onSelect(
+                            e.target.checked
+                              ? [...(selected || []), app.id]
+                              : (selected || []).filter((id) => id !== app.id),
+                          )
+                        }
+                      />
+                      Plan for later — do not install
+                    </label>
+                  )}
+                  <div className="button-row">
+                    <button
+                      onClick={() =>
+                        setExpanded(expanded === app.id ? "" : app.id)
+                      }
+                    >
+                      Configure
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setPlan(
+                            await api("/catalog/" + app.id + "/plan", "POST", {
+                              logical_mappings: mappings[app.id] || {},
+                              host_id: targets[app.id] || "local",
+                            }),
+                          );
+                          setError("");
+                        } catch (e) {
+                          setError((e as Error).message);
+                        }
+                      }}
+                    >
+                      Preview plan
+                    </button>
+                  </div>
+                  {expanded === app.id && (
+                    <>
+                      <ConfigurationForm app={app} />
+                      <div className="dynamic-form">
+                        <p className="muted">
+                          Storage preview mappings only. Nothing is created or
+                          mounted.
+                        </p>
+                        {app.storageRequirements.map((slot) => (
+                          <label key={slot.id}>
+                            {slot.id} · {slot.access}
+                            {slot.required ? " (required)" : ""}
+                            <select
+                              value={mappings[app.id]?.[slot.id] || ""}
+                              onChange={(e) =>
+                                setMappings({
+                                  ...mappings,
+                                  [app.id]: {
+                                    ...mappings[app.id],
+                                    [slot.id]: e.target.value,
+                                  },
+                                })
+                              }
+                            >
+                              <option value="">Choose logical storage</option>
+                              {logical.data
+                                ?.filter((s) =>
+                                  s.mappings.some(
+                                    (m) =>
+                                      m.host_id ===
+                                        (targets[app.id] || "local") &&
+                                      (slot.access !== "rw" ||
+                                        m.access === "rw"),
+                                  ),
+                                )
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </details>
+              </section>
+            );
+          })}
+        </div>
+      )}
       {plan && (
         <Panel title="Installation preview — not executable">
           <pre className="plan-json">{JSON.stringify(plan, null, 2)}</pre>

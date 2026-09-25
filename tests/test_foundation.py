@@ -8,7 +8,7 @@ from mediahub.apps.framework import Registry
 from mediahub.apps.manifest import Environment, Manifest, parse_manifest
 from mediahub.config import ROOT, Config
 from mediahub.contracts import Health
-from mediahub.db import Session, User, migrate
+from mediahub.db import Session, Setting, User, migrate
 from mediahub.errors import DomainError
 from pydantic import ValidationError
 from sqlalchemy import inspect, select, text
@@ -55,11 +55,29 @@ def test_cloudflared_manifest_has_guided_secret_setup():
     fields = {field.name: field for field in manifest.configFields}
     assert fields["public_hostnames"].required is True
     assert fields["status_url"].required is False
+    assert fields["origin_ca_pool"].required is False
+    assert fields["origin_ca_pool"].secret is False
     assert not any(field.secret for field in manifest.configFields)
     assert all(
         not step.helpUrl or step.helpUrl.startswith("https://developers.cloudflare.com/")
         for step in manifest.installGuide
     )
+
+
+def test_fjordhub_manifest_is_guided_and_uses_official_source():
+    manifest = parse_manifest(ROOT / "apps/fjordhub/manifest.yaml")
+    assert manifest.availability == "available"
+    assert manifest.repository == "https://github.com/qlerup/fjordhub"
+    assert manifest.requiredRuntime == "docker"
+    assert manifest.recommendedIsolation == "dedicated-host"
+    assert [step.id for step in manifest.installGuide] == [
+        "choose-host",
+        "map-appdata",
+        "deploy-source",
+        "connect-read-only",
+    ]
+    assert manifest.secrets == []
+    assert manifest.services == {}
 
 
 def test_install_guide_rejects_unknown_fields_and_unsafe_help_links():
@@ -355,6 +373,7 @@ def test_settings_persist_and_reject_secrets(logged_in):
         "visible_navigation": [
             "/",
             "/apps",
+            "/store",
             "/storage",
             "/updates",
             "/backups",
@@ -386,6 +405,46 @@ def test_settings_persist_and_reject_secrets(logged_in):
         logged_in.put("/api/settings", json={**values, "password": "never returned"}).status_code
         == 422
     )
+
+
+def test_app_store_navigation_is_added_once_without_overriding_later_choice(logged_in):
+    from mediahub.settings import SettingsService
+
+    svc = logged_in.app.state.services
+    old_value = {
+        **svc.settings.get().model_dump(),
+        "visible_navigation": ["/", "/apps", "/storage", "/settings"],
+    }
+    with svc.sessions.begin() as db:
+        marker = db.scalar(select(Setting).where(Setting.key == "navigation.app-store.v1"))
+        if marker:
+            db.delete(marker)
+        platform = db.scalar(select(Setting).where(Setting.key == "platform"))
+        if platform:
+            platform.value = old_value
+        else:
+            db.add(Setting(key="platform", value=old_value))
+
+    migrated = SettingsService(svc.sessions)
+    assert migrated.get().visible_navigation == [
+        "/",
+        "/apps",
+        "/store",
+        "/storage",
+        "/settings",
+    ]
+
+    migrated.save(
+        migrated.get().model_copy(
+            update={"visible_navigation": ["/", "/apps", "/storage", "/settings"]}
+        )
+    )
+    assert SettingsService(svc.sessions).get().visible_navigation == [
+        "/",
+        "/apps",
+        "/storage",
+        "/settings",
+    ]
 
 
 def test_central_errors_hide_internals(logged_in, monkeypatch):

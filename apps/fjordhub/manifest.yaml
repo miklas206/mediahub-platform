@@ -1,0 +1,44 @@
+schemaVersion: 1
+id: org.mediahub.fjordhub
+name: FjordHub
+description: Deploy or connect FjordHub through a guided flow, then read its app and Docker resource status through a least-privilege Access Token.
+category: media-platform
+version: 0.1.0
+maintainer: {name: FjordHub contributors}
+icon: fjordhub.svg
+homepage: https://github.com/qlerup/fjordhub
+repository: https://github.com/qlerup/fjordhub
+availability: available
+requiredRuntime: docker
+recommendedIsolation: dedicated-host
+hostCapabilities: []
+images: {}
+services: {}
+storageRequirements:
+  - {id: appdata, type: appdata, access: rw, required: true}
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: [metrics.read]
+updateSource: {type: none}
+adapter: {id: org.mediahub.fjordhub, protocolVersion: 1}
+configFields: []
+installGuide:
+  - id: choose-host
+    title: Choose a trusted Docker host
+    description: FjordHub uses the Docker socket for app lifecycle management. Prefer a dedicated trusted LXC or VM and review port conflicts before deployment.
+    fields: []
+    helpUrl: https://github.com/qlerup/fjordhub/blob/main/README.md
+  - id: map-appdata
+    title: Select persistent app data
+    description: Keep FjordHub state on a writable appdata mapping outside the operating-system root disk so upgrades and container replacement do not remove it.
+    fields: []
+  - id: deploy-source
+    title: Deploy the official source
+    description: Clone the verified public repository, create a unique SECRET_KEY, review the environment file and start the supplied Docker Compose project.
+    fields: []
+    helpUrl: https://github.com/qlerup/fjordhub
+  - id: connect-read-only
+    title: Connect the read-only integration
+    description: Create a FjordHub Access Token and let MediaHub read supported app and Docker resource status without granting container control.
+    fields: []

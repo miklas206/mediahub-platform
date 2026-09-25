@@ -81,6 +81,7 @@ export type Settings = {
 export type NavigationPath =
   | "/"
   | "/apps"
+  | "/store"
   | "/storage"
   | "/hosts"
   | "/activity"

@@ -384,6 +384,124 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.store-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 12px;
+  background:
+    linear-gradient(120deg, var(--accent-bg), transparent 58%), var(--surface);
+}
+.store-hero h2,
+.store-hero p {
+  margin: 0.25rem 0 0;
+}
+.store-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: none;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.store-grid {
+  align-items: stretch;
+}
+.store-grid > .store-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 28rem;
+}
+.store-card-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding: 1.25rem 0;
+}
+.store-card-action .primary,
+.assisted-actions .primary,
+.store-callout .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.7rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  text-decoration: none;
+}
+.store-card details {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.store-card details > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.store-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.store-callout p {
+  margin: 0.25rem 0 0;
+}
+.store-discovery-grid,
+.store-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+.store-discovery-grid > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 0.45rem 0.7rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--raised);
+}
+.store-discovery-grid svg {
+  color: var(--accent);
+}
+.store-discovery-grid p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+}
+.store-form-grid label {
+  min-width: 0;
+}
+.install-command-block {
+  overflow-x: auto;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.store-success {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
 @media (max-width: 700px) {
   .assisted-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -406,6 +524,14 @@
   .cloudflare-profile-list article {
     align-items: stretch;
     flex-direction: column;
+  }
+  .store-hero,
+  .store-callout {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .store-grid > .store-card {
+    min-height: 0;
   }
 }
 .seedbox-daily textarea {

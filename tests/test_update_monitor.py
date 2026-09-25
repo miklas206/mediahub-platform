@@ -1,5 +1,7 @@
 import asyncio
 
+from mediahub.apps.cloudflared import register_cloudflared_app
+
 
 def available_item(version="0.4.0"):
     return {
@@ -84,6 +86,7 @@ def test_update_schedule_is_configurable_and_does_not_install(logged_in):
 
 def test_recording_an_app_result_updates_the_shared_badge(logged_in):
     svc = logged_in.app.state.services
+    register_cloudflared_app(svc)
     app = next(item for item in svc.apps.list() if not item["isMock"])
     asyncio.run(
         svc.updates.record_app(

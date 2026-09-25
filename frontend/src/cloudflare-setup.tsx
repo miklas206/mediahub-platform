@@ -38,6 +38,7 @@ type SetupValues = {
   tunnel_name: string;
   public_hostnames: string;
   origin_url: string;
+  origin_ca_pool: string;
   status_url: string;
 };
 
@@ -47,6 +48,7 @@ type TunnelProfile = {
   setupMode: "existing-tunnel" | "new-tunnel";
   publicHostnames: string[];
   originUrl: string;
+  originCaPool: string;
   statusUrl: string;
 };
 
@@ -55,6 +57,7 @@ const defaults: SetupValues = {
   tunnel_name: "",
   public_hostnames: "",
   origin_url: browserPrivateOrigin(),
+  origin_ca_pool: "/etc/cloudflared/mediahub-ca.pem",
   status_url: "",
 };
 
@@ -98,6 +101,10 @@ function storedProfiles(configuration?: StoredConfiguration): TunnelProfile[] {
                 )
               : [],
             originUrl: typeof item.originUrl === "string" ? item.originUrl : "",
+            originCaPool:
+              typeof item.originCaPool === "string"
+                ? item.originCaPool
+                : "/etc/cloudflared/mediahub-ca.pem",
             statusUrl: typeof item.statusUrl === "string" ? item.statusUrl : "",
           }));
       }
@@ -118,6 +125,9 @@ function storedProfiles(configuration?: StoredConfiguration): TunnelProfile[] {
           : "existing-tunnel",
       publicHostnames: legacyRoutes,
       originUrl: configuration.values.origin_url || browserPrivateOrigin(),
+      originCaPool:
+        configuration.values.origin_ca_pool ||
+        "/etc/cloudflared/mediahub-ca.pem",
       statusUrl: configuration.values.status_url || "",
     },
   ];
@@ -140,6 +150,7 @@ function CloudflareSetupEditor({
           tunnel_name: profile.name,
           public_hostnames: profile.publicHostnames.join("\n"),
           origin_url: profile.originUrl,
+          origin_ca_pool: profile.originCaPool,
           status_url: profile.statusUrl,
         }
       : { ...defaults, origin_url: browserPrivateOrigin() },
@@ -171,6 +182,7 @@ function CloudflareSetupEditor({
         setupMode: values.setup_mode,
         publicHostnames: routeList,
         originUrl: values.origin_url.trim(),
+        originCaPool: values.origin_ca_pool.trim(),
         statusUrl: values.status_url.trim(),
       };
       const updated = profile
@@ -184,6 +196,7 @@ function CloudflareSetupEditor({
           tunnel_name: primary.name,
           public_hostnames: primary.publicHostnames.join("\n"),
           origin_url: primary.originUrl,
+          origin_ca_pool: primary.originCaPool,
           status_url: primary.statusUrl,
         },
       });
@@ -312,6 +325,20 @@ function CloudflareSetupEditor({
               exactly; an HTTPS-only MediaHub origin must start with https://.
             </small>
           </label>
+          <label>
+            CA Pool path on cloudflared host
+            <input
+              value={values.origin_ca_pool}
+              onChange={(event) => update("origin_ca_pool", event.target.value)}
+              placeholder="/etc/cloudflared/mediahub-ca.pem"
+            />
+            <small>
+              If MediaHub uses its internal CA, copy only the public CA
+              certificate to this path on the connector host. Set Cloudflare's
+              Origin Server Name to the hostname or IP in the certificate and
+              keep “Disable TLS certificate verification” turned off.
+            </small>
+          </label>
         </div>
       )}
       {step === 2 && (
@@ -356,6 +383,8 @@ function CloudflareSetupEditor({
             <strong>{routeList.length}</strong>
             <span>Private origin</span>
             <strong>{values.origin_url}</strong>
+            <span>Origin CA pool</span>
+            <strong>{values.origin_ca_pool || "System trust store"}</strong>
             <span>Connector metrics</span>
             <strong>
               {values.status_url || "Not configured — route checks only"}
@@ -441,6 +470,7 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
           tunnel_name: primary?.name || "",
           public_hostnames: primary?.publicHostnames.join("\n") || "",
           origin_url: primary?.originUrl || "",
+          origin_ca_pool: primary?.originCaPool || "",
           status_url: primary?.statusUrl || "",
         },
       });

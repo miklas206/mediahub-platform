@@ -86,7 +86,9 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     .locator("summary")
     .filter({ hasText: "Optional apps and advanced catalog" })
     .click();
-  await expect(page.getByText("Guided installation").first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Plex", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Foundation Test App")).toHaveCount(0);
   const plex = page
     .locator("section.app-detail")
