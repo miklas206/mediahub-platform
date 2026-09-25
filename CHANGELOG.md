@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.5 - 2026-09-25
+
+- Fixed platform updates failing before download when the private staging
+  directory had been created by root. Fresh installs now create the directory
+  for the unprivileged Core user, the host updater verifies that ownership, and
+  Core reports a clear storage-permission error instead of a generic failure.
+
 ## 0.4.4 - 2026-09-25
 
 - Added an assisted, least-privilege Cloudflare Tunnel monitoring setup that

@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import os
 from types import SimpleNamespace
 
 import httpx
@@ -142,6 +143,29 @@ def test_digest_mismatch_fails_closed_before_host_request(tmp_path, monkeypatch)
 
     asyncio.run(stage())
     assert updater.status()["state"] == "failed"
+    assert not (spool / "request.json").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows does not preserve POSIX mode bits")
+def test_unsafe_staging_permissions_fail_with_actionable_message(tmp_path, monkeypatch):
+    contents, release = release_fixture()
+
+    def handler(request):
+        return httpx.Response(200, content=next(iter(contents.values())))
+
+    updater, spool = runtime(tmp_path, monkeypatch, handler)
+    staging = spool / "staging"
+    staging.mkdir(mode=0o755)
+    staging.chmod(0o755)
+
+    async def stage():
+        await updater.install(release)
+        await updater.task
+
+    asyncio.run(stage())
+    status = updater.status()
+    assert status["state"] == "failed"
+    assert "ownership or permissions" in status["message"]
     assert not (spool / "request.json").exists()
 
 

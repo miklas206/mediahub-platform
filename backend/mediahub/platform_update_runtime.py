@@ -87,6 +87,43 @@ class PlatformUpdateRuntime:
     def _status_path(self):
         return self.root / "status.json"
 
+    def _staging_root(self):
+        """Return a private Core-owned staging directory or fail with a useful error.
+
+        The host updater runs as root while Core deliberately runs as uid 10001.
+        A root-owned staging directory would otherwise surface as an opaque
+        PermissionError after the user starts an update.
+        """
+        root = self.root / "staging"
+        try:
+            root.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        except PermissionError:
+            raise DomainError(
+                "platform_update_storage",
+                "Update staging storage is not writable by MediaHub",
+                500,
+            ) from None
+        try:
+            details = root.lstat()
+        except OSError:
+            raise DomainError(
+                "platform_update_storage",
+                "Update staging storage is unavailable",
+                500,
+            ) from None
+        posix_metadata_invalid = os.name != "nt" and (
+            details.st_uid != os.geteuid() or details.st_mode & 0o077
+        )
+        if not stat.S_ISDIR(details.st_mode) or root.is_symlink() or posix_metadata_invalid:
+            raise DomainError(
+                "platform_update_storage",
+                "Update staging storage has invalid ownership or permissions",
+                500,
+            )
+        return root
+
     def status(self):
         root = self._available_root()
         if root is None:
@@ -289,7 +326,7 @@ class PlatformUpdateRuntime:
     async def _stage(self, operation, target, assets, steps):
         stage = self.root / "staging" / operation
         try:
-            stage.parent.mkdir(mode=0o700, exist_ok=True)
+            self._staging_root()
             stage.mkdir(mode=0o700)
             required = sum(int(asset["size"]) for asset in assets.values()) + 1024**3
             if shutil.disk_usage(self.root).free < required:
@@ -371,6 +408,11 @@ class PlatformUpdateRuntime:
             os.replace(temporary, request_path)
         except Exception as error:
             shutil.rmtree(stage, ignore_errors=True)
-            message = error.message if isinstance(error, DomainError) else "Release staging failed"
+            if isinstance(error, DomainError):
+                message = error.message
+            elif isinstance(error, PermissionError):
+                message = "Update staging storage is not writable by MediaHub"
+            else:
+                message = "Release staging failed"
             steps[0]["state"] = "error"
             self._write_status("failed", 100, message, operation, target, steps)

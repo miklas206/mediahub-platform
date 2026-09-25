@@ -354,6 +354,7 @@ class HostUpdater:
             raise ValueError("Host updater must run as root")
         self._directory(self.root)
         self._directory(self.updates, owner=10001)
+        self._directory(self.updates / "staging", owner=10001)
         if self.root == Path("/") or self.root.is_symlink() or not self.compose.is_file():
             raise ValueError("Unsafe MediaHub root")
         self.backups.mkdir(mode=0o700, exist_ok=True)

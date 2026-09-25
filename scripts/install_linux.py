@@ -147,6 +147,9 @@ def main():
         path = root / name
         path.mkdir(mode=0o700)
         os.chown(path, 10001, 10001)
+    update_staging = root / "updates" / "staging"
+    update_staging.mkdir(mode=0o700)
+    os.chown(update_staging, 10001, 10001)
     (root / "update-backups").mkdir(mode=0o700)
     folders = {
         kind: choose_directory(kind.replace("_", " ").title(), storage / kind, storage)
