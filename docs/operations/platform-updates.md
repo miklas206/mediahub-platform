@@ -111,3 +111,11 @@ to add the spool mount, root-owned trust files and systemd helper. Preserve the
 existing Core database, Agent state, TLS identities, encrypted secrets, storage
 mappings and all media. Once that bootstrap is verified, later complete releases
 can be installed from the MediaHub button without direct host changes.
+
+Digest-exported Docker archives can load by image ID without retaining the
+registry digest as a local reference. MediaHub therefore verifies the complete
+bundle against the trusted release manifest, requires the manifest's image
+repository to match the root-owned allowlist, loads exactly one image, verifies
+its local image ID, and assigns a local tag derived from the release version and
+bundle hash. Compose is set to `pull_policy: never`, so installation remains
+offline and cannot silently substitute a registry image.

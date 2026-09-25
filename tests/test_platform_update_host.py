@@ -68,6 +68,15 @@ def fixture(tmp_path, monkeypatch, fail_new_core=False, image_repository=CORE_RE
             return "container-" + args[-1]
         if args[:2] == ["docker", "inspect"]:
             return "healthy" if "Health" in args[3] else "true"
+        if args[:2] == ["docker", "load"]:
+            role = "core" if "core" in str(args[-1]) else "agent"
+            digit = "3" if role == "core" else "4"
+            return "Loaded image ID: sha256:" + digit * 64
+        if args[:3] == ["docker", "image", "inspect"]:
+            reference = args[-1]
+            if "agent" in reference or reference == "sha256:" + "4" * 64:
+                return "sha256:" + "4" * 64
+            return "sha256:" + "3" * 64
         return ""
 
     updater = TestUpdater(root, runner=runner, sleeper=lambda _: None)
@@ -108,7 +117,7 @@ def fixture(tmp_path, monkeypatch, fail_new_core=False, image_repository=CORE_RE
 
         def wait(service, health=False, timeout=150):
             current = json.loads((root / "compose.json").read_text(encoding="utf-8"))
-            new_image = "@sha256:" in current["services"]["core"]["image"]
+            new_image = current["services"]["core"]["image"].startswith("mediahub-core:release-")
             if service == "core" and health and new_image:
                 raise ValueError("new Core failed health verification")
             return original_wait(service, health, timeout)
@@ -136,8 +145,10 @@ def test_successful_transaction_updates_both_images_and_trusted_version(tmp_path
     compose = json.loads((root / "compose.json").read_text(encoding="utf-8"))
     assert status["state"] == "succeeded"
     assert status["progress"] == 100
-    assert compose["services"]["core"]["image"].startswith(CORE_REPOSITORY + "@sha256:")
-    assert compose["services"]["agent"]["image"].startswith(AGENT_REPOSITORY + "@sha256:")
+    assert compose["services"]["core"]["image"].startswith("mediahub-core:release-0.4.0-")
+    assert compose["services"]["agent"]["image"].startswith("mediahub-agent:release-0.4.0-")
+    assert compose["services"]["core"]["pull_policy"] == "never"
+    assert compose["services"]["agent"]["pull_policy"] == "never"
     assert (root / "installed-version").read_text(encoding="utf-8") == "0.4.0\n"
     assert (root / "update-backups" / OPERATION / "data" / "mediahub.db").exists()
     assert any(command[:2] == ["docker", "load"] for command in commands)

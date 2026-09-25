@@ -262,7 +262,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.get("/v1/version")
     async def version():
-        return {"version": "0.4.0", "protocolVersion": 1}
+        return {"version": "0.4.1", "protocolVersion": 1}
 
     @app.get("/v1/status")
     async def status():
@@ -295,7 +295,7 @@ def create_agent(config: AgentConfig | None = None):
             except OSError:
                 pass
         return {
-            "version": "0.4.0",
+            "version": "0.4.1",
             "protocolVersion": 1,
             "hostname": platform.node(),
             "os": os_name,

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-09-25
+
+- Fixed offline Core/Agent image activation after discovering that Docker
+  correctly verifies and loads a digest-exported bundle but does not preserve
+  the registry digest as a locally addressable image reference. The
+  networkless host updater now binds the single loaded image ID to a local tag
+  derived from the release version and verified bundle hash, enforces
+  `pull_policy: never`, and still rejects untrusted release repositories.
+
 ## 0.4.0 - 2026-09-25
 
 - Added compact update cards whose progress stays inside the app being checked

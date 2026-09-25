@@ -27,6 +27,7 @@ IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 ID = re.compile(r"^[a-f0-9]{32}$")
 MAX_BUNDLE = 2 * 1024**3
+LOADED_IMAGE = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
 def sha256(path):
@@ -268,6 +269,33 @@ class HostUpdater:
     def _compose_command(self, *args, capture=True):
         return self.command("docker", "compose", "-f", self.compose, *args, capture=capture)
 
+    def _load_release_image(self, role, stage, manifest):
+        """Load a verified offline bundle and give its image an immutable local tag.
+
+        Docker archives exported from a registry digest can legitimately load by
+        image ID only.  The bundle hash has already been validated against the
+        trusted release manifest, so the loaded ID is safe to bind to a local,
+        version-and-bundle-specific tag without contacting a registry.
+        """
+        bundle = manifest["bundles"][role]
+        output = self.command("docker", "load", "--input", stage / bundle["name"])
+        candidates = []
+        for line in output.splitlines():
+            for prefix in ("Loaded image ID: ", "Loaded image: "):
+                if line.startswith(prefix):
+                    candidates.append(line.removeprefix(prefix).strip())
+        if len(candidates) != 1:
+            raise ValueError("Offline image bundle did not identify exactly one image")
+        image_id = self.command("docker", "image", "inspect", "--format", "{{.Id}}", candidates[0])
+        if not LOADED_IMAGE.fullmatch(image_id):
+            raise ValueError("Offline image bundle returned an invalid image ID")
+        local_tag = f"mediahub-{role}:release-{manifest['version']}-{bundle['sha256'][:12]}"
+        self.command("docker", "tag", image_id, local_tag)
+        inspected = self.command("docker", "image", "inspect", "--format", "{{.Id}}", local_tag)
+        if inspected != image_id:
+            raise ValueError("Offline image tag verification failed")
+        return local_tag
+
     def _wait(self, service, health=False, timeout=150):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -371,15 +399,10 @@ class HostUpdater:
                 self.steps[2]["state"] = "running"
                 self.status("installing", 72, "Loading immutable Core and Agent images")
                 for role in ("core", "agent"):
-                    self.command(
-                        "docker",
-                        "load",
-                        "--input",
-                        stage / manifest["bundles"][role]["name"],
-                        capture=False,
+                    compose["services"][role]["image"] = self._load_release_image(
+                        role, stage, manifest
                     )
-                    self.command("docker", "image", "inspect", manifest["images"][role])
-                    compose["services"][role]["image"] = manifest["images"][role]
+                    compose["services"][role]["pull_policy"] = "never"
                 self._atomic_json(self.compose, compose, uid=0, gid=0)
                 self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
                 self._wait("agent")
