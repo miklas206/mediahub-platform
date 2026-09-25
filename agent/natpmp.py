@@ -9,11 +9,13 @@ import socket
 import struct
 import time
 
+PROTON_INTERNAL_PORT = 1
+
 
 def request_packet(opcode, lifetime=60):
     if opcode not in (1, 2) or not 30 <= lifetime <= 120:
         raise ValueError("Invalid mapping request")
-    return struct.pack("!BBHHHI", 0, opcode, 0, 1, 0, lifetime)
+    return struct.pack("!BBHHHI", 0, opcode, 0, PROTON_INTERNAL_PORT, 0, lifetime)
 
 
 def parse_response(packet, opcode):
@@ -22,7 +24,7 @@ def parse_response(packet, opcode):
     version, operation, result, epoch, internal, external, lifetime = struct.unpack(
         "!BBHIHHI", packet
     )
-    if version != 0 or operation != opcode + 128 or result or internal != 1:
+    if version != 0 or operation != opcode + 128 or result or internal != PROTON_INTERNAL_PORT:
         raise ValueError("NAT-PMP mapping refused")
     if not 1024 <= external <= 65535 or not 30 <= lifetime <= 120:
         raise ValueError("Unsafe NAT-PMP allocation")

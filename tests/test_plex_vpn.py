@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from mediahub.errors import DomainError
 
+from agent.natpmp import PROTON_INTERNAL_PORT
 from agent.plex_vpn import (
     INPUT_COMMENT,
     PLEX_PORT,
@@ -62,7 +63,7 @@ def test_forwarded_port_is_redirected_and_allowed_only_on_vpn_interface():
     asyncio.run(PlexVPN._apply_redirect(fake, {"Id": "vpn"}, 42264))
 
     redirect = next(command for command in calls if REDIRECT_COMMENT in command and "-I" in command)
-    assert redirect[redirect.index("--dport") + 1] == "42264"
+    assert redirect[redirect.index("--dport") + 1] == str(PROTON_INTERNAL_PORT)
     assert redirect[redirect.index("--to-ports") + 1] == str(PLEX_PORT)
 
     allowed = next(command for command in calls if INPUT_COMMENT in command and "-I" in command)

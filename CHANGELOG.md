@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.2 - 2026-09-25
+
+- Fixed Plex remote access through Proton NAT-PMP. Proton translates the
+  allocated public port to the private port requested by MediaHub; the
+  fail-closed `tun0` redirect now matches that translated private port before
+  forwarding traffic to Plex. Added a regression test for the exact rule.
+
 ## 0.4.1 - 2026-09-25
 
 - Fixed offline Core/Agent image activation after discovering that Docker

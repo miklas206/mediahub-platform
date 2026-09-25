@@ -1,6 +1,6 @@
 # MediaHub
 
-**A local-first home for your media apps.** MediaHub 0.4.1 brings Plex,
+**A local-first home for your media apps.** MediaHub 0.4.2 brings Plex,
 protected downloads, storage, health and everyday controls into one interface.
 Dark mode, responsive layouts and simple controls come first; technical host and
 runtime details stay in Advanced mode.

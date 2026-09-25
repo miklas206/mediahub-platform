@@ -11,6 +11,11 @@ preferred external port is 0, requested lifetime is 60 seconds. Response version
 opcode, result, internal port, port range, lifetime and matching TCP/UDP port are
 validated. There is no router discovery or alternative-interface fallback.
 
+Proton translates the allocated public port to the private port carried in the
+NAT-PMP request. MediaHub therefore installs the narrowly owned Plex `tun0`
+redirect against private port `1`; the allocated public port must not be used as
+the post-NAT destination-port match.
+
 The helper uses the already-pinned qBittorrent image, no secrets, no mounts,
 read-only rootfs and only NET_RAW for interface binding. Only the newly created
 helper is removed afterwards; no Docker volumes are deleted.
