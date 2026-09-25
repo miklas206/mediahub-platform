@@ -1,6 +1,7 @@
 """Read-only Cloudflare Tunnel health and end-to-end route probes."""
 
 import asyncio
+import json
 import re
 import time
 from urllib.parse import quote, urlsplit
@@ -21,6 +22,7 @@ class CloudflareTunnelMonitor:
         self.setup_mode = "existing-tunnel"
         self.tunnel_name = None
         self.origin_url = None
+        self.tunnels = []
         self.cache_seconds = cache_seconds
         self.lock = asyncio.Lock()
         self.cached = None
@@ -46,17 +48,44 @@ class CloudflareTunnelMonitor:
         values = dict((configuration or {}).get("values") or configuration or {})
         if not values:
             return self.configuration()
-        if "status_url" in values:
+        profiles = self._profiles(values)
+        if profiles:
+            self.tunnels = profiles
+            self.status_url = next(
+                (profile["statusUrl"] for profile in profiles if profile["statusUrl"]),
+                None,
+            )
+            self.probe_urls = list(
+                dict.fromkeys(route for profile in profiles for route in profile["probeUrls"])
+            )
+            primary = profiles[0]
+            self.setup_mode = primary["setupMode"]
+            self.tunnel_name = primary["name"]
+            self.origin_url = primary["originUrl"]
+        elif "status_url" in values:
             raw_status = str(values.get("status_url") or "").strip()
             self.status_url = Config.valid_cloudflared_status_url(raw_status or None)
-        if "public_hostnames" in values:
+        if not profiles and "public_hostnames" in values:
             self.probe_urls = self._public_routes(values.get("public_hostnames"))
-        elif "probe_url" in values:  # migrate the old preview field in place
+        elif not profiles and "probe_url" in values:  # migrate the old preview field in place
             self.probe_urls = self._public_routes(values.get("probe_url"))
-        self.setup_mode = str(values.get("setup_mode") or self.setup_mode)[:40]
-        self.tunnel_name = str(values.get("tunnel_name") or "").strip()[:100] or None
-        raw_origin = str(values.get("origin_url") or "").strip()[:500]
-        self.origin_url = Config.validate_url(raw_origin) if raw_origin else None
+        if not profiles:
+            self.tunnels = []
+            self.setup_mode = str(values.get("setup_mode") or self.setup_mode)[:40]
+            self.tunnel_name = str(values.get("tunnel_name") or "").strip()[:100] or None
+            raw_origin = str(values.get("origin_url") or "").strip()[:500]
+            self.origin_url = Config.validate_url(raw_origin) if raw_origin else None
+            if self.tunnel_name or self.probe_urls or self.status_url:
+                self.tunnels = [
+                    {
+                        "id": "legacy",
+                        "name": self.tunnel_name or "Cloudflare Tunnel",
+                        "setupMode": self.setup_mode,
+                        "originUrl": self.origin_url,
+                        "statusUrl": self.status_url,
+                        "probeUrls": list(self.probe_urls),
+                    }
+                ]
         self.cached = None
         self.cached_at = 0.0
         return self.configuration()
@@ -68,7 +97,60 @@ class CloudflareTunnelMonitor:
             "originUrl": self.origin_url,
             "statusUrlConfigured": bool(self.status_url),
             "routeCount": len(self.probe_urls),
+            "tunnels": [
+                {
+                    "id": profile["id"],
+                    "name": profile["name"],
+                    "setupMode": profile["setupMode"],
+                    "originUrl": profile["originUrl"],
+                    "statusUrlConfigured": bool(profile["statusUrl"]),
+                    "routeCount": len(profile["probeUrls"]),
+                    "routes": list(profile["probeUrls"]),
+                }
+                for profile in self.tunnels
+            ],
         }
+
+    @classmethod
+    def _profiles(cls, values):
+        raw = str(values.get("tunnel_profiles") or "").strip()
+        if not raw:
+            return []
+        try:
+            decoded = json.loads(raw)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Saved Cloudflare tunnel profiles are invalid") from error
+        if not isinstance(decoded, list) or len(decoded) > 8:
+            raise ValueError("At most eight Cloudflare tunnel profiles are supported")
+        profiles = []
+        for index, item in enumerate(decoded):
+            if not isinstance(item, dict):
+                raise ValueError("Cloudflare tunnel profiles must be objects")
+            name = str(item.get("name") or "").strip()[:100]
+            if not name:
+                raise ValueError("Every Cloudflare tunnel profile needs a name")
+            profile_id = re.sub(r"[^a-zA-Z0-9_-]", "", str(item.get("id") or ""))[:80]
+            if not profile_id:
+                profile_id = f"tunnel-{index + 1}"
+            setup_mode = str(item.get("setupMode") or "existing-tunnel")[:40]
+            if setup_mode not in {"existing-tunnel", "new-tunnel"}:
+                raise ValueError("Unsupported Cloudflare tunnel setup mode")
+            raw_origin = str(item.get("originUrl") or "").strip()[:500]
+            origin_url = Config.validate_url(raw_origin) if raw_origin else None
+            raw_status = str(item.get("statusUrl") or "").strip()
+            status_url = Config.valid_cloudflared_status_url(raw_status or None)
+            probe_urls = cls._public_routes(item.get("publicHostnames") or [])
+            profiles.append(
+                {
+                    "id": profile_id,
+                    "name": name,
+                    "setupMode": setup_mode,
+                    "originUrl": origin_url,
+                    "statusUrl": status_url,
+                    "probeUrls": probe_urls,
+                }
+            )
+        return profiles
 
     @staticmethod
     def _metric_values(text, name):

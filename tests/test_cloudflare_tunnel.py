@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -104,12 +105,68 @@ def test_assisted_configuration_applies_routes_without_account_token(monkeypatch
         "originUrl": "https://192.168.1.50:18765",
         "statusUrlConfigured": False,
         "routeCount": 2,
+        "tunnels": [
+            {
+                "id": "legacy",
+                "name": "Home tunnel",
+                "setupMode": "existing-tunnel",
+                "originUrl": "https://192.168.1.50:18765",
+                "statusUrlConfigured": False,
+                "routeCount": 2,
+                "routes": [
+                    "https://media.example.test",
+                    "https://home.example.test",
+                ],
+            }
+        ],
     }
     mock_client(monkeypatch, handler)
     result = asyncio.run(monitor.status())
     assert result["status"] == "degraded"
     assert result["routeCount"] == 2
     assert result["connections"] == 0
+
+
+def test_multiple_tunnel_profiles_are_saved_and_aggregated():
+    cfg = config(probes=[])
+    cfg.cloudflared_status_url = None
+    monitor = CloudflareTunnelMonitor(cfg)
+    applied = monitor.configure(
+        {
+            "values": {
+                "tunnel_profiles": json.dumps(
+                    [
+                        {
+                            "id": "home",
+                            "name": "Home tunnel",
+                            "setupMode": "existing-tunnel",
+                            "publicHostnames": ["media.example.test"],
+                            "originUrl": "https://192.168.1.50:18765",
+                            "statusUrl": "",
+                        },
+                        {
+                            "id": "parents",
+                            "name": "Parents tunnel",
+                            "setupMode": "existing-tunnel",
+                            "publicHostnames": ["home.example.test"],
+                            "originUrl": "https://192.168.1.60:8443",
+                            "statusUrl": "http://192.168.1.60:20241/metrics",
+                        },
+                    ]
+                )
+            }
+        }
+    )
+    assert applied["routeCount"] == 2
+    assert [item["name"] for item in applied["tunnels"]] == [
+        "Home tunnel",
+        "Parents tunnel",
+    ]
+    assert monitor.probe_urls == [
+        "https://media.example.test",
+        "https://home.example.test",
+    ]
+    assert monitor.status_url == "http://192.168.1.60:20241/metrics"
 
 
 def test_connected_tunnel_with_failed_origin_is_degraded(monkeypatch):

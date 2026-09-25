@@ -6,7 +6,7 @@ import { useLoad, Panel, ErrorBox } from "./phase2";
 import { bytes, uptime } from "./format";
 import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
-import { CloudflareAssistedSetup } from "./cloudflare-setup";
+import { CloudflareSetupManager } from "./cloudflare-setup";
 
 type Runtime = {
   operation?: { state: string; message?: string };
@@ -116,6 +116,15 @@ type Runtime = {
     tunnelName?: string | null;
     routeCount?: number;
     statusUrlConfigured?: boolean;
+    tunnels?: {
+      id: string;
+      name: string;
+      setupMode: string;
+      originUrl: string | null;
+      statusUrlConfigured: boolean;
+      routeCount: number;
+      routes: string[];
+    }[];
     routes: {
       url: string;
       hostname: string;
@@ -129,6 +138,20 @@ type Runtime = {
 const stamp = (n?: number | null) =>
   n ? new Date(n * 1000).toLocaleString() : "Not verified";
 const size = (n?: number | null) => (n == null ? "Unavailable" : bytes(n));
+const localPlexUrl = () => {
+  if (typeof window === "undefined") return "";
+  const hostname = window.location.hostname.toLowerCase();
+  const isPrivate =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+  return isPrivate
+    ? `http://${window.location.hostname}:32400/web`
+    : "https://app.plex.tv/desktop/#!/settings/web/general";
+};
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="runtime-row">
@@ -549,10 +572,9 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
           </div>
           <dl>
             <Row
-              label="Monitored tunnel"
+              label="Monitored tunnels"
               value={
-                c?.tunnelName ||
-                (c?.configured ? "1 configured tunnel" : "Not configured")
+                c?.tunnels?.length || (c?.configured ? 1 : "Not configured")
               }
             />
             <Row
@@ -728,6 +750,13 @@ export function AppRuntimePage() {
     [releaseUrl, setReleaseUrl] = useState("");
   const [showLogs, setShowLogs] = useState(false),
     [component, setComponent] = useState("all");
+  useEffect(() => {
+    setActionError("");
+    setUpdateResult("");
+    setReleaseUrl("");
+    setShowLogs(false);
+    setComponent("all");
+  }, [appId]);
   const act = async (action: string) => {
     if (
       action !== "test-vpn" &&
@@ -748,6 +777,8 @@ export function AppRuntimePage() {
     }
   };
   const control = data?.report.control;
+  const operatorUrl =
+    data?.operatorUrl || (data?.view === "plex" ? localPlexUrl() : "");
   const checkUpdate = async () => {
     setBusy(true);
     setActionError("");
@@ -831,10 +862,7 @@ export function AppRuntimePage() {
         <p role="status">Loading app status…</p>
       )}
       {data?.view === "cloudflare" && (
-        <CloudflareAssistedSetup
-          configured={data.report.cloudflare?.configured}
-          onSaved={reload}
-        />
+        <CloudflareSetupManager onSaved={reload} />
       )}
       {data?.view === "seedbox" && (
         <SeedboxDaily
@@ -909,6 +937,9 @@ export function AppRuntimePage() {
           {data.view === "plex" && (
             <>
               <div className="runtime-toolbar">
+                <a className="runtime-primary-link" href={operatorUrl}>
+                  Open Plex settings
+                </a>
                 <button
                   disabled={busy || !!error || !data.report.available}
                   onClick={checkUpdate}
@@ -951,9 +982,9 @@ export function AppRuntimePage() {
           <button onClick={() => setShowLogs(!showLogs)}>
             {showLogs ? "Hide logs" : "View logs"}
           </button>
-          {data.operatorUrl && (
+          {operatorUrl && data.view !== "plex" && (
             <p>
-              <a href={data.operatorUrl} rel="noreferrer">
+              <a href={operatorUrl} rel="noreferrer">
                 {data.view === "plex" ? "Open Plex" : "Open qBittorrent"}
               </a>
               {data.view === "seedbox" &&

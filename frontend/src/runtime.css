@@ -175,6 +175,18 @@
 .runtime-toolbar a {
   color: #a0c8fb;
 }
+.runtime-toolbar .runtime-primary-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.55rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--line));
+  border-radius: 8px;
+  background: var(--accent);
+  color: #08201c;
+  font-weight: 700;
+  text-decoration: none;
+}
 @media (max-width: 800px) {
   .runtime-panels,
   .runtime-device-list {
@@ -348,6 +360,30 @@
 .assisted-actions + .success {
   margin-top: 1rem;
 }
+.cloudflare-profile-list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1rem 0;
+}
+.cloudflare-profile-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--bg));
+}
+.cloudflare-profile-list article > div:first-child {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.cloudflare-profile-list small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 @media (max-width: 700px) {
   .assisted-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -366,6 +402,10 @@
   }
   .assisted-actions > span {
     display: none;
+  }
+  .cloudflare-profile-list article {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 .seedbox-daily textarea {

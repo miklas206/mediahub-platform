@@ -3,7 +3,7 @@ id: org.mediahub.cloudflared
 name: Cloudflare Tunnel
 description: Guided, least-privilege setup for Cloudflare Tunnel route health, connector metrics and official release monitoring.
 category: infrastructure
-version: 0.2.0
+version: 0.3.0
 maintainer: {name: MediaHub contributors}
 icon: cloudflared.svg
 homepage: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
@@ -53,6 +53,12 @@ configFields:
     required: false
     placeholder: http://192.168.1.50:20241/metrics
     description: Optional private-LAN Prometheus metrics endpoint. It reveals connector health but never a tunnel token.
+  - name: tunnel_profiles
+    label: Saved tunnel profiles
+    type: text
+    required: false
+    default: ""
+    description: MediaHub-managed JSON for multiple non-secret tunnel monitoring profiles. Edit it through the Cloudflare app instead of by hand.
 installGuide:
   - id: prepare-domain
     title: Prepare your domain

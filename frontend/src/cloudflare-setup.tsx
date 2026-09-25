@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
   Cloud,
+  Pencil,
+  Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { api } from "./api";
 import { ErrorBox, Panel, useLoad } from "./phase2";
@@ -38,6 +41,15 @@ type SetupValues = {
   status_url: string;
 };
 
+type TunnelProfile = {
+  id: string;
+  name: string;
+  setupMode: "existing-tunnel" | "new-tunnel";
+  publicHostnames: string[];
+  originUrl: string;
+  statusUrl: string;
+};
+
 const defaults: SetupValues = {
   setup_mode: "existing-tunnel",
   tunnel_name: "",
@@ -53,41 +65,90 @@ function routes(value: string) {
     .filter(Boolean);
 }
 
-export function CloudflareAssistedSetup({
-  configured,
-  onSaved,
-}: {
-  configured?: boolean;
-  onSaved: () => void;
-}) {
-  const catalog = useLoad<CatalogApp[]>("/catalog");
-  const stored = useLoad<StoredConfiguration>(
-    `/catalog/${packageId}/configuration`,
-  );
-  const [values, setValues] = useState<SetupValues>(defaults);
-  const [step, setStep] = useState(0);
-  const [initialized, setInitialized] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const app = catalog.data?.find((item) => item.id === packageId);
-  const steps = app?.installGuide || [];
-
-  useEffect(() => {
-    if (!stored.data || initialized) return;
-    setValues({
-      setup_mode:
-        stored.data.values.setup_mode === "new-tunnel"
+function storedProfiles(configuration?: StoredConfiguration): TunnelProfile[] {
+  if (!configuration) return [];
+  const raw = configuration.values.tunnel_profiles;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter(
+            (item): item is Record<string, unknown> =>
+              !!item && typeof item === "object",
+          )
+          .slice(0, 8)
+          .map((item, index) => ({
+            id:
+              typeof item.id === "string" && item.id
+                ? item.id
+                : `tunnel-${index + 1}`,
+            name:
+              typeof item.name === "string" && item.name
+                ? item.name
+                : `Tunnel ${index + 1}`,
+            setupMode:
+              item.setupMode === "new-tunnel"
+                ? "new-tunnel"
+                : "existing-tunnel",
+            publicHostnames: Array.isArray(item.publicHostnames)
+              ? item.publicHostnames.filter(
+                  (hostname): hostname is string =>
+                    typeof hostname === "string" && !!hostname,
+                )
+              : [],
+            originUrl: typeof item.originUrl === "string" ? item.originUrl : "",
+            statusUrl: typeof item.statusUrl === "string" ? item.statusUrl : "",
+          }));
+      }
+    } catch {
+      // Fall through to the legacy single-profile fields below.
+    }
+  }
+  const legacyName = configuration.values.tunnel_name?.trim();
+  const legacyRoutes = routes(configuration.values.public_hostnames || "");
+  if (!legacyName && !legacyRoutes.length) return [];
+  return [
+    {
+      id: "legacy",
+      name: legacyName || "Cloudflare Tunnel",
+      setupMode:
+        configuration.values.setup_mode === "new-tunnel"
           ? "new-tunnel"
           : "existing-tunnel",
-      tunnel_name: stored.data.values.tunnel_name || "",
-      public_hostnames: stored.data.values.public_hostnames || "",
-      origin_url: stored.data.values.origin_url || browserPrivateOrigin(),
-      status_url: stored.data.values.status_url || "",
-    });
-    setInitialized(true);
-  }, [initialized, stored.data]);
+      publicHostnames: legacyRoutes,
+      originUrl: configuration.values.origin_url || browserPrivateOrigin(),
+      statusUrl: configuration.values.status_url || "",
+    },
+  ];
+}
 
+function CloudflareSetupEditor({
+  profiles,
+  profile,
+  onFinished,
+}: {
+  profiles: TunnelProfile[];
+  profile?: TunnelProfile;
+  onFinished: (saved: boolean) => void;
+}) {
+  const catalog = useLoad<CatalogApp[]>("/catalog");
+  const [values, setValues] = useState<SetupValues>(() =>
+    profile
+      ? {
+          setup_mode: profile.setupMode,
+          tunnel_name: profile.name,
+          public_hostnames: profile.publicHostnames.join("\n"),
+          origin_url: profile.originUrl,
+          status_url: profile.statusUrl,
+        }
+      : { ...defaults, origin_url: browserPrivateOrigin() },
+  );
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const app = catalog.data?.find((item) => item.id === packageId);
+  const steps = app?.installGuide || [];
   const routeList = useMemo(
     () => routes(values.public_hostnames),
     [values.public_hostnames],
@@ -98,43 +159,60 @@ export function CloudflareAssistedSetup({
       : step === 1
         ? !!routeList.length && /^https?:\/\//i.test(values.origin_url)
         : true;
-
   const update = (name: keyof SetupValues, value: string) =>
     setValues((current) => ({ ...current, [name]: value }));
-
   const save = async () => {
     setBusy(true);
     setError("");
-    setMessage("");
     try {
-      await api(`/catalog/${packageId}/configuration`, "PUT", { values });
-      stored.reload();
-      onSaved();
-      setMessage(
-        "Setup saved. MediaHub reloaded read-only route and connector monitoring.",
-      );
+      const savedProfile: TunnelProfile = {
+        id: profile?.id || crypto.randomUUID(),
+        name: values.tunnel_name.trim(),
+        setupMode: values.setup_mode,
+        publicHostnames: routeList,
+        originUrl: values.origin_url.trim(),
+        statusUrl: values.status_url.trim(),
+      };
+      const updated = profile
+        ? profiles.map((item) => (item.id === profile.id ? savedProfile : item))
+        : [...profiles, savedProfile];
+      const primary = updated[0];
+      await api(`/catalog/${packageId}/configuration`, "PUT", {
+        values: {
+          tunnel_profiles: JSON.stringify(updated),
+          setup_mode: primary.setupMode,
+          tunnel_name: primary.name,
+          public_hostnames: primary.publicHostnames.join("\n"),
+          origin_url: primary.originUrl,
+          status_url: primary.statusUrl,
+        },
+      });
+      onFinished(true);
     } catch (failure) {
       setError((failure as Error).message);
     } finally {
       setBusy(false);
     }
   };
-
   return (
-    <Panel title="Assisted Cloudflare setup">
+    <Panel
+      title={
+        profile ? "Edit Cloudflare configuration" : "Assisted Cloudflare setup"
+      }
+    >
       <div className="assisted-setup-intro">
         <div className="tunnel-icon degraded">
           <Cloud size={22} />
         </div>
         <div>
           <strong>
-            {configured
-              ? "Review or change the setup"
+            {profile
+              ? `Edit ${profile.name}`
               : "Set up without command-line guesswork"}
           </strong>
           <p className="muted">
-            MediaHub never receives an account-wide Cloudflare API token and
-            never opens a router port.
+            MediaHub saves only non-secret monitoring details. It never receives
+            an account-wide Cloudflare API token and never opens a router port.
           </p>
         </div>
       </div>
@@ -149,7 +227,7 @@ export function CloudflareAssistedSetup({
           </li>
         ))}
       </ol>
-      <ErrorBox error={error || stored.error || catalog.error} />
+      <ErrorBox error={error || catalog.error} />
       {step === 0 && (
         <div className="assisted-step">
           <p className="eyebrow">STEP 1 · TUNNEL</p>
@@ -164,7 +242,7 @@ export function CloudflareAssistedSetup({
             >
               <strong>Use an existing tunnel</strong>
               <span>
-                Best when Cloudflare already shows your connector as healthy.
+                Best when Cloudflare already shows the connector as healthy.
               </span>
             </button>
             <button
@@ -186,24 +264,17 @@ export function CloudflareAssistedSetup({
               placeholder="For example: My home tunnel"
               maxLength={100}
             />
-            <small>
-              This is a friendly label. MediaHub does not claim that connector
-              sessions are separate tunnels.
-            </small>
+            <small>A friendly label for the actual tunnel in Cloudflare.</small>
           </label>
           {values.setup_mode === "new-tunnel" && (
             <p className="notice">
-              Create a remotely managed tunnel in Cloudflare, deploy its
-              connector using Cloudflare's shown installation command, and add
-              the MediaHub published application. MediaHub deliberately does not
-              ask for your account API token.
+              Create the tunnel in Cloudflare, deploy the shown connector, and
+              add the published application. MediaHub deliberately does not ask
+              for your account API token.{" "}
               {steps[1]?.helpUrl && (
-                <>
-                  {" "}
-                  <a href={steps[1].helpUrl} target="_blank" rel="noreferrer">
-                    Open official tunnel instructions →
-                  </a>
-                </>
+                <a href={steps[1].helpUrl} target="_blank" rel="noreferrer">
+                  Open official tunnel instructions →
+                </a>
               )}
             </p>
           )}
@@ -237,8 +308,8 @@ export function CloudflareAssistedSetup({
               placeholder="https://192.168.1.50:18765"
             />
             <small>
-              This is the LAN address entered as the route's service in
-              Cloudflare. HTTPS is recommended.
+              The LAN service URL used in Cloudflare. Match the protocol
+              exactly; an HTTPS-only MediaHub origin must start with https://.
             </small>
           </label>
         </div>
@@ -249,8 +320,8 @@ export function CloudflareAssistedSetup({
           <h3>Distinguish connector sessions from tunnels</h3>
           <p>
             Cloudflared normally keeps several redundant outbound sessions for
-            one tunnel. A local metrics URL lets MediaHub show those sessions,
-            requests and errors accurately.
+            one tunnel. A private metrics URL lets MediaHub show them
+            accurately.
           </p>
           <label>
             Private metrics URL
@@ -259,10 +330,7 @@ export function CloudflareAssistedSetup({
               onChange={(event) => update("status_url", event.target.value)}
               placeholder="http://192.168.1.50:20241/metrics"
             />
-            <small>
-              Optional. Use cloudflared's private Prometheus /metrics endpoint
-              or MediaHub's sanitized /status helper. Never expose it publicly.
-            </small>
+            <small>Optional. Never expose this endpoint publicly.</small>
           </label>
           {steps[3]?.helpUrl && (
             <a href={steps[3].helpUrl} target="_blank" rel="noreferrer">
@@ -274,7 +342,7 @@ export function CloudflareAssistedSetup({
       {step === 3 && (
         <div className="assisted-step">
           <p className="eyebrow">STEP 4 · REVIEW</p>
-          <h3>Nothing is changed in your Cloudflare account</h3>
+          <h3>Save this tunnel profile in MediaHub</h3>
           <div className="setup-review-grid">
             <span>Mode</span>
             <strong>
@@ -296,15 +364,19 @@ export function CloudflareAssistedSetup({
           <div className="setup-safety-note">
             <ShieldCheck size={20} />
             <p>
-              Saving enables read-only checks. It does not create tunnels,
-              change DNS, restart cloudflared or publish a new hostname.
+              Saving updates MediaHub's monitoring configuration only. It does
+              not change DNS, routes, tokens or connector processes in
+              Cloudflare.
             </p>
           </div>
         </div>
       )}
       <div className="assisted-actions">
-        <button disabled={step === 0 || busy} onClick={() => setStep(step - 1)}>
-          <ChevronLeft size={16} /> Back
+        <button
+          disabled={busy}
+          onClick={() => (step ? setStep(step - 1) : onFinished(false))}
+        >
+          <ChevronLeft size={16} /> {step ? "Back" : "Cancel"}
         </button>
         <span>{step + 1} of 4</span>
         {step < 3 ? (
@@ -321,10 +393,124 @@ export function CloudflareAssistedSetup({
             disabled={busy}
             onClick={() => void save()}
           >
-            {busy ? "Saving…" : "Save and verify"}
+            {busy ? "Saving…" : "Save configuration"}
           </button>
         )}
       </div>
+    </Panel>
+  );
+}
+
+export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
+  const stored = useLoad<StoredConfiguration>(
+    `/catalog/${packageId}/configuration`,
+  );
+  const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const profiles = useMemo(() => storedProfiles(stored.data), [stored.data]);
+  const selected = profiles.find((profile) => profile.id === editing);
+  const finish = (saved: boolean) => {
+    setEditing(null);
+    setAdding(false);
+    if (saved) {
+      stored.reload();
+      onSaved();
+      setMessage("Cloudflare monitoring configuration was saved.");
+    }
+  };
+  const remove = async (profile: TunnelProfile) => {
+    if (
+      !window.confirm(
+        `Remove the saved configuration for ${profile.name}? This does not delete anything in Cloudflare.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const updated = profiles.filter((item) => item.id !== profile.id);
+      const primary = updated[0];
+      await api(`/catalog/${packageId}/configuration`, "PUT", {
+        values: {
+          tunnel_profiles: JSON.stringify(updated),
+          setup_mode: primary?.setupMode || "existing-tunnel",
+          tunnel_name: primary?.name || "",
+          public_hostnames: primary?.publicHostnames.join("\n") || "",
+          origin_url: primary?.originUrl || "",
+          status_url: primary?.statusUrl || "",
+        },
+      });
+      stored.reload();
+      onSaved();
+      setMessage(`${profile.name} was removed from MediaHub monitoring.`);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!stored.data)
+    return (
+      <Panel title="Cloudflare configuration">
+        <p>Loading saved configuration…</p>
+      </Panel>
+    );
+  if (adding || selected || !profiles.length)
+    return (
+      <CloudflareSetupEditor
+        key={selected?.id || "new"}
+        profiles={profiles}
+        profile={selected}
+        onFinished={finish}
+      />
+    );
+  return (
+    <Panel title="Saved Cloudflare configuration">
+      <div className="assisted-setup-intro">
+        <div className="tunnel-icon healthy">
+          <Cloud size={22} />
+        </div>
+        <div>
+          <strong>
+            {profiles.length} tunnel configuration
+            {profiles.length === 1 ? "" : "s"} saved
+          </strong>
+          <p className="muted">
+            Edit existing monitoring details or add another tunnel. The guided
+            installer appears only while adding or editing a configuration.
+          </p>
+        </div>
+      </div>
+      <ErrorBox error={error || stored.error} />
+      <div className="cloudflare-profile-list">
+        {profiles.map((profile) => (
+          <article key={profile.id}>
+            <div>
+              <strong>{profile.name}</strong>
+              <span>
+                {profile.publicHostnames.length} published route
+                {profile.publicHostnames.length === 1 ? "" : "s"}
+              </span>
+              <small>{profile.originUrl}</small>
+            </div>
+            <div className="button-row">
+              <button onClick={() => setEditing(profile.id)}>
+                <Pencil size={15} /> Edit configuration
+              </button>
+              <button disabled={busy} onClick={() => void remove(profile)}>
+                <Trash2 size={15} /> Remove
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      <button className="primary" onClick={() => setAdding(true)}>
+        <Plus size={16} /> Add tunnel configuration
+      </button>
       {message && (
         <p className="success" role="status">
           {message}

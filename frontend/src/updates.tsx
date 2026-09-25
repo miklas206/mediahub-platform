@@ -479,7 +479,11 @@ export function UpdatesPage() {
           reported[item.id] = item.latestVersion;
       }
       setLatest((current) => ({ ...current, ...reported }));
-      setNotice("All configured update sources were checked.");
+      setNotice(
+        result.count
+          ? `${result.count} verified update${result.count === 1 ? " is" : "s are"} available.`
+          : "Everything is up to date.",
+      );
       updateSummary.reload();
       platformRelease.reload();
       setCheckedPlatformRelease(undefined);
@@ -609,7 +613,7 @@ export function UpdatesPage() {
       <ErrorBox error={error || apps.error} />
       <ErrorBox error={platformRelease.error || updateSummary.error} />
       {notice && (
-        <p className="notice" role="status">
+        <p className="success" role="status">
           {notice}
         </p>
       )}

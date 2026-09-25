@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.6 - 2026-09-25
+
+- Turn the completed update check into a clear green "Everything is up to date" state.
+- Keep multiple Cloudflare tunnel monitoring profiles and show edit, remove, and add controls after installation.
+- Reserve the assisted Cloudflare wizard for first-time setup and explicit configuration changes.
+- Add a direct Plex server settings button and clear stale app-specific update results when switching apps.
+- Extend Cloudflare monitoring to aggregate routes from saved tunnel profiles without storing Cloudflare account tokens.
+
 ## 0.4.5 - 2026-09-25
 
 - Fixed platform updates failing before download when the private staging
