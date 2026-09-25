@@ -46,6 +46,72 @@ def test_connected_tunnel_and_route(monkeypatch):
     assert result["routes"][0]["reachable"] is True
 
 
+def test_prometheus_metrics_are_connector_sessions_not_tunnel_count(monkeypatch):
+    prometheus = """\
+# HELP cloudflared_tunnel_ha_connections Number of active HA connections
+cloudflared_tunnel_ha_connections 4
+cloudflared_tunnel_total_requests 42
+cloudflared_tunnel_request_errors 2
+build_info{goversion="go1.24",type="cloudflared",version="2026.9.3"} 1
+"""
+
+    async def handler(request):
+        if request.url.path == "/metrics":
+            return httpx.Response(200, text=prometheus)
+        return httpx.Response(302, headers={"location": "/login"})
+
+    cfg = config()
+    cfg.cloudflared_status_url = "http://192.168.50.10:20241/metrics"
+    mock_client(monkeypatch, handler)
+    result = asyncio.run(CloudflareTunnelMonitor(cfg).status())
+    assert result["status"] == "healthy"
+    assert result["connections"] == 4
+    assert result["totalRequests"] == 42
+    assert result["requestErrors"] == 2
+    assert result["version"] == "2026.9.3"
+
+
+def test_prometheus_parser_accepts_cloudflared_prefixed_build_info():
+    source = CloudflareTunnelMonitor._prometheus_source(
+        "cloudflared_tunnel_ha_connections 2\n"
+        'cloudflared_build_info{version="2026.9.4",goversion="go1.24"} 1\n'
+    )
+    assert source["connections"] == 2
+    assert source["version"] == "2026.9.4"
+
+
+def test_assisted_configuration_applies_routes_without_account_token(monkeypatch):
+    async def handler(request):
+        return httpx.Response(302, headers={"location": "/login"})
+
+    cfg = config(probes=[])
+    cfg.cloudflared_status_url = None
+    monitor = CloudflareTunnelMonitor(cfg)
+    applied = monitor.configure(
+        {
+            "values": {
+                "setup_mode": "existing-tunnel",
+                "tunnel_name": "Home tunnel",
+                "public_hostnames": "media.example.test, home.example.test",
+                "origin_url": "https://192.168.1.50:18765",
+                "status_url": "",
+            }
+        }
+    )
+    assert applied == {
+        "setupMode": "existing-tunnel",
+        "tunnelName": "Home tunnel",
+        "originUrl": "https://192.168.1.50:18765",
+        "statusUrlConfigured": False,
+        "routeCount": 2,
+    }
+    mock_client(monkeypatch, handler)
+    result = asyncio.run(monitor.status())
+    assert result["status"] == "degraded"
+    assert result["routeCount"] == 2
+    assert result["connections"] == 0
+
+
 def test_connected_tunnel_with_failed_origin_is_degraded(monkeypatch):
     async def handler(request):
         if request.url.host == "192.168.50.10":

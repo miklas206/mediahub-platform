@@ -1,6 +1,6 @@
 # MediaHub
 
-**A local-first home for your media apps.** MediaHub 0.4.3 brings Plex,
+**A local-first home for your media apps.** MediaHub 0.4.4 brings Plex,
 protected downloads, storage, health and everyday controls into one interface.
 Dark mode, responsive layouts and simple controls come first; technical host and
 runtime details stay in Advanced mode.
@@ -26,8 +26,9 @@ an audited appliance. Review the security and operational limits before use.
   and non-overwriting restore staging. Media backup remains separate.
 - Scheduled release checks, an update badge and a rollback-protected Core/Agent
   updater that accepts only complete digest-verified GitHub Release bundles.
-- Optional Cloudflare Tunnel app visibility, local helper health, public-route
-  probes and official cloudflared release checks without granting tunnel control.
+- Optional assisted Cloudflare Tunnel monitoring with clear tunnel, connector
+  session and published-route counts, private metrics, public-route probes and
+  official cloudflared release checks without granting account or tunnel control.
 - Optional read-only FjordHub Access Token adapter. No dependency on FjordHub,
   Cloudflare, a public address, or an exposed torrent-client WebUI.
 

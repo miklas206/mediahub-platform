@@ -1,14 +1,14 @@
 schemaVersion: 1
 id: org.mediahub.cloudflared
 name: Cloudflare Tunnel
-description: Optional read-only tunnel, route health and official release monitoring for MediaHub.
+description: Guided, least-privilege setup for Cloudflare Tunnel route health, connector metrics and official release monitoring.
 category: infrastructure
-version: 0.1.0
+version: 0.2.0
 maintainer: {name: MediaHub contributors}
 icon: cloudflared.svg
 homepage: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
 repository: https://github.com/cloudflare/cloudflared
-availability: coming-soon
+availability: available
 requiredRuntime: none
 recommendedIsolation: shared-host
 hostCapabilities: []
@@ -26,50 +26,50 @@ configFields:
     label: Tunnel setup
     type: select
     options: [new-tunnel, existing-tunnel]
-    default: new-tunnel
+    default: existing-tunnel
     required: true
     description: Choose whether the guided installer should attach an existing Cloudflare Tunnel or help prepare a new one.
-  - name: public_hostname
-    label: Public hostname
+  - name: tunnel_name
+    label: Tunnel name
     type: text
     required: true
-    placeholder: media.example.com
-    description: The hostname you will create in Cloudflare for this MediaHub installation.
+    placeholder: My home tunnel
+    description: A friendly label only. MediaHub does not enumerate or modify the tunnels in your Cloudflare account.
+  - name: public_hostnames
+    label: Published hostnames to monitor
+    type: text
+    required: true
+    placeholder: media.example.com, home.example.com
+    description: Comma or line separated public hostnames. These are routes through one tunnel, not additional tunnels.
   - name: origin_url
     label: Internal MediaHub URL
     type: text
     required: true
-    placeholder: https://192.168.1.185:18765
+    placeholder: https://192.168.1.50:18765
     description: The private HTTPS address cloudflared should reach on your LAN. It is never published as a router port.
-  - name: tunnel_token
-    label: Cloudflare Tunnel connector token
-    type: password
-    secret: true
-    required: true
-    description: Paste only the connector token from the Cloudflare dashboard. Do not provide an account API token.
-  - name: probe_url
-    label: Public health-check URL
+  - name: status_url
+    label: Local cloudflared metrics URL
     type: text
     required: false
-    placeholder: https://media.example.com
-    description: Optional HTTPS address MediaHub can probe after installation to verify the complete route.
+    placeholder: http://192.168.1.50:20241/metrics
+    description: Optional private-LAN Prometheus metrics endpoint. It reveals connector health but never a tunnel token.
 installGuide:
   - id: prepare-domain
     title: Prepare your domain
     description: Add or select a domain in Cloudflare. MediaHub will not modify nameservers, billing, account permissions or DNS automatically.
-    fields: [public_hostname]
+    fields: [public_hostnames]
     helpUrl: https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/
   - id: create-tunnel
     title: Create or select a Tunnel
-    description: In Cloudflare Zero Trust, create a remotely managed Tunnel or select an existing dedicated Tunnel. Copy its connector token when Cloudflare displays it.
-    fields: [setup_mode, tunnel_token]
+    description: In Cloudflare Zero Trust, create a remotely managed Tunnel or select your existing Tunnel. One Tunnel can safely contain several published applications.
+    fields: [setup_mode, tunnel_name]
     helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/
   - id: connect-origin
     title: Connect the private MediaHub origin
-    description: Point the public hostname at MediaHub's private HTTPS origin. The future installer will verify certificate trust, WebSocket/SSE support and the exact origin before starting cloudflared.
+    description: Point the MediaHub hostname at its private HTTPS origin. The assistant checks the public route but never opens a router port.
     fields: [origin_url]
     helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/ingress/
   - id: verify-route
     title: Verify end to end
-    description: MediaHub checks the local connector, Cloudflare links and the optional public URL without receiving a Cloudflare account API token.
-    fields: [probe_url]
+    description: MediaHub checks the public routes and can optionally read cloudflared's local Prometheus metrics without receiving a Cloudflare account API token.
+    fields: [status_url]

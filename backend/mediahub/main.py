@@ -80,6 +80,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.catalog = Catalog(config, sessions, svc.agent)
         svc.integrations = IntegrationService(config, sessions, events)
         svc.cloudflare_tunnel = CloudflareTunnelMonitor(config)
+        svc.cloudflare_tunnel.configure(svc.catalog.configuration("org.mediahub.cloudflared"))
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.platform_update = PlatformUpdateRuntime(svc)
         svc.hosts = HostRegistry(svc)

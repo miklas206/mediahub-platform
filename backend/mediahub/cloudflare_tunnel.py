@@ -1,12 +1,14 @@
 """Read-only Cloudflare Tunnel health and end-to-end route probes."""
 
 import asyncio
+import re
 import time
 from urllib.parse import quote, urlsplit
 
 import httpx
 from packaging.version import InvalidVersion, Version
 
+from mediahub.config import Config
 from mediahub.errors import DomainError
 
 LATEST_RELEASE_URL = "https://api.github.com/repos/cloudflare/cloudflared/releases/latest"
@@ -16,6 +18,9 @@ class CloudflareTunnelMonitor:
     def __init__(self, config, *, cache_seconds=10, release_cache_seconds=600):
         self.status_url = config.cloudflared_status_url
         self.probe_urls = config.cloudflared_probe_urls
+        self.setup_mode = "existing-tunnel"
+        self.tunnel_name = None
+        self.origin_url = None
         self.cache_seconds = cache_seconds
         self.lock = asyncio.Lock()
         self.cached = None
@@ -25,13 +30,99 @@ class CloudflareTunnelMonitor:
         self.release_cached = None
         self.release_cached_at = 0.0
 
+    @staticmethod
+    def _public_routes(value):
+        entries = value if isinstance(value, list) else re.split(r"[\s,;]+", str(value or ""))
+        urls = []
+        for entry in entries:
+            entry = str(entry).strip()
+            if entry:
+                urls.append(entry if "://" in entry else "https://" + entry)
+        return Config.valid_cloudflared_probe_urls(urls)
+
+    def configure(self, configuration):
+        """Apply catalog-backed setup values without requiring a Core restart."""
+
+        values = dict((configuration or {}).get("values") or configuration or {})
+        if not values:
+            return self.configuration()
+        if "status_url" in values:
+            raw_status = str(values.get("status_url") or "").strip()
+            self.status_url = Config.valid_cloudflared_status_url(raw_status or None)
+        if "public_hostnames" in values:
+            self.probe_urls = self._public_routes(values.get("public_hostnames"))
+        elif "probe_url" in values:  # migrate the old preview field in place
+            self.probe_urls = self._public_routes(values.get("probe_url"))
+        self.setup_mode = str(values.get("setup_mode") or self.setup_mode)[:40]
+        self.tunnel_name = str(values.get("tunnel_name") or "").strip()[:100] or None
+        raw_origin = str(values.get("origin_url") or "").strip()[:500]
+        self.origin_url = Config.validate_url(raw_origin) if raw_origin else None
+        self.cached = None
+        self.cached_at = 0.0
+        return self.configuration()
+
+    def configuration(self):
+        return {
+            "setupMode": self.setup_mode,
+            "tunnelName": self.tunnel_name,
+            "originUrl": self.origin_url,
+            "statusUrlConfigured": bool(self.status_url),
+            "routeCount": len(self.probe_urls),
+        }
+
+    @staticmethod
+    def _metric_values(text, name):
+        values = []
+        prefix = name + "{"
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if not (line.startswith(prefix) or line.startswith(name + " ")):
+                continue
+            try:
+                values.append(float(line.rsplit(None, 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        return values
+
+    @classmethod
+    def _prometheus_source(cls, text):
+        connections = sum(cls._metric_values(text, "cloudflared_tunnel_ha_connections"))
+        requests = sum(cls._metric_values(text, "cloudflared_tunnel_total_requests"))
+        errors = sum(cls._metric_values(text, "cloudflared_tunnel_request_errors"))
+        build_match = re.search(
+            r"^(?:cloudflared_)?build_info\{(?P<labels>[^\n}]*)\}\s+[0-9.eE+-]+$",
+            text,
+            re.MULTILINE,
+        )
+        version_match = (
+            re.search(
+                r'(?:^|,)version="([^"\n]{1,80})"(?:,|$)',
+                build_match.group("labels"),
+            )
+            if build_match
+            else None
+        )
+        if "cloudflared_tunnel_ha_connections" not in text and not build_match:
+            raise ValueError("Cloudflared Prometheus metrics were not found")
+        return {
+            "metricsReachable": True,
+            "connections": max(0, min(int(connections), 1000)),
+            "totalRequests": max(0, int(requests)),
+            "requestErrors": max(0, int(errors)),
+            "version": version_match.group(1) if version_match else None,
+        }
+
     async def _source(self, client):
         if not self.status_url:
             return None
         response = await client.get(self.status_url, headers={"Accept": "application/json"})
         response.raise_for_status()
-        if len(response.content) > 64 * 1024:
+        if len(response.content) > 512 * 1024:
             raise ValueError("Cloudflared status response is too large")
+        if self.status_url.endswith("/metrics") or not response.content.lstrip().startswith(b"{"):
+            return self._prometheus_source(response.text)
         body = response.json()
         if not isinstance(body, dict):
             raise ValueError("Invalid Cloudflared status response")
@@ -71,7 +162,7 @@ class CloudflareTunnelMonitor:
             }
 
     async def status(self, *, force=False):
-        if not self.status_url:
+        if not self.status_url and not self.probe_urls:
             return {
                 "configured": False,
                 "status": "not_configured",
@@ -80,6 +171,7 @@ class CloudflareTunnelMonitor:
                 "connections": 0,
                 "routes": [],
                 "message": "Cloudflared monitoring is not configured",
+                **self.configuration(),
             }
         async with self.lock:
             if not force and self.cached and time.monotonic() - self.cached_at < self.cache_seconds:
@@ -98,7 +190,18 @@ class CloudflareTunnelMonitor:
                 )
             connected = bool(source and source["metricsReachable"] and source["connections"] > 0)
             failed_routes = sum(not route["reachable"] for route in routes)
-            if not connected:
+            reachable_routes = sum(route["reachable"] for route in routes)
+            if not self.status_url and reachable_routes and not failed_routes:
+                health, message = (
+                    "degraded",
+                    "Public routes are reachable; connector metrics are not configured",
+                )
+            elif not connected and reachable_routes:
+                health, message = (
+                    "degraded",
+                    "Public routes are reachable; local connector metrics are unavailable",
+                )
+            elif not connected:
                 health, message = "critical", "Cloudflare Tunnel is not connected"
             elif failed_routes:
                 health, message = (
@@ -124,6 +227,7 @@ class CloudflareTunnelMonitor:
                 "version": source["version"] if source else None,
                 "routes": routes,
                 "message": message,
+                **self.configuration(),
             }
             self.cached, self.cached_at = result, time.monotonic()
             return result

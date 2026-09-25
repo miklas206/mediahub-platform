@@ -223,12 +223,11 @@ nav a.active {
 .app-shortcuts {
   display: grid;
   gap: 2px;
-  margin: 2px 0 7px 24px;
-  padding-left: 13px;
-  border-left: 1px solid var(--line);
+  margin: 2px 0 7px;
 }
 .app-shortcuts a {
-  padding: 7px 9px;
+  width: 100%;
+  padding: 9px 14px 9px 43px;
   font-size: 12px;
   gap: 9px;
 }
@@ -1017,10 +1016,46 @@ nav a.active {
   gap: 24px;
 }
 .updates-grid {
-  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(265px, 1fr));
+  align-items: stretch;
 }
 .updates-grid > .panel {
-  align-self: start;
+  align-self: stretch;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.updates-grid > .panel > .phase-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.updates-grid .button-row {
+  order: 3;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+.updates-grid .operation-progress {
+  order: 4;
+}
+.updates-grid .runtime-row {
+  min-height: 3.25rem;
+}
+.update-card-message {
+  order: 2;
+  min-height: 4.5rem;
+  margin-top: 1rem;
+}
+.update-card-advanced {
+  order: 5;
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.9rem;
+}
+.update-card-advanced summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
 }
 .updates-grid .operation-progress {
   margin: 18px 0 0;

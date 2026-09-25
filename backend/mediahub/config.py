@@ -58,7 +58,7 @@ class Config(BaseSettings):
             or not (address.is_private or address.is_loopback)
             or parsed.username
             or parsed.password
-            or parsed.path not in {"", "/", "/status"}
+            or parsed.path not in {"", "/", "/status", "/metrics"}
             or parsed.query
             or parsed.fragment
         ):

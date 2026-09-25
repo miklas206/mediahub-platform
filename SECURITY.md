@@ -1,6 +1,6 @@
 # Security policy
 
-v0.4.3 targets authenticated private/LAN deployments over HTTPS. Public Internet
+v0.4.4 targets authenticated private/LAN deployments over HTTPS. Public Internet
 exposure has not been enabled or independently security-audited.
 Before a public GitHub release, maintainers must enable private vulnerability reporting and publish
 a monitored security contact. Do not post secrets or exploitable production details in public issues.

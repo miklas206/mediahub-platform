@@ -30,6 +30,34 @@ def test_update_notifications_are_persistent_deduplicated_and_dismissible(logged
     assert logged_in.get("/api/v1/updates/summary").json()["data"]["notifications"] == []
 
 
+def test_update_notifications_auto_resolve_when_no_updates_remain(logged_in):
+    svc = logged_in.app.state.services
+    svc.updates._store_results([available_item()])
+    assert len(svc.updates.summary()["notifications"]) == 1
+
+    resolved = {**available_item(), "updateAvailable": False}
+    svc.updates._store_results([resolved])
+
+    summary = svc.updates.summary()
+    assert summary["count"] == 0
+    assert summary["notifications"] == []
+    assert len(svc.events.notifications(pending_only=False)) == 1
+    assert svc.events.notifications(pending_only=False)[0]["state"] == "read"
+
+
+def test_failed_zero_update_check_keeps_previous_notification(logged_in):
+    svc = logged_in.app.state.services
+    svc.updates._store_results([available_item()])
+
+    resolved = {**available_item(), "updateAvailable": False}
+    svc.updates._store_results([resolved], error="Update source unavailable")
+
+    summary = svc.updates.summary()
+    assert summary["count"] == 0
+    assert summary["lastError"] == "Update source unavailable"
+    assert len(summary["notifications"]) == 1
+
+
 def test_same_version_notifies_again_only_after_it_was_no_longer_available(logged_in):
     svc = logged_in.app.state.services
     svc.updates._store_results([available_item()])

@@ -45,7 +45,7 @@ def test_manifest_valid():
 
 def test_cloudflared_manifest_has_guided_secret_setup():
     manifest = parse_manifest(ROOT / "apps/cloudflared/manifest.yaml")
-    assert manifest.availability == "coming-soon"
+    assert manifest.availability == "available"
     assert [step.id for step in manifest.installGuide] == [
         "prepare-domain",
         "create-tunnel",
@@ -53,8 +53,9 @@ def test_cloudflared_manifest_has_guided_secret_setup():
         "verify-route",
     ]
     fields = {field.name: field for field in manifest.configFields}
-    assert fields["tunnel_token"].secret is True
-    assert fields["tunnel_token"].required is True
+    assert fields["public_hostnames"].required is True
+    assert fields["status_url"].required is False
+    assert not any(field.secret for field in manifest.configFields)
     assert all(
         not step.helpUrl or step.helpUrl.startswith("https://developers.cloudflare.com/")
         for step in manifest.installGuide

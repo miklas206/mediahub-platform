@@ -190,7 +190,7 @@ export function SetupWizard({
           <span>
             SETUP · STEP {draft.step + 1} OF {steps.length}
           </span>
-          <span>0.4.3</span>
+          <span>0.4.4</span>
         </header>
         <div className="wizard-body">
           <div className="page-heading">

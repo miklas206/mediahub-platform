@@ -76,6 +76,24 @@ class EventBus:
             row.state = "read"
         return True
 
+    def read_notifications(self, *, event_type=None, source=None):
+        """Resolve matching pending notifications without deleting their audit events."""
+
+        with self.sessions.begin() as db:
+            query = (
+                select(Notification)
+                .join(Event, Event.id == Notification.event_id)
+                .where(Notification.state == "pending")
+            )
+            if event_type:
+                query = query.where(Event.type == event_type)
+            if source:
+                query = query.where(Event.source == source)
+            rows = db.scalars(query).all()
+            for row in rows:
+                row.state = "read"
+            return len(rows)
+
     def activity(self, limit: int = 50):
         with self.sessions() as db:
             events = db.scalars(select(Event).order_by(Event.created_at.desc()).limit(limit)).all()

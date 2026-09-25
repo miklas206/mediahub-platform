@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.4 - 2026-09-25
+
+- Added an assisted, least-privilege Cloudflare Tunnel monitoring setup that
+  distinguishes one tunnel from its published routes and redundant connector
+  sessions. It supports route-only checks or private Prometheus metrics without
+  receiving an account API token or tunnel token.
+- Made app submenu selection fill the sidebar row and aligned update cards with
+  consistent rows, actions, messages and expandable advanced settings.
+- Successful update checks with no available releases now automatically resolve
+  stale update notifications while preserving their activity audit entries.
+
 ## 0.4.3 - 2026-09-25
 
 - Fixed the Plex remote-reachability status check when the Agent correctly runs

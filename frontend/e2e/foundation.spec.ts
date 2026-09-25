@@ -84,6 +84,44 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await expect(
     page.getByRole("progressbar", { name: "Check MediaHub updates" }),
   ).toHaveAttribute("aria-valuenow", "100");
+  const updateCards = page.locator(".updates-grid > .panel");
+  await expect(updateCards).toHaveCount(2);
+  const updateCardHeights = await updateCards.evaluateAll((cards) =>
+    cards.map((card) => card.getBoundingClientRect().height),
+  );
+  expect(
+    Math.max(...updateCardHeights) - Math.min(...updateCardHeights),
+  ).toBeLessThan(2);
+  await page.screenshot({
+    path: "../.qa/updates-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page
+    .getByRole("link", { name: "Cloudflare Tunnel", exact: true })
+    .click();
+  await expect(
+    page.getByText("Assisted Cloudflare setup", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Tunnel name").fill("QA home tunnel");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await page.getByLabel("Public hostnames").fill("media.example.com");
+  await page.getByRole("button", { name: /Continue/ }).click();
+  await expect(page.getByLabel("Private metrics URL")).toBeVisible();
+  await page.getByRole("button", { name: /Continue/ }).click();
+  const setupReview = page.locator(".setup-review-grid");
+  await expect(
+    setupReview.getByText("Published routes", { exact: true }),
+  ).toBeVisible();
+  await expect(setupReview.getByText("1", { exact: true })).toBeVisible();
+  const activeShortcut = page.locator(".app-shortcuts a.active");
+  const shortcutGroup = page.locator(".app-shortcuts");
+  await expect(activeShortcut).toBeVisible();
+  const [shortcutBox, groupBox] = await Promise.all([
+    activeShortcut.boundingBox(),
+    shortcutGroup.boundingBox(),
+  ]);
+  expect(shortcutBox?.width).toBeCloseTo(groupBox?.width || 0, 0);
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Maintenance", exact: true }).click();
   await expect(

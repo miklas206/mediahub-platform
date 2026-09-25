@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from mediahub.api import administrator, authenticated, result, services
+from mediahub.apps.cloudflared import register_cloudflared_app
 from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.apps.remote_status import RemoteStatusCache
 from mediahub.apps.seedbox import SeedboxInstallation
@@ -471,7 +472,17 @@ async def configuration(package_id: str, request: Request, user=Depends(authenti
 async def save_configuration(
     package_id: str, body: ConfigValues, request: Request, user=Depends(authenticated)
 ):
-    return result(services(request).catalog.save(package_id, body.values))
+    svc = services(request)
+    saved = svc.catalog.save(package_id, body.values)
+    if package_id == "org.mediahub.cloudflared":
+        svc.cloudflare_tunnel.configure(saved)
+        register_cloudflared_app(svc)
+        svc.events.record(
+            "cloudflare.configuration.changed",
+            package_id,
+            "Cloudflare assisted setup saved; read-only monitoring reloaded",
+        )
+    return result(saved)
 
 
 @router.post("/catalog/{package_id}/plan")

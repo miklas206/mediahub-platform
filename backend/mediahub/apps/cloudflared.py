@@ -57,7 +57,7 @@ class CloudflaredAppAdapter:
                     else "unknown"
                 ),
                 message=(
-                    f"{report.get('connections', 0)} Cloudflare connection(s)"
+                    f"{report.get('connections', 0)} redundant connector session(s)"
                     if report.get("metricsReachable")
                     else "The local cloudflared status helper is unavailable"
                     if report.get("configured")
@@ -114,6 +114,7 @@ def register_cloudflared_app(svc):
     """Expose configured monitoring as an app without granting tunnel control."""
 
     manifest = parse_manifest(svc.config.manifest_dir / "cloudflared" / "manifest.yaml")
+    configured = bool(svc.cloudflare_tunnel.status_url or svc.cloudflare_tunnel.probe_urls)
     with svc.sessions.begin() as db:
         app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == manifest.id))
         created = app is None
@@ -122,7 +123,7 @@ def register_cloudflared_app(svc):
                 package_id=manifest.id,
                 name=manifest.name,
                 version=manifest.version,
-                state="monitored" if svc.config.cloudflared_status_url else "not_configured",
+                state="monitored" if configured else "not_configured",
                 is_mock=False,
             )
             db.add(app)
@@ -131,7 +132,7 @@ def register_cloudflared_app(svc):
             app.name = manifest.name
             if Version(app.version) < Version(manifest.version):
                 app.version = manifest.version
-            app.state = "monitored" if svc.config.cloudflared_status_url else "not_configured"
+            app.state = "monitored" if configured else "not_configured"
         app_id = app.id
     svc.apps.adapters[app_id] = CloudflaredAppAdapter(svc.cloudflare_tunnel, svc.events, app_id)
     if created:

@@ -670,20 +670,16 @@ export function UpdatesPage() {
             <strong>{release?.latestVersion || "Not published yet"}</strong>
           </div>
           <div className="runtime-row">
-            <span>GitHub source</span>
-            <span>{release?.repository || "Choose in Settings"}</span>
-          </div>
-          <div className="runtime-row">
-            <span>Verified release</span>
+            <span>Release source</span>
             <span>
               {release?.installReady
-                ? "Ready to install"
+                ? "Verified GitHub release"
                 : release?.manifest
                   ? "Manifest verified"
-                  : "Not available"}
+                  : release?.repository || "Choose in Settings"}
             </span>
           </div>
-          <p>
+          <p className="update-card-message">
             {release?.message || "Checking the configured release channel…"}
           </p>
           <div className="button-row">
@@ -710,17 +706,16 @@ export function UpdatesPage() {
               {busy === "platform-install" ? "Installing…" : "Install update"}
             </button>
           </div>
-          {!release?.installReady && (
-            <p className="muted">
-              Installation unlocks when a complete digest-verified release and
-              the rollback-protected host updater are available.
-            </p>
-          )}
           {operations.platform && (
             <OperationProgress operation={operations.platform} />
           )}
-          <details className="private-release-access">
-            <summary>Private GitHub access</summary>
+          <details className="update-card-advanced">
+            <summary>Advanced update settings</summary>
+            <p className="muted">
+              Source: {release?.repository || "Not configured"}. Installation
+              requires a complete digest-verified release and the
+              rollback-protected host updater.
+            </p>
             <p className="muted">
               {privateAccess.data?.configured
                 ? "Configured · the token is encrypted and is never returned to this page."
@@ -765,8 +760,10 @@ export function UpdatesPage() {
                 )}
               </div>
             </form>
+            <p>
+              <Link to="/backups">Create configuration backup →</Link>
+            </p>
           </details>
-          <Link to="/backups">Create configuration backup →</Link>
         </Panel>
         {apps.data
           ?.filter((app) => !app.isMock)
@@ -783,7 +780,9 @@ export function UpdatesPage() {
                       version?.qBittorrent?.version ||
                       version?.cloudflare?.version ||
                       (isCloudflare
-                        ? "Monitoring not configured"
+                        ? version?.available
+                          ? "Route monitoring enabled"
+                          : "Monitoring not configured"
                         : "Not verified")}
                   </strong>
                 </div>
@@ -798,6 +797,16 @@ export function UpdatesPage() {
                 <div className="runtime-row">
                   <span>Latest</span>
                   <span>{latest[app.id] || "Not checked"}</span>
+                </div>
+                <div className="runtime-row">
+                  <span>Update method</span>
+                  <span>
+                    {isCloudflare
+                      ? "Official release check"
+                      : isPlex
+                        ? "Managed by MediaHub"
+                        : "Coordinated fail-closed update"}
+                  </span>
                 </div>
                 <div className="button-row">
                   {(isPlex || isCloudflare) && (
@@ -837,14 +846,21 @@ export function UpdatesPage() {
                   <OperationProgress operation={operations[app.id]!} />
                 )}
                 {!isPlex && !isCloudflare && (
-                  <p className="muted">
+                  <p className="muted update-card-message">
                     VPN and torrent-client updates require a coordinated,
                     fail-closed deployment. Routine restarts are available from
                     the app page.
                   </p>
                 )}
+                {isPlex && (
+                  <p className="muted update-card-message">
+                    MediaHub checks Plex releases and creates a configuration
+                    rollback snapshot before an update. Media files stay
+                    separate.
+                  </p>
+                )}
                 {isCloudflare && (
-                  <p className="muted">
+                  <p className="muted update-card-message">
                     Monitoring checks tunnel health and official Cloudflare
                     releases. Installation guidance is available from the app
                     page without exposing the tunnel publicly.

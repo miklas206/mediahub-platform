@@ -85,7 +85,17 @@ class UpdateMonitor:
                 "lastError": error,
             }
         )
-        if signature and signature != previous.get("signature"):
+        if not signature and not error:
+            # A successful zero-update result resolves old update alerts. Their
+            # Event rows remain in the audit timeline, but they must not keep a
+            # stale badge or ask the user to dismiss an already installed release.
+            self.services.events.read_notifications(
+                event_type="updates.available", source="updates"
+            )
+        elif signature != previous.get("signature"):
+            self.services.events.read_notifications(
+                event_type="updates.available", source="updates"
+            )
             count = len(available)
             self.services.events.record(
                 "updates.available",
