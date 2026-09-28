@@ -27,11 +27,26 @@ class SeedboxExtraStorage(StrictModel):
     """Host-authorized legacy seed location, never supplied by public install requests."""
 
     logicalId: str = Field(pattern=r"^[a-z][a-z0-9-]{1,60}$")
+    displayName: str | None = Field(default=None, min_length=1, max_length=80)
     source: str
     target: str
     nfsSource: str
     storageMarker: str = Field(min_length=1, max_length=120)
     readOnly: bool = True
+    allowTorrentDownload: bool = False
+
+    @field_validator("displayName")
+    @classmethod
+    def display_name(cls, value):
+        if value is not None and (not value.isprintable() or value.strip() != value):
+            raise ValueError("Storage display name must be printable and trimmed")
+        return value
+
+    @model_validator(mode="after")
+    def torrent_download_requires_write_access(self):
+        if self.allowTorrentDownload and self.readOnly:
+            raise ValueError("Torrent download destinations must be writable")
+        return self
 
     @field_validator("source", "target")
     @classmethod

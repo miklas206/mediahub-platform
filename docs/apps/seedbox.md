@@ -12,9 +12,11 @@ collapsed Maintenance diagnostics instead of the daily app view. WebUI access
 remains a local authenticated SSH tunnel; CSRF and Host validation are not
 disabled.
 
-MediaHub can add a magnet or uploaded `.torrent` to the Downloads top folder or
-an existing direct child folder. The browser selects an opaque Agent-issued ID;
-it cannot submit a filesystem path. See [daily-use controls](../operations/seedbox-daily-use.md).
+MediaHub can add a magnet or uploaded `.torrent` to Downloads or to another
+explicitly approved writable logical destination such as Movies, TV Shows or
+Other. Existing direct child folders are also selectable. The browser uses an
+opaque Agent-issued ID and cannot submit a filesystem path. See
+[daily-use controls](../operations/seedbox-daily-use.md).
 
 Runtime-only removal retains downloads, encrypted credentials and qBittorrent state.
 Image versions are pinned; a newer version must not be invented from an image tag.

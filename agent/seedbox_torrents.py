@@ -61,13 +61,11 @@ class TorrentService:
         async with self.session() as (client, spec, policy):
             response = await client.get("/api/v2/torrents/info", params={"limit": 500})
             response.raise_for_status()
+            allowed_roots = self.allowed_save_roots(policy, spec)
             rows = []
             for item in response.json():
                 path = PurePosixPath(item.get("save_path", ""))
-                allowed = (
-                    path == PurePosixPath("/downloads")
-                    or PurePosixPath("/downloads") in path.parents
-                )
+                allowed = any(path == root or root in path.parents for root in allowed_roots)
                 rows.append(
                     {
                         key: item.get(key)
@@ -89,61 +87,121 @@ class TorrentService:
                     }
                     | {"actionsAllowed": allowed}
                 )
-            locations = self.download_locations(Path(policy.paths.downloads))
+            locations = self.download_locations(policy, spec)
             return {
                 "items": rows,
                 "storageId": spec.downloadsStorageId,
                 "downloadLocations": [
-                    {"id": item["id"], "label": item["label"]} for item in locations
+                    {
+                        "id": item["id"],
+                        "label": item["label"],
+                        "storageLabel": item["storageLabel"],
+                    }
+                    for item in locations
                 ],
                 "limit": 500,
             }
 
     @staticmethod
-    def download_locations(root: Path):
-        """Return only the root and existing direct child folders.
+    def writable_storage_roots(policy, spec):
+        """Return install-authorized writable roots, never request-supplied paths."""
+        logical_ids = {spec.downloadsStorageId}
+        roots = [
+            {
+                "logicalId": spec.downloadsStorageId,
+                "storageLabel": "Downloads",
+                "root": Path(policy.paths.downloads),
+                "saveRoot": PurePosixPath("/downloads"),
+                "primary": True,
+            }
+        ]
+        for mapping in policy.paths.extraStorage:
+            if mapping.readOnly or not mapping.allowTorrentDownload:
+                continue
+            if mapping.logicalId in logical_ids:
+                raise ValueError("Writable logical storage identifiers must be unique")
+            logical_ids.add(mapping.logicalId)
+            roots.append(
+                {
+                    "logicalId": mapping.logicalId,
+                    "storageLabel": mapping.displayName or mapping.logicalId.replace("-", " ").title(),
+                    "root": Path(mapping.source),
+                    "saveRoot": PurePosixPath(mapping.target),
+                    "primary": False,
+                }
+            )
+        return roots
+
+    @classmethod
+    def allowed_save_roots(cls, policy, spec):
+        return [item["saveRoot"] for item in cls.writable_storage_roots(policy, spec)]
+
+    @classmethod
+    def download_locations(cls, policy, spec):
+        """Return authorized roots and their existing direct child folders.
 
         The browser receives opaque identifiers rather than filesystem paths. Symlinks,
         hidden folders and nested caller-supplied paths never become destinations.
         """
-        resolved_root = root.resolve(strict=True)
-        if not resolved_root.is_dir():
-            raise ValueError("Downloads storage is not a directory")
-        locations = [{"id": "root", "label": "Top folder", "savePath": "/downloads"}]
-        children = sorted(root.iterdir(), key=lambda item: item.name.casefold())
-        for child in children[:512]:
-            name = child.name
-            if (
-                name.startswith(".")
-                or len(name) > 120
-                or not name.isprintable()
-                or "\\" in name
-                or child.is_symlink()
-                or not child.is_dir()
-            ):
-                continue
-            resolved_child = child.resolve(strict=True)
-            if resolved_child.parent != resolved_root:
-                continue
+        locations = []
+        for storage in cls.writable_storage_roots(policy, spec):
+            root = storage["root"]
+            resolved_root = root.resolve(strict=True)
+            if not resolved_root.is_dir():
+                raise ValueError("Authorized storage is not a directory")
+            identity = storage["logicalId"] + "\0"
+            root_id = (
+                "root"
+                if storage["primary"]
+                else "location-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+            )
             locations.append(
                 {
-                    "id": "folder-" + hashlib.sha256(name.encode("utf-8")).hexdigest(),
-                    "label": name,
-                    "savePath": str(PurePosixPath("/downloads") / name),
+                    "id": root_id,
+                    "label": "Top folder",
+                    "storageLabel": storage["storageLabel"],
+                    "savePath": str(storage["saveRoot"]),
                 }
             )
+            children = sorted(root.iterdir(), key=lambda item: item.name.casefold())
+            for child in children[:512]:
+                name = child.name
+                if (
+                    name.startswith(".")
+                    or len(name) > 120
+                    or not name.isprintable()
+                    or "\\" in name
+                    or child.is_symlink()
+                    or not child.is_dir()
+                ):
+                    continue
+                resolved_child = child.resolve(strict=True)
+                if resolved_child.parent != resolved_root:
+                    continue
+                prefix = "folder-" if storage["primary"] else "location-"
+                token = name if storage["primary"] else identity + name
+                locations.append(
+                    {
+                        "id": prefix + hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                        "label": name,
+                        "storageLabel": storage["storageLabel"],
+                        "savePath": str(storage["saveRoot"] / name),
+                    }
+                )
+                if len(locations) >= 101:
+                    return locations
             if len(locations) >= 101:
-                break
+                return locations
         return locations
 
     @classmethod
-    def resolve_download_location(cls, root: Path, location_id: str):
-        for location in cls.download_locations(root):
+    def resolve_download_location(cls, policy, spec, location_id: str):
+        for location in cls.download_locations(policy, spec):
             if location["id"] == location_id:
                 return location["savePath"]
         raise DomainError(
             "download_location_denied",
-            "Choose an available folder inside the approved Downloads storage",
+            "Choose an available folder inside approved Seedbox storage",
             403,
         )
 
@@ -166,9 +224,7 @@ class TorrentService:
                 raise DomainError(
                     "storage_denied", "Use the authorized logical downloads storage", 403
                 )
-            save_path = self.resolve_download_location(
-                Path(policy.paths.downloads), body.downloadLocationId
-            )
+            save_path = self.resolve_download_location(policy, spec, body.downloadLocationId)
             existing = await client.get("/api/v2/torrents/info", params={"hashes": identity})
             existing.raise_for_status()
             if existing.json():
@@ -225,10 +281,8 @@ class TorrentService:
             if len(rows) != 1:
                 raise DomainError("torrent_missing", "Torrent not found", 404)
             path = PurePosixPath(rows[0].get("save_path", ""))
-            if (
-                path != PurePosixPath("/downloads")
-                and PurePosixPath("/downloads") not in path.parents
-            ):
+            allowed_roots = self.allowed_save_roots(_policy, spec)
+            if not any(path == root or root in path.parents for root in allowed_roots):
                 raise DomainError("storage_denied", "Torrent is outside authorized storage", 403)
             endpoint = {
                 "pause": "stop",

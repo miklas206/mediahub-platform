@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.4.8"
+    "version": "0.4.9"
   },
   "paths": {
     "/api/v1/health": {
@@ -3362,7 +3362,7 @@
           },
           "downloadLocationId": {
             "type": "string",
-            "pattern": "^(?:root|folder-[a-f0-9]{64})$",
+            "pattern": "^(?:root|(?:folder|location)-[a-f0-9]{64})$",
             "title": "Downloadlocationid",
             "default": "root"
           },

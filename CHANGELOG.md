@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.9 - 2026-09-28
+
+- Allow Seedbox administrators to choose among explicitly approved writable
+  logical destinations such as Downloads, Movies, TV Shows and Other when
+  adding a torrent.
+- Keep destination selection fail-closed: the browser receives opaque IDs,
+  read-only or merely mounted storage is excluded, and the Agent revalidates
+  the selected root or direct child folder before contacting qBittorrent.
+- Keep torrent actions available for jobs stored in any approved writable
+  destination while preserving compatibility with the original Downloads root.
+
 ## 0.4.8 - 2026-09-28
 
 - Keep sidebar app-health indicators synchronized with the same remote status

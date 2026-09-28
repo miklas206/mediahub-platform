@@ -11,7 +11,9 @@ class AddTorrent(StrictModel):
     magnet: SecretStr | None = Field(default=None, exclude=True, max_length=16384)
     torrentBase64: SecretStr | None = Field(default=None, exclude=True, max_length=2796204)
     storageId: str = Field(min_length=1, max_length=128)
-    downloadLocationId: str = Field(default="root", pattern=r"^(?:root|folder-[a-f0-9]{64})$")
+    downloadLocationId: str = Field(
+        default="root", pattern=r"^(?:root|(?:folder|location)-[a-f0-9]{64})$"
+    )
     startImmediately: bool = False
 
     @model_validator(mode="after")

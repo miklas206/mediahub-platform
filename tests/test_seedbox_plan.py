@@ -111,6 +111,31 @@ def test_legacy_seed_mapping_is_scoped_readonly_and_never_created():
     assert len(plan["services"]["vpn"]["volumes"]) == 2
 
 
+def test_explicit_torrent_destination_requires_write_access():
+    with pytest.raises(ValidationError):
+        paths(extraStorage=[extra(allowTorrentDownload=True)])
+
+    runtime = paths(
+        extraStorage=[
+            extra(
+                logicalId="movies",
+                displayName="Movies",
+                source="/data/movies",
+                target="/media/movies",
+                nfsSource="host:/movies",
+                storageMarker="movies-marker",
+                readOnly=False,
+                allowTorrentDownload=True,
+            )
+        ]
+    )
+    mapping = runtime.extraStorage[0]
+    assert mapping.displayName == "Movies"
+    assert mapping.allowTorrentDownload is True
+    mount = compose_plan(spec(), runtime)["services"]["torrent"]["volumes"][-1]
+    assert mount["target"] == "/media/movies" and mount["read_only"] is False
+
+
 @pytest.mark.parametrize(
     "change",
     [

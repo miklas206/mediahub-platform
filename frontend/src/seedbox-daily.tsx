@@ -19,7 +19,7 @@ type Torrent = {
   category?: string;
   seeding_time?: number;
 };
-type DownloadLocation = { id: string; label: string };
+type DownloadLocation = { id: string; label: string; storageLabel?: string };
 type Listing = {
   items: Torrent[];
   storageId: string;
@@ -310,7 +310,7 @@ export function SeedboxDaily({
               >
                 {list?.downloadLocations?.map((item) => (
                   <option key={item.id} value={item.id}>
-                    MediaHub Downloads · {item.label}
+                    MediaHub {item.storageLabel || "Downloads"} · {item.label}
                   </option>
                 ))}
               </select>
@@ -318,7 +318,8 @@ export function SeedboxDaily({
             {downloadLocationsSupported === false && (
               <p className="muted">
                 This Seedbox Agent still supports the Downloads top folder only.
-                Install the matching Agent update to enable folder choices.
+                Install the matching Agent update and configure writable logical
+                storage to enable Film, TV and Other choices.
               </p>
             )}
             <label>
@@ -336,9 +337,9 @@ export function SeedboxDaily({
               Add torrent
             </button>
             <p className="muted">
-              Paused by default. Only existing folders directly inside the
-              approved Downloads storage can be selected. Private tracker links
-              are not included in MediaHub events.
+              Paused by default. Only explicitly approved writable storage and
+              existing direct child folders can be selected. Private tracker
+              links are not included in MediaHub events.
             </p>
           </form>
         </Panel>

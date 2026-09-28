@@ -2,6 +2,7 @@ import asyncio
 import base64
 import configparser
 import hashlib
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -153,11 +154,15 @@ def test_download_locations_are_opaque_bounded_directories(tmp_path):
     except OSError:
         pass
 
-    locations = TorrentService.download_locations(tmp_path)
-    assert [(item["label"], item["savePath"]) for item in locations] == [
-        ("Top folder", "/downloads"),
-        ("Movies", "/downloads/Movies"),
-        ("TV", "/downloads/TV"),
+    policy = SimpleNamespace(paths=SimpleNamespace(downloads=str(tmp_path), extraStorage=[]))
+    spec = SimpleNamespace(downloadsStorageId="downloads")
+    locations = TorrentService.download_locations(policy, spec)
+    assert [
+        (item["storageLabel"], item["label"], item["savePath"]) for item in locations
+    ] == [
+        ("Downloads", "Top folder", "/downloads"),
+        ("Downloads", "Movies", "/downloads/Movies"),
+        ("Downloads", "TV", "/downloads/TV"),
     ]
     assert all("/" not in item["id"] for item in locations)
     assert all(str(tmp_path) not in item["id"] for item in locations)
@@ -166,12 +171,113 @@ def test_download_locations_are_opaque_bounded_directories(tmp_path):
 def test_download_location_must_still_exist_and_match_opaque_id(tmp_path):
     folder = tmp_path / "Movies"
     folder.mkdir()
-    location = TorrentService.download_locations(tmp_path)[1]
-    assert TorrentService.resolve_download_location(tmp_path, location["id"]) == "/downloads/Movies"
+    policy = SimpleNamespace(paths=SimpleNamespace(downloads=str(tmp_path), extraStorage=[]))
+    spec = SimpleNamespace(downloadsStorageId="downloads")
+    location = TorrentService.download_locations(policy, spec)[1]
+    assert (
+        TorrentService.resolve_download_location(policy, spec, location["id"])
+        == "/downloads/Movies"
+    )
     folder.rename(tmp_path / "Renamed")
     with pytest.raises(Exception) as denied:
-        TorrentService.resolve_download_location(tmp_path, location["id"])
+        TorrentService.resolve_download_location(policy, spec, location["id"])
     assert getattr(denied.value, "code", "") == "download_location_denied"
+
+
+def test_explicit_writable_logical_storage_is_a_destination(tmp_path):
+    downloads = tmp_path / "downloads"
+    movies = tmp_path / "movies"
+    downloads.mkdir()
+    movies.mkdir()
+    (movies / "Completed").mkdir()
+    mapping = SimpleNamespace(
+        logicalId="movies",
+        displayName="Movies",
+        source=str(movies),
+        target="/media/movies",
+        readOnly=False,
+        allowTorrentDownload=True,
+    )
+    policy = SimpleNamespace(
+        paths=SimpleNamespace(downloads=str(downloads), extraStorage=[mapping])
+    )
+    spec = SimpleNamespace(downloadsStorageId="downloads")
+
+    locations = TorrentService.download_locations(policy, spec)
+    assert [(item["storageLabel"], item["savePath"]) for item in locations] == [
+        ("Downloads", "/downloads"),
+        ("Movies", "/media/movies"),
+        ("Movies", "/media/movies/Completed"),
+    ]
+    assert locations[1]["id"].startswith("location-")
+    assert TorrentService.allowed_save_roots(policy, spec) == [
+        PurePosixPath("/downloads"),
+        PurePosixPath("/media/movies"),
+    ]
+
+
+def test_readonly_or_unapproved_extra_storage_is_not_a_destination(tmp_path):
+    downloads = tmp_path / "downloads"
+    extra = tmp_path / "extra"
+    downloads.mkdir()
+    extra.mkdir()
+    mappings = [
+        SimpleNamespace(
+            logicalId="readonly",
+            displayName="Read only",
+            source=str(extra),
+            target="/media/readonly",
+            readOnly=True,
+            allowTorrentDownload=False,
+        ),
+        SimpleNamespace(
+            logicalId="unapproved",
+            displayName="Unapproved",
+            source=str(extra),
+            target="/media/unapproved",
+            readOnly=False,
+            allowTorrentDownload=False,
+        ),
+    ]
+    policy = SimpleNamespace(
+        paths=SimpleNamespace(downloads=str(downloads), extraStorage=mappings)
+    )
+    spec = SimpleNamespace(downloadsStorageId="downloads")
+    assert [item["storageLabel"] for item in TorrentService.download_locations(policy, spec)] == [
+        "Downloads"
+    ]
+
+
+def test_duplicate_writable_logical_storage_ids_fail_closed(tmp_path):
+    downloads = tmp_path / "downloads"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for path in (downloads, first, second):
+        path.mkdir()
+    mappings = [
+        SimpleNamespace(
+            logicalId="movies",
+            displayName="Movies one",
+            source=str(first),
+            target="/media/movies-one",
+            readOnly=False,
+            allowTorrentDownload=True,
+        ),
+        SimpleNamespace(
+            logicalId="movies",
+            displayName="Movies two",
+            source=str(second),
+            target="/media/movies-two",
+            readOnly=False,
+            allowTorrentDownload=True,
+        ),
+    ]
+    policy = SimpleNamespace(
+        paths=SimpleNamespace(downloads=str(downloads), extraStorage=mappings)
+    )
+    spec = SimpleNamespace(downloadsStorageId="downloads")
+    with pytest.raises(ValueError, match="unique"):
+        TorrentService.download_locations(policy, spec)
 
 
 def test_download_location_contract_rejects_paths():
@@ -181,6 +287,15 @@ def test_download_location_contract_rejects_paths():
             storageId="downloads",
             downloadLocationId="../../etc",
         )
+
+
+def test_download_location_contract_accepts_agent_opaque_logical_location():
+    body = AddTorrent(
+        magnet="magnet:?xt=urn:btih:" + "a" * 40,
+        storageId="downloads",
+        downloadLocationId="location-" + "b" * 64,
+    )
+    assert body.downloadLocationId == "location-" + "b" * 64
 
 
 def test_proton_profile_only_changes_public_peer():
