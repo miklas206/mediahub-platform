@@ -1,6 +1,8 @@
 import hashlib
 import io
 import json
+import os
+import stat
 import tarfile
 from types import SimpleNamespace
 
@@ -368,3 +370,62 @@ def test_source_build_client_does_not_inherit_host_credentials(tmp_path, monkeyp
     assert options["env"]["DOCKER_HOST"] == "unix:///var/run/docker.sock"
     assert options["stdout"] == host_module.subprocess.DEVNULL
     assert options["stderr"] == host_module.subprocess.DEVNULL
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Runtime image permissions require POSIX modes")
+def test_extracted_source_is_readable_by_non_root_runtime_under_private_umask(tmp_path):
+    workspace = tmp_path / "private-build"
+    workspace.mkdir(mode=0o700)
+    archive = workspace / "source.tar.gz"
+    source_archive(archive)
+    old_mask = os.umask(0o077)
+    try:
+        HostUpdater._extract_source(archive, workspace / "source")
+    finally:
+        os.umask(old_mask)
+    assert stat.S_IMODE(workspace.stat().st_mode) == 0o700
+    for path in (workspace / "source").rglob("*"):
+        assert stat.S_IMODE(path.stat().st_mode) == (0o755 if path.is_dir() else 0o644)
+
+
+def test_configuration_copy_preserves_ownership_of_directories_and_files(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    (source / "private").mkdir(parents=True)
+    (source / "private/token").write_text("test-only")
+    host_module.shutil.copytree(source, destination)
+    calls = []
+    monkeypatch.setattr(
+        host_module.os,
+        "chown",
+        lambda path, uid, gid, **kwargs: calls.append((path, uid, gid, kwargs)),
+        raising=False,
+    )
+    HostUpdater._copy_ownership(source, destination)
+    assert {call[0] for call in calls} == {
+        destination,
+        destination / "private",
+        destination / "private/token",
+    }
+    for path, uid, gid, kwargs in calls:
+        expected = (source / path.relative_to(destination)).stat()
+        assert (uid, gid) == (expected.st_uid, expected.st_gid)
+        assert kwargs == {"follow_symlinks": False}
+
+
+def test_source_image_smoke_failure_never_stops_existing_services(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    original = updater.compose.read_bytes()
+    runner = updater.runner
+
+    def fail_smoke(args, capture=True):
+        if args[:2] == ["docker", "run"]:
+            raise ValueError("simulated unreadable runtime source")
+        return runner(args, capture)
+
+    updater.runner = fail_smoke
+    updater.process()
+    assert not any("stop" in args for args in commands)
+    assert updater.compose.read_bytes() == original
+    assert updater.installed_version.read_text().strip() == "0.3.0"
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"

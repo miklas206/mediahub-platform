@@ -346,7 +346,9 @@ class HostUpdater:
     @staticmethod
     def _extract_source(archive, destination):
         """Extract regular source files only; no links, devices or path escapes."""
-        destination.mkdir(mode=0o700)
+        # The enclosing build workspace stays root-only (0700). Source modes
+        # must remain readable after Docker COPY into non-root runtime images.
+        destination.mkdir(mode=0o755)
         total = 0
         seen = set()
         with tarfile.open(archive, "r:gz") as bundle:
@@ -371,15 +373,19 @@ class HostUpdater:
                     continue
                 target = destination.joinpath(*path.parts[1:])
                 if member.isdir():
-                    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    target.mkdir(mode=0o755, parents=True, exist_ok=True)
                     continue
                 total += member.size
                 if member.size < 0 or total > 2 * 1024**3:
                     raise ValueError("Expanded source exceeds limit")
-                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
                 with bundle.extractfile(member) as incoming, target.open("xb") as outgoing:
                     shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
-                target.chmod(0o700 if member.mode & 0o111 else 0o600)
+                target.chmod(0o755 if member.mode & 0o111 else 0o644)
+        # A systemd UMask=0077 also masks mkdir(mode=0755); explicitly normalize
+        # source-only directories, never the private enclosing workspace.
+        for directory, _, _ in os.walk(destination):
+            Path(directory).chmod(0o755)
 
     def _build_source_images(self, stage, manifest):
         """Build before stopping services. Never pass credentials or host data to Docker."""
@@ -422,6 +428,34 @@ class HostUpdater:
                 image_id = self.command("docker", "image", "inspect", "--format", "{{.Id}}", tag)
                 if not LOADED_IMAGE.fullmatch(image_id):
                     raise ValueError("Source build did not produce a valid image")
+                # Exercise the image's actual non-root user before downtime.
+                # No network, host mounts, credentials or production state.
+                self.command(
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "--read-only",
+                    "--cap-drop",
+                    "ALL",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "--memory",
+                    "128m",
+                    "--pids-limit",
+                    "64",
+                    "--entrypoint",
+                    "python",
+                    image_id,
+                    "-c",
+                    "import agent, mediahub, os; from pathlib import Path; "
+                    "assert os.geteuid() != 0; "
+                    "assert all(os.access(p, os.R_OK | (os.X_OK if p.is_dir() else 0)) "
+                    "for root in ('/app/agent', '/app/backend', '/app/apps') "
+                    "for p in Path(root).rglob('*'))",
+                    capture=False,
+                )
                 images[role] = image_id
             return images
         finally:
@@ -484,10 +518,26 @@ class HostUpdater:
             shutil.copy2(self.compose, temporary / "compose.json")
             for name in ("data", "agent"):
                 shutil.copytree(self.root / name, temporary / name, symlinks=False)
+                self._copy_ownership(self.root / name, temporary / name)
             os.replace(temporary, backup)
         except Exception:
             shutil.rmtree(temporary, ignore_errors=True)
             raise
+
+    @staticmethod
+    def _copy_ownership(source, destination):
+        # copytree/copy2 preserve modes and timestamps, not uid/gid. Losing
+        # ownership makes restored secrets unreadable to non-root containers.
+        if not hasattr(os, "chown"):
+            return
+        for original in [source, *source.rglob("*")]:
+            details = original.lstat()
+            if stat.S_ISLNK(details.st_mode):
+                raise ValueError("Configuration ownership reference contains a symbolic link")
+            target = destination / original.relative_to(source)
+            if target.is_symlink():
+                raise ValueError("Configuration ownership destination contains a symbolic link")
+            os.chown(target, details.st_uid, details.st_gid, follow_symlinks=False)
 
     def _restore_configuration(self, backup):
         self._compose_command("stop", "-t", "30", "core", "agent", capture=False)
@@ -500,6 +550,7 @@ class HostUpdater:
             os.replace(current, failed)
             try:
                 shutil.copytree(backup / name, current, symlinks=False)
+                self._copy_ownership(backup / name, current)
             except Exception:
                 if current.exists():
                     shutil.rmtree(current)

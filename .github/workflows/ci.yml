@@ -33,6 +33,8 @@ jobs:
           python -c 'import sys; from pathlib import Path; from scripts.platform_update_host import HostUpdater; p=Path(sys.argv[1]); HostUpdater._extract_source(p/"mediahub-source.tar.gz", p/"source")' "$source_test"
           docker build -f "$source_test/source/docker/Dockerfile" -t mediahub-source-core:ci "$source_test/source"
           docker build -f "$source_test/source/docker/Agent.Dockerfile" -t mediahub-source-agent:ci "$source_test/source"
+          docker run --rm --entrypoint python mediahub-source-core:ci -c 'import agent, mediahub; import os; assert os.access("/app/backend/migrations/env.py", os.R_OK)'
+          docker run --rm --entrypoint python mediahub-source-agent:ci -c 'import agent, mediahub'
       - run: docker compose -f compose.dev.yaml up --build --wait
       - run: curl --fail http://127.0.0.1:18765/api/health && curl --fail http://127.0.0.1:18765/
       - if: always()

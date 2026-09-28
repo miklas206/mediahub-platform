@@ -41,6 +41,8 @@ the Authorization header to asset hosts.
 4. Build Core and local Agent using their Dockerfiles. Current services keep
    running. The source context contains no host secrets or data mounts. Build
    output is not sent to the UI/logs; progress identifies each build stage.
+   Run isolated non-root image smoke checks without network, host mounts or
+   production state before stopping the old version.
 5. Only after both builds succeed, check snapshot capacity, stop Core/local Agent
    and back up their configuration/state (not media).
 6. Replace their images with the exact locally built image IDs, with pulls disabled.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.12 - 2026-09-28
+
+- Preserve readable source permissions inside non-root Docker images, including builds run under a private systemd umask.
+- Add POSIX permission regression coverage and run source-built images as their non-root runtime user in CI.
+- Run isolated non-root image smoke checks on the host before stopping any existing service.
+- Preserve uid/gid in configuration backups and restoration for non-root Core/Agent runtimes.
+- Supersede 0.4.11; its first live deployment failed startup checks and required ownership repair during rollback.
+
 ## 0.4.11 - 2026-09-28
 
 - Build platform updates from verified GitHub source on the server, before stopping Core.
