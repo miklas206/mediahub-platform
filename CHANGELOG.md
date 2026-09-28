@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.11 - 2026-09-28
+
+- Build platform updates from verified GitHub source on the server, before stopping Core.
+- Preserve configuration backup and rollback; never include media in the update transaction.
+- Add source-build progress and explicit host capability/trusted repository checks.
+- Provide a one-time migration helper for existing installations; keep image bundles optional for older clients.
+
 ## 0.4.10 - 2026-09-28
 
 - Supersede the v0.4.9 storage-destination release with the repository's
