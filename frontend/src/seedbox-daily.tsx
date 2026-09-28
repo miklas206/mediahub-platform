@@ -19,7 +19,13 @@ type Torrent = {
   category?: string;
   seeding_time?: number;
 };
-type Listing = { items: Torrent[]; storageId: string; limit: number };
+type DownloadLocation = { id: string; label: string };
+type Listing = {
+  items: Torrent[];
+  storageId: string;
+  downloadLocations?: DownloadLocation[];
+  limit: number;
+};
 type Locations = {
   provider: string;
   available: boolean;
@@ -49,16 +55,29 @@ export function SeedboxDaily({
     [locationError, setLocationError] = useState("");
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
+  const [downloadLocationsSupported, setDownloadLocationsSupported] = useState<
+    boolean | null
+  >(null);
   const [country, setCountry] = useState(""),
     [server, setServer] = useState("automatic");
   const [mode, setMode] = useState("magnet"),
     [magnet, setMagnet] = useState(""),
     [file, setFile] = useState<File | null>(null),
-    [start, setStart] = useState(false);
+    [start, setStart] = useState(false),
+    [downloadLocation, setDownloadLocation] = useState("root");
   const reload = useCallback(() => {
     void api<Listing>("/seedbox/torrents")
       .then((v) => {
-        setList(v);
+        setDownloadLocationsSupported(Array.isArray(v.downloadLocations));
+        const downloadLocations = v.downloadLocations?.length
+          ? v.downloadLocations
+          : [{ id: "root", label: "Top folder" }];
+        setList({ ...v, downloadLocations });
+        setDownloadLocation((current) =>
+          downloadLocations.some((item) => item.id === current)
+            ? current
+            : downloadLocations[0]?.id || "root",
+        );
         setListError("");
       })
       .catch(() =>
@@ -120,6 +139,8 @@ export function SeedboxDaily({
         storageId: list.storageId,
         startImmediately: start,
       };
+      if (downloadLocation !== "root")
+        body.downloadLocationId = downloadLocation;
       if (mode === "magnet") body.magnet = magnet;
       else {
         if (
@@ -280,10 +301,26 @@ export function SeedboxDaily({
             )}
             <label>
               Download location
-              <select disabled>
-                <option>MediaHub Storage · Downloads</option>
+              <select
+                value={downloadLocation}
+                disabled={
+                  busy || changing || !(list?.downloadLocations?.length ?? 0)
+                }
+                onChange={(event) => setDownloadLocation(event.target.value)}
+              >
+                {list?.downloadLocations?.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    MediaHub Downloads · {item.label}
+                  </option>
+                ))}
               </select>
             </label>
+            {downloadLocationsSupported === false && (
+              <p className="muted">
+                This Seedbox Agent still supports the Downloads top folder only.
+                Install the matching Agent update to enable folder choices.
+              </p>
+            )}
             <label>
               <input
                 type="checkbox"
@@ -299,8 +336,9 @@ export function SeedboxDaily({
               Add torrent
             </button>
             <p className="muted">
-              Paused by default. Only approved downloads storage is used.
-              Private tracker links are not included in MediaHub events.
+              Paused by default. Only existing folders directly inside the
+              approved Downloads storage can be selected. Private tracker links
+              are not included in MediaHub events.
             </p>
           </form>
         </Panel>

@@ -132,7 +132,7 @@ outside the public source tree (`.qa/` is ignored). Never publish that directory
 
 - [Install](docs/install.md) · [Storage](docs/storage.md) · [Shared storage](docs/shared-storage.md)
 - [Backups](docs/backups.md) · [Certificate lifecycle](docs/certificates.md)
-- [Plex operations](docs/operations/plex-runtime.md) · [Seedbox](docs/apps/seedbox.md)
+- [Plex operations](docs/operations/plex-runtime.md) · [Seedbox](docs/apps/seedbox.md) · [Seedbox daily use](docs/operations/seedbox-daily-use.md)
 - [Platform updates](docs/operations/platform-updates.md)
 - [App Store](docs/app-system/app-store.md) · [Cloudflare Tunnel](docs/operations/cloudflared-monitoring.md)
 - [FjordHub integration](docs/integrations/fjordhub.md) · [Architecture](docs/architecture/README.md)

@@ -42,7 +42,12 @@ import { bytes, uptime } from "./format";
 import { SetupWizard } from "./wizard";
 import { BackupsPage } from "./backups";
 import { UpdatesPage } from "./updates";
-import { AppRuntimePage, RemoteRuntimeLogs } from "./runtime";
+import {
+  AppRuntimePage,
+  DeviceDiagnostics,
+  RemoteRuntimeLogs,
+  type Runtime,
+} from "./runtime";
 import { SeedboxInstallPage } from "./seedbox-install";
 import { PlexInstallPage } from "./plex-install";
 import { SecuritySettings } from "./security";
@@ -361,7 +366,7 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.4.7</span>
+          <span>v0.4.8</span>
         </div>
       </div>
     </main>
@@ -398,7 +403,8 @@ function Shell({
   const [dashboardSections, setDashboardSections] =
     useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
-  const { data: navigationApps } = useData<AppInfo[]>("/apps");
+  const { data: navigationApps, reload: reloadNavigationApps } =
+    useData<AppInfo[]>("/apps");
   const { data: updateSummary, reload: reloadUpdateSummary } = useData<{
     count: number;
   }>("/updates/summary");
@@ -430,16 +436,30 @@ function Shell({
       setMetrics(JSON.parse((event as MessageEvent).data));
       setLive(true);
     });
-    source.addEventListener("app.health.changed", () =>
-      setRevision((n) => n + 1),
-    );
+    source.addEventListener("app.health.changed", () => {
+      setRevision((n) => n + 1);
+      reloadNavigationApps();
+    });
     source.addEventListener("updates.changed", () => reloadUpdateSummary());
     source.addEventListener("session.expired", () => {
       source.close();
       window.dispatchEvent(new Event("session-expired"));
     });
     return () => source.close();
-  }, [reloadUpdateSummary]);
+  }, [reloadNavigationApps, reloadUpdateSummary]);
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) reloadNavigationApps();
+    };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [reloadNavigationApps]);
   const runtimePage = location.pathname.startsWith("/apps/");
   const storePage = location.pathname.startsWith("/store/");
   const title =
@@ -567,7 +587,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.4.7"}</span>
+            <span className="version">v{metrics?.version || "0.4.8"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -694,7 +714,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.4.7"}
+              {metrics?.version || "0.4.8"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>
@@ -1629,6 +1649,39 @@ function MaintenanceCard({
   );
 }
 
+function SeedboxDeviceMaintenance({ appId }: { appId: string }) {
+  const { data, error, reload } = useData<{
+    view: string;
+    report: Runtime;
+  }>(`/apps/${appId}/runtime`);
+  return (
+    <details className="maintenance-device-details">
+      <summary>
+        <span>
+          <strong>Seedbox device diagnostics</strong>
+          <small>
+            Disk identity and mount details for troubleshooting only
+          </small>
+        </span>
+        <ChevronDown size={17} />
+      </summary>
+      <div className="maintenance-device-content">
+        <div className="runtime-toolbar">
+          <p className="muted">
+            These technical details stay hidden during normal daily use.
+          </p>
+          <button type="button" onClick={reload}>
+            <RefreshCw size={15} /> Refresh devices
+          </button>
+        </div>
+        {error && <Notice>{error}</Notice>}
+        {!data && !error && <Loading />}
+        {data?.view === "seedbox" && <DeviceDiagnostics report={data.report} />}
+      </div>
+    </details>
+  );
+}
+
 function MaintenancePage() {
   const core = useData<{ status: string; version: string }>("/health");
   const runtime = useData<AgentStatus>("/runtime");
@@ -1667,6 +1720,9 @@ function MaintenancePage() {
       : "degraded";
   const failure =
     core.error || runtime.error || storage.error || apps.error || "";
+  const seedboxApp = appsData?.find(
+    (app) => app.packageId === "org.mediahub.seedbox",
+  );
 
   const runCheck = async () => {
     const steps: OperationStep[] = [
@@ -1896,6 +1952,7 @@ function MaintenancePage() {
             </p>
           </div>
         </div>
+        {seedboxApp && <SeedboxDeviceMaintenance appId={seedboxApp.id} />}
       </Section>
     </div>
   );

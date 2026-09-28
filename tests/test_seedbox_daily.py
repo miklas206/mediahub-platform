@@ -9,6 +9,7 @@ import pytest
 from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction
 from pydantic import ValidationError
 
+from agent.seedbox_torrents import TorrentService
 from agent.torrent_input import magnet_hash, torrent_hash
 from agent.vpn_locations import LocationService, ProtonLocations
 
@@ -79,6 +80,10 @@ def test_private_inputs_excluded_from_serialization():
     assert "PRIVATE_TOKEN" not in body.model_dump_json()
     assert "PRIVATE_TOKEN" not in repr(body)
     assert "PRIVATE_TOKEN" in body.private_payload()["magnet"]
+    assert "downloadLocationId" not in body.private_payload()
+
+    selected = body.model_copy(update={"downloadLocationId": "folder-" + "b" * 64})
+    assert selected.private_payload()["downloadLocationId"] == "folder-" + "b" * 64
 
 
 @pytest.mark.parametrize(
@@ -134,6 +139,48 @@ def test_no_file_deletion_or_paths_in_action_contract():
         AddTorrent(magnet="test", storageId="downloads", savePath="/etc")
     with pytest.raises(ValidationError):
         TorrentAction(hash="all", action="remove")
+
+
+def test_download_locations_are_opaque_bounded_directories(tmp_path):
+    (tmp_path / "Movies").mkdir()
+    (tmp_path / "TV").mkdir()
+    (tmp_path / ".incomplete").mkdir()
+    (tmp_path / "file.txt").write_text("not a folder")
+    outside = tmp_path.parent / (tmp_path.name + "-outside")
+    outside.mkdir()
+    try:
+        (tmp_path / "linked").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pass
+
+    locations = TorrentService.download_locations(tmp_path)
+    assert [(item["label"], item["savePath"]) for item in locations] == [
+        ("Top folder", "/downloads"),
+        ("Movies", "/downloads/Movies"),
+        ("TV", "/downloads/TV"),
+    ]
+    assert all("/" not in item["id"] for item in locations)
+    assert all(str(tmp_path) not in item["id"] for item in locations)
+
+
+def test_download_location_must_still_exist_and_match_opaque_id(tmp_path):
+    folder = tmp_path / "Movies"
+    folder.mkdir()
+    location = TorrentService.download_locations(tmp_path)[1]
+    assert TorrentService.resolve_download_location(tmp_path, location["id"]) == "/downloads/Movies"
+    folder.rename(tmp_path / "Renamed")
+    with pytest.raises(Exception) as denied:
+        TorrentService.resolve_download_location(tmp_path, location["id"])
+    assert getattr(denied.value, "code", "") == "download_location_denied"
+
+
+def test_download_location_contract_rejects_paths():
+    with pytest.raises(ValidationError):
+        AddTorrent(
+            magnet="magnet:?xt=urn:btih:" + "a" * 40,
+            storageId="downloads",
+            downloadLocationId="../../etc",
+        )
 
 
 def test_proton_profile_only_changes_public_peer():

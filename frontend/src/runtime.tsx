@@ -8,7 +8,7 @@ import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 
-type Runtime = {
+export type Runtime = {
   operation?: { state: string; message?: string };
   plex?: {
     running: boolean;
@@ -171,6 +171,50 @@ function Verified({ value }: { value?: boolean | null }) {
           ? "Not ready"
           : "Not checked"}
     </span>
+  );
+}
+export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
+  return (
+    <div className="runtime-device-diagnostics">
+      <div className="runtime-device-checks">
+        {r.deviceChecks?.map((d) => (
+          <div key={d.id}>
+            <strong>{d.id}</strong>
+            <Verified value={d.connected} />
+            <span>{d.message}</span>
+          </div>
+        ))}
+      </div>
+      <div className="runtime-device-list">
+        {r.deviceInventory
+          ?.filter((d) => d.stableIdentity)
+          .map((d, i) => (
+            <article key={d.stableIdentity || i}>
+              <strong>{d.model || "Block device"}</strong>
+              <span>
+                {size(d.sizeBytes)} · {d.connected ? "Present" : "Missing"} ·{" "}
+                {d.mounted ? "Mounted" : "Unmounted"}
+              </span>
+              <code>{d.stableIdentity}</code>
+              <span>
+                {d.mounts
+                  .map(
+                    (m) =>
+                      `${m.path} (${m.readOnly ? "read-only" : "read/write mount"})`,
+                  )
+                  .join(" · ")}
+              </span>
+            </article>
+          ))}
+      </div>
+      {!r.deviceChecks?.length && !r.deviceInventory?.length && (
+        <p>No device diagnostics were reported by this Agent.</p>
+      )}
+      <p className="muted">
+        Device and mount flags are separate from the app’s actual write
+        permission.
+      </p>
+    </div>
   );
 }
 function SeedboxPanel({ report: r }: { report: Runtime }) {
@@ -372,43 +416,6 @@ function SeedboxPanel({ report: r }: { report: Runtime }) {
           </dl>
         </Panel>
       </div>
-      <Panel title="Device requirements">
-        <div className="runtime-device-checks">
-          {r.deviceChecks?.map((d) => (
-            <div key={d.id}>
-              <strong>{d.id}</strong>
-              <Verified value={d.connected} />
-              <span>{d.message}</span>
-            </div>
-          ))}
-        </div>
-        <div className="runtime-device-list">
-          {r.deviceInventory
-            ?.filter((d) => d.stableIdentity)
-            .map((d, i) => (
-              <article key={d.stableIdentity || i}>
-                <strong>{d.model || "Block device"}</strong>
-                <span>
-                  {size(d.sizeBytes)} · {d.connected ? "Present" : "Missing"} ·{" "}
-                  {d.mounted ? "Mounted" : "Unmounted"}
-                </span>
-                <code>{d.stableIdentity}</code>
-                <span>
-                  {d.mounts
-                    .map(
-                      (m) =>
-                        `${m.path} (${m.readOnly ? "read-only" : "read/write mount"})`,
-                    )
-                    .join(" · ")}
-                </span>
-              </article>
-            ))}
-        </div>
-        <p className="muted">
-          Device and mount flags are separate from the app’s actual write
-          permission.
-        </p>
-      </Panel>
     </div>
   );
 }

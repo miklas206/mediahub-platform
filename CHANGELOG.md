@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.4.8 - 2026-09-28
+
+- Keep sidebar app-health indicators synchronized with the same remote status
+  used by app detail pages through SSE-triggered, focus-triggered and bounded
+  visible-page refreshes.
+- Move Seedbox block-device and mount inventory out of the daily app view into
+  a collapsed troubleshooting section under Settings → Maintenance.
+- Let administrators select the Downloads top folder or an existing direct
+  child folder when adding a torrent. Destination identifiers are opaque and
+  are revalidated by the Agent; arbitrary paths, hidden folders and symlinks
+  remain unavailable.
+
 ## 0.4.7 - 2026-09-25
 
 - Add a dedicated App Store navigation entry with stable, equal-height catalog

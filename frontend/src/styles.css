@@ -711,6 +711,54 @@ nav a.active {
   font-size: 13px;
   margin-bottom: 4px;
 }
+.maintenance-device-details {
+  border-top: 1px solid var(--line);
+}
+.maintenance-device-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 23px;
+  cursor: pointer;
+  list-style: none;
+}
+.maintenance-device-details > summary::-webkit-details-marker {
+  display: none;
+}
+.maintenance-device-details > summary span,
+.maintenance-device-details > summary strong,
+.maintenance-device-details > summary small {
+  display: block;
+}
+.maintenance-device-details > summary small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.maintenance-device-details > summary svg {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+.maintenance-device-details[open] > summary svg {
+  transform: rotate(180deg);
+}
+.maintenance-device-content {
+  padding: 0 23px 23px;
+}
+.maintenance-device-content > .runtime-toolbar {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.maintenance-device-content > .runtime-toolbar p {
+  margin: 0;
+}
+.maintenance-device-content > .runtime-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
 .operation-progress {
   margin: 22px 23px 0;
   overflow: hidden;

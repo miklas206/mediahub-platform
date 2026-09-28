@@ -6,9 +6,15 @@ start/stop/restart, VPN/client restart, verification and metadata-only diagnosti
 Core mutations require an administrator session and CSRF protection.
 
 The live panel displays verified tunnel egress, qBittorrent API/binding/namespace,
-NFS source, app permissions, disk capacity, host resources, device checks and real
-forwarded-port lease state. WebUI access remains a local authenticated SSH tunnel;
-CSRF and Host validation are not disabled.
+NFS source, app permissions, disk capacity, host resources and the real
+forwarded-port lease state. Low-level block-device inventory is kept under the
+collapsed Maintenance diagnostics instead of the daily app view. WebUI access
+remains a local authenticated SSH tunnel; CSRF and Host validation are not
+disabled.
+
+MediaHub can add a magnet or uploaded `.torrent` to the Downloads top folder or
+an existing direct child folder. The browser selects an opaque Agent-issued ID;
+it cannot submit a filesystem path. See [daily-use controls](../operations/seedbox-daily-use.md).
 
 Runtime-only removal retains downloads, encrypted credentials and qBittorrent state.
 Image versions are pinned; a newer version must not be invented from an image tag.
