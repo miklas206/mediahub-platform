@@ -82,6 +82,7 @@ def main():
     parser.add_argument(
         "--device-snapshot", help="Optional existing host-generated metadata file for an LXC"
     )
+    parser.add_argument("--source-repository", help="Trusted GitHub owner/repo for source updates")
     args = parser.parse_args()
     if os.name != "posix" or os.geteuid() != 0:
         raise ValueError("Run on the new Linux Docker host as root")
@@ -90,6 +91,9 @@ def main():
     image_prefix = args.release_image_prefix
     if not re.fullmatch(r"ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+", image_prefix):
         raise ValueError("Release image prefix must be a lowercase GHCR repository")
+    source_repository = args.source_repository or image_prefix.removeprefix("ghcr.io/")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source_repository):
+        raise ValueError("Source repository must be a GitHub owner/repository")
     project_version = tomllib.loads((SOURCE / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
@@ -404,6 +408,7 @@ def main():
             {
                 "coreRepository": image_prefix + "-core",
                 "agentRepository": image_prefix + "-agent",
+                "sourceRepository": source_repository,
             },
             indent=2,
         )
@@ -417,6 +422,7 @@ def main():
         0o700,
     )
     updater_name = "mediahub-platform-update"
+    new_file(root / "updates/host-capabilities.json", '{"sourceBuild": true}\n', 0o644)
     new_file(
         Path("/etc/systemd/system") / (updater_name + ".service"),
         "[Unit]\n"
@@ -434,7 +440,7 @@ def main():
         "ProtectHome=true\n"
         "ProtectSystem=strict\n"
         f"ReadWritePaths={root} /var/run/docker.sock\n"
-        "RestrictAddressFamilies=AF_UNIX\n",
+        "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n",
         0o644,
     )
     new_file(

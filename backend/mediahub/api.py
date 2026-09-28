@@ -233,16 +233,11 @@ async def settings(request: Request, user=Depends(authenticated)):
 async def platform_update(request: Request, user=Depends(authenticated)):
     svc = services(request)
     checked = await svc.updates.check_platform()
-    checked["installReady"] = bool(
-        svc.platform_update.available
-        and checked.get("updateAvailable")
-        and set(checked.get("assets") or {})
-        == {
-            "mediahub-release.json",
-            "mediahub-core-image.tar.gz",
-            "mediahub-agent-image.tar.gz",
-        }
-    )
+    checked["installReady"] = svc.platform_update.ready(checked)
+    if checked.get("updateMethod") == "source" and not svc.platform_update.source_available:
+        checked["message"] = (
+            "Source update found. Enable source-build support on the host updater first."
+        )
     await svc.updates.record_platform(checked)
     return result(checked)
 

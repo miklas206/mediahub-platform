@@ -29,6 +29,39 @@ def test_unconfigured_release_provider_is_offline_and_honest():
     assert data["installReady"] is False
 
 
+def test_source_release_is_preferred_without_downloading_prebuilt_images():
+    repository = "example/mediahub"
+    names = [
+        "mediahub-source-release.json",
+        "mediahub-source.tar.gz",
+        "mediahub-release.json",
+        "mediahub-core-image.tar.gz",
+        "mediahub-agent-image.tar.gz",
+    ]
+    payload = {
+        "tag_name": "v0.5.0",
+        "assets": [asset(repository, "v0.5.0", name, index) for index, name in enumerate(names, 1)],
+    }
+    data = asyncio.run(GitHubReleaseProvider("0.4.10", response(payload)).check(repository))
+    assert data["updateMethod"] == "source"
+    assert set(data["assets"]) == {"mediahub-source-release.json", "mediahub-source.tar.gz"}
+    assert "build it on this server" in data["message"]
+
+
+def test_oversized_source_cannot_be_selected():
+    repository = "example/mediahub"
+    payload = {
+        "tag_name": "v0.5.0",
+        "assets": [
+            asset(repository, "v0.5.0", "mediahub-source-release.json", 1),
+            asset(repository, "v0.5.0", "mediahub-source.tar.gz", 2, 257 * 1024**2),
+        ],
+    }
+    data = asyncio.run(GitHubReleaseProvider("0.4.10", response(payload)).check(repository))
+    assert data["installReady"] is False
+    assert "mediahub-source.tar.gz" not in data["assets"]
+
+
 def test_release_check_requires_digest_identified_manifest():
     payload = {
         "tag_name": "v0.3.0",

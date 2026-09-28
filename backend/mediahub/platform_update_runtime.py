@@ -20,7 +20,14 @@ from mediahub import __version__
 from mediahub.errors import DomainError
 
 IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
-RUNNING = {"downloading", "staged", "installing", "verifying", "rolling_back"}
+RUNNING = {"downloading", "staged", "building", "installing", "verifying", "rolling_back"}
+
+SOURCE_ASSETS = {"mediahub-source-release.json", "mediahub-source.tar.gz"}
+IMAGE_ASSETS = {
+    "mediahub-release.json",
+    "mediahub-core-image.tar.gz",
+    "mediahub-agent-image.tar.gz",
+}
 
 
 class StrictModel(BaseModel):
@@ -57,6 +64,30 @@ class ReleaseManifest(StrictModel):
         return self
 
 
+class SourceBundle(StrictModel):
+    name: Literal["mediahub-source.tar.gz"]
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    repository: str = Field(pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+    commit: str = Field(pattern=r"^[a-f0-9]{40}$")
+
+
+class SourceManifest(StrictModel):
+    schemaVersion: Literal[2]
+    version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    source: SourceBundle
+    updatePolicy: dict[str, bool]
+
+    @model_validator(mode="after")
+    def safe_release(self):
+        if self.updatePolicy != {
+            "transactional": True,
+            "rollbackRequired": True,
+            "mediaIsOutOfScope": True,
+        }:
+            raise ValueError("Release policy is unsafe")
+        return self
+
+
 class PlatformUpdateRuntime:
     def __init__(self, services):
         self.services = services
@@ -83,6 +114,33 @@ class PlatformUpdateRuntime:
     @property
     def available(self):
         return self._available_root() is not None
+
+    @property
+    def source_available(self):
+        if not self.available:
+            return False
+        try:
+            path = self.root / "host-capabilities.json"
+            details = path.lstat()
+            if (
+                not stat.S_ISREG(details.st_mode)
+                or path.is_symlink()
+                or details.st_size > 4096
+                or details.st_uid != 0
+                or details.st_mode & 0o022
+            ):
+                return False
+            return json.loads(path.read_text())["sourceBuild"] is True
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
+    def ready(self, release):
+        names = set(release.get("assets") or {})
+        return bool(
+            self.available
+            and release.get("updateAvailable")
+            and (names == IMAGE_ASSETS or (names == SOURCE_ASSETS and self.source_available))
+        )
 
     def _status_path(self):
         return self.root / "status.json"
@@ -303,31 +361,46 @@ class PlatformUpdateRuntime:
         if not release.get("updateAvailable"):
             raise DomainError("platform_update_not_needed", "MediaHub is already up to date", 409)
         assets = release.get("assets") or {}
-        if set(assets) != {
-            "mediahub-release.json",
-            "mediahub-core-image.tar.gz",
-            "mediahub-agent-image.tar.gz",
-        }:
+        source_mode = set(assets) == SOURCE_ASSETS
+        if set(assets) not in (SOURCE_ASSETS, IMAGE_ASSETS):
             raise DomainError("platform_release_incomplete", "Release assets are incomplete", 409)
+        if source_mode and not self.source_available:
+            raise DomainError(
+                "platform_source_bootstrap_required",
+                "The host updater needs source-build support before this update",
+                409,
+            )
         operation = uuid.uuid4().hex
         target = str(release["latestVersion"])
         steps = [
-            {"id": "download", "label": "Download verified release", "state": "running"},
+            {
+                "id": "download",
+                "label": "Download verified source" if source_mode else "Download verified release",
+                "state": "running",
+            },
             {"id": "backup", "label": "Back up configuration", "state": "pending"},
             {"id": "replace", "label": "Replace Core and Agent", "state": "pending"},
             {"id": "verify", "label": "Verify health or roll back", "state": "pending"},
         ]
+        if source_mode:
+            steps.insert(1, {"id": "build", "label": "Build on this server", "state": "pending"})
         self._write_status(
             "downloading", 5, "Downloading verified release assets", operation, target, steps
         )
-        self.task = asyncio.create_task(self._stage(operation, target, assets, steps))
+        self.task = asyncio.create_task(
+            self._stage(operation, target, assets, steps, release.get("repository"))
+        )
         return self.status()
 
-    async def _stage(self, operation, target, assets, steps):
+    async def _stage(self, operation, target, assets, steps, repository=None):
         stage = self.root / "staging" / operation
         try:
             self._staging_root()
             stage.mkdir(mode=0o700)
+            source_mode = set(assets) == SOURCE_ASSETS
+            manifest_name = (
+                "mediahub-source-release.json" if source_mode else "mediahub-release.json"
+            )
             required = sum(int(asset["size"]) for asset in assets.values()) + 1024**3
             if shutil.disk_usage(self.root).free < required:
                 raise DomainError(
@@ -342,24 +415,34 @@ class PlatformUpdateRuntime:
             ) as client:
                 manifest_digest = await self._download(
                     client,
-                    assets["mediahub-release.json"],
-                    stage / "mediahub-release.json",
+                    assets[manifest_name],
+                    stage / manifest_name,
                     token,
                 )
-                raw = (stage / "mediahub-release.json").read_bytes()
+                raw = (stage / manifest_name).read_bytes()
                 if len(raw) > 1024 * 1024:
                     raise DomainError(
                         "platform_manifest_invalid", "Release manifest is invalid", 502
                     )
-                manifest = ReleaseManifest.model_validate_json(raw)
+                manifest = (SourceManifest if source_mode else ReleaseManifest).model_validate_json(
+                    raw
+                )
+                if source_mode and manifest.source.repository != repository:
+                    raise DomainError(
+                        "platform_source_repository",
+                        "Source repository does not match configured GitHub repository",
+                        502,
+                    )
                 if Version(manifest.version) != Version(target) or Version(target) <= Version(
                     __version__
                 ):
                     raise DomainError(
                         "platform_manifest_invalid", "Release version is invalid", 502
                     )
-                for index, role in enumerate(("core", "agent"), start=1):
-                    bundle = manifest.bundles[role]
+                for index, role in enumerate(
+                    ("source",) if source_mode else ("core", "agent"), start=1
+                ):
+                    bundle = manifest.source if source_mode else manifest.bundles[role]
                     asset = assets[bundle.name]
                     digest = await self._download(client, asset, stage / bundle.name, token)
                     if digest != bundle.sha256:
@@ -375,7 +458,7 @@ class PlatformUpdateRuntime:
                         steps,
                     )
             request = {
-                "schemaVersion": 1,
+                "schemaVersion": 2 if source_mode else 1,
                 "operationId": operation,
                 "fromVersion": __version__,
                 "toVersion": target,

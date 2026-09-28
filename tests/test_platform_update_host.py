@@ -1,5 +1,10 @@
+import hashlib
+import io
 import json
+import tarfile
 from types import SimpleNamespace
+
+import pytest
 
 import scripts.platform_update_host as host_module
 from scripts.platform_update_host import HostUpdater, version_key
@@ -179,3 +184,187 @@ def test_untrusted_image_repository_is_rejected_before_services_stop(tmp_path, m
     assert "before any running service" in status["message"]
     assert not any("stop" in command for command in commands)
     assert (root / "installed-version").read_text(encoding="utf-8") == "0.3.0\n"
+
+
+def source_archive(path, entries=None):
+    entries = entries or {
+        "mediahub-source/pyproject.toml": b'[project]\nversion = "0.4.0"\n',
+        "mediahub-source/docker/Dockerfile": b"FROM scratch\n",
+        "mediahub-source/docker/Agent.Dockerfile": b"FROM scratch\n",
+    }
+    with tarfile.open(path, "w:gz") as archive:
+        for name, data in entries.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+
+
+def source_updater(tmp_path, monkeypatch):
+    updater, root, commands = fixture(tmp_path, monkeypatch)
+    policy = json.loads(updater.policy.read_text())
+    policy["sourceRepository"] = "example/mediahub"
+    updater.policy.write_text(json.dumps(policy))
+    archive = updater.test_stage / "mediahub-source.tar.gz"
+    source_archive(archive)
+    updater.test_request["schemaVersion"] = 2
+    updater.test_manifest = {
+        "schemaVersion": 2,
+        "version": "0.4.0",
+        "source": {
+            "name": archive.name,
+            "repository": "example/mediahub",
+            "commit": "a" * 40,
+            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        },
+        "updatePolicy": {
+            "transactional": True,
+            "rollbackRequired": True,
+            "mediaIsOutOfScope": True,
+        },
+    }
+    monkeypatch.setattr(
+        host_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=50 * 1024**3)
+    )
+    return updater, root, commands
+
+
+def test_source_builds_both_images_before_stopping_and_never_loads_images(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    builds = [index for index, args in enumerate(commands) if args[:2] == ["docker", "build"]]
+    stop = next(index for index, args in enumerate(commands) if "stop" in args)
+    assert len(builds) == 2 and max(builds) < stop
+    assert not any(args[:2] == ["docker", "load"] for args in commands)
+    assert not list(root.glob("source-build-*"))
+
+
+def test_failed_source_build_leaves_running_services_and_config_untouched(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    original = updater.compose.read_bytes()
+    runner = updater.runner
+
+    def fail_build(args, capture=True):
+        if args[:2] == ["docker", "build"]:
+            raise ValueError("simulated failed build")
+        return runner(args, capture)
+
+    updater.runner = fail_build
+    updater.process()
+    assert not any("stop" in args for args in commands)
+    assert updater.compose.read_bytes() == original
+    assert updater.installed_version.read_text().strip() == "0.3.0"
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+    assert not list(root.glob("source-build-*"))
+
+
+def test_source_failed_health_rolls_back(tmp_path, monkeypatch):
+    updater, root, _ = source_updater(tmp_path, monkeypatch)
+    original = updater.compose.read_bytes()
+    wait = updater._wait
+
+    def fail_new(service, health=False, timeout=150):
+        current = json.loads(updater.compose.read_text())
+        if service == "core" and current["services"]["core"]["image"] == "sha256:" + "3" * 64:
+            raise ValueError("new source image unhealthy")
+        return wait(service, health, timeout)
+
+    updater._wait = fail_new
+    updater.process()
+    assert updater.compose.read_bytes() == original
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "rolled_back"
+    assert updater.installed_version.read_text().strip() == "0.3.0"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../escape",
+        "/absolute",
+        "mediahub-source/../../escape",
+        "mediahub-source/a\\b",
+        "other/file",
+    ],
+)
+def test_source_archive_rejects_path_escapes(tmp_path, name):
+    archive = tmp_path / "source.tar.gz"
+    source_archive(archive, {name: b"unsafe"})
+    with pytest.raises(ValueError):
+        HostUpdater._extract_source(archive, tmp_path / "unpacked")
+
+
+@pytest.mark.parametrize(
+    "kind", [tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.CHRTYPE, tarfile.FIFOTYPE]
+)
+def test_source_archive_rejects_links_and_devices(tmp_path, kind):
+    path = tmp_path / "source.tar.gz"
+    with tarfile.open(path, "w:gz") as archive:
+        info = tarfile.TarInfo("mediahub-source/unsafe")
+        info.type = kind
+        info.linkname = "/etc/passwd"
+        archive.addfile(info)
+    with pytest.raises(ValueError):
+        HostUpdater._extract_source(path, tmp_path / "unpacked")
+
+
+def test_source_untrusted_repository_stops_before_build_or_service_changes(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    updater.test_manifest["source"]["repository"] = "attacker/repo"
+    updater.process()
+    assert not any("stop" in args or "build" in args for args in commands)
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+
+
+def test_source_request_is_revalidated_and_claimed_by_host(tmp_path, monkeypatch):
+    updater, root, _ = source_updater(tmp_path, monkeypatch)
+    manifest = updater.test_stage / "mediahub-source-release.json"
+    manifest.write_text(json.dumps(updater.test_manifest))
+    request = {**updater.test_request, "manifestSha256": host_module.sha256(manifest)}
+    request_path = root / "updates/request.json"
+    request_path.write_text(json.dumps(request))
+    actual, actual_manifest, stage = HostUpdater._validate_request(updater)
+    assert actual == request and actual_manifest == updater.test_manifest
+    assert stage == updater.test_stage
+    assert not request_path.exists()
+    assert (root / "updates" / f"running-{OPERATION}.json").exists()
+
+
+def test_source_low_space_does_not_stop_services(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    monkeypatch.setattr(host_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=1024))
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+    assert not any("stop" in args or "build" in args for args in commands)
+
+
+def test_source_archive_rejects_duplicate_files(tmp_path):
+    path = tmp_path / "source.tar.gz"
+    with tarfile.open(path, "w:gz") as archive:
+        for _ in range(2):
+            info = tarfile.TarInfo("mediahub-source/duplicate")
+            info.size = 1
+            archive.addfile(info, io.BytesIO(b"a"))
+    with pytest.raises(ValueError):
+        HostUpdater._extract_source(path, tmp_path / "unpacked")
+
+
+def test_source_build_client_does_not_inherit_host_credentials(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token-must-not-reach-build")
+    monkeypatch.setenv("DOCKER_CONFIG", "/root/secret-registry-config")
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(host_module.subprocess, "run", run)
+    HostUpdater._run(["docker", "build", "--tag", "test:source", str(source)], capture=False)
+    _, options = calls[0]
+    assert options["timeout"] == 1800
+    assert "GITHUB_TOKEN" not in options["env"]
+    assert options["env"]["DOCKER_CONFIG"] == str(tmp_path / "docker-client")
+    assert options["env"]["DOCKER_HOST"] == "unix:///var/run/docker.sock"
+    assert options["stdout"] == host_module.subprocess.DEVNULL
+    assert options["stderr"] == host_module.subprocess.DEVNULL

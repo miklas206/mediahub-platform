@@ -38,6 +38,7 @@ type PlatformRelease = {
   manifest: ReleaseAsset | null;
   assets: Record<string, ReleaseAsset>;
   installReady: boolean;
+  updateMethod?: "source" | "legacy-images";
   privateAccessConfigured: boolean;
   message: string;
 };
@@ -503,7 +504,7 @@ export function UpdatesPage() {
   }
 
   async function waitForPlatformUpdate() {
-    const deadline = Date.now() + 12 * 60 * 1000;
+    const deadline = Date.now() + 75 * 60 * 1000;
     while (Date.now() < deadline) {
       let result: PlatformOperation;
       try {
@@ -549,7 +550,7 @@ export function UpdatesPage() {
     if (
       !release?.latestVersion ||
       !window.confirm(
-        `Install MediaHub ${release.latestVersion}? Core and Agent will restart. Configuration is backed up first, media files are excluded, and the previous version is restored automatically if health verification fails.`,
+        `Install MediaHub ${release.latestVersion}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}Core and the local Agent will then restart. Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
       )
     )
       return;
@@ -677,7 +678,9 @@ export function UpdatesPage() {
             <span>Release source</span>
             <span>
               {release?.installReady
-                ? "Verified GitHub release"
+                ? release.updateMethod === "source"
+                  ? "GitHub source · build locally"
+                  : "Legacy image release"
                 : release?.manifest
                   ? "Manifest verified"
                   : release?.repository || "Choose in Settings"}
@@ -717,8 +720,9 @@ export function UpdatesPage() {
             <summary>Advanced update settings</summary>
             <p className="muted">
               Source: {release?.repository || "Not configured"}. Installation
-              requires a complete digest-verified release and the
-              rollback-protected host updater.
+              {release?.updateMethod === "source"
+                ? "downloads source code and builds Core and the local Agent on this server. Builds may take several minutes and need at least 8 GiB of free system space."
+                : "requires a complete verified release and the rollback-protected host updater."}
             </p>
             <p className="muted">
               {privateAccess.data?.configured

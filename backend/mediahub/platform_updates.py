@@ -1,8 +1,8 @@
 """Read-only GitHub release discovery for MediaHub itself.
 
 The provider never accepts a URL from the browser. It talks only to GitHub's
-fixed API origin and exposes only the three bounded, SHA-256 identified assets
-required by the transactional updater. Applying the release is a separate
+fixed API origin and prefers bounded, SHA-256 identified source assets, retaining
+legacy image discovery for migration. Applying the release is a separate
 host-updater responsibility with its own rollback boundary.
 """
 
@@ -99,6 +99,8 @@ class GitHubReleaseProvider:
         if parsed_release.scheme != "https" or parsed_release.hostname != "github.com":
             release_url = None
         accepted = {
+            "mediahub-source-release.json": 1024 * 1024,
+            "mediahub-source.tar.gz": 256 * 1024**2,
             "mediahub-release.json": 1024 * 1024,
             "mediahub-core-image.tar.gz": 2 * 1024**3,
             "mediahub-agent-image.tar.gz": 2 * 1024**3,
@@ -133,8 +135,19 @@ class GitHubReleaseProvider:
                     "downloadUrl": download_url,
                     "apiUrl": api_url,
                 }
-        manifest = assets.get("mediahub-release.json")
-        complete = set(assets) == set(accepted)
+        source_names = {"mediahub-source-release.json", "mediahub-source.tar.gz"}
+        image_names = {
+            "mediahub-release.json",
+            "mediahub-core-image.tar.gz",
+            "mediahub-agent-image.tar.gz",
+        }
+        source_mode = source_names <= set(assets)
+        selected = source_names if source_mode else image_names
+        assets = {name: value for name, value in assets.items() if name in selected}
+        manifest = assets.get(
+            "mediahub-source-release.json" if source_mode else "mediahub-release.json"
+        )
+        complete = set(assets) == selected
         available = latest > installed
         return {
             **base,
@@ -144,10 +157,13 @@ class GitHubReleaseProvider:
             "publishedAt": payload.get("published_at"),
             "manifest": manifest,
             "assets": assets,
+            "updateMethod": "source" if source_mode else "legacy-images",
             # A host-side transactional updater is deliberately a separate gate.
             "installReady": False,
             "message": (
-                "A newer complete, digest-verified release is available."
+                "New source code is available; MediaHub will build it on this server."
+                if available and complete and source_mode
+                else "A newer complete, digest-verified release is available."
                 if available and complete
                 else "A newer release exists, but one or more verified MediaHub assets are missing."
                 if available

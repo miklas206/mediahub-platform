@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Root-owned transactional MediaHub image updater.
+"""Root-owned transactional MediaHub source/image updater.
 
-The networkless host helper consumes only Core-staged, digest-verified release
+The host helper consumes only Core-staged, digest-verified release
 bundles. It never receives a GitHub token and never traverses media mounts.
+Docker/BuildKit need outbound access to fetch base images and dependencies.
 """
 
 import argparse
@@ -14,9 +15,11 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import time
+import tomllib
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import fcntl
@@ -60,13 +63,28 @@ class HostUpdater:
 
     @staticmethod
     def _run(args, capture=True):
+        source_build = args[:2] == ["docker", "build"]
+        environment = None
+        if source_build:
+            # BuildKit needs writable client state even with ProtectHome enabled.
+            # Do not inherit host registry credentials or pass GitHub tokens.
+            config = Path(args[-1]).parent / "docker-client"
+            config.mkdir(mode=0o700, exist_ok=True)
+            environment = {
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": str(config),
+                "DOCKER_CONFIG": str(config),
+                "BUILDX_CONFIG": str(config / "buildx"),
+                "DOCKER_HOST": "unix:///var/run/docker.sock",
+            }
         result = subprocess.run(
             args,
             check=True,
             text=True,
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
             stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
-            timeout=600,
+            timeout=1800 if source_build else 600,
+            env=environment,
         )
         output = result.stdout or ""
         if len(output) > 65536:
@@ -147,7 +165,10 @@ class HostUpdater:
 
     def _trusted_policy(self):
         value = json.loads(self._trusted_file(self.policy))
-        if set(value) != {"coreRepository", "agentRepository"}:
+        if set(value) not in (
+            {"coreRepository", "agentRepository"},
+            {"coreRepository", "agentRepository", "sourceRepository"},
+        ):
             raise ValueError("Invalid update policy")
         expected = {
             "core": value["coreRepository"],
@@ -160,6 +181,15 @@ class HostUpdater:
         ):
             raise ValueError("Invalid trusted image repository")
         return expected
+
+    def _trusted_source(self):
+        value = json.loads(self._trusted_file(self.policy))
+        repository = value.get("sourceRepository")
+        if not isinstance(repository, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
+        ):
+            raise ValueError("Source builds require an explicit trusted GitHub repository")
+        return repository
 
     def status(self, state, progress, message):
         self._atomic_json(
@@ -205,7 +235,7 @@ class HostUpdater:
             "manifestSha256",
         }:
             raise ValueError("Unexpected update request fields")
-        if request["schemaVersion"] != 1 or not ID.fullmatch(request["operationId"]):
+        if request["schemaVersion"] not in (1, 2) or not ID.fullmatch(request["operationId"]):
             raise ValueError("Invalid update request")
         if not VERSION.fullmatch(request["fromVersion"]) or not VERSION.fullmatch(
             request["toVersion"]
@@ -218,10 +248,18 @@ class HostUpdater:
             raise ValueError("Invalid manifest digest")
         stage = self.updates / "staging" / request["operationId"]
         self._directory(stage, owner=10001)
-        manifest_path = stage / "mediahub-release.json"
+        source_mode = request["schemaVersion"] == 2
+        manifest_path = stage / (
+            "mediahub-source-release.json" if source_mode else "mediahub-release.json"
+        )
         if sha256(manifest_path) != request["manifestSha256"]:
             raise ValueError("Manifest digest mismatch")
         manifest = self._read_json(manifest_path)
+        if source_mode:
+            self._validate_source_manifest(manifest, request, stage)
+            running = self.updates / ("running-" + request["operationId"] + ".json")
+            os.replace(request_path, running)
+            return request, manifest, stage
         if set(manifest) != {
             "schemaVersion",
             "version",
@@ -265,6 +303,129 @@ class HostUpdater:
         running = self.updates / ("running-" + request["operationId"] + ".json")
         os.replace(request_path, running)
         return request, manifest, stage
+
+    def _validate_source_manifest(self, manifest, request, stage):
+        if set(manifest) != {"schemaVersion", "version", "source", "updatePolicy"}:
+            raise ValueError("Unexpected source manifest fields")
+        if manifest["schemaVersion"] != 2 or manifest["version"] != request["toVersion"]:
+            raise ValueError("Source version mismatch")
+        if manifest["updatePolicy"] != {
+            "transactional": True,
+            "rollbackRequired": True,
+            "mediaIsOutOfScope": True,
+        }:
+            raise ValueError("Unsafe source update policy")
+        source = manifest["source"]
+        if not isinstance(source, dict) or set(source) != {
+            "name",
+            "sha256",
+            "repository",
+            "commit",
+        }:
+            raise ValueError("Invalid source metadata")
+        if (
+            source["name"] != "mediahub-source.tar.gz"
+            or source["repository"] != self._trusted_source()
+            or not isinstance(source["commit"], str)
+            or not re.fullmatch(r"[a-f0-9]{40}", source["commit"])
+            or not isinstance(source["sha256"], str)
+            or not re.fullmatch(r"[a-f0-9]{64}", source["sha256"])
+        ):
+            raise ValueError("Untrusted source metadata")
+        path = stage / source["name"]
+        details = path.lstat()
+        if (
+            not stat.S_ISREG(details.st_mode)
+            or path.is_symlink()
+            or details.st_nlink != 1
+            or not 0 < details.st_size <= 256 * 1024**2
+            or sha256(path) != source["sha256"]
+        ):
+            raise ValueError("Source archive verification failed")
+
+    @staticmethod
+    def _extract_source(archive, destination):
+        """Extract regular source files only; no links, devices or path escapes."""
+        destination.mkdir(mode=0o700)
+        total = 0
+        seen = set()
+        with tarfile.open(archive, "r:gz") as bundle:
+            for index, member in enumerate(bundle):
+                path = PurePosixPath(member.name)
+                if (
+                    index >= 50000
+                    or path.is_absolute()
+                    or ".." in path.parts
+                    or "\\" in member.name
+                    or ":" in member.name
+                    or not path.parts
+                    or path.parts[0] != "mediahub-source"
+                    or not (member.isfile() or member.isdir())
+                    or path in seen
+                ):
+                    raise ValueError("Unsafe source archive entry")
+                seen.add(path)
+                if len(path.parts) == 1:
+                    if not member.isdir():
+                        raise ValueError("Invalid source archive root")
+                    continue
+                target = destination.joinpath(*path.parts[1:])
+                if member.isdir():
+                    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    continue
+                total += member.size
+                if member.size < 0 or total > 2 * 1024**3:
+                    raise ValueError("Expanded source exceeds limit")
+                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                with bundle.extractfile(member) as incoming, target.open("xb") as outgoing:
+                    shutil.copyfileobj(incoming, outgoing, length=1024 * 1024)
+                target.chmod(0o700 if member.mode & 0o111 else 0o600)
+
+    def _build_source_images(self, stage, manifest):
+        """Build before stopping services. Never pass credentials or host data to Docker."""
+        if shutil.disk_usage(self.root).free < 8 * 1024**3:
+            raise ValueError("At least 8 GiB of system space is required for source builds")
+        workspace = self.root / ("source-build-" + self.operation)
+        workspace.mkdir(mode=0o700)
+        try:
+            archive = workspace / "source.tar.gz"
+            shutil.copyfile(stage / manifest["source"]["name"], archive)
+            # Recheck the private, root-owned copy, not the mutable Core-owned spool.
+            if sha256(archive) != manifest["source"]["sha256"]:
+                raise ValueError("Source changed while preparing the build")
+            source = workspace / "source"
+            self._extract_source(archive, source)
+            project = tomllib.loads((source / "pyproject.toml").read_text())
+            if project.get("project", {}).get("version") != manifest["version"]:
+                raise ValueError("Source version does not match requested version")
+            images = {}
+            for index, role in enumerate(("core", "agent")):
+                self.status(
+                    "building", 62 + index * 5, f"Building {role} from GitHub source on this server"
+                )
+                dockerfile = "docker/Dockerfile" if role == "core" else "docker/Agent.Dockerfile"
+                if not (source / dockerfile).is_file():
+                    raise ValueError("Source Dockerfile is missing")
+                tag = f"mediahub-{role}:source-{manifest['version']}-{manifest['source']['sha256'][:12]}"
+                self.command(
+                    "docker",
+                    "build",
+                    "--file",
+                    source / dockerfile,
+                    "--tag",
+                    tag,
+                    "--label",
+                    "org.opencontainers.image.revision=" + manifest["source"]["commit"],
+                    source,
+                    capture=False,
+                )
+                image_id = self.command("docker", "image", "inspect", "--format", "{{.Id}}", tag)
+                if not LOADED_IMAGE.fullmatch(image_id):
+                    raise ValueError("Source build did not produce a valid image")
+                images[role] = image_id
+            return images
+        finally:
+            shutil.rmtree(workspace)
 
     def _compose_command(self, *args, capture=True):
         return self.command("docker", "compose", "-f", self.compose, *args, capture=capture)
@@ -368,6 +529,7 @@ class HostUpdater:
                 self.request = request
                 self.operation = request["operationId"]
                 self.target = request["toVersion"]
+                source_mode = manifest.get("schemaVersion") == 2
                 self.steps = [
                     {"id": "download", "label": "Download verified release", "state": "complete"},
                     {"id": "backup", "label": "Back up configuration", "state": "running"},
@@ -379,12 +541,25 @@ class HostUpdater:
                     raise ValueError("Installed version does not match the update request")
                 if version_key(self.target) <= version_key(installed):
                     raise ValueError("Update must move to a newer stable version")
-                trusted_repositories = self._trusted_policy()
-                for role in ("core", "agent"):
-                    repository = manifest["images"][role].partition("@")[0]
-                    if repository != trusted_repositories[role]:
-                        raise ValueError("Release image is outside the trusted repository")
-                self.status("installing", 65, "Stopping control services for a safe snapshot")
+                built_images = None
+                if source_mode:
+                    self._validate_source_manifest(manifest, request, stage)
+                    self.steps[0]["label"] = "Download verified source"
+                    self.steps.insert(
+                        1, {"id": "build", "label": "Build on this server", "state": "running"}
+                    )
+                    self.steps[2]["state"] = "pending"
+                    built_images = self._build_source_images(stage, manifest)
+                    self.steps[1]["state"] = "complete"
+                    self.steps[2]["state"] = "running"
+                else:
+                    trusted_repositories = self._trusted_policy()
+                    for role in ("core", "agent"):
+                        repository = manifest["images"][role].partition("@")[0]
+                        if repository != trusted_repositories[role]:
+                            raise ValueError("Release image is outside the trusted repository")
+                offset = 1 if source_mode else 0
+                self.status("installing", 70, "Stopping control services for a safe snapshot")
                 compose = self._read_json(self.compose, 2 * 1024 * 1024)
                 if compose.get("name") != "mediahub-platform" or set(
                     compose.get("services", {})
@@ -396,24 +571,27 @@ class HostUpdater:
                 backup_destination = self.backups / self.operation
                 self._copy_configuration(backup_destination)
                 backup = backup_destination
-                self.steps[1]["state"] = "complete"
-                self.steps[2]["state"] = "running"
+                self.steps[1 + offset]["state"] = "complete"
+                self.steps[2 + offset]["state"] = "running"
                 self.status("installing", 72, "Loading immutable Core and Agent images")
                 for role in ("core", "agent"):
-                    compose["services"][role]["image"] = self._load_release_image(
-                        role, stage, manifest
+                    compose["services"][role]["image"] = (
+                        built_images[role]
+                        if built_images
+                        else self._load_release_image(role, stage, manifest)
                     )
+                    compose["services"][role].pop("build", None)
                     compose["services"][role]["pull_policy"] = "never"
                 self._atomic_json(self.compose, compose, uid=0, gid=0)
                 self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
                 self._wait("agent")
                 self._compose_command("up", "-d", "--no-deps", "core", capture=False)
-                self.steps[2]["state"] = "complete"
-                self.steps[3]["state"] = "running"
+                self.steps[2 + offset]["state"] = "complete"
+                self.steps[-1]["state"] = "running"
                 self.status("verifying", 90, "Verifying the updated MediaHub services")
                 self._wait("core", health=True)
                 self._atomic_text(self.installed_version, self.target)
-                self.steps[3]["state"] = "complete"
+                self.steps[-1]["state"] = "complete"
                 self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
                 shutil.rmtree(stage)
                 backups = sorted(
@@ -427,7 +605,9 @@ class HostUpdater:
                 if request is None:
                     raise
                 if not services_stopped:
-                    self.steps[1]["state"] = "error"
+                    for step in self.steps:
+                        if step["state"] == "running":
+                            step["state"] = "error"
                     self.status(
                         "failed",
                         100,
@@ -435,7 +615,7 @@ class HostUpdater:
                     )
                     return
                 try:
-                    self.steps[3]["state"] = "running"
+                    self.steps[-1]["state"] = "running"
                     self.status("rolling_back", 95, "Update failed; restoring the previous version")
                     if backup and backup.is_dir():
                         self._restore_configuration(backup)
@@ -444,12 +624,12 @@ class HostUpdater:
                         self._wait("agent")
                         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
                         self._wait("core", health=True)
-                    self.steps[3]["state"] = "complete"
+                    self.steps[-1]["state"] = "complete"
                     self.status(
                         "rolled_back", 100, "Update failed and the previous version was restored"
                     )
                 except Exception:
-                    self.steps[3]["state"] = "error"
+                    self.steps[-1]["state"] = "error"
                     self.status(
                         "failed",
                         100,

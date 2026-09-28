@@ -1,121 +1,121 @@
-# Platform updates from GitHub
+# Platform updates from GitHub source
 
-MediaHub separates release discovery, download verification and privileged host
-mutation. A scheduled check may create a notification, but it never installs
-software. Installation always requires an authenticated administrator action.
+MediaHub downloads **source code** from GitHub and builds Core and the local
+Agent on the user's server. Normal releases no longer build or distribute Docker
+images in GitHub Actions. Like FjordHub, the server builds the software it runs;
+unlike FjordHub's branch tracking, MediaHub still selects numbered stable releases.
+A push to `main` alone is not an update: tag a reviewed, tested version `vX.Y.Z`.
+The tag must match `pyproject.toml`.
 
-## Release discovery and private repositories
+Checks and notifications never install software. Installation requires an
+authenticated administrator action and retains the transactional rollback model.
 
-Core contacts only GitHub's fixed API origin for the configured
-`owner/repository`. It never executes a branch, raw script URL or release notes.
-Public repositories require no credential. A private repository uses a
-repository-scoped, read-only GitHub credential entered over MediaHub HTTPS.
+## Source distribution and private access
 
-Use a fine-grained token restricted to the one repository with **Contents:
-read**. Core stores it in the encrypted release secret store and returns only
-configured/not-configured state. It is never placed in a URL, response, event or
-log. The host updater never receives the token and has no Internet-capable
-address family.
+The release workflow uses `git archive` at the exact tagged commit and an explicit
+tracked source allowlist. Local `.qa`, `.git`, temporary files, untracked secrets,
+server configuration and media are not included. The two update assets are:
 
-Settings offers Off, hourly, 6-hourly, 12-hourly, daily, every three days and
-weekly checks. A successful check stores only version/status metadata. A new
-combination of available versions creates one persistent notification and an
-Updates-menu badge. Repeating the same check does not create duplicate alerts.
+- `mediahub-source-release.json`: schema 2, version, repository, commit and hash.
+- `mediahub-source.tar.gz`: source tree with the `mediahub-source/` prefix.
 
-## Required release assets
+Core talks only to the fixed GitHub API and approved GitHub asset hosts. Each
+asset requires bounded size and GitHub-reported SHA-256 metadata. Both Core and
+the host helper validate the archive hash against the manifest. SHA-256 checks
+prove integrity against those metadata; they are not an independent publisher
+signature. The configured GitHub repository is a software trust boundary.
 
-Tagging a reviewed stable commit as `vX.Y.Z` runs the release workflow. It builds
-and publishes immutable Core and Agent images and attaches exactly these update
-inputs to the GitHub Release:
+Private repositories use a repository-scoped fine-grained token with Contents:
+read, entered over HTTPS and stored encrypted. Tokens are never passed to the
+host helper, Docker builds, URLs, logs or API responses. Redirects never forward
+the Authorization header to asset hosts.
 
-- `mediahub-release.json`
-- `mediahub-core-image.tar.gz`
-- `mediahub-agent-image.tar.gz`
+## Installation sequence
 
-Each asset must have GitHub-reported SHA-256 metadata, a bounded size, an exact
-GitHub repository path and an exact GitHub asset API path. Core streams the
-downloads into its restricted update spool, checks size and digest while
-writing, validates the strict manifest and verifies each bundle again against
-the manifest. Redirects are limited to GitHub's release-asset hosts and the
-repository credential is not forwarded to the asset host.
+1. Download and validate source into the Core-owned update spool.
+2. The root-owned helper checks the explicit `sourceRepository` allowlist and
+   stable version against its installed-version marker.
+3. Copy source into a private root-owned build directory and recheck its hash.
+   Reject links, special devices, duplicate entries, absolute paths, traversal,
+   excessive file counts and oversized expanded archives. Validate source version.
+4. Build Core and local Agent using their Dockerfiles. Current services keep
+   running. The source context contains no host secrets or data mounts. Build
+   output is not sent to the UI/logs; progress identifies each build stage.
+5. Only after both builds succeed, check snapshot capacity, stop Core/local Agent
+   and back up their configuration/state (not media).
+6. Replace their images with the exact locally built image IDs, with pulls disabled.
+7. Start local Agent then Core, check readiness, record the new version.
+8. If replacement/health fails, attempt restoration of the previous images and
+   configuration. A build failure never stops the existing services.
 
-Optional registry attestations may be unavailable for a private user-owned
-repository. They do not replace or weaken the exact digest checks on the offline
-release bundles.
+This does **not** upgrade Agents on other hosts, qBittorrent, Gluetun, Plex or
+cloudflared. Those require their own app/host update workflows. Download storage,
+movies, TV and other media are outside the transaction and rollback paths.
 
-## Privileged host boundary
+## Requirements and resource implications
 
-Core cannot change `compose.json` or talk to the host Docker socket. After all
-unprivileged checks pass, it atomically creates one small `request.json` in the
-spool. A systemd path unit starts the root-owned host helper.
+The host requires Python 3.11+, Docker with working builds, Compose and systemd.
+At least 8 GiB free on the installation filesystem is required before source
+builds, plus configuration snapshot capacity. Docker's own data filesystem also
+needs sufficient free space. Build failure, including insufficient Docker space,
+leaves running services untouched. Builds consume CPU/RAM and can be slower on
+small servers. Each image build is bounded to 30 minutes; the UI observes up to
+75 minutes. The UI timeout does not cancel a host transaction.
 
-The host helper:
+**Docker, BuildKit's client and build containers need outbound access** to fetch
+base images, registry authorization and locked dependencies. The updater unit
+therefore permits AF_UNIX, AF_INET and AF_INET6; no inbound port is opened.
+BuildKit uses temporary client configuration without host registry credentials.
+Source builds are not offline updates. Builds use normal isolated Docker build
+networking, not the host network, privileged mode or mounts of application data.
 
-1. has no network address family and receives no GitHub credential;
-2. revalidates the request, manifest, bundle hashes, file types and bounded paths;
-3. accepts only stable upgrades newer than the root-owned installed-version marker;
-4. accepts only Core and Agent image repositories listed in the root-owned
-   `update-policy.json` created at installation;
-5. checks rollback space, stops only Core and local Agent, and creates a new
-   configuration snapshot outside media storage;
-6. loads the two offline image bundles and verifies that both immutable image
-   digest references exist;
-7. starts Agent first, then Core, and waits for the configured health checks;
-8. records the new trusted version only after health succeeds;
-9. restores the previous compose/configuration automatically if replacement or
-   health verification fails.
+## New and existing installations
 
-Movies, TV, downloads and all other media mounts are outside both backup and
-rollback paths. The helper never formats, moves, deletes or rewrites media. The
-two newest successful configuration snapshots are retained; failed-state
-directories are retained for administrator recovery rather than deleted.
+The new-install script installs the source-capable helper and root-owned
+`updates/host-capabilities.json` automatically. `--source-repository owner/repo`
+can specify a fork; its default is derived from the configured image prefix.
+Changing the UI repository alone does not silently expand root-level trust.
 
-## Runtime files
+Existing installations need a **one-time host-helper migration**, from a reviewed
+checkout containing both scripts:
 
-The standard installation uses these paths beneath the bounded installation
-root (normally `/opt/mediahub`):
-
-```text
-compose.json                         root-owned deployment
-installed-version                   root-owned rollback/downgrade guard
-update-policy.json                  root-owned trusted GHCR repositories
-platform_update_host.py             root-owned networkless helper
-updates/                             Core-owned staging/status spool
-update-backups/                      root-owned configuration snapshots
+```sh
+sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository OWNER/REPOSITORY
 ```
 
-The service units are `mediahub-platform-update.path` and
-`mediahub-platform-update.service`. The service uses `NoNewPrivileges`, a strict
-filesystem view, a private temporary directory, `AF_UNIX` only and write access
-limited to the MediaHub installation root and Docker's Unix socket.
+Use the actual trusted repository in place of `OWNER/REPOSITORY`. This changes
+the root-owned helper, policy, public capability marker and a narrowly named
+systemd drop-in allowing outbound build networking. It reloads unit definitions,
+not running services. It keeps the
+original helper/policy in `*.before-source`, refuses a pending/running update and
+does not restart services. It copies no private keys and changes no firewall,
+SSH, storage, Cloudflare or TLS settings. Core also needs this source-aware
+version before it can submit source requests.
 
-## Failure and recovery
+For the one-time Core transition, the release workflow has an explicit manual
+`legacy_images` option that additionally builds the old schema-1 image bundles.
+Old Core clients can install those bundles using their existing update button.
+New clients prefer source assets and refuse source installation until the host
+capability is present. Normal tagged releases publish source only; there is no
+automatic fallback to unverified source execution.
 
-The Updates card shows download, backup, replacement and verification progress
-inside the MediaHub card. A short browser disconnect is expected while Core is
-replaced; the page reconnects to the same HTTPS address. Terminal states are:
+Bootstrap rollback: with no update active, restore the helper and policy from
+their protected `*.before-source` copies, remove the capability marker and
+`/etc/systemd/system/mediahub-platform-update.service.d/source-build.conf`, then
+run `systemctl daemon-reload`. A
+source-aware Core will then disable source installation. Do not alter media.
 
-- `succeeded`: both services passed health checks and the trusted version moved forward;
-- `rolled_back`: the update failed and the previous deployment was restored;
-- `failed`: the request was rejected before mutation, or update and automatic
-  rollback both require administrator recovery.
+## Progress and failure recovery
 
-Do not delete the newest `update-backups` directory or failed-state directories
-until the installation is confirmed healthy. Never work around a failed release
-by changing the root-owned trust policy to an unrelated image repository.
+The update card reports download, build, backup, replacement and verification.
+Only replacement causes a short Core disconnect. `succeeded` means local health
+checks passed; `rolled_back` means restoration succeeded; `failed` requires
+review of the protected status file. No raw credentials or build output is shown.
+The two newest successful configuration snapshots are retained. Failed-state
+directories remain for administrator recovery. Do not delete recovery state until
+the deployment is confirmed healthy. Docker build cache is not automatically
+pruned, because it may be shared with other applications.
 
-## Existing installations
-
-An installation created before v0.4.0 needs one controlled bootstrap deployment
-to add the spool mount, root-owned trust files and systemd helper. Preserve the
-existing Core database, Agent state, TLS identities, encrypted secrets, storage
-mappings and all media. Once that bootstrap is verified, later complete releases
-can be installed from the MediaHub button without direct host changes.
-
-Digest-exported Docker archives can load by image ID without retaining the
-registry digest as a local reference. MediaHub therefore verifies the complete
-bundle against the trusted release manifest, requires the manifest's image
-repository to match the root-owned allowlist, loads exactly one image, verifies
-its local image ID, and assigns a local tag derived from the release version and
-bundle hash. Compose is set to `pull_policy: never`, so installation remains
-offline and cannot silently substitute a registry image.
+This implementation has automated source/staging/transaction tests. Running those
+tests is not evidence of a real Docker build, deployment or rollback on a server;
+record those separately when the migration is actually executed.

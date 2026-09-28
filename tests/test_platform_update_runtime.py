@@ -58,6 +58,102 @@ def release_fixture():
     }
 
 
+def source_fixture(repository="example/mediahub"):
+    source = b"test-source-archive"
+    manifest = {
+        "schemaVersion": 2,
+        "version": "0.5.0",
+        "source": {
+            "name": "mediahub-source.tar.gz",
+            "sha256": digest(source),
+            "repository": repository,
+            "commit": "a" * 40,
+        },
+        "updatePolicy": {
+            "transactional": True,
+            "rollbackRequired": True,
+            "mediaIsOutOfScope": True,
+        },
+    }
+    contents = {
+        "mediahub-source-release.json": json.dumps(manifest).encode(),
+        "mediahub-source.tar.gz": source,
+    }
+    assets = {
+        name: {
+            "name": name,
+            "size": len(value),
+            "digest": "sha256:" + digest(value),
+            "apiUrl": f"https://api.github.com/repos/example/mediahub/releases/assets/{index}",
+        }
+        for index, (name, value) in enumerate(contents.items(), 1)
+    }
+    return contents, {
+        "updateAvailable": True,
+        "latestVersion": "0.5.0",
+        "repository": "example/mediahub",
+        "assets": assets,
+    }
+
+
+def test_source_requires_upgraded_host_and_stages_only_source(tmp_path, monkeypatch):
+    contents, release = source_fixture()
+    requested = []
+
+    def handler(request):
+        name = list(contents)[int(request.url.path.rsplit("/", 1)[1]) - 1]
+        requested.append(name)
+        return httpx.Response(200, content=contents[name])
+
+    updater, spool = runtime(tmp_path, monkeypatch, handler)
+    assert not updater.ready(release)
+    with pytest.raises(DomainError, match="source-build support"):
+        asyncio.run(updater.install(release))
+    monkeypatch.setattr(PlatformUpdateRuntime, "source_available", property(lambda self: True))
+    assert updater.ready(release)
+
+    async def stage():
+        await updater.install(release)
+        await updater.task
+
+    asyncio.run(stage())
+    assert updater.status()["state"] == "staged"
+    assert requested == list(contents)
+    request = json.loads((spool / "request.json").read_text())
+    assert request["schemaVersion"] == 2
+    assert [step["id"] for step in updater.status()["steps"]] == [
+        "download",
+        "build",
+        "backup",
+        "replace",
+        "verify",
+    ]
+    for path in spool.rglob("*"):
+        if path.is_file():
+            assert b"github_pat_" not in path.read_bytes()
+
+
+@pytest.mark.parametrize("wrong_repository,tamper", [(True, False), (False, True)])
+def test_source_rejects_wrong_repository_or_digest(tmp_path, monkeypatch, wrong_repository, tamper):
+    contents, release = source_fixture("attacker/repo" if wrong_repository else "example/mediahub")
+
+    def handler(request):
+        name = list(contents)[int(request.url.path.rsplit("/", 1)[1]) - 1]
+        value = b"tampered" if tamper and name.endswith("tar.gz") else contents[name]
+        return httpx.Response(200, content=value)
+
+    updater, spool = runtime(tmp_path, monkeypatch, handler)
+    monkeypatch.setattr(PlatformUpdateRuntime, "source_available", property(lambda self: True))
+
+    async def stage():
+        await updater.install(release)
+        await updater.task
+
+    asyncio.run(stage())
+    assert updater.status()["state"] == "failed"
+    assert not (spool / "request.json").exists()
+
+
 def runtime(tmp_path, monkeypatch, handler, token="github_pat_test_read_only_123456789"):
     spool = tmp_path / "updates"
     spool.mkdir(mode=0o700)

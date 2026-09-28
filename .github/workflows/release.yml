@@ -3,6 +3,16 @@ name: MediaHub release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable version tag to publish
+        required: true
+        type: string
+      legacy_images:
+        description: Also build old image bundles for a one-time migration
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -11,11 +21,36 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
+  source:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - name: Package tracked source, not prebuilt images
+        run: python scripts/source_release.py --repository "$GITHUB_REPOSITORY" --commit "$(git rev-parse HEAD)" --version "$RELEASE_TAG"
+      - name: Publish source release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes
+          gh release upload "$RELEASE_TAG" mediahub-source-release.json mediahub-source.tar.gz --clobber
+
+  legacy-images:
+    # Normal releases publish source without waiting for prebuilt Docker images.
+    if: github.event_name == 'workflow_dispatch' && inputs.legacy_images
+    needs: source
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out reviewed source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Resolve lowercase image names
         id: names
@@ -36,7 +71,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          tags: ${{ steps.names.outputs.base }}-core:${{ github.ref_name }}
+          tags: ${{ steps.names.outputs.base }}-core:${{ env.RELEASE_TAG }}
 
       - name: Build and publish Agent
         id: agent
@@ -45,7 +80,7 @@ jobs:
           context: .
           file: docker/Agent.Dockerfile
           push: true
-          tags: ${{ steps.names.outputs.base }}-agent:${{ github.ref_name }}
+          tags: ${{ steps.names.outputs.base }}-agent:${{ env.RELEASE_TAG }}
 
       - name: Attest Core image
         # GitHub may reject registry attestations for private packages depending on
@@ -83,7 +118,7 @@ jobs:
         shell: bash
         run: |
           python scripts/release_manifest.py \
-            --version "${GITHUB_REF_NAME}" \
+            --version "$RELEASE_TAG" \
             --core "${{ steps.names.outputs.base }}-core@${{ steps.core.outputs.digest }}" \
             --agent "${{ steps.names.outputs.base }}-agent@${{ steps.agent.outputs.digest }}" \
             --core-bundle mediahub-core-image.tar.gz \
@@ -95,9 +130,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
-          gh release upload "$GITHUB_REF_NAME" \
+          gh release upload "$RELEASE_TAG" \
             mediahub-release.json \
             mediahub-core-image.tar.gz \
             mediahub-agent-image.tar.gz \
