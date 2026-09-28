@@ -366,7 +366,7 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.4.9</span>
+          <span>v0.4.10</span>
         </div>
       </div>
     </main>
@@ -587,7 +587,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.4.9"}</span>
+            <span className="version">v{metrics?.version || "0.4.10"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -714,7 +714,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.4.9"}
+              {metrics?.version || "0.4.10"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>

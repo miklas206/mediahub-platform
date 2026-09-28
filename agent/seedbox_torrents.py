@@ -124,7 +124,8 @@ class TorrentService:
             roots.append(
                 {
                     "logicalId": mapping.logicalId,
-                    "storageLabel": mapping.displayName or mapping.logicalId.replace("-", " ").title(),
+                    "storageLabel": mapping.displayName
+                    or mapping.logicalId.replace("-", " ").title(),
                     "root": Path(mapping.source),
                     "saveRoot": PurePosixPath(mapping.target),
                     "primary": False,

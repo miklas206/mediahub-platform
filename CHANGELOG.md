@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.10 - 2026-09-28
+
+- Supersede the v0.4.9 storage-destination release with the repository's
+  canonical Python formatting so the full GitHub CI gate passes unchanged.
+
 ## 0.4.9 - 2026-09-28
 
 - Allow Seedbox administrators to choose among explicitly approved writable
