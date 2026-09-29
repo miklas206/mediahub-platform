@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.16 - 2026-09-29
+
+- Cache Python dependencies before copying application source, reusing the same dependency layer between Core and Agent builds.
+- Fetch frontend packages from the lockfile before copying the versioned package manifest; install offline so version-only releases do not repeat package downloads.
+- Preserve the existing verified-source, backup, preflight and rollback update workflow. The first build warms the new cache; later builds benefit while dependencies and the base image remain unchanged.
+
 ## 0.4.15 - 2026-09-29
 
 - Use tus-js-client for browser uploads with 5 MiB chunks and automatic offset recovery.
