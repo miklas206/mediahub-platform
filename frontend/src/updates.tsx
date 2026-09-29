@@ -469,21 +469,24 @@ export function UpdatesPage() {
     );
     setBusy("all-check");
     setError("");
+    setNotice("");
     task.steps[0].state = "running";
     task.publish(10, "running", "Checking MediaHub and installed apps…");
     try {
       const result = await api<UpdateSummary>("/updates/check", "POST");
-      task.steps[0].state = "complete";
+      task.steps[0].state = result.lastError ? "error" : "complete";
       task.steps[1].state = "complete";
       task.steps[2].state = "complete";
       task.details.push(`${result.items.length} update sources checked`);
       task.details.push(`${result.count} verified updates available`);
       task.publish(
         100,
-        "success",
-        result.count
-          ? `${result.count} update${result.count === 1 ? " is" : "s are"} available.`
-          : "Everything checked is up to date.",
+        result.lastError ? "error" : "success",
+        result.lastError
+          ? `Update check incomplete: ${result.lastError}`
+          : result.count
+            ? `${result.count} update${result.count === 1 ? " is" : "s are"} available.`
+            : "Everything checked is up to date.",
       );
       const reported: Record<string, string> = {};
       for (const item of result.items) {
@@ -491,10 +494,16 @@ export function UpdatesPage() {
           reported[item.id] = item.latestVersion;
       }
       setLatest((current) => ({ ...current, ...reported }));
+      if (result.lastError)
+        setError(`Update check incomplete: ${result.lastError}`);
       setNotice(
-        result.count
-          ? `${result.count} verified update${result.count === 1 ? " is" : "s are"} available.`
-          : "Everything is up to date.",
+        result.lastError
+          ? result.count
+            ? `${result.count} verified update${result.count === 1 ? "" : "s"} found; other sources could not be checked.`
+            : ""
+          : result.count
+            ? `${result.count} verified update${result.count === 1 ? " is" : "s are"} available.`
+            : "Everything is up to date.",
       );
       updateSummary.reload();
       platformRelease.reload();
