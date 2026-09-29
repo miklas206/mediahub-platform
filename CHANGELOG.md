@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.19 - 2026-09-29
+
+- Accept files and whole folders dropped directly onto the existing Media files panel, preserving nested paths and mixed selections.
+- Keep the Upload menu's Files and Folder choices, existing 5 MiB tus transfers and Stop controls.
+- Highlight the drop target, block overlapping uploads and prevent accidental file navigation. Read all directory batches and report unreadable or oversized selections before uploading.
+
 ## 0.4.18 - 2026-09-29
 
 - Reuse the frontend build across backend-only releases: read the displayed version from Core and exclude package release metadata from Docker build inputs.

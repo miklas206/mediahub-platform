@@ -1398,6 +1398,21 @@ button.primary:hover:not(:disabled) {
 .media-upload-picker {
   position: relative;
 }
+.media-drop-area {
+  min-width: 0;
+  border-radius: 12px;
+}
+.media-drop-area.drag-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}
+.media-drop-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.drag-active .media-drop-hint {
+  color: var(--accent);
+}
 .media-upload-choices {
   position: absolute;
   top: calc(100% + 6px);

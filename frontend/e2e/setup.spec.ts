@@ -204,6 +204,37 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       .getByRole("button", { name: "Parent folder", exact: true })
       .click();
 
+    const dropData = await page.evaluateHandle(() => {
+      const data = new DataTransfer();
+      data.items.add(
+        new File(["Dropped file content"], "dropped.txt", {
+          type: "text/plain",
+        }),
+      );
+      return data;
+    });
+    const dropArea = page.locator(".media-drop-area");
+    await expect(
+      page.getByRole("button", { name: "Upload", exact: true }),
+    ).toBeEnabled();
+    await dropArea.dispatchEvent("dragover", { dataTransfer: dropData });
+    await expect(dropArea).toHaveClass(/drag-active/);
+    await page.screenshot({
+      path: "../.qa/upload-drop-desktop.png",
+      fullPage: true,
+    });
+    await dropArea.dispatchEvent("drop", { dataTransfer: dropData });
+    await expect(
+      page.getByText("1 of 1 files uploaded", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator(".media-file-list")
+        .getByText("dropped.txt", { exact: true }),
+    ).toBeVisible();
+    await expect(dropArea).not.toHaveClass(/drag-active/);
+    await dropData.dispose();
+
     let releaseChunk!: () => void;
     let chunkEntered!: () => void;
     const entered = new Promise<void>((resolve) => {
@@ -340,7 +371,9 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   await page.getByLabel("Logical name", { exact: true }).fill("downloads");
   await page.getByLabel("Underlying dataset reference").fill("qa-dataset");
   await page.getByRole("button", { name: "Register dataset" }).click();
-  await expect(page.getByRole("status")).toContainText("Metadata saved");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Metadata saved" }),
+  ).toBeVisible();
   await page
     .getByRole("combobox", { name: "Logical storage", exact: true })
     .selectOption({ label: "downloads" });

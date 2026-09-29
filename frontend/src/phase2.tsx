@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
   type ReactNode,
+  type DragEvent,
 } from "react";
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { api, uploadMediaFile } from "./api";
+import { droppedMediaFiles, type MediaUploadFile } from "./media-drop";
 import { Link } from "react-router-dom";
 import { bytes } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
@@ -565,6 +567,9 @@ export function MediaFiles() {
     }[]
   >([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const dropReader = useRef<AbortController | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [readingDrop, setReadingDrop] = useState(false);
   const folderInput = useRef<HTMLInputElement>(null);
   const uploadPicker = useRef<HTMLDivElement>(null);
   const uploadButton = useRef<HTMLButtonElement>(null);
@@ -593,15 +598,24 @@ export function MediaFiles() {
   useEffect(() => {
     const controllers = uploadControllers.current;
     const warn = (event: BeforeUnloadEvent) => {
-      if (controllers.size) event.preventDefault();
+      if (controllers.size || dropReader.current) event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
+    const preventFileNavigation = (event: globalThis.DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    window.addEventListener("dragover", preventFileNavigation);
+    window.addEventListener("drop", preventFileNavigation);
     return () => {
       window.removeEventListener("beforeunload", warn);
+      window.removeEventListener("dragover", preventFileNavigation);
+      window.removeEventListener("drop", preventFileNavigation);
+      dropReader.current?.abort();
       controllers.forEach((controller) => controller.abort());
     };
   }, []);
   const stopUpload = (id?: string) => {
+    if (!id) dropReader.current?.abort();
     uploadControllers.current.forEach((controller, key) => {
       if (!id || key === id) controller.abort();
     });
@@ -650,20 +664,20 @@ export function MediaFiles() {
   const selectedLocation = available.find((item) => item.id === locationId);
 
   const uploadFiles = useCallback(
-    async (files: FileList | null, folder = false) => {
-      if (!files?.length || !listing || uploadControllers.current.size) return;
-      const selected = Array.from(files);
+    async (selected: MediaUploadFile[]) => {
+      if (!selected.length || !listing || uploadControllers.current.size)
+        return;
       if (selected.length > 10000) {
         setError("Choose a folder with at most 10,000 files per upload.");
         return;
       }
       setUploading(true);
       setError("");
-      const queue = selected.map((file) => ({
+      const queue = selected.map(({ file, relativePath }) => ({
         id: crypto.randomUUID(),
         file,
         controller: new AbortController(),
-        name: folder ? file.webkitRelativePath : file.name,
+        name: relativePath,
       }));
       queue.forEach((item) =>
         uploadControllers.current.set(item.id, item.controller),
@@ -678,7 +692,7 @@ export function MediaFiles() {
       );
       const directories = new Map<string, string>();
       try {
-        for (const { id, file, controller } of queue) {
+        for (const { id, file, controller, name } of queue) {
           const signal = controller.signal;
           try {
             signal.throwIfAborted();
@@ -688,8 +702,8 @@ export function MediaFiles() {
               ),
             );
             let destination = listing.path;
-            if (folder) {
-              const parts = file.webkitRelativePath.split("/");
+            if (name !== file.name) {
+              const parts = name.split("/");
               if (
                 parts.length < 2 ||
                 parts.pop() !== file.name ||
@@ -764,223 +778,294 @@ export function MediaFiles() {
     [listing, locationId, open],
   );
 
+  const canUpload =
+    !!listing && !!selectedLocation?.writable && !loading && !uploading;
+  const drop = async (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setDragActive(false);
+    if (!canUpload || dropReader.current || uploadControllers.current.size)
+      return;
+    const controller = new AbortController();
+    dropReader.current = controller;
+    setUploading(true);
+    setReadingDrop(true);
+    setUploadChoicesOpen(false);
+    setError("");
+    try {
+      const selected = await droppedMediaFiles(
+        event.dataTransfer,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
+      setReadingDrop(false);
+      if (!selected.length)
+        setError("No files found. Empty folders are not uploaded.");
+      else await uploadFiles(selected);
+    } catch (caught) {
+      if (!controller.signal.aborted) setError((caught as Error).message);
+    } finally {
+      dropReader.current = null;
+      setReadingDrop(false);
+      setUploading(false);
+    }
+  };
+
   return (
-    <Panel title="Media files">
-      <p className="muted">
-        Browse the folders Plex and Seedbox use, and securely upload files or
-        folders from this device. Existing files cannot be overwritten, moved or
-        deleted here.
-      </p>
-      <ErrorBox error={locations.error || error} />
-      {!locations.data ? (
-        <p>Loading media locations…</p>
-      ) : available.length === 0 ? (
-        <div className="empty">
-          <Folder size={28} />
-          <h3>No media folders registered</h3>
-          <p>Add a Movies, TV or Downloads storage location first.</p>
-        </div>
-      ) : (
-        <>
-          <div className="media-browser-toolbar">
-            <label>
-              Media location
-              <select
-                value={locationId}
-                disabled={uploading}
-                onChange={(event) => setLocationId(event.target.value)}
-              >
-                {available.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="media-browser-actions">
-              <button
-                disabled={!listing?.parent || loading || uploading}
-                onClick={() =>
-                  listing?.parent && open(locationId, listing.parent)
-                }
-              >
-                <ArrowLeft size={16} /> Parent folder
-              </button>
-              <button
-                aria-label="Refresh media files"
-                disabled={loading}
-                onClick={() => open(locationId, listing?.path)}
-              >
-                <RefreshCw className={loading ? "spin" : ""} size={16} />
-                Refresh
-              </button>
-              <input
-                aria-label="Choose files to upload"
-                className="visually-hidden"
-                multiple
-                onChange={(event) => uploadFiles(event.target.files)}
-                ref={fileInput}
-                type="file"
-              />
-              <input
-                aria-label="Choose folder to upload"
-                className="visually-hidden"
-                type="file"
-                multiple
-                {...{ webkitdirectory: "" }}
-                ref={folderInput}
-                onChange={(event) => uploadFiles(event.target.files, true)}
-              />
-              <div
-                className="media-upload-picker"
-                ref={uploadPicker}
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget))
-                    setUploadChoicesOpen(false);
-                }}
-              >
-                <button
-                  className="primary"
-                  ref={uploadButton}
-                  aria-expanded={uploadChoicesOpen}
-                  aria-controls="media-upload-choices"
-                  disabled={
-                    !listing ||
-                    !selectedLocation?.writable ||
-                    loading ||
-                    uploading
-                  }
-                  onClick={() => setUploadChoicesOpen((open) => !open)}
-                >
-                  <Upload size={16} /> Upload
-                </button>
-                {uploadChoicesOpen && (
-                  <div
-                    className="media-upload-choices"
-                    id="media-upload-choices"
-                    role="group"
-                    aria-label="Upload options"
-                  >
-                    <button
-                      onClick={() => {
-                        setUploadChoicesOpen(false);
-                        uploadButton.current?.focus();
-                        fileInput.current?.click();
-                      }}
-                    >
-                      <FileText size={16} /> Files
-                    </button>
-                    <button
-                      onClick={() => {
-                        setUploadChoicesOpen(false);
-                        uploadButton.current?.focus();
-                        folderInput.current?.click();
-                      }}
-                    >
-                      <Folder size={16} /> Folder
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+    <div
+      className={`media-drop-area${dragActive ? " drag-active" : ""}`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = canUpload ? "copy" : "none";
+        setDragActive(canUpload);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setDragActive(false);
+      }}
+      onDrop={drop}
+    >
+      <Panel title="Media files">
+        <p className="muted">
+          Browse the folders Plex and Seedbox use, and securely upload files or
+          folders from this device. Existing files cannot be overwritten, moved
+          or deleted here.
+        </p>
+        <p className="media-drop-hint" role="status">
+          {readingDrop
+            ? "Reading files and folders…"
+            : dragActive
+              ? "Drop here to upload to the current folder"
+              : "Drag files or folders anywhere into this panel to upload to the current folder."}
+        </p>
+        <ErrorBox error={locations.error || error} />
+        {!locations.data ? (
+          <p>Loading media locations…</p>
+        ) : available.length === 0 ? (
+          <div className="empty">
+            <Folder size={28} />
+            <h3>No media folders registered</h3>
+            <p>Add a Movies, TV or Downloads storage location first.</p>
           </div>
-          {uploads.length > 0 && (
-            <div className="media-upload-list" aria-live="polite">
-              <div className="media-upload-summary">
-                <span>
-                  {uploads.filter((item) => item.state === "complete").length}{" "}
-                  of {uploads.length} files uploaded
-                </span>
-                {uploading && (
-                  <button onClick={() => stopUpload()}>Stop all</button>
-                )}
-              </div>
-              <p className="muted">
-                Folders keep their structure. Empty folders are not included.
-                Keep this page open; stopping keeps completed files.
-              </p>
-              {uploads.map((item) => (
-                <div
-                  className={`media-upload-item ${item.state}`}
-                  key={item.id}
+        ) : (
+          <>
+            <div className="media-browser-toolbar">
+              <label>
+                Media location
+                <select
+                  value={locationId}
+                  disabled={uploading}
+                  onChange={(event) => setLocationId(event.target.value)}
                 >
-                  <div>
-                    <strong>{item.name}</strong>
-                    <small>
-                      {item.state === "complete"
-                        ? "Upload complete"
-                        : item.state === "error"
-                          ? item.message
-                          : item.state === "queued"
-                            ? "Waiting"
-                            : item.state === "stopped"
-                              ? "Stopped"
-                              : item.state === "stopping"
-                                ? "Stopping and cleaning up..."
-                                : `${item.progress}% uploaded`}
-                    </small>
-                  </div>
-                  <div className="media-upload-progress">
-                    <span style={{ width: `${item.progress}%` }} />
-                  </div>
-                  {["queued", "uploading", "stopping"].includes(item.state) && (
-                    <button
-                      aria-label={`Stop upload ${item.name}`}
-                      disabled={item.state === "stopping"}
-                      onClick={() => stopUpload(item.id)}
+                  {available.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="media-browser-actions">
+                <button
+                  disabled={!listing?.parent || loading || uploading}
+                  onClick={() =>
+                    listing?.parent && open(locationId, listing.parent)
+                  }
+                >
+                  <ArrowLeft size={16} /> Parent folder
+                </button>
+                <button
+                  aria-label="Refresh media files"
+                  disabled={loading}
+                  onClick={() => open(locationId, listing?.path)}
+                >
+                  <RefreshCw className={loading ? "spin" : ""} size={16} />
+                  Refresh
+                </button>
+                <input
+                  aria-label="Choose files to upload"
+                  className="visually-hidden"
+                  multiple
+                  onChange={(event) =>
+                    uploadFiles(
+                      Array.from(event.target.files || [], (file) => ({
+                        file,
+                        relativePath: file.name,
+                      })),
+                    )
+                  }
+                  ref={fileInput}
+                  type="file"
+                />
+                <input
+                  aria-label="Choose folder to upload"
+                  className="visually-hidden"
+                  type="file"
+                  multiple
+                  {...{ webkitdirectory: "" }}
+                  ref={folderInput}
+                  onChange={(event) =>
+                    uploadFiles(
+                      Array.from(event.target.files || [], (file) => ({
+                        file,
+                        relativePath: file.webkitRelativePath,
+                      })),
+                    )
+                  }
+                />
+                <div
+                  className="media-upload-picker"
+                  ref={uploadPicker}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                      setUploadChoicesOpen(false);
+                  }}
+                >
+                  <button
+                    className="primary"
+                    ref={uploadButton}
+                    aria-expanded={uploadChoicesOpen}
+                    aria-controls="media-upload-choices"
+                    disabled={
+                      !listing ||
+                      !selectedLocation?.writable ||
+                      loading ||
+                      uploading
+                    }
+                    onClick={() => setUploadChoicesOpen((open) => !open)}
+                  >
+                    <Upload size={16} /> Upload
+                  </button>
+                  {uploadChoicesOpen && (
+                    <div
+                      className="media-upload-choices"
+                      id="media-upload-choices"
+                      role="group"
+                      aria-label="Upload options"
                     >
-                      {item.state === "stopping" ? "Stopping..." : "Stop"}
-                    </button>
+                      <button
+                        onClick={() => {
+                          setUploadChoicesOpen(false);
+                          uploadButton.current?.focus();
+                          fileInput.current?.click();
+                        }}
+                      >
+                        <FileText size={16} /> Files
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUploadChoicesOpen(false);
+                          uploadButton.current?.focus();
+                          folderInput.current?.click();
+                        }}
+                      >
+                        <Folder size={16} /> Folder
+                      </button>
+                    </div>
                   )}
                 </div>
-              ))}
+              </div>
             </div>
-          )}
-          <div className="media-path">
-            <Folder size={16} />
-            <span>{relative}</span>
-          </div>
-          <div className="media-file-list" aria-busy={loading}>
-            {listing?.items.map((item) => (
-              <button
-                className="media-file-row"
-                disabled={item.type === "file" || uploading}
-                key={item.path}
-                onClick={() =>
-                  item.type === "folder" && open(locationId, item.path)
-                }
-              >
-                {item.type === "folder" ? (
-                  <Folder size={19} />
-                ) : (
-                  <FileText size={19} />
-                )}
-                <span>
-                  <strong>{item.name}</strong>
-                  <small>
-                    {item.type === "folder"
-                      ? `${item.sizeComplete ? "" : "At least "}${bytes(item.sizeBytes)} · Folder`
-                      : `${bytes(item.sizeBytes)} · ${new Date(
-                          item.modifiedAt * 1000,
-                        ).toLocaleDateString()}`}
-                  </small>
-                </span>
-              </button>
-            ))}
-            {!loading && listing?.items.length === 0 && (
-              <p className="muted">This folder is empty.</p>
+            {uploads.length > 0 && (
+              <div className="media-upload-list" aria-live="polite">
+                <div className="media-upload-summary">
+                  <span>
+                    {uploads.filter((item) => item.state === "complete").length}{" "}
+                    of {uploads.length} files uploaded
+                  </span>
+                  {uploading && (
+                    <button onClick={() => stopUpload()}>Stop all</button>
+                  )}
+                </div>
+                <p className="muted">
+                  Folders keep their structure. Empty folders are not included.
+                  Keep this page open; stopping keeps completed files.
+                </p>
+                {uploads.map((item) => (
+                  <div
+                    className={`media-upload-item ${item.state}`}
+                    key={item.id}
+                  >
+                    <div>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {item.state === "complete"
+                          ? "Upload complete"
+                          : item.state === "error"
+                            ? item.message
+                            : item.state === "queued"
+                              ? "Waiting"
+                              : item.state === "stopped"
+                                ? "Stopped"
+                                : item.state === "stopping"
+                                  ? "Stopping and cleaning up..."
+                                  : `${item.progress}% uploaded`}
+                      </small>
+                    </div>
+                    <div className="media-upload-progress">
+                      <span style={{ width: `${item.progress}%` }} />
+                    </div>
+                    {["queued", "uploading", "stopping"].includes(
+                      item.state,
+                    ) && (
+                      <button
+                        aria-label={`Stop upload ${item.name}`}
+                        disabled={item.state === "stopping"}
+                        onClick={() => stopUpload(item.id)}
+                      >
+                        {item.state === "stopping" ? "Stopping..." : "Stop"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-            {loading && <p className="muted">Reading folder…</p>}
-          </div>
-          {listing?.truncated && (
-            <p className="muted">
-              Showing the first 500 entries. Open a subfolder to narrow the
-              list.
-            </p>
-          )}
-        </>
-      )}
-    </Panel>
+            <div className="media-path">
+              <Folder size={16} />
+              <span>{relative}</span>
+            </div>
+            <div className="media-file-list" aria-busy={loading}>
+              {listing?.items.map((item) => (
+                <button
+                  className="media-file-row"
+                  disabled={item.type === "file" || uploading}
+                  key={item.path}
+                  onClick={() =>
+                    item.type === "folder" && open(locationId, item.path)
+                  }
+                >
+                  {item.type === "folder" ? (
+                    <Folder size={19} />
+                  ) : (
+                    <FileText size={19} />
+                  )}
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.type === "folder"
+                        ? `${item.sizeComplete ? "" : "At least "}${bytes(item.sizeBytes)} · Folder`
+                        : `${bytes(item.sizeBytes)} · ${new Date(
+                            item.modifiedAt * 1000,
+                          ).toLocaleDateString()}`}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {!loading && listing?.items.length === 0 && (
+                <p className="muted">This folder is empty.</p>
+              )}
+              {loading && <p className="muted">Reading folder…</p>}
+            </div>
+            {listing?.truncated && (
+              <p className="muted">
+                Showing the first 500 entries. Open a subfolder to narrow the
+                list.
+              </p>
+            )}
+          </>
+        )}
+      </Panel>
+    </div>
   );
 }
 
