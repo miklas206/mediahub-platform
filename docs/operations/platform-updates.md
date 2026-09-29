@@ -109,7 +109,7 @@ source-aware Core will then disable source installation. Do not alter media.
 
 ## Progress and failure recovery
 
-### Incremental builds (0.4.18)
+### Automatic fast updates and incremental builds
 
 Routine releases reuse Docker layers for unchanged inputs. Python runs directly
 from the copied application source with dependencies from `requirements.lock`;
@@ -118,17 +118,41 @@ package manifest without its release version, and the UI reads the installed
 version from Core. A backend-only release therefore reuses the frontend bundle.
 Changes to dependencies or build recipes still invalidate the affected layers.
 
-The new host helper fingerprints Agent inputs and records the result in the
-root-owned `agent-build-cache.json` only after successful health checks. It ignores
-frontend files, the Core Dockerfile and distribution-version-only changes. Shared
-backend code, Agent code, dependencies and the Agent recipe remain inputs. The
-Agent Dockerfile must not depend on frontend files or the Core Dockerfile; expand
-the fingerprint inputs if that build contract ever changes.
+The host helper fingerprints Agent inputs and records the result in the
+root-owned `agent-build-cache.json` only after successful health checks. It reads
+the Agent Dockerfile's local `COPY`/`ADD` inputs, including complete copied
+directories, the recipe itself and Docker ignore files. Frontend, app-catalog and
+Core-only changes therefore do not rebuild Agent unless its recipe actually
+copies those files. Shared backend code, Agent code and dependencies remain
+inputs. Distribution-version-only changes are ignored for Agent.
+
+The update page advertises **Automatic fast update** when the installed host
+helper supports it. After verifying and extracting the release, the helper chooses
+**Fast update** when Agent's inputs and immutable image match the last successful
+update and that image is actually running. Only Core is built and replaced; Agent
+continues running. Core still builds to publish the new release version, and
+Docker automatically reuses unchanged layers, including the frontend bundle.
+Progress and console output identify the selected mode and the reason.
+
+Missing or invalid cache evidence, a stopped or mismatched Agent, or changed Agent
+inputs selects **Full update**. Unsupported recipe constructs (such as wildcard
+sources, build-context mounts, build-stage copies or custom syntax) also select a
+full build, rather than guessing which files matter. Both modes retain the usual
+release verification, configuration snapshot, health checks and rollback. Neither
+mode prunes Docker objects or changes media files.
 If the fingerprint and the installed immutable image match, the Agent remains
 running and only Core is built, snapshotted and replaced. Missing, invalid or
 mismatched cache evidence causes a normal full build. The first update with the
 new helper establishes the baseline. An unchanged Agent can report an older
 distribution version because its executable code has not changed.
+
+**Enabling automatic mode on existing hosts:** install the host helper from the
+same reviewed checkout as this feature using the migration command below. The
+command also publishes the root-owned `automaticFastUpdate` capability. Updating
+Core alone does not upgrade that helper, so the UI indicates when a refresh is
+needed. The revised fingerprint intentionally establishes a new baseline: the
+first update is full; later eligible updates automatically use fast mode. New
+Linux installations advertise this capability immediately.
 
 **Existing hosts:** Core updates do not replace the root-owned host helper. From
 a reviewed checkout of v0.4.18 or newer, run the existing migration command once

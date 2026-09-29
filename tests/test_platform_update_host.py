@@ -123,6 +123,8 @@ def fixture(tmp_path, monkeypatch, fail_new_core=False, image_repository=CORE_RE
         if args[:3] == ["docker", "compose", "-f"] and "ps" in args:
             return "container-" + args[-1]
         if args[:2] == ["docker", "inspect"]:
+            if args[3] == "{{.Image}}":
+                return "sha256:" + "4" * 64
             return "healthy" if "Health" in args[3] else "true"
         if args[:2] == ["docker", "load"]:
             role = "core" if "core" in str(args[-1]) else "agent"
@@ -288,6 +290,7 @@ def test_source_builds_both_images_before_stopping_and_never_loads_images(tmp_pa
     assert len(builds) == 2 and max(builds) < stop
     assert not any(args[:2] == ["docker", "load"] for args in commands)
     assert not list(root.glob("source-build-*"))
+    assert json.loads((root / "updates/status.json").read_text())["updateMode"] == "full"
 
 
 def cached_source_updater(tmp_path, monkeypatch):
@@ -320,6 +323,11 @@ def test_unchanged_agent_is_not_built_stopped_recreated_or_snapshotted(tmp_path,
     backup = root / "update-backups" / OPERATION
     assert (backup / "data/mediahub.db").is_file()
     assert not (backup / "agent").exists()
+    status = json.loads((root / "updates/status.json").read_text())
+    assert status["updateMode"] == "fast"
+    assert status["changedServices"] == ["core"]
+    assert "only Core" in status["updateReason"]
+    assert any(step["label"] == "Fast update: build Core only" for step in status["steps"])
 
 
 @pytest.mark.parametrize("invalid", ["corrupt", "changed", "different-image", "missing-image"])
@@ -374,6 +382,79 @@ def test_core_only_rollback_preserves_running_agent_state(tmp_path, monkeypatch)
     assert not any("agent" in args and ("up" in args or "stop" in args) for args in commands)
 
 
+@pytest.mark.parametrize("drift", ["running-image", "stopped", "missing-container"])
+def test_fast_update_requires_the_verified_agent_to_be_running(tmp_path, monkeypatch, drift):
+    updater, root, commands = cached_source_updater(tmp_path, monkeypatch)
+    runner = updater.runner
+
+    def drifted(args, capture=True):
+        if drift == "missing-container" and args[:2] == ["docker", "compose"] and "ps" in args:
+            return ""
+        if args[:2] == ["docker", "inspect"]:
+            if drift == "running-image" and args[3] == "{{.Image}}":
+                return "sha256:" + "9" * 64
+            if drift == "stopped" and args[3] == "{{.State.Running}}":
+                return "false"
+        return runner(args, capture)
+
+    updater.runner = drifted
+    updater._wait = lambda *args, **kwargs: None
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["updateMode"] == "full"
+    assert len([args for args in commands if args[:2] == ["docker", "build"]]) == 2
+
+
+@pytest.mark.parametrize(
+    "copy", ["COPY agent/ ./agent/", 'COPY ["agent/", "./agent/"]', "COPY\tagent/ ./agent/"]
+)
+def test_agent_fingerprint_follows_recipe_inputs_including_new_directories(tmp_path, copy):
+    (tmp_path / "docker").mkdir()
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "apps").mkdir()
+    (tmp_path / "agent/main.py").write_text("agent = 1")
+    app = tmp_path / "apps/catalog.json"
+    app.write_text("old")
+    recipe = tmp_path / "docker/Agent.Dockerfile"
+    recipe.write_text("FROM python\n" + copy + "\n")
+    baseline = HostUpdater._agent_fingerprint(tmp_path)
+    assert baseline is not None
+    app.write_text("new")
+    assert HostUpdater._agent_fingerprint(tmp_path) == baseline
+    recipe.write_text(recipe.read_text() + "COPY apps/ ./apps/\n")
+    with_apps = HostUpdater._agent_fingerprint(tmp_path)
+    assert with_apps != baseline
+    app.write_text("newer")
+    assert HostUpdater._agent_fingerprint(tmp_path) != with_apps
+    before_directory = HostUpdater._agent_fingerprint(tmp_path)
+    (tmp_path / "agent/empty").mkdir()
+    assert HostUpdater._agent_fingerprint(tmp_path) != before_directory
+    before_ignore = HostUpdater._agent_fingerprint(tmp_path)
+    (tmp_path / ".dockerignore").write_text("agent/empty\n")
+    assert HostUpdater._agent_fingerprint(tmp_path) != before_ignore
+
+
+@pytest.mark.parametrize(
+    "recipe",
+    [
+        "COPY $INPUT /app/",
+        "COPY *.py /app/",
+        "COPY --from=builder /output /app/",
+        "RUN --mount=type=bind,target=/src build",
+        "ONBUILD COPY . /app/",
+        "COPY missing /app/",
+        "COPY ../outside /app/",
+        "ADD https://example.com/code /app/",
+        "# escape=`\nCOPY agent /app/",
+        "COPY <<EOF /app/code\nexample\nEOF",
+    ],
+)
+def test_unknown_agent_recipe_disables_fast_reuse(tmp_path, recipe):
+    (tmp_path / "docker").mkdir()
+    (tmp_path / "docker/Agent.Dockerfile").write_text("FROM python\n" + recipe + "\n")
+    assert HostUpdater._agent_fingerprint(tmp_path) is None
+    assert HostUpdater(tmp_path)._reusable_agent(None) is None
+
+
 def test_agent_fingerprint_ignores_ui_and_release_version_but_tracks_runtime(tmp_path):
     source = tmp_path / "source"
     for name in ("frontend", "backend/mediahub", "agent", "docker"):
@@ -384,7 +465,7 @@ def test_agent_fingerprint_ignores_ui_and_release_version_but_tracks_runtime(tmp
         "backend/mediahub/api.py": "shared = 1\n",
         "agent/main.py": "agent = 1\n",
         "requirements.lock": "dependency==1\n",
-        "docker/Agent.Dockerfile": "FROM python\n",
+        "docker/Agent.Dockerfile": "FROM python\nCOPY pyproject.toml requirements.lock ./\nCOPY backend/ ./backend/\nCOPY agent/ ./agent/\n",
         "frontend/package.json": '{"version":"0.4.17"}',
         "frontend/ui.tsx": "old UI",
         "docker/Dockerfile": "old Core recipe",

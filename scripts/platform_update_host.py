@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -66,6 +67,8 @@ class HostUpdater:
         self.log_lines = []
         self.last_status = None
         self.private_log_block = False
+        self.update_mode = None
+        self.update_reason = None
 
     @staticmethod
     def _run(args, capture=True, on_output=None):
@@ -291,6 +294,9 @@ class HostUpdater:
                 "toVersion": self.target,
                 "steps": self.steps,
                 "logs": self.log_lines,
+                "updateMode": self.update_mode,
+                "updateReason": self.update_reason,
+                "changedServices": list(self.changed_roles) if self.update_mode else [],
                 "updatedAt": time.time(),
             },
         )
@@ -477,15 +483,65 @@ class HostUpdater:
 
     @staticmethod
     def _agent_fingerprint(source):
-        """Conservative source identity; only UI and release-only metadata are ignored."""
-        digest = hashlib.sha256(b"mediahub-agent-inputs-v1\0")
-        for path in sorted(source.rglob("*")):
-            if not path.is_file():
+        """Fingerprint actual Agent build inputs; unknown recipes require a full build.
+
+        Core always builds with Docker's layer cache to publish the new release
+        version. Agent can remain running when its COPY/ADD inputs are unchanged.
+        Derive inputs from the recipe so adding a new copied directory cannot
+        silently leave the Agent on stale code.
+        """
+        recipe = source / "docker/Agent.Dockerfile"
+        try:
+            lines = recipe.read_text(encoding="utf-8").replace("\\\n", " ").splitlines()
+        except (OSError, UnicodeError):
+            return None
+        inputs = {recipe}
+        for name in (".dockerignore", "docker/Agent.Dockerfile.dockerignore"):
+            if (source / name).is_file():
+                inputs.add(source / name)
+        for line in lines:
+            line = line.strip()
+            if re.match(r"#\s*(escape|syntax)\s*=", line, re.IGNORECASE):
+                return None
+            if not line or line.startswith("#"):
                 continue
+            words = line.split(None, 1)
+            instruction = words[0]
+            arguments = words[1] if len(words) == 2 else ""
+            # Alternate syntax, build-context mounts and ONBUILD can introduce
+            # inputs this deliberately small parser cannot safely determine.
+            if "--mount" in line or "<<" in line or instruction.upper() == "ONBUILD":
+                return None
+            if instruction.upper() not in {"COPY", "ADD"}:
+                continue
+            if arguments.startswith("--"):
+                return None
+            try:
+                parts = (
+                    json.loads(arguments) if arguments.startswith("[") else shlex.split(arguments)
+                )
+            except (ValueError, TypeError):
+                return None
+            if not isinstance(parts, list) or len(parts) < 2:
+                return None
+            for value in parts[:-1]:
+                if not isinstance(value, str) or re.search(r"[\\$*?\[\]:]", value):
+                    return None
+                relative = PurePosixPath(value)
+                if relative.is_absolute() or ".." in relative.parts:
+                    return None
+                path = source / relative
+                if not path.exists():
+                    return None
+                if path.is_dir():
+                    inputs.add(path)
+                    inputs.update(path.rglob("*"))
+                else:
+                    inputs.add(path)
+        digest = hashlib.sha256(b"mediahub-agent-inputs-v2\0")
+        for path in sorted(inputs):
             relative = path.relative_to(source).as_posix()
-            if relative.startswith("frontend/") or relative == "docker/Dockerfile":
-                continue
-            content = path.read_bytes()
+            content = path.read_bytes() if path.is_file() else b""
             if relative == "pyproject.toml":
                 content = re.sub(
                     rb'(?m)^version = "[0-9]+\.[0-9]+\.[0-9]+"\r?$', b'version = "release"', content
@@ -497,6 +553,7 @@ class HostUpdater:
                     content,
                 )
             digest.update(relative.encode() + b"\0")
+            digest.update(b"file\0" if path.is_file() else b"directory\0")
             digest.update(str(path.stat().st_mode & 0o111).encode() + b"\0")
             digest.update(hashlib.sha256(content).digest())
         return digest.hexdigest()
@@ -504,6 +561,8 @@ class HostUpdater:
     def _reusable_agent(self, fingerprint):
         # Only trust an identity recorded by this root-owned helper after health
         # verification, bound to the currently configured immutable image.
+        if fingerprint is None:
+            return None
         try:
             cache = json.loads(self._trusted_file(self.root / "agent-build-cache.json"))
             image = cache["agentImage"]
@@ -516,7 +575,17 @@ class HostUpdater:
                 and self.command("docker", "image", "inspect", "--format", "{{.Id}}", image)
                 == image
             ):
-                return image
+                container = self._compose_command("ps", "-q", "agent")
+                if (
+                    container
+                    and self.command("docker", "inspect", "--format", "{{.Image}}", container)
+                    == image
+                    and self.command(
+                        "docker", "inspect", "--format", "{{.State.Running}}", container
+                    )
+                    == "true"
+                ):
+                    return image
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
             pass
         return None
@@ -541,6 +610,28 @@ class HostUpdater:
             images = {}
             fingerprint = self._agent_fingerprint(source)
             reusable_agent = self._reusable_agent(fingerprint)
+            self.changed_roles = ("core",) if reusable_agent else ("core", "agent")
+            self.update_mode = "fast" if reusable_agent else "full"
+            self.update_reason = (
+                "Agent build inputs are unchanged; only Core needs rebuilding."
+                if reusable_agent
+                else "Agent inputs changed or no verified reusable Agent image is available."
+            )
+            if fingerprint is None:
+                self.update_reason = (
+                    "Agent build inputs could not be determined; rebuilding both services."
+                )
+            self.status(
+                "building",
+                61,
+                ("Fast update selected. " if reusable_agent else "Full update selected. ")
+                + self.update_reason,
+            )
+            for step in self.steps:
+                if step["id"] == "build":
+                    step["label"] = (
+                        "Fast update: build Core only" if reusable_agent else "Build Core and Agent"
+                    )
             for index, role in enumerate(("core", "agent")):
                 if role == "agent" and reusable_agent:
                     images[role] = reusable_agent
@@ -598,7 +689,6 @@ class HostUpdater:
                     capture=False,
                 )
                 images[role] = image_id
-            self.changed_roles = ("core",) if reusable_agent else ("core", "agent")
             self.pending_build_cache = {
                 "agentFingerprint": fingerprint,
                 "agentImage": images["agent"],

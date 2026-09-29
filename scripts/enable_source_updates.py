@@ -59,7 +59,9 @@ def enable(root, repository):
         updater.command("systemctl", "daemon-reload", capture=False)
         # Advertise only after helper and explicit trust are installed. Public metadata only.
         capabilities = updater.updates / "host-capabilities.json"
-        updater._atomic_json(capabilities, {"sourceBuild": True}, uid=0, gid=0)
+        updater._atomic_json(
+            capabilities, {"sourceBuild": True, "automaticFastUpdate": True}, uid=0, gid=0
+        )
         capabilities.chmod(0o644)
     print("Source-build updater enabled. No services restarted and no media changed.")
 

@@ -234,6 +234,9 @@ async def platform_update(request: Request, user=Depends(authenticated)):
     svc = services(request)
     checked = await svc.updates.check_platform()
     checked["installReady"] = svc.platform_update.ready(checked)
+    checked["fastUpdateAvailable"] = (
+        checked.get("updateMethod") == "source" and svc.platform_update.fast_available
+    )
     if checked.get("updateMethod") == "source" and not svc.platform_update.source_available:
         checked["message"] = (
             "Source update found. Enable source-build support on the host updater first."

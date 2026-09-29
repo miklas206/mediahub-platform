@@ -422,7 +422,11 @@ def main():
         0o700,
     )
     updater_name = "mediahub-platform-update"
-    new_file(root / "updates/host-capabilities.json", '{"sourceBuild": true}\n', 0o644)
+    new_file(
+        root / "updates/host-capabilities.json",
+        '{"sourceBuild": true, "automaticFastUpdate": true}\n',
+        0o644,
+    )
     new_file(
         Path("/etc/systemd/system") / (updater_name + ".service"),
         "[Unit]\n"
