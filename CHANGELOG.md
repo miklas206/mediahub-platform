@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.27 - 2026-09-30
+
+- Label update progress and steps as last received while Core is unreachable, and show a separate reconnecting indicator instead of animating a stale build step.
+- Explain the possible service-restart pause without claiming the unseen server state; restore live progress when status polling succeeds.
+
 ## 0.4.26 - 2026-09-30
 
 - Run the Agent image with UID 10001 and primary media GID 1000 so mergerfs writes do not depend on resolving Docker supplementary groups.

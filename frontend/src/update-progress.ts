@@ -19,6 +19,7 @@ export function mergeUpdateConsole(
 export function disconnectedUpdate(previous: OperationState): OperationState {
   return mergeUpdateConsole(previous, {
     ...previous,
+    connectionLost: true,
     message:
       "Connection interrupted. Keeping the last update status while reconnecting…",
     console: [

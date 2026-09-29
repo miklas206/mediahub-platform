@@ -16,6 +16,8 @@ it("keeps build steps, percentage and console through repeated disconnects", () 
   const disconnected = disconnectedUpdate(disconnectedUpdate(building));
   expect(disconnected.steps).toEqual(building.steps);
   expect(disconnected.progress).toBe(62);
+  expect(disconnected.connectionLost).toBe(true);
+  expect(disconnected.message).toContain("reconnect");
   expect(disconnected.details).toEqual(building.details);
   expect(disconnected.console).toHaveLength(2);
   const recovered = mergeUpdateConsole(disconnected, {
@@ -25,6 +27,7 @@ it("keeps build steps, percentage and console through repeated disconnects", () 
   });
   expect(recovered.console).toHaveLength(3);
   expect(recovered.progress).toBe(67);
+  expect(recovered.connectionLost).toBeUndefined();
 });
 
 it("shows status messages from older helpers and bounds and redacts history", () => {

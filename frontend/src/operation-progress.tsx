@@ -22,6 +22,7 @@ export type OperationState = {
   steps: OperationStep[];
   details: string[];
   console?: string[];
+  connectionLost?: boolean;
 };
 
 export function redactOperationDetail(value: string) {
@@ -75,14 +76,46 @@ export function OperationProgress({
         aria-label={operation.title}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={progress}
+        aria-valuenow={operation.connectionLost ? undefined : progress}
+        aria-valuetext={
+          operation.connectionLost
+            ? `Last known progress: ${progress}%. Waiting for connection.`
+            : undefined
+        }
       >
         <span style={{ width: `${progress}%` }} />
       </div>
-      <ol className="operation-steps">
+      {operation.connectionLost && (
+        <p className="muted">
+          <LoaderCircle className="spin" size={14} aria-hidden="true" />{" "}
+          Reconnecting ? {progress}% and the steps below are the last received
+          status.
+        </p>
+      )}
+      <ol
+        className="operation-steps"
+        aria-label={
+          operation.connectionLost
+            ? "Last received update steps"
+            : "Update steps"
+        }
+      >
         {operation.steps.map((step, index) => (
-          <li className={step.state} key={`${step.label}-${index}`}>
-            <StepIcon state={step.state} />
+          <li
+            className={
+              operation.connectionLost && step.state === "running"
+                ? "pending"
+                : step.state
+            }
+            key={`${step.label}-${index}`}
+          >
+            <StepIcon
+              state={
+                operation.connectionLost && step.state === "running"
+                  ? "pending"
+                  : step.state
+              }
+            />
             <span>{step.label}</span>
           </li>
         ))}
