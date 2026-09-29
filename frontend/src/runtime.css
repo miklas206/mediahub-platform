@@ -484,6 +484,7 @@
 }
 .store-form-grid label {
   min-width: 0;
+  align-content: start;
 }
 .install-command-block {
   overflow-x: auto;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.4.23 - 2026-09-29
+
+- Align FjordHub guide inputs at the top of each form row so Timezone does not stretch or shift downward when adjacent fields have helper text.
+
 ## 0.4.22 - 2026-09-29
 
 - Fix Linux folder creation and resumable uploads through search-only ancestor directories by using O_PATH with O_DIRECTORY/O_NOFOLLOW instead of requiring read permission on every ancestor.
