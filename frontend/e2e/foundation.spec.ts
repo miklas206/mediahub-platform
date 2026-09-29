@@ -53,6 +53,47 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   );
   expect(updated).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/store/fjordhub");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByLabel("Installation target")).toHaveValue("lxc");
+  await page
+    .getByLabel("Container ID (empty = next free ID)", { exact: true })
+    .fill("210");
+  await page
+    .getByLabel("Container disk storage", { exact: true })
+    .fill("ssd-test");
+  await page.getByLabel("Direct FjordHub port").fill("9090");
+  await page.getByLabel("Network configuration").selectOption("static");
+  await expect(
+    page.getByRole("button", { name: "Continue", exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel("IPv4 address/prefix").fill("192.168.1.50/24");
+  await page.getByLabel("IPv4 gateway").fill("192.168.1.1");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const generated = page.getByLabel("FjordHub installation commands");
+  await expect(generated).toContainText("pct create");
+  await expect(generated).toContainText("CTID='210'");
+  await expect(generated).toContainText("STORAGE='ssd-test'");
+  await expect(generated).toContainText("ip=192.168.1.50/24,gw=192.168.1.1");
+  await expect(generated).toContainText("APP_PORT='9090'");
+  await page.screenshot({
+    path: "../.qa/fjordhub-commands-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: "../.qa/fjordhub-commands-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
   await page.screenshot({
     path: "../.qa/dashboard-desktop.png",
     fullPage: true,

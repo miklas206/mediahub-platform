@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.21 - 2026-09-29
+
+- Generate copyable/downloadable FjordHub setup commands for a new unprivileged Debian 13 Proxmox LXC or an existing Debian host.
+- Configure container ID, storage, separate data disk, CPU/RAM, bridge, DHCP/static IPv4, application paths, port and timezone from the guide.
+- Generate a private session secret on the target and write the selected `.env` values automatically. Refuse occupied IDs and existing installations; never run provisioning from MediaHub.
+
 ## 0.4.20 - 2026-09-29
 
 - Preserve actual update steps, progress and console history across temporary connection failures instead of replacing them with a fixed 82% fallback that omits Build.

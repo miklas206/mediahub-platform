@@ -13,6 +13,12 @@ import {
 import { CloudflareSetupManager } from "./cloudflare-setup";
 import { IntegrationsPage } from "./integrations";
 import { CatalogPage, Panel } from "./phase2";
+import {
+  defaultFjordHubConfig,
+  fjordHubCommands,
+  fjordHubErrors,
+  type FjordHubConfig,
+} from "./fjordhub-commands";
 
 export function AppStorePage() {
   return (
@@ -87,32 +93,49 @@ export function CloudflareStorePage() {
 type FjordHubMode = "new" | "existing";
 
 const fjordHubSteps = ["Deployment", "Storage & ports", "Install", "Connect"];
-const linuxPath = /^\/[A-Za-z0-9._/-]+$/;
 
 export function FjordHubStorePage() {
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<FjordHubMode>("new");
-  const [installPath, setInstallPath] = useState("/opt/fjordhub");
-  const [dataPath, setDataPath] = useState("/srv/mediahub/appdata/fjordhub");
-  const [appPort, setAppPort] = useState("8888");
-  const [timezone, setTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  );
-  const validPaths = linuxPath.test(installPath) && linuxPath.test(dataPath);
-  const validPort = /^\d{2,5}$/.test(appPort) && Number(appPort) <= 65535;
-  const installCommands = useMemo(
-    () =>
-      [
-        `git clone --depth 1 https://github.com/qlerup/fjordhub.git ${installPath}`,
-        `cd ${installPath}`,
-        "cp .env.example .env",
-        "openssl rand -hex 32  # copy this result to SECRET_KEY in .env",
-        "docker compose up -d --build",
-      ].join("\n"),
-    [installPath],
-  );
-  const canContinue =
-    step === 0 || step === 3 || (step === 1 ? validPaths && validPort : true);
+  const [config, setConfig] = useState<FjordHubConfig>({
+    ...defaultFjordHubConfig,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  });
+  const { installPath, dataPath, appPort, timezone } = config;
+  const field = (key: keyof FjordHubConfig, value: string) =>
+    setConfig((current) => ({ ...current, [key]: value }));
+  const errors = fjordHubErrors(config);
+  const [copyMessage, setCopyMessage] = useState("");
+  const installCommands = useMemo(() => {
+    try {
+      return fjordHubCommands(config);
+    } catch {
+      return "";
+    }
+  }, [config]);
+  const canContinue = step !== 1 || errors.length === 0;
+  const copyCommands = async () => {
+    try {
+      await navigator.clipboard.writeText(installCommands);
+      setCopyMessage(
+        "Commands copied. Run them yourself on the indicated host.",
+      );
+    } catch {
+      setCopyMessage(
+        "Clipboard unavailable. Select the commands below or download the script.",
+      );
+    }
+  };
+  const downloadCommands = () => {
+    const url = URL.createObjectURL(
+      new Blob([installCommands + "\n"], { type: "text/x-shellscript" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "mediahub-fjordhub-setup.sh";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   return (
     <div className="stack store-install-page">
@@ -185,12 +208,89 @@ export function FjordHubStorePage() {
           <div className="assisted-step">
             <p className="eyebrow">STEP 2 · STORAGE & PORTS</p>
             <h3>Choose paths that survive container replacement</h3>
+            <label>
+              Installation target
+              <select
+                value={config.target}
+                onChange={(event) => field("target", event.target.value)}
+              >
+                <option value="lxc">Create a new Proxmox LXC</option>
+                <option value="linux">Use an existing Debian host</option>
+              </select>
+            </label>
+            {config.target === "lxc" && (
+              <>
+                <p className="muted">
+                  Debian 13, unprivileged LXC with Docker nesting. Storage names
+                  and bridge are defaults, not detected from your server. Use{" "}
+                  <code>pvesm status</code> and <code>ip link show</code> in the
+                  Proxmox shell to check them.
+                </p>
+                <div className="store-form-grid">
+                  {(
+                    [
+                      ["ctid", "Container ID (empty = next free ID)"],
+                      ["hostname", "Container hostname"],
+                      ["templateStorage", "Template storage"],
+                      ["storage", "Container disk storage"],
+                      ["bridge", "Network bridge"],
+                      ["cores", "CPU cores"],
+                      ["memory", "Memory (MiB)"],
+                      ["disk", "System disk (GiB)"],
+                      ["dataDisk", "App-data disk (GiB)"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        value={config[key]}
+                        onChange={(event) => field(key, event.target.value)}
+                      />
+                    </label>
+                  ))}
+                  <label>
+                    Network configuration
+                    <select
+                      value={config.network}
+                      onChange={(event) => field("network", event.target.value)}
+                    >
+                      <option value="dhcp">DHCP</option>
+                      <option value="static">Static IPv4</option>
+                    </select>
+                  </label>
+                  {config.network === "static" && (
+                    <>
+                      <label>
+                        IPv4 address/prefix
+                        <input
+                          placeholder="192.168.1.50/24"
+                          value={config.address}
+                          onChange={(event) =>
+                            field("address", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        IPv4 gateway
+                        <input
+                          placeholder="192.168.1.1"
+                          value={config.gateway}
+                          onChange={(event) =>
+                            field("gateway", event.target.value)
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
             <div className="store-form-grid">
               <label>
                 FjordHub source path
                 <input
                   value={installPath}
-                  onChange={(event) => setInstallPath(event.target.value)}
+                  onChange={(event) => field("installPath", event.target.value)}
                 />
                 <small>
                   Dedicated folder for the Git checkout and Compose file.
@@ -200,10 +300,11 @@ export function FjordHubStorePage() {
                 Persistent app-data path
                 <input
                   value={dataPath}
-                  onChange={(event) => setDataPath(event.target.value)}
+                  onChange={(event) => field("dataPath", event.target.value)}
                 />
                 <small>
-                  Use a writable MediaHub appdata mapping, not an OS root disk.
+                  Path inside the guest. LXC mode creates a separate managed
+                  data disk here, included in backups.
                 </small>
               </label>
               <label>
@@ -211,7 +312,7 @@ export function FjordHubStorePage() {
                 <input
                   inputMode="numeric"
                   value={appPort}
-                  onChange={(event) => setAppPort(event.target.value)}
+                  onChange={(event) => field("appPort", event.target.value)}
                 />
                 <small>
                   Confirm that this port is free on the selected host.
@@ -221,15 +322,16 @@ export function FjordHubStorePage() {
                 Timezone
                 <input
                   value={timezone}
-                  onChange={(event) => setTimezone(event.target.value)}
+                  onChange={(event) => field("timezone", event.target.value)}
                 />
               </label>
             </div>
-            {(!validPaths || !validPort) && (
-              <p className="notice">
-                Use absolute Linux paths without spaces and a valid port between
-                10 and 65535.
-              </p>
+            {errors.length > 0 && (
+              <div className="notice" role="alert">
+                {errors.map((error) => (
+                  <p key={error}>{error}</p>
+                ))}
+              </div>
             )}
             <div className="setup-safety-note">
               <ShieldCheck size={20} />
@@ -246,8 +348,31 @@ export function FjordHubStorePage() {
         {step === 2 && (
           <div className="assisted-step">
             <p className="eyebrow">STEP 3 · INSTALL FROM THE OFFICIAL SOURCE</p>
-            <h3>Run these commands on the selected Linux host</h3>
-            <pre className="install-command-block">{installCommands}</pre>
+            <h3>
+              {config.target === "lxc"
+                ? "Run in the Proxmox node Shell as root"
+                : "Run as root on a fresh Debian 12 or 13 host"}
+            </h3>
+            <p>
+              The script creates and configures FjordHub only when you run it.
+              Review the storage and network settings first. If it stops after
+              creating the LXC, inspect that container before starting again.
+            </p>
+            <div className="button-row">
+              <button type="button" onClick={copyCommands}>
+                Copy commands
+              </button>
+              <button type="button" onClick={downloadCommands}>
+                Download script
+              </button>
+            </div>
+            {copyMessage && <p role="status">{copyMessage}</p>}
+            <pre
+              className="install-command-block"
+              aria-label="FjordHub installation commands"
+            >
+              {installCommands}
+            </pre>
             <div className="setup-review-grid">
               <span>DATA_DIR in .env</span>
               <strong>{dataPath}</strong>
@@ -256,7 +381,9 @@ export function FjordHubStorePage() {
               <span>TZ in .env</span>
               <strong>{timezone}</strong>
               <span>SECRET_KEY in .env</span>
-              <strong>Use the generated random value; never commit it</strong>
+              <strong>
+                Generated and written automatically when you run the script
+              </strong>
             </div>
             <p className="muted">
               After the containers are healthy, open FjordHub on the direct port
