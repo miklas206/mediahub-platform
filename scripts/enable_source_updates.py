@@ -58,9 +58,26 @@ def enable(root, repository):
         updater._atomic_text(override, content)
         updater.command("systemctl", "daemon-reload", capture=False)
         # Advertise only after helper and explicit trust are installed. Public metadata only.
+        # Existing source-built images already carry their exact Git revision.
+        # Seed the marker for installations created before commit-based updates.
+        if not updater.installed_source():
+            core_id = updater._compose_command("ps", "-q", "core")
+            if core_id:
+                revision = updater.command(
+                    "docker",
+                    "inspect",
+                    "--format",
+                    '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                    core_id,
+                )
+                if re.fullmatch(r"[a-f0-9]{40}", revision):
+                    updater.write_installed_source({"repository": repository, "commit": revision})
         capabilities = updater.updates / "host-capabilities.json"
         updater._atomic_json(
-            capabilities, {"sourceBuild": True, "automaticFastUpdate": True}, uid=0, gid=0
+            capabilities,
+            {"sourceBuild": True, "automaticFastUpdate": True, "mainBranchUpdates": True},
+            uid=0,
+            gid=0,
         )
         capabilities.chmod(0o644)
     print("Source-build updater enabled. No services restarted and no media changed.")

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from mediahub import __version__
 from mediahub.errors import DomainError
+from mediahub.platform_source import SHA, download_source, normalize_source
 
 IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 RUNNING = {"downloading", "staged", "building", "installing", "verifying", "rolling_back"}
@@ -72,7 +73,7 @@ class SourceBundle(StrictModel):
 
 
 class SourceManifest(StrictModel):
-    schemaVersion: Literal[2]
+    schemaVersion: Literal[2, 3]
     version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     source: SourceBundle
     updatePolicy: dict[str, bool]
@@ -141,7 +142,39 @@ class PlatformUpdateRuntime:
         except (OSError, ValueError, KeyError, TypeError):
             return False
 
+    @property
+    def commit_available(self):
+        return self.source_available and self._host_capability("mainBranchUpdates")
+
+    def installed_source(self):
+        if self.root is None:
+            return {}
+        try:
+            path = self.root / "installed-source.json"
+            details = path.lstat()
+            if (
+                not stat.S_ISREG(details.st_mode)
+                or path.is_symlink()
+                or details.st_size > 4096
+                or details.st_uid != 0
+                or details.st_mode & 0o022
+            ):
+                return {}
+            value = json.loads(path.read_text())
+            if not SHA.fullmatch(value.get("commit", "")):
+                return {}
+            return value
+        except (OSError, ValueError, TypeError, AttributeError):
+            return {}
+
     def ready(self, release):
+        if release.get("sourceChannel") == "main":
+            return bool(
+                self.available
+                and self.commit_available
+                and release.get("updateAvailable")
+                and SHA.fullmatch(release.get("latestCommit") or "")
+            )
         names = set(release.get("assets") or {})
         return bool(
             self.available
@@ -382,8 +415,15 @@ class PlatformUpdateRuntime:
         if not release.get("updateAvailable"):
             raise DomainError("platform_update_not_needed", "MediaHub is already up to date", 409)
         assets = release.get("assets") or {}
-        source_mode = set(assets) == SOURCE_ASSETS
-        if set(assets) not in (SOURCE_ASSETS, IMAGE_ASSETS):
+        commit_mode = release.get("sourceChannel") == "main"
+        if commit_mode and not self.commit_available:
+            raise DomainError(
+                "platform_commit_bootstrap_required",
+                "Refresh the host updater once to enable main-branch updates.",
+                409,
+            )
+        source_mode = commit_mode or set(assets) == SOURCE_ASSETS
+        if not commit_mode and set(assets) not in (SOURCE_ASSETS, IMAGE_ASSETS):
             raise DomainError("platform_release_incomplete", "Release assets are incomplete", 409)
         if source_mode and not self.source_available:
             raise DomainError(
@@ -409,20 +449,34 @@ class PlatformUpdateRuntime:
             "downloading", 5, "Downloading verified release assets", operation, target, steps
         )
         self.task = asyncio.create_task(
-            self._stage(operation, target, assets, steps, release.get("repository"))
+            self._stage(
+                operation,
+                target,
+                assets,
+                steps,
+                release.get("repository"),
+                release.get("latestCommit") if commit_mode else None,
+                release.get("installedCommit"),
+            )
         )
         return self.status()
 
-    async def _stage(self, operation, target, assets, steps, repository=None):
+    async def _stage(
+        self, operation, target, assets, steps, repository=None, commit=None, from_commit=None
+    ):
         stage = self.root / "staging" / operation
         try:
             self._staging_root()
             stage.mkdir(mode=0o700)
-            source_mode = set(assets) == SOURCE_ASSETS
+            source_mode = commit is not None or set(assets) == SOURCE_ASSETS
             manifest_name = (
                 "mediahub-source-release.json" if source_mode else "mediahub-release.json"
             )
-            required = sum(int(asset["size"]) for asset in assets.values()) + 1024**3
+            required = (
+                3 * 1024**3
+                if commit is not None
+                else sum(int(asset["size"]) for asset in assets.values()) + 1024**3
+            )
             if shutil.disk_usage(self.root).free < required:
                 raise DomainError(
                     "platform_update_space",
@@ -434,58 +488,96 @@ class PlatformUpdateRuntime:
             async with httpx.AsyncClient(
                 timeout=timeout, follow_redirects=False, trust_env=False
             ) as client:
-                manifest_digest = await self._download(
-                    client,
-                    assets[manifest_name],
-                    stage / manifest_name,
-                    token,
-                )
-                raw = (stage / manifest_name).read_bytes()
-                if len(raw) > 1024 * 1024:
-                    raise DomainError(
-                        "platform_manifest_invalid", "Release manifest is invalid", 502
+                if commit is not None:
+                    raw_archive = stage / "github-source.tar.gz"
+                    await download_source(client, repository, commit, raw_archive, token)
+                    digest = await asyncio.to_thread(
+                        normalize_source, raw_archive, stage / "mediahub-source.tar.gz"
                     )
-                manifest = (SourceManifest if source_mode else ReleaseManifest).model_validate_json(
-                    raw
-                )
-                if source_mode and manifest.source.repository != repository:
-                    raise DomainError(
-                        "platform_source_repository",
-                        "Source repository does not match configured GitHub repository",
-                        502,
+                    raw_archive.unlink()
+                    manifest = SourceManifest.model_validate(
+                        {
+                            "schemaVersion": 3,
+                            "version": target,
+                            "source": {
+                                "name": "mediahub-source.tar.gz",
+                                "sha256": digest,
+                                "repository": repository,
+                                "commit": commit,
+                            },
+                            "updatePolicy": {
+                                "transactional": True,
+                                "rollbackRequired": True,
+                                "mediaIsOutOfScope": True,
+                            },
+                        }
                     )
-                if Version(manifest.version) != Version(target) or Version(target) <= Version(
-                    __version__
-                ):
-                    raise DomainError(
-                        "platform_manifest_invalid", "Release version is invalid", 502
-                    )
-                for index, role in enumerate(
-                    ("source",) if source_mode else ("core", "agent"), start=1
-                ):
-                    bundle = manifest.source if source_mode else manifest.bundles[role]
-                    asset = assets[bundle.name]
-                    digest = await self._download(client, asset, stage / bundle.name, token)
-                    if digest != bundle.sha256:
+                    if Version(target) < Version(__version__) or commit == from_commit:
                         raise DomainError(
-                            "platform_bundle_mismatch", "Release bundle verification failed", 502
+                            "platform_source_invalid",
+                            "Source is already installed or has an older version",
+                            409,
                         )
-                    self._write_status(
-                        "downloading",
-                        15 + index * 20,
-                        f"Verified {role} update bundle",
-                        operation,
-                        target,
-                        steps,
+                    raw = manifest.model_dump_json().encode()
+                    (stage / manifest_name).write_bytes(raw)
+                    manifest_digest = hashlib.sha256(raw).hexdigest()
+                else:
+                    manifest_digest = await self._download(
+                        client,
+                        assets[manifest_name],
+                        stage / manifest_name,
+                        token,
                     )
+                    raw = (stage / manifest_name).read_bytes()
+                    if len(raw) > 1024 * 1024:
+                        raise DomainError(
+                            "platform_manifest_invalid", "Release manifest is invalid", 502
+                        )
+                    manifest = (
+                        SourceManifest if source_mode else ReleaseManifest
+                    ).model_validate_json(raw)
+                    if source_mode and manifest.source.repository != repository:
+                        raise DomainError(
+                            "platform_source_repository",
+                            "Source repository does not match configured GitHub repository",
+                            502,
+                        )
+                    if Version(manifest.version) != Version(target) or Version(target) <= Version(
+                        __version__
+                    ):
+                        raise DomainError(
+                            "platform_manifest_invalid", "Release version is invalid", 502
+                        )
+                    for index, role in enumerate(
+                        ("source",) if source_mode else ("core", "agent"), start=1
+                    ):
+                        bundle = manifest.source if source_mode else manifest.bundles[role]
+                        asset = assets[bundle.name]
+                        digest = await self._download(client, asset, stage / bundle.name, token)
+                        if digest != bundle.sha256:
+                            raise DomainError(
+                                "platform_bundle_mismatch",
+                                "Release bundle verification failed",
+                                502,
+                            )
+                        self._write_status(
+                            "downloading",
+                            15 + index * 20,
+                            f"Verified {role} update bundle",
+                            operation,
+                            target,
+                            steps,
+                        )
             request = {
-                "schemaVersion": 2 if source_mode else 1,
+                "schemaVersion": 3 if commit is not None else 2 if source_mode else 1,
                 "operationId": operation,
                 "fromVersion": __version__,
                 "toVersion": target,
                 "stage": f"staging/{operation}",
                 "manifestSha256": manifest_digest,
             }
+            if commit is not None:
+                request["fromCommit"] = from_commit
             request_path = self.root / "request.json"
             if request_path.exists():
                 raise DomainError("platform_update_busy", "Host updater already has a request", 409)

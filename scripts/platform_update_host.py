@@ -320,16 +320,23 @@ class HostUpdater:
     def _validate_request(self):
         request_path = self.updates / "request.json"
         request = self._read_json(request_path, 65536)
-        if set(request) != {
+        expected_fields = {
             "schemaVersion",
             "operationId",
             "fromVersion",
             "toVersion",
             "stage",
             "manifestSha256",
-        }:
+        }
+        if request.get("schemaVersion") == 3:
+            expected_fields.add("fromCommit")
+            if request.get("fromCommit") is not None and not re.fullmatch(
+                r"[a-f0-9]{40}", str(request["fromCommit"])
+            ):
+                raise ValueError("Invalid installed commit")
+        if set(request) != expected_fields:
             raise ValueError("Unexpected update request fields")
-        if request["schemaVersion"] not in (1, 2) or not ID.fullmatch(request["operationId"]):
+        if request["schemaVersion"] not in (1, 2, 3) or not ID.fullmatch(request["operationId"]):
             raise ValueError("Invalid update request")
         if not VERSION.fullmatch(request["fromVersion"]) or not VERSION.fullmatch(
             request["toVersion"]
@@ -342,7 +349,7 @@ class HostUpdater:
             raise ValueError("Invalid manifest digest")
         stage = self.updates / "staging" / request["operationId"]
         self._directory(stage, owner=10001)
-        source_mode = request["schemaVersion"] == 2
+        source_mode = request["schemaVersion"] in (2, 3)
         manifest_path = stage / (
             "mediahub-source-release.json" if source_mode else "mediahub-release.json"
         )
@@ -401,7 +408,11 @@ class HostUpdater:
     def _validate_source_manifest(self, manifest, request, stage):
         if set(manifest) != {"schemaVersion", "version", "source", "updatePolicy"}:
             raise ValueError("Unexpected source manifest fields")
-        if manifest["schemaVersion"] != 2 or manifest["version"] != request["toVersion"]:
+        if (
+            manifest["schemaVersion"] not in (2, 3)
+            or manifest["schemaVersion"] != request["schemaVersion"]
+            or manifest["version"] != request["toVersion"]
+        ):
             raise ValueError("Source version mismatch")
         if manifest["updatePolicy"] != {
             "transactional": True,
@@ -739,6 +750,24 @@ class HostUpdater:
             self.sleep(2)
         raise ValueError(f"{service} did not become healthy")
 
+    def installed_source(self):
+        path = self.updates / "installed-source.json"
+        if not path.exists():
+            return {}
+        value = json.loads(self._trusted_file(path, 4096))
+        if not isinstance(value, dict) or not re.fullmatch(
+            r"[a-f0-9]{40}", str(value.get("commit", ""))
+        ):
+            raise ValueError("Invalid installed source marker")
+        return value
+
+    def write_installed_source(self, source):
+        path = self.updates / "installed-source.json"
+        self._atomic_json(
+            path, {"repository": source["repository"], "commit": source["commit"]}, uid=0, gid=0
+        )
+        path.chmod(0o644)
+
     def _backup_preflight(self):
         total = sum(self._tree_size(self.root / name) for name in self._state_directories())
         if shutil.disk_usage(self.root).free < total * 2 + 1024**3:
@@ -755,6 +784,11 @@ class HostUpdater:
         temporary.mkdir(mode=0o700, parents=True)
         try:
             shutil.copy2(self.compose, temporary / "compose.json")
+            shutil.copy2(self.installed_version, temporary / "installed-version")
+            marker = self.updates / "installed-source.json"
+            if marker.exists():
+                self.installed_source()  # Validate before copying root-owned metadata.
+                shutil.copy2(marker, temporary / "installed-source.json")
             for name in self._state_directories():
                 shutil.copytree(self.root / name, temporary / name, symlinks=False)
                 self._copy_ownership(self.root / name, temporary / name)
@@ -781,6 +815,13 @@ class HostUpdater:
     def _restore_configuration(self, backup):
         self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
         shutil.copy2(backup / "compose.json", self.compose)
+        if (backup / "installed-version").exists():
+            shutil.copy2(backup / "installed-version", self.installed_version)
+        marker = self.updates / "installed-source.json"
+        if (backup / "installed-source.json").exists():
+            shutil.copy2(backup / "installed-source.json", marker)
+        else:
+            marker.unlink(missing_ok=True)
         for name in self._state_directories():
             current = self.root / name
             failed = self.root / f"{name}.failed-{self.operation}"
@@ -820,7 +861,7 @@ class HostUpdater:
                 self.request = request
                 self.operation = request["operationId"]
                 self.target = request["toVersion"]
-                source_mode = manifest.get("schemaVersion") == 2
+                source_mode = manifest.get("schemaVersion") in (2, 3)
                 self.steps = [
                     {"id": "download", "label": "Download verified release", "state": "complete"},
                     {"id": "backup", "label": "Back up configuration", "state": "running"},
@@ -830,7 +871,20 @@ class HostUpdater:
                 installed = self._trusted_file(self.installed_version, 128).strip()
                 if request["fromVersion"] != installed:
                     raise ValueError("Installed version does not match the update request")
-                if version_key(self.target) <= version_key(installed):
+                if manifest.get("schemaVersion") == 3:
+                    previous_source = self.installed_source()
+                    previous_commit = (
+                        previous_source.get("commit")
+                        if previous_source.get("repository") == self._trusted_source()
+                        else None
+                    )
+                    if request.get("fromCommit") != previous_commit:
+                        raise ValueError("Installed commit does not match the update request")
+                    if manifest["source"]["commit"] == previous_commit:
+                        raise ValueError("Source commit is already installed")
+                    if version_key(self.target) < version_key(installed):
+                        raise ValueError("Source version must not downgrade")
+                elif version_key(self.target) <= version_key(installed):
                     raise ValueError("Update must move to a newer stable version")
                 built_images = None
                 if source_mode:
@@ -892,6 +946,8 @@ class HostUpdater:
                         gid=0,
                     )
                 self._atomic_text(self.installed_version, self.target)
+                if source_mode:
+                    self.write_installed_source(manifest["source"])
                 self.steps[-1]["state"] = "complete"
                 self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
                 shutil.rmtree(stage)

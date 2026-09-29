@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Follow the configured GitHub repository's main branch by commit instead of requiring a new release or version number. Pin source downloads to the selected commit and retain bounded archive validation, builds, snapshots and rollback.
+- Display installed and available commit IDs, and add a one-time host-helper migration for same-version source updates.
+
 - Serialize release publishing by target tag so overlapping runs cannot collide while uploading the same release assets.
 
 ## 0.4.29 - 2026-09-30

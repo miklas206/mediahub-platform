@@ -1440,7 +1440,7 @@ function SettingsPage() {
             />
           </label>
           <label>
-            GitHub release repository
+            GitHub source repository
             <input
               name="release_repository"
               value={draft.release_repository || ""}
@@ -1454,8 +1454,8 @@ function SettingsPage() {
               pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
             />
             <small>
-              Public or private repository used only for verified MediaHub
-              releases. Configure encrypted private access on the Updates page.
+              Public or private repository whose main branch is checked for code
+              changes. Configure encrypted private access on the Updates page.
             </small>
           </label>
           <label>
@@ -1481,8 +1481,8 @@ function SettingsPage() {
               <option value={168}>Every week</option>
             </select>
             <small>
-              Checks only release metadata. Updates are installed only after
-              explicit approval.
+              Checks main for MediaHub code changes and app update metadata.
+              Updates are installed only after explicit approval.
             </small>
           </label>
           <label className="check-label">

@@ -241,6 +241,8 @@ async def platform_update(request: Request, user=Depends(authenticated)):
         checked["message"] = (
             "Source update found. Enable source-build support on the host updater first."
         )
+    if checked.get("sourceChannel") == "main" and not svc.platform_update.commit_available:
+        checked["message"] = "Main-branch updates need a one-time host updater refresh."
     await svc.updates.record_platform(checked)
     return result(checked)
 

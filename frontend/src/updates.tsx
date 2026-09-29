@@ -32,6 +32,9 @@ type PlatformRelease = {
   configured: boolean;
   repository: string | null;
   installedVersion: string;
+  installedCommit?: string | null;
+  latestCommit?: string | null;
+  sourceChannel?: "main";
   latestVersion: string | null;
   updateAvailable: boolean;
   releaseUrl: string | null;
@@ -343,7 +346,7 @@ export function UpdatesPage() {
     event.preventDefault();
     const task = operationTask(
       "Save private GitHub access",
-      ["Encrypt credential", "Confirm protected storage", "Refresh releases"],
+      ["Encrypt credential", "Confirm protected storage", "Refresh source"],
       (value) => updateOperation("platform", value),
     );
     setBusy("github-credentials");
@@ -357,21 +360,21 @@ export function UpdatesPage() {
       task.steps[1].state = "complete";
       task.details.push("Credential storage · encrypted and protected");
       task.steps[2].state = "running";
-      task.publish(85, "running", "Refreshing verified release information…");
+      task.publish(85, "running", "Refreshing source information…");
       setGithubToken("");
       privateAccess.reload();
       platformRelease.reload();
       updateSummary.reload();
       setCheckedPlatformRelease(undefined);
       task.steps[2].state = "complete";
-      task.details.push("Release information · refresh requested");
+      task.details.push("Source information · refresh requested");
       task.publish(
         100,
         "success",
         "Private GitHub access was encrypted and verified.",
       );
       setNotice(
-        "Private GitHub release access was encrypted and verified locally.",
+        "Private GitHub source access was encrypted and verified locally.",
       );
     } catch (caught) {
       const running = task.steps.find((step) => step.state === "running");
@@ -389,7 +392,7 @@ export function UpdatesPage() {
       return;
     const task = operationTask(
       "Remove private GitHub access",
-      ["Remove encrypted credential", "Refresh release channel"],
+      ["Remove encrypted credential", "Refresh main branch"],
       (value) => updateOperation("platform", value),
     );
     setBusy("github-credentials");
@@ -405,15 +408,15 @@ export function UpdatesPage() {
       task.steps[0].state = "complete";
       task.details.push("DELETE /updates/platform/credentials · completed");
       task.steps[1].state = "running";
-      task.publish(80, "running", "Refreshing public release access…");
+      task.publish(80, "running", "Refreshing public source access…");
       privateAccess.reload();
       platformRelease.reload();
       updateSummary.reload();
       setCheckedPlatformRelease(undefined);
       task.steps[1].state = "complete";
-      task.details.push("Release information · refresh requested");
+      task.details.push("Source information · refresh requested");
       task.publish(100, "success", "Private GitHub access was removed.");
-      setNotice("Private GitHub release access was removed.");
+      setNotice("Private GitHub source access was removed.");
     } catch (caught) {
       const running = task.steps.find((step) => step.state === "running");
       if (running) running.state = "error";
@@ -428,13 +431,13 @@ export function UpdatesPage() {
   async function checkPlatform() {
     const task = operationTask(
       "Check MediaHub updates",
-      ["Contact configured GitHub repository", "Validate release manifest"],
+      ["Contact configured GitHub repository", "Check latest commit on main"],
       (value) => updateOperation("platform", value),
     );
     setBusy("platform-check");
     setError("");
     task.steps[0].state = "running";
-    task.publish(10, "running", "Contacting the configured release channel…");
+    task.publish(10, "running", "Checking the configured repository on main…");
     try {
       const result = await api<PlatformRelease>("/updates/platform");
       setCheckedPlatformRelease(result);
@@ -446,7 +449,7 @@ export function UpdatesPage() {
       task.publish(
         70,
         "running",
-        "Validating version and release asset metadata…",
+        "Comparing installed code with the latest commit…",
       );
       task.steps[1].state = "complete";
       task.details.push(
@@ -458,13 +461,11 @@ export function UpdatesPage() {
     } catch (caught) {
       const running = task.steps.find((step) => step.state === "running");
       if (running) running.state = "error";
-      task.details.push(
-        "GitHub release check failed · no update was installed",
-      );
+      task.details.push("GitHub code check failed · no update was installed");
       task.publish(
         100,
         "error",
-        "The GitHub release check could not be completed.",
+        "The GitHub code check could not be completed.",
       );
       setError((caught as Error).message);
     } finally {
@@ -580,7 +581,7 @@ export function UpdatesPage() {
     if (
       !release?.latestVersion ||
       !window.confirm(
-        `Install MediaHub ${release.latestVersion}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}${release.fastUpdateAvailable ? "Fast update is selected automatically when possible: Core restarts, while an unchanged Agent keeps running. Otherwise both services are rebuilt and restarted. " : "Core and the local Agent may restart. "}Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
+        `Install MediaHub ${release.latestVersion}${release.latestCommit ? ` / ${release.latestCommit.slice(0, 7)} from main` : ""}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}${release.fastUpdateAvailable ? "Fast update is selected automatically when possible: Core restarts, while an unchanged Agent keeps running. Otherwise both services are rebuilt and restarted. " : "Core and the local Agent may restart. "}Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
       )
     )
       return;
@@ -590,7 +591,7 @@ export function UpdatesPage() {
       title: "Install MediaHub update",
       status: "running",
       progress: 2,
-      message: "Requesting the verified release…",
+      message: "Requesting the selected source commit…",
       steps: [
         { label: "Download verified release", state: "running" },
         { label: "Back up configuration", state: "pending" },
@@ -698,14 +699,20 @@ export function UpdatesPage() {
         <Panel title="MediaHub Core">
           <div className="runtime-row">
             <span>Installed</span>
-            <strong>{platform.data?.version || "Loading…"}</strong>
+            <strong>
+              {platform.data?.version || "Loading…"}
+              {release?.installedCommit &&
+                ` / ${release.installedCommit.slice(0, 7)}`}
+            </strong>
           </div>
           <div className="runtime-row">
-            <span>Latest release</span>
-            <strong>{release?.latestVersion || "Not published yet"}</strong>
+            <span>Latest code on main</span>
+            <strong>
+              {release?.latestCommit?.slice(0, 7) || "Not checked yet"}
+            </strong>
           </div>
           <div className="runtime-row">
-            <span>Release source</span>
+            <span>Update source</span>
             <span>
               {release?.installReady
                 ? release.updateMethod === "source"
@@ -717,7 +724,7 @@ export function UpdatesPage() {
             </span>
           </div>
           <p className="update-card-message">
-            {release?.message || "Checking the configured release channel…"}
+            {release?.message || "Checking main for code changes…"}
           </p>
           {release?.updateMethod === "source" && (
             <div className="notice">
@@ -746,7 +753,7 @@ export function UpdatesPage() {
             </button>
             {release?.releaseUrl && (
               <a href={release.releaseUrl} target="_blank" rel="noreferrer">
-                View release →
+                View code →
               </a>
             )}
             <button

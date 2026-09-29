@@ -361,3 +361,40 @@ def test_install_requires_complete_release_and_available_host_updater(tmp_path, 
     with pytest.raises(DomainError) as failure:
         asyncio.run(unavailable.install(release))
     assert failure.value.code == "platform_updater_unavailable"
+
+
+def test_commit_staging_supports_unchanged_version(tmp_path, monkeypatch):
+    import io
+    import tarfile
+
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w:gz") as archive:
+        content = ('[project]\nversion="' + runtime_module.__version__ + '"').encode()
+        member = tarfile.TarInfo("repo-123/pyproject.toml")
+        member.size = len(content)
+        archive.addfile(member, io.BytesIO(content))
+    updater, spool = runtime(
+        tmp_path, monkeypatch, lambda request: httpx.Response(200, content=raw.getvalue())
+    )
+    monkeypatch.setattr(PlatformUpdateRuntime, "commit_available", property(lambda self: True))
+    monkeypatch.setattr(PlatformUpdateRuntime, "source_available", property(lambda self: True))
+    release = {
+        "sourceChannel": "main",
+        "repository": "owner/repo",
+        "updateAvailable": True,
+        "latestVersion": runtime_module.__version__,
+        "latestCommit": "a" * 40,
+        "installedCommit": "b" * 40,
+    }
+    assert updater.ready(release)
+
+    async def run():
+        await updater.install(release)
+        await updater.task
+
+    asyncio.run(run())
+    assert updater.status()["state"] == "staged"
+    request = json.loads((spool / "request.json").read_text())
+    assert request["schemaVersion"] == 3 and request["fromCommit"] == "b" * 40
+    manifest = json.loads((spool / request["stage"] / "mediahub-source-release.json").read_text())
+    assert manifest["source"]["commit"] == "a" * 40

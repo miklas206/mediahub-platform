@@ -682,3 +682,71 @@ def test_source_image_smoke_failure_never_stops_existing_services(tmp_path, monk
     assert updater.compose.read_bytes() == original
     assert updater.installed_version.read_text().strip() == "0.3.0"
     assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+
+
+def test_same_version_commit_update_and_duplicate_rejection(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    updater.installed_version.write_text("0.4.0")
+    updater.test_request.update(schemaVersion=3, fromVersion="0.4.0", fromCommit="b" * 40)
+    updater.test_manifest["schemaVersion"] = 3
+    updater.write_installed_source({"repository": "example/mediahub", "commit": "b" * 40})
+    updater.process()
+    assert updater.installed_source()["commit"] == "a" * 40
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    commands.clear()
+    updater.test_request["fromCommit"] = "a" * 40
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+    assert not any("stop" in args for args in commands)
+
+
+def test_commit_marker_preserved_when_new_source_fails_health(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    updater.installed_version.write_text("0.4.0")
+    updater.test_request.update(schemaVersion=3, fromVersion="0.4.0", fromCommit="b" * 40)
+    updater.test_manifest["schemaVersion"] = 3
+    updater.write_installed_source({"repository": "example/mediahub", "commit": "b" * 40})
+    wait = updater._wait
+    failed = False
+
+    def fail_once(service, health=False, timeout=150):
+        nonlocal failed
+        if service == "core" and health and not failed:
+            failed = True
+            raise ValueError("New core failed")
+        return wait(service, health, timeout)
+
+    updater._wait = fail_once
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "rolled_back"
+    assert updater.installed_source()["commit"] == "b" * 40
+    assert updater.installed_version.read_text() == "0.4.0"
+
+
+def test_schema3_request_is_validated_before_becoming_running(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    request = dict(updater.test_request, schemaVersion=3, fromCommit="b" * 40)
+    manifest = dict(updater.test_manifest, schemaVersion=3)
+    manifest_path = updater.test_stage / "mediahub-source-release.json"
+    manifest_path.write_text(json.dumps(manifest))
+    request["manifestSha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    request_path = root / "updates/request.json"
+    request_path.write_text(json.dumps(request))
+    accepted, source, stage = HostUpdater._validate_request(updater)
+    assert accepted["fromCommit"] == "b" * 40
+    assert source["schemaVersion"] == 3
+    assert not request_path.exists()
+    del request["fromCommit"]
+    request_path.write_text(json.dumps(request))
+    with pytest.raises(ValueError, match="Unexpected update request fields"):
+        HostUpdater._validate_request(updater)
+
+
+def test_commit_request_rejects_stale_installed_commit_before_stopping(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    updater.test_request.update(schemaVersion=3, fromCommit="b" * 40)
+    updater.test_manifest["schemaVersion"] = 3
+    updater.write_installed_source({"repository": "example/mediahub", "commit": "c" * 40})
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+    assert not any("stop" in args for args in commands)

@@ -1,16 +1,35 @@
 # Platform updates from GitHub source
 
 MediaHub downloads **source code** from GitHub and builds Core and the local
-Agent on the user's server. Normal releases no longer build or distribute Docker
-images in GitHub Actions. Like FjordHub, the server builds the software it runs;
-unlike FjordHub's branch tracking, MediaHub still selects numbered stable releases.
-A push to `main` alone is not an update: tag a reviewed, tested version `vX.Y.Z`.
-The tag must match `pyproject.toml`.
+Agent on the user's server. The update channel follows the configured repository's `main` branch.
+The installed Git commit is compared with `main`; a new commit is an update even
+when the version number is unchanged. No release or tag is required.
+Push reviewed code to `main`, then use Check GitHub and Install update. Checks
+never install automatically. The selected full commit SHA pins both metadata and
+archive download even if main advances while the installation is downloading.
 
 Checks and notifications never install software. Installation requires an
 authenticated administrator action and retains the transactional rollback model.
 
-## Source distribution and private access
+## One-time transition from release checks
+
+Existing installations need both this Core version and the updated host helper.
+From the reviewed checkout on the MediaHub Linux host, run
+`sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository OWNER/REPO`.
+This preserves repository trust and seeds the installed commit from the running
+Core image's revision label. The UI gates installation on `mainBranchUpdates`
+until the helper supports schema 3. No release is needed after this transition.
+
+The Core downloads GitHub's archive for the pinned commit, bounds its compressed
+and expanded size, rejects links/traversal, and repackages only build inputs. It
+computes SHA-256 for the root helper's independent integrity check; this hash is
+not a GitHub signature. GitHub HTTPS and the configured repository are the source
+trust boundary. Tokens are sent only to api.github.com, never archive redirects.
+The host stores the installed commit only after healthy startup and restores its
+previous marker on rollback. Changing main with a force-push is also treated as
+a code change; lower application version numbers are rejected at install time.
+
+## Legacy release distribution and private access
 
 The release workflow uses `git archive` at the exact tagged commit and an explicit
 tracked source allowlist. Local `.qa`, `.git`, temporary files, untracked secrets,

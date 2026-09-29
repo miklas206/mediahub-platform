@@ -8,7 +8,7 @@ from sqlalchemy import select
 from mediahub import __version__
 from mediahub.db import Setting
 from mediahub.errors import DomainError
-from mediahub.platform_updates import GitHubReleaseProvider
+from mediahub.platform_source import GitHubSourceProvider
 
 STATE_KEY = "update-monitor"
 
@@ -109,7 +109,9 @@ class UpdateMonitor:
 
     async def check_platform(self):
         repository = self.services.settings.get().release_repository
-        return await GitHubReleaseProvider(__version__).check(
+        installed = self.services.platform_update.installed_source()
+        commit = installed.get("commit") if installed.get("repository") == repository else None
+        return await GitHubSourceProvider(__version__, commit).check(
             repository, self.services.release_credentials.token()
         )
 
@@ -122,7 +124,7 @@ class UpdateMonitor:
                 "id": "mediahub-core",
                 "name": "MediaHub Core",
                 "installedVersion": result.get("installedVersion"),
-                "latestVersion": result.get("latestVersion"),
+                "latestVersion": result.get("latestCommit") or result.get("latestVersion"),
                 "updateAvailable": bool(result.get("updateAvailable")),
                 "message": str(result.get("message") or "Checked")[:200],
             },
@@ -148,7 +150,8 @@ class UpdateMonitor:
                         "id": "mediahub-core",
                         "name": "MediaHub Core",
                         "installedVersion": platform.get("installedVersion"),
-                        "latestVersion": platform.get("latestVersion"),
+                        "latestVersion": platform.get("latestCommit")
+                        or platform.get("latestVersion"),
                         "updateAvailable": bool(platform.get("updateAvailable")),
                         "message": str(platform.get("message") or "Checked")[:200],
                     }
