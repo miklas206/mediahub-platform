@@ -53,6 +53,32 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   );
   expect(updated).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  let deployment: Record<string, unknown> | null = null;
+  let deploymentPosts = 0;
+  await page.route("**/api/v1/fjordhub/deployment**", async (route) => {
+    if (route.request().url().endsWith("/fingerprint")) {
+      await route.fulfill({
+        json: { data: { fingerprint: "SHA256:" + "A".repeat(43) } },
+      });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      deploymentPosts++;
+      const body = route.request().postDataJSON();
+      expect(body.config.cores).toBe("4");
+      expect(body.config.memory).toBe("10240");
+      expect(body.script).toBeUndefined();
+      deployment = {
+        id: body.requestId,
+        host: body.host,
+        config: body.config,
+        state: "running",
+        message: "Building FjordHub",
+        logs: ["Created LXC 210", "Building FjordHub"],
+      };
+    }
+    await route.fulfill({ json: { data: deployment } });
+  });
   await page.goto("/store/fjordhub");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByLabel("Installation target")).toHaveValue("lxc");
@@ -93,6 +119,27 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     ),
   ).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  const installButton = page.getByRole("button", {
+    name: "Create LXC and install FjordHub",
+    exact: true,
+  });
+  await expect(installButton).toBeDisabled();
+  await page.getByLabel("SSH server IP").fill("192.168.1.126");
+  await page.getByLabel("Root SSH password").fill("qa-fake-password");
+  await page.getByRole("button", { name: "Check SSH connection" }).click();
+  await page
+    .getByLabel("I recognize and trust this server fingerprint.")
+    .check();
+  await installButton.click();
+  await expect(page.getByLabel("FjordHub installation console")).toContainText(
+    "Created LXC 210",
+  );
+  await expect(page.getByLabel("Root SSH password")).toHaveValue("");
+  await page.reload();
+  await expect(page.getByLabel("FjordHub installation console")).toContainText(
+    "Building FjordHub",
+  );
+  expect(deploymentPosts).toBe(1);
   await page.goto("/");
   await page.screenshot({
     path: "../.qa/dashboard-desktop.png",

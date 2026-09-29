@@ -1,3 +1,4 @@
+import { FjordHubDeployment } from "./fjordhub-deployment";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -96,6 +97,7 @@ const fjordHubSteps = ["Deployment", "Storage & ports", "Install", "Connect"];
 
 export function FjordHubStorePage() {
   const [step, setStep] = useState(0);
+  const [deploying, setDeploying] = useState(false);
   const [mode, setMode] = useState<FjordHubMode>("new");
   const [config, setConfig] = useState<FjordHubConfig>({
     ...defaultFjordHubConfig,
@@ -113,7 +115,7 @@ export function FjordHubStorePage() {
       return "";
     }
   }, [config]);
-  const canContinue = step !== 1 || errors.length === 0;
+  const canContinue = !deploying && (step !== 1 || errors.length === 0);
   const copyCommands = async () => {
     try {
       await navigator.clipboard.writeText(installCommands);
@@ -221,8 +223,9 @@ export function FjordHubStorePage() {
             {config.target === "lxc" && (
               <>
                 <p className="muted">
-                  Debian 13, unprivileged LXC with Docker nesting. Storage names
-                  and bridge are defaults, not detected from your server. Use{" "}
+                  Recommended: 4 CPU cores and 10 GiB RAM (10240 MiB). Debian
+                  13, unprivileged LXC with Docker nesting. Storage names and
+                  bridge are defaults, not detected from your server. Use{" "}
                   <code>pvesm status</code> and <code>ip link show</code> in the
                   Proxmox shell to check them.
                 </p>
@@ -345,6 +348,12 @@ export function FjordHubStorePage() {
           </div>
         )}
 
+        <FjordHubDeployment
+          config={config}
+          visible={step === 2}
+          onBusy={setDeploying}
+        />
+
         {step === 2 && (
           <div className="assisted-step">
             <p className="eyebrow">STEP 3 · INSTALL FROM THE OFFICIAL SOURCE</p>
@@ -354,7 +363,7 @@ export function FjordHubStorePage() {
                 : "Run as root on a fresh Debian 12 or 13 host"}
             </h3>
             <p>
-              The script creates and configures FjordHub only when you run it.
+              Use the install button above, or run these commands manually.
               Review the storage and network settings first. If it stops after
               creating the LXC, inspect that container before starting again.
             </p>
@@ -387,8 +396,7 @@ export function FjordHubStorePage() {
             </div>
             <p className="muted">
               After the containers are healthy, open FjordHub on the direct port
-              and finish its own administrator setup. MediaHub deliberately does
-              not execute unreviewed Git source as root.
+              and finish its own administrator setup.
             </p>
           </div>
         )}
@@ -416,7 +424,7 @@ export function FjordHubStorePage() {
         <div className="assisted-actions">
           <button
             type="button"
-            disabled={step === 0}
+            disabled={step === 0 || deploying}
             onClick={() => setStep((value) => Math.max(0, value - 1))}
           >
             <ChevronLeft size={16} /> Back

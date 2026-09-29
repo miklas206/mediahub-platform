@@ -1,3 +1,4 @@
+import templates from "../../backend/mediahub/fjordhub_scripts.json";
 export type FjordHubConfig = {
   target: "lxc" | "linux";
   installPath: string;
@@ -29,8 +30,8 @@ export const defaultFjordHubConfig: FjordHubConfig = {
   templateStorage: "local",
   storage: "local-lvm",
   bridge: "vmbr0",
-  cores: "2",
-  memory: "2048",
+  cores: "4",
+  memory: "10240",
   disk: "24",
   dataDisk: "32",
   network: "dhcp",
@@ -122,91 +123,17 @@ export function fjordHubErrors(c: FjordHubConfig): string[] {
 export function fjordHubCommands(c: FjordHubConfig): string {
   const errors = fjordHubErrors(c);
   if (errors.length) throw new Error(errors.join(" "));
-  const guest = [
-    "set -Eeuo pipefail",
-    "umask 022",
-    "[ \"$(id -u)\" -eq 0 ] || { echo 'Run as root.' >&2; exit 1; }",
-    "[ ! -d /etc/pve ] || { echo 'Run the Linux installer inside the guest, not on Proxmox.' >&2; exit 1; }",
-    ". /etc/os-release",
-    '[ "$ID" = debian ] && [[ "$VERSION_ID" = 12 || "$VERSION_ID" = 13 ]] || { echo \'Debian 12 or 13 required.\' >&2; exit 1; }',
-    `INSTALL_DIR=${quote(c.installPath)}`,
-    `DATA_DIR=${quote(c.dataPath)}`,
-    `APP_PORT=${quote(c.appPort)}`,
-    `TZ=${quote(c.timezone)}`,
-    "export INSTALL_DIR DATA_DIR APP_PORT TZ",
-    '[ ! -e "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ] || { echo \'Source path already exists; stopping.\' >&2; exit 1; }',
-    '[ "$(realpath -m "$DATA_DIR")" = "$DATA_DIR" ] && [ "$(realpath -m "$INSTALL_DIR")" = "$INSTALL_DIR" ] || { echo \'Symlinked paths are not supported.\' >&2; exit 1; }',
-    'if [ -d "$DATA_DIR" ] && [ -n "$(find "$DATA_DIR" -mindepth 1 -maxdepth 1 ! -name lost+found -print -quit)" ]; then echo \'App-data path is not empty; stopping.\' >&2; exit 1; fi',
-    "export DEBIAN_FRONTEND=noninteractive",
-    "apt-get update",
-    "apt-get install -y ca-certificates curl git python3",
-    "if ! command -v docker >/dev/null 2>&1; then",
-    "  install -m 0755 -d /etc/apt/keyrings",
-    "  curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc",
-    "  chmod 0644 /etc/apt/keyrings/docker.asc",
-    "  cat > /etc/apt/sources.list.d/docker.sources <<DOCKER_REPO",
-    "Types: deb",
-    "URIs: https://download.docker.com/linux/debian",
-    "Suites: $VERSION_CODENAME",
-    "Components: stable",
-    "Architectures: $(dpkg --print-architecture)",
-    "Signed-By: /etc/apt/keyrings/docker.asc",
-    "DOCKER_REPO",
-    "  chmod 0644 /etc/apt/sources.list.d/docker.sources",
-    "  apt-get update",
-    "  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
-    "fi",
-    "systemctl enable --now docker",
-    "docker compose version",
-    'mkdir -p -- "$(dirname "$INSTALL_DIR")" "$DATA_DIR"',
-    'git clone --depth 1 https://github.com/qlerup/fjordhub.git "$INSTALL_DIR"',
-    'cd -- "$INSTALL_DIR"',
-    "python3 - <<'MEDIAHUB_ENV'",
-    "import os, secrets",
-    "from pathlib import Path",
-    "values = {key: os.environ[key] for key in ('DATA_DIR', 'APP_PORT', 'TZ')}",
-    "values['FJORDHUB_HOST_DIR'] = os.environ['INSTALL_DIR']",
-    "values['SECRET_KEY'] = secrets.token_hex(32)",
-    "lines = Path('.env.example').read_text().splitlines()",
-    "lines = [line for line in lines if line.partition('=')[0] not in values]",
-    "with os.fdopen(os.open('.env', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:",
-    "    output.write('\\n'.join(lines + [key + '=' + value for key, value in values.items()]) + '\\n')",
-    "Path('.env').chmod(0o600)",
-    "MEDIAHUB_ENV",
-    "docker compose config --quiet",
-    "docker compose up -d --build --wait --wait-timeout 180",
-    "docker compose ps",
-    'curl --fail --silent --show-error "http://127.0.0.1:$APP_PORT/api/health"',
-    "printf '\\nFjordHub is ready. Open http://<guest-IP>:%s and create your administrator.\\n' \"$APP_PORT\"",
-    "hostname -I",
-  ].join("\n");
+  const render = (template: string, values: Record<string, string>) =>
+    template.replace(/@@([A-Za-z]+)@@/g, (_, key: string) => values[key]);
+  const guest = render(templates.guest, c);
   if (c.target === "linux")
     return "bash <<'MEDIAHUB_INSTALL'\n" + guest + "\nMEDIAHUB_INSTALL";
-  const network = `name=eth0,bridge=${c.bridge},ip=${c.network === "dhcp" ? "dhcp" : c.address + ",gw=" + c.gateway},ip6=manual`;
-  return [
-    "bash <<'MEDIAHUB_PROVISION'",
-    "set -Eeuo pipefail",
-    "[ \"$(id -u)\" -eq 0 ] && command -v pct >/dev/null || { echo 'Run in the Proxmox node shell as root.' >&2; exit 1; }",
-    "[ \"$(dpkg --print-architecture)\" = amd64 ] || { echo 'This template requires amd64.' >&2; exit 1; }",
-    c.ctid ? `CTID=${quote(c.ctid)}` : "CTID=$(pvesh get /cluster/nextid)",
-    'pvesh get /cluster/nextid --vmid "$CTID" >/dev/null',
-    `STORAGE=${quote(c.storage)}`,
-    `TEMPLATE_STORAGE=${quote(c.templateStorage)}`,
-    `ip link show ${quote(c.bridge)} >/dev/null`,
-    'pvesm status --storage "$STORAGE" --content rootdir',
-    'pvesm status --storage "$TEMPLATE_STORAGE" --content vztmpl',
-    "pveam update",
-    "TEMPLATE=$(pveam available --section system | awk '$2 ~ /^debian-13-standard_.*_amd64.tar.zst$/ {print $2}' | sort -V | tail -n 1)",
-    "[ -n \"$TEMPLATE\" ] || { echo 'No Debian 13 template found.' >&2; exit 1; }",
-    'pveam download "$TEMPLATE_STORAGE" "$TEMPLATE"',
-    `pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" --hostname ${quote(c.hostname)} --ostype debian --unprivileged 1 --features nesting=1,keyctl=1 --cores ${c.cores} --memory ${c.memory} --swap 512 --rootfs "$STORAGE:${c.disk}" --mp0 "$STORAGE:${c.dataDisk},mp=${c.dataPath},backup=1" --net0 ${quote(network)} --onboot 1`,
-    'printf "Created LXC %s. If a later step fails, inspect this container before retrying.\\n" "$CTID"',
-    'pct start "$CTID"',
-    'pct exec "$CTID" -- bash -c \'for attempt in {1..30}; do getent hosts deb.debian.org >/dev/null && exit 0; sleep 2; done; echo "Guest network is not ready" >&2; exit 1\'',
-    "pct exec \"$CTID\" -- bash -s <<'MEDIAHUB_GUEST'",
+  return render(templates.lxc, {
+    ...c,
     guest,
-    "MEDIAHUB_GUEST",
-    'printf "Manage this guest with: pct enter %s\\n" "$CTID"',
-    "MEDIAHUB_PROVISION",
-  ].join("\n");
+    ctidLine: c.ctid
+      ? `CTID=${quote(c.ctid)}`
+      : "CTID=$(pvesh get /cluster/nextid)",
+    networkSpec: `name=eth0,bridge=${c.bridge},ip=${c.network === "dhcp" ? "dhcp" : c.address + ",gw=" + c.gateway},ip6=manual`,
+  });
 }

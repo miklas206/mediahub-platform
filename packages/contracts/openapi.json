@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.4.23"
+    "version": "0.4.24"
   },
   "paths": {
     "/api/v1/health": {
@@ -3174,6 +3174,92 @@
         }
       }
     },
+    "/api/v1/fjordhub/deployment": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_fjordhub_deployment_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start",
+        "operationId": "start_api_v1_fjordhub_deployment_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fjordhub/deployment/fingerprint": {
+      "post": {
+        "summary": "Host Fingerprint",
+        "operationId": "host_fingerprint_api_v1_fjordhub_deployment_fingerprint_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHAddress"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integrations": {
       "get": {
         "summary": "Listing",
@@ -3977,6 +4063,163 @@
           "password"
         ],
         "title": "Credentials"
+      },
+      "DeployConfig": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "lxc",
+              "linux"
+            ],
+            "title": "Target",
+            "default": "lxc"
+          },
+          "installPath": {
+            "type": "string",
+            "title": "Installpath",
+            "default": "/opt/fjordhub"
+          },
+          "dataPath": {
+            "type": "string",
+            "title": "Datapath",
+            "default": "/srv/mediahub/appdata/fjordhub"
+          },
+          "appPort": {
+            "type": "string",
+            "title": "Appport",
+            "default": "8888"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Europe/Copenhagen"
+          },
+          "ctid": {
+            "type": "string",
+            "title": "Ctid",
+            "default": ""
+          },
+          "hostname": {
+            "type": "string",
+            "title": "Hostname",
+            "default": "fjordhub"
+          },
+          "templateStorage": {
+            "type": "string",
+            "title": "Templatestorage",
+            "default": "local"
+          },
+          "storage": {
+            "type": "string",
+            "title": "Storage",
+            "default": "local-lvm"
+          },
+          "bridge": {
+            "type": "string",
+            "title": "Bridge",
+            "default": "vmbr0"
+          },
+          "cores": {
+            "type": "string",
+            "title": "Cores",
+            "default": "4"
+          },
+          "memory": {
+            "type": "string",
+            "title": "Memory",
+            "default": "10240"
+          },
+          "disk": {
+            "type": "string",
+            "title": "Disk",
+            "default": "24"
+          },
+          "dataDisk": {
+            "type": "string",
+            "title": "Datadisk",
+            "default": "32"
+          },
+          "network": {
+            "type": "string",
+            "enum": [
+              "dhcp",
+              "static"
+            ],
+            "title": "Network",
+            "default": "dhcp"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address",
+            "default": ""
+          },
+          "gateway": {
+            "type": "string",
+            "title": "Gateway",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DeployConfig"
+      },
+      "DeployRequest": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "default": 22
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requestid"
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^SHA256:[A-Za-z0-9+/]{43}$",
+            "title": "Fingerprint"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "config": {
+            "$ref": "#/components/schemas/DeployConfig"
+          },
+          "acknowledgedJob": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledgedjob"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "host",
+          "requestId",
+          "fingerprint",
+          "password",
+          "config"
+        ],
+        "title": "DeployRequest"
       },
       "Draft": {
         "properties": {
@@ -4788,6 +5031,27 @@
           "revision"
         ],
         "title": "Revision"
+      },
+      "SSHAddress": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "default": 22
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "host"
+        ],
+        "title": "SSHAddress"
       },
       "SaveDraft": {
         "properties": {

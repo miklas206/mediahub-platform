@@ -12,6 +12,7 @@ COPY frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm fetch
 COPY --from=frontend-manifest /manifest/package.json ./
 RUN pnpm install --offline --frozen-lockfile
+COPY backend/mediahub/fjordhub_scripts.json /build/backend/mediahub/fjordhub_scripts.json
 COPY frontend/src/ ./src/
 COPY frontend/public/ ./public/
 COPY frontend/index.html frontend/tsconfig.json frontend/vite.config.ts ./

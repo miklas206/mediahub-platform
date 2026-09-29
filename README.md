@@ -145,3 +145,27 @@ Screenshots: place reviewed, anonymized dashboard/app screenshots in
 
 Apache-2.0 for MediaHub's own code. Third-party applications, images and
 dependencies retain their own licenses and terms.
+
+
+### FjordHub installation from MediaHub
+
+The App Store FjordHub guide recommends **4 CPU cores and 10 GiB RAM (10240 MiB)**.
+Choose a new unprivileged Debian 13 Proxmox LXC or an existing fresh Debian 12/13 host,
+then review storage, bridge, networking and paths. In the Install step enter the target
+server's private IPv4 address, SSH port and root SSH password. Use **Check SSH connection**,
+compare the displayed SHA256 fingerprint with the server console (for the default Ed25519
+host key: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256`), trust that identity,
+and click **Create LXC and install FjordHub** or **Install FjordHub**. The SSH service must
+permit root password login; SSH-key authentication is not offered by this initial flow.
+
+The installer uses the same reviewed template as the manual command preview. It does not
+accept executable scripts from API callers. Passwords are used in memory for that job and
+are not persisted. This administrator-only action creates the chosen container/disks or
+installs on the chosen Debian host; the commands can still be copied/downloaded instead.
+
+The console shows the latest 300 redacted output lines. You can leave the page and return;
+the job continues in Core. Keep Core running during installation. If Core restarts, SSH
+fails or the one-hour limit is reached, status requires inspection: remote work may still
+be running. Nothing is retried or deleted automatically. Check the target and any created
+LXC before explicitly acknowledging a fresh attempt. On success, open FjordHub on its guest
+IP and chosen port to create its administrator and connect its read-only Access Token.

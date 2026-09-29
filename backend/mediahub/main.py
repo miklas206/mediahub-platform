@@ -32,6 +32,8 @@ from mediahub.config import Config
 from mediahub.db import connect, migrate
 from mediahub.errors import DomainError
 from mediahub.events import EventBus
+from mediahub.fjordhub_api import router as fjordhub_router
+from mediahub.fjordhub_deploy import FjordHubDeploy
 from mediahub.hosts import HostRegistry
 from mediahub.hosts_api import router as hosts_router
 from mediahub.imports import ImportPlanner
@@ -87,6 +89,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.platform_update = PlatformUpdateRuntime(svc)
         svc.hosts = HostRegistry(svc)
+        svc.fjordhub_deploy = FjordHubDeploy(sessions)
         register_remote_apps(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -229,6 +232,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
+    app.include_router(fjordhub_router, prefix="/api/v1")
     app.include_router(integrations_router, prefix="/api/v1")
     app.include_router(security_router, prefix="/api/v1")
     app.include_router(backups_router, prefix="/api/v1")

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.24 - 2026-09-29
+
+- Recommend and prefill 4 CPU cores and 10240 MiB RAM for new FjordHub LXCs.
+- Run the reviewed FjordHub installer from the guide over fingerprint-pinned root SSH, with a live console and durable installation status.
+- Share the command template between browser preview and backend execution; accept validated configuration only, never browser-supplied shell commands.
+- Keep SSH passwords in job memory only, redact bounded logs, prevent duplicate/racing jobs and require target inspection after failed or interrupted attempts.
+
 ## 0.4.23 - 2026-09-29
 
 - Align FjordHub guide inputs at the top of each form row so Timezone does not stretch or shift downward when adjacent fields have helper text.
