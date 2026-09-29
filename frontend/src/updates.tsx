@@ -40,6 +40,7 @@ type PlatformRelease = {
   assets: Record<string, ReleaseAsset>;
   installReady: boolean;
   updateMethod?: "source" | "legacy-images";
+  fastUpdateAvailable?: boolean;
   privateAccessConfigured: boolean;
   message: string;
 };
@@ -80,6 +81,9 @@ type PlatformOperation = {
   toVersion?: string | null;
   steps?: Array<{ label?: string; state?: string }>;
   logs?: string[];
+  updateMode?: "fast" | "full" | null;
+  updateReason?: string | null;
+  changedServices?: string[];
 };
 
 function operationTask(
@@ -123,7 +127,9 @@ function platformOperation(value: PlatformOperation): OperationState {
     status:
       value.state === "succeeded" ? "success" : failed ? "error" : "running",
     progress: value.progress,
-    message: value.message,
+    message: value.updateMode
+      ? `${value.updateMode === "fast" ? "Fast update" : "Full update"} · ${value.message}`
+      : value.message,
     console: value.logs || [],
     steps: (value.steps || []).map((step) => ({
       label: step.label || "Update step",
@@ -131,6 +137,15 @@ function platformOperation(value: PlatformOperation): OperationState {
     })),
     details: [
       `State · ${value.state}`,
+      ...(value.updateMode
+        ? [
+            `Update mode · ${value.updateMode === "fast" ? "Fast update" : "Full update"}`,
+            ...(value.updateReason ? [value.updateReason] : []),
+            ...(value.changedServices?.length
+              ? [`Rebuilding · ${value.changedServices.join(", ")}`]
+              : []),
+          ]
+        : []),
       ...(value.fromVersion && value.toVersion
         ? [`Version · ${value.fromVersion} → ${value.toVersion}`]
         : []),
@@ -565,7 +580,7 @@ export function UpdatesPage() {
     if (
       !release?.latestVersion ||
       !window.confirm(
-        `Install MediaHub ${release.latestVersion}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}Core and the local Agent will then restart. Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
+        `Install MediaHub ${release.latestVersion}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}${release.fastUpdateAvailable ? "Fast update is selected automatically when possible: Core restarts, while an unchanged Agent keeps running. Otherwise both services are rebuilt and restarted. " : "Core and the local Agent may restart. "}Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
       )
     )
       return;
@@ -704,6 +719,20 @@ export function UpdatesPage() {
           <p className="update-card-message">
             {release?.message || "Checking the configured release channel…"}
           </p>
+          {release?.updateMethod === "source" && (
+            <div className="notice">
+              <strong>
+                {release.fastUpdateAvailable
+                  ? "Automatic fast update"
+                  : "Source update"}
+              </strong>
+              <p className="muted">
+                {release.fastUpdateAvailable
+                  ? "The server checks which services changed. An unchanged Agent keeps running while only Core is rebuilt. Otherwise, both services are rebuilt. Docker build cache is reused automatically."
+                  : "Refresh the host updater to enable automatic fast-update detection. Existing source updates remain available."}
+              </p>
+            </div>
+          )}
           <div className="button-row">
             <button
               onClick={() => void checkPlatform()}
@@ -736,7 +765,7 @@ export function UpdatesPage() {
             <p className="muted">
               Source: {release?.repository || "Not configured"}. Installation
               {release?.updateMethod === "source"
-                ? "downloads source code and builds Core and the local Agent on this server. Builds may take several minutes and need at least 8 GiB of free system space."
+                ? "downloads source code and builds the required services on this server. Builds may take several minutes and need at least 8 GiB of free system space."
                 : "requires a complete verified release and the rollback-protected host updater."}
             </p>
             <p className="muted">

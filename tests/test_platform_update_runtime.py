@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -28,6 +29,62 @@ def test_status_exposes_bounded_optional_build_console(tmp_path, monkeypatch):
     path.write_text(json.dumps(payload), encoding="utf-8")
     assert updater.status()["state"] == "building"
     assert updater.status()["logs"] == []
+
+
+def test_status_exposes_validated_automatic_update_plan(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    path = spool / "status.json"
+    path.write_text(
+        json.dumps(
+            {
+                "state": "building",
+                "updateMode": "fast",
+                "updateReason": "Agent unchanged",
+                "changedServices": ["core", "untrusted", "core"],
+            }
+        )
+    )
+    status = updater.status()
+    assert status["updateMode"] == "fast"
+    assert status["updateReason"] == "Agent unchanged"
+    assert status["changedServices"] == ["core"]
+    path.write_text(
+        json.dumps({"state": "building", "updateMode": "unexpected", "changedServices": "core"})
+    )
+    status = updater.status()
+    assert status["updateMode"] is None
+    assert status["changedServices"] == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Capability ownership requires POSIX metadata")
+@pytest.mark.parametrize(
+    "capabilities,expected",
+    [
+        ({"sourceBuild": True}, False),
+        ({"sourceBuild": True, "automaticFastUpdate": True}, True),
+        ({"sourceBuild": False, "automaticFastUpdate": True}, False),
+    ],
+)
+def test_fast_updates_require_host_capability(tmp_path, monkeypatch, capabilities, expected):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    path = spool / "host-capabilities.json"
+    path.write_text(json.dumps(capabilities))
+    path.chmod(0o644)
+    # Production metadata is root-owned; CI may run under a normal account.
+    original = Path.lstat
+
+    def metadata(candidate):
+        result = original(candidate)
+        return (
+            SimpleNamespace(st_mode=result.st_mode, st_size=result.st_size, st_uid=0)
+            if candidate == path
+            else result
+        )
+
+    monkeypatch.setattr(Path, "lstat", metadata)
+    assert updater.fast_available is expected
+    path.chmod(0o666)
+    assert updater.fast_available is False
 
 
 def release_fixture():

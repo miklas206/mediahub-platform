@@ -229,6 +229,10 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     state: "building",
     progress: 62,
     message: "Building core",
+    updateMode: "fast",
+    updateReason:
+      "Agent build inputs are unchanged; only Core needs rebuilding.",
+    changedServices: ["core"],
     steps: [{ label: "Build on this server", state: "running" }],
     logs: ["#1 CACHED", "#2 RUN pnpm build"],
   };
@@ -243,6 +247,7 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
           updateAvailable: true,
           installReady: true,
           updateMethod: "source",
+          fastUpdateAvailable: true,
           assets: {},
           message: "QA release",
         },
@@ -273,6 +278,9 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
         }),
   );
   await page.getByRole("button", { name: "Check GitHub", exact: true }).click();
+  await expect(
+    page.getByText("Automatic fast update", { exact: true }),
+  ).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Install update", exact: true })
@@ -297,6 +305,9 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     page.getByRole("progressbar", { name: "Install MediaHub update" }),
   ).toHaveAttribute("aria-valuenow", "100");
   await expect(page.getByLabel("Update console")).toContainText("#3 DONE");
+  await expect(
+    page.getByText("Fast update · QA update complete", { exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: "../.qa/update-console-desktop.png",
     fullPage: true,

@@ -117,6 +117,13 @@ class PlatformUpdateRuntime:
 
     @property
     def source_available(self):
+        return self._host_capability("sourceBuild")
+
+    @property
+    def fast_available(self):
+        return self.source_available and self._host_capability("automaticFastUpdate")
+
+    def _host_capability(self, name):
         if not self.available:
             return False
         try:
@@ -130,7 +137,7 @@ class PlatformUpdateRuntime:
                 or details.st_mode & 0o022
             ):
                 return False
-            return json.loads(path.read_text())["sourceBuild"] is True
+            return json.loads(path.read_text())[name] is True
         except (OSError, ValueError, KeyError, TypeError):
             return False
 
@@ -217,6 +224,15 @@ class PlatformUpdateRuntime:
                 "operationId": str(value.get("operationId") or "")[:64] or None,
                 "steps": list(value.get("steps") or [])[:10],
                 "updatedAt": value.get("updatedAt"),
+                "updateMode": value.get("updateMode")
+                if value.get("updateMode") in ("fast", "full")
+                else None,
+                "updateReason": str(value.get("updateReason") or "")[:300] or None,
+                "changedServices": [
+                    role for role in ("core", "agent") if role in value.get("changedServices", [])
+                ]
+                if isinstance(value.get("changedServices"), list)
+                else [],
                 "logs": [
                     line[:240] for line in value.get("logs", [])[-40:] if isinstance(line, str)
                 ]
