@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.25 - 2026-09-29
+
+- Preserve Agent filesystem and path-policy errors through Core, including HTTP 403 responses for denied writes, read-only storage and disabled directory creation.
+- Distinguish authentication failures from storage failures for folder preparation and streamed upload chunks; handle malformed rejection responses without exposing proxy pages.
+
 ## 0.4.24 - 2026-09-29
 
 - Recommend and prefill 4 CPU cores and 10240 MiB RAM for new FjordHub LXCs.
