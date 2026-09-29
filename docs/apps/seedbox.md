@@ -14,7 +14,8 @@ disabled.
 
 MediaHub can add a magnet or uploaded `.torrent` to Downloads or to another
 explicitly approved writable logical destination such as Movies, TV Shows or
-Other. Existing direct child folders are also selectable. The browser uses an
+Other Media. Only these media roots are selectable; existing content folders
+are excluded. The browser uses an
 opaque Agent-issued ID and cannot submit a filesystem path. See
 [daily-use controls](../operations/seedbox-daily-use.md).
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.13 - 2026-09-29
+
+- Show only approved media roots in the torrent destination selector; existing movie-title folders no longer appear.
+- Display the configured media names without the MediaHub or Top folder decoration.
+- Reject obsolete child-folder destination IDs when adding torrents, while preserving actions on existing jobs.
+- Keep media content, mount paths, VPN settings and torrent state unchanged.
+
 ## 0.4.12 - 2026-09-28
 
 - Preserve readable source permissions inside non-root Docker images, including builds run under a private systemd umask.

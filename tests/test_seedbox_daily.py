@@ -142,7 +142,7 @@ def test_no_file_deletion_or_paths_in_action_contract():
         TorrentAction(hash="all", action="remove")
 
 
-def test_download_locations_are_opaque_bounded_directories(tmp_path):
+def test_download_locations_exclude_existing_content_folders(tmp_path):
     (tmp_path / "Movies").mkdir()
     (tmp_path / "TV").mkdir()
     (tmp_path / ".incomplete").mkdir()
@@ -159,26 +159,20 @@ def test_download_locations_are_opaque_bounded_directories(tmp_path):
     locations = TorrentService.download_locations(policy, spec)
     assert [(item["storageLabel"], item["label"], item["savePath"]) for item in locations] == [
         ("Downloads", "Top folder", "/downloads"),
-        ("Downloads", "Movies", "/downloads/Movies"),
-        ("Downloads", "TV", "/downloads/TV"),
     ]
     assert all("/" not in item["id"] for item in locations)
     assert all(str(tmp_path) not in item["id"] for item in locations)
 
 
-def test_download_location_must_still_exist_and_match_opaque_id(tmp_path):
-    folder = tmp_path / "Movies"
-    folder.mkdir()
+def test_previous_child_folder_id_is_no_longer_a_destination(tmp_path):
+    import hashlib
+
+    (tmp_path / "Movies").mkdir()
     policy = SimpleNamespace(paths=SimpleNamespace(downloads=str(tmp_path), extraStorage=[]))
     spec = SimpleNamespace(downloadsStorageId="downloads")
-    location = TorrentService.download_locations(policy, spec)[1]
-    assert (
-        TorrentService.resolve_download_location(policy, spec, location["id"])
-        == "/downloads/Movies"
-    )
-    folder.rename(tmp_path / "Renamed")
+    old_id = "folder-" + hashlib.sha256(b"Movies").hexdigest()
     with pytest.raises(Exception) as denied:
-        TorrentService.resolve_download_location(policy, spec, location["id"])
+        TorrentService.resolve_download_location(policy, spec, old_id)
     assert getattr(denied.value, "code", "") == "download_location_denied"
 
 
@@ -205,7 +199,6 @@ def test_explicit_writable_logical_storage_is_a_destination(tmp_path):
     assert [(item["storageLabel"], item["savePath"]) for item in locations] == [
         ("Downloads", "/downloads"),
         ("Movies", "/media/movies"),
-        ("Movies", "/media/movies/Completed"),
     ]
     assert locations[1]["id"].startswith("location-")
     assert TorrentService.allowed_save_roots(policy, spec) == [

@@ -70,7 +70,7 @@ export function SeedboxDaily({
       .then((v) => {
         setDownloadLocationsSupported(Array.isArray(v.downloadLocations));
         const downloadLocations = v.downloadLocations?.length
-          ? v.downloadLocations
+          ? v.downloadLocations.filter((item) => item.label === "Top folder")
           : [{ id: "root", label: "Top folder" }];
         setList({ ...v, downloadLocations });
         setDownloadLocation((current) =>
@@ -310,7 +310,7 @@ export function SeedboxDaily({
               >
                 {list?.downloadLocations?.map((item) => (
                   <option key={item.id} value={item.id}>
-                    MediaHub {item.storageLabel || "Downloads"} · {item.label}
+                    {item.storageLabel || "Downloads"}
                   </option>
                 ))}
               </select>
@@ -337,9 +337,8 @@ export function SeedboxDaily({
               Add torrent
             </button>
             <p className="muted">
-              Paused by default. Only explicitly approved writable storage and
-              existing direct child folders can be selected. Private tracker
-              links are not included in MediaHub events.
+              Paused by default. Only approved media locations can be selected.
+              Private tracker links are not included in MediaHub events.
             </p>
           </form>
         </Panel>

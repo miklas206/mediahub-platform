@@ -139,10 +139,10 @@ class TorrentService:
 
     @classmethod
     def download_locations(cls, policy, spec):
-        """Return authorized roots and their existing direct child folders.
+        """Return the explicitly authorized storage roots only.
 
-        The browser receives opaque identifiers rather than filesystem paths. Symlinks,
-        hidden folders and nested caller-supplied paths never become destinations.
+        The browser receives opaque identifiers rather than filesystem paths. Existing
+        media subfolders are content, not additional download destinations.
         """
         locations = []
         for storage in cls.writable_storage_roots(policy, spec):
@@ -164,35 +164,6 @@ class TorrentService:
                     "savePath": str(storage["saveRoot"]),
                 }
             )
-            children = sorted(root.iterdir(), key=lambda item: item.name.casefold())
-            for child in children[:512]:
-                name = child.name
-                if (
-                    name.startswith(".")
-                    or len(name) > 120
-                    or not name.isprintable()
-                    or "\\" in name
-                    or child.is_symlink()
-                    or not child.is_dir()
-                ):
-                    continue
-                resolved_child = child.resolve(strict=True)
-                if resolved_child.parent != resolved_root:
-                    continue
-                prefix = "folder-" if storage["primary"] else "location-"
-                token = name if storage["primary"] else identity + name
-                locations.append(
-                    {
-                        "id": prefix + hashlib.sha256(token.encode("utf-8")).hexdigest(),
-                        "label": name,
-                        "storageLabel": storage["storageLabel"],
-                        "savePath": str(storage["saveRoot"] / name),
-                    }
-                )
-                if len(locations) >= 101:
-                    return locations
-            if len(locations) >= 101:
-                return locations
         return locations
 
     @classmethod
