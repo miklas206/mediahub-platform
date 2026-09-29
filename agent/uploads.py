@@ -52,22 +52,8 @@ class UploadSessions:
 
     @contextlib.contextmanager
     def _directory(self, value):
-        path = self.policy.allowed(value)
-        descriptor = None
-        if os.name == "posix":
-            descriptor = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                for part in path.parts[1:]:
-                    child = os.open(
-                        part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor
-                    )
-                    os.close(descriptor)
-                    descriptor = child
-                yield descriptor
-            finally:
-                os.close(descriptor)
-        else:
-            yield None
+        with self.policy.directory_descriptor(value) as descriptor:
+            yield descriptor
 
     @staticmethod
     def _name(data):

@@ -339,6 +339,34 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     });
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1440, height: 1000 });
+    let folderAttempts = 0;
+    await page.route("**/files/folder", (route) => {
+      folderAttempts++;
+      return route.fulfill({
+        status: 403,
+        json: {
+          error: {
+            code: "storage_erofs",
+            message: "Storage is mounted read-only (EROFS)",
+          },
+        },
+      });
+    });
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    const rejectedChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Folder", exact: true }).click();
+    // Two files in the same failed directory must trigger just one create request.
+    const rejectedFolder = join(uploadFixture, "Blocked Film");
+    await mkdir(rejectedFolder);
+    await writeFile(join(rejectedFolder, "one.mkv"), "one");
+    await writeFile(join(rejectedFolder, "two.srt"), "two");
+    await (await rejectedChooser).setFiles(rejectedFolder);
+    await expect(page.getByRole("alert")).toContainText(
+      "Cannot prepare upload folder: Storage is mounted read-only (EROFS)",
+    );
+    await expect(page.locator(".media-upload-item.error")).toHaveCount(2);
+    expect(folderAttempts).toBe(1);
+    await page.unroute("**/files/folder");
   } finally {
     await rm(uploadFixture, { recursive: true, force: true });
   }

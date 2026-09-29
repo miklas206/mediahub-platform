@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.22 - 2026-09-29
+
+- Fix Linux folder creation and resumable uploads through search-only ancestor directories by using O_PATH with O_DIRECTORY/O_NOFOLLOW instead of requiring read permission on every ancestor.
+- Report the actual filesystem error, affected path and Agent identity for permission failures; distinguish read-only mounts, full disks, quotas and path limits.
+- Show folder preparation errors above the upload queue and avoid repeating the same failed folder-creation request for every file.
+
 ## 0.4.21 - 2026-09-29
 
 - Generate copyable/downloadable FjordHub setup commands for a new unprivileged Debian 13 Proxmox LXC or an existing Debian host.

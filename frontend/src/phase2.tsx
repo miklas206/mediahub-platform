@@ -691,6 +691,8 @@ export function MediaFiles() {
         })),
       );
       const directories = new Map<string, string>();
+      const failedDirectories = new Map<string, Error>();
+      let folderError = "";
       try {
         for (const { id, file, controller, name } of queue) {
           const signal = controller.signal;
@@ -716,17 +718,27 @@ export function MediaFiles() {
                 );
               }
               const relativePath = parts.join("/");
+              if (failedDirectories.has(relativePath))
+                throw failedDirectories.get(relativePath)!;
               if (!directories.has(relativePath)) {
-                const created = await api<{ path: string }>(
-                  `/storage/locations/${locationId}/files/folder`,
-                  "POST",
-                  {
-                    path: listing.path,
-                    relativePath,
-                  },
-                  signal,
-                );
-                directories.set(relativePath, created.path);
+                try {
+                  const created = await api<{ path: string }>(
+                    `/storage/locations/${locationId}/files/folder`,
+                    "POST",
+                    {
+                      path: listing.path,
+                      relativePath,
+                    },
+                    signal,
+                  );
+                  directories.set(relativePath, created.path);
+                } catch (caught) {
+                  if (!signal.aborted) {
+                    failedDirectories.set(relativePath, caught as Error);
+                    folderError = `Cannot prepare upload folder: ${(caught as Error).message}`;
+                  }
+                  throw caught;
+                }
               }
               destination = directories.get(relativePath)!;
             }
@@ -771,6 +783,7 @@ export function MediaFiles() {
       } finally {
         setUploading(false);
         await open(locationId, listing.path);
+        if (folderError) setError(folderError);
         if (fileInput.current) fileInput.current.value = "";
         if (folderInput.current) folderInput.current.value = "";
       }

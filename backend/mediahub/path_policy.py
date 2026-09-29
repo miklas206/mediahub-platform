@@ -6,11 +6,13 @@ without ever overwriting an existing file.
 """
 
 import asyncio
+import errno
 import os
 import secrets
 import shutil
 import stat
 from collections.abc import AsyncIterable
+from contextlib import contextmanager
 from pathlib import Path
 
 import psutil
@@ -111,6 +113,63 @@ class DirectoryPolicy:
             "freeBytes": capacity.free,
             "permissionCheck": "advisory-no-write-probe",
         }
+
+    @staticmethod
+    def storage_error(error: OSError, path: Path, action: str):
+        number = error.errno
+        symbol = errno.errorcode.get(number, "UNKNOWN")
+        reason = {
+            errno.EACCES: "Permission denied",
+            errno.EPERM: "Operation not permitted by the filesystem",
+            errno.EROFS: "Storage is mounted read-only",
+            errno.ENOSPC: "Storage has no free space or inodes",
+            errno.EDQUOT: "Storage quota exceeded",
+            errno.ENAMETOOLONG: "Folder name or path exceeds the filesystem limit",
+            errno.ENOENT: "A parent directory is missing or was removed",
+            errno.ENOTDIR: "A path component is not a directory or changed during access",
+            errno.ELOOP: "A symlink was encountered; access was blocked",
+        }.get(number, "Filesystem rejected the operation")
+        identity = (
+            f"; Agent UID={os.geteuid()}, GID={os.getegid()}, groups={os.getgroups()}"
+            if os.name == "posix" and number in (errno.EACCES, errno.EPERM)
+            else ""
+        )
+        return DomainError(
+            "storage_" + symbol.lower(),
+            f"{reason} while {action}: {path} ({symbol}{identity})",
+            507
+            if number in (errno.ENOSPC, errno.EDQUOT)
+            else 403
+            if number in (errno.EACCES, errno.EPERM, errno.EROFS)
+            else 400,
+        )
+
+    @contextmanager
+    def directory_descriptor(self, value: str):
+        path = self.allowed(value)
+        if os.name != "posix":
+            yield None
+            return
+        # Traversal needs search permission, not permission to list every ancestor.
+        # O_DIRECTORY plus O_NOFOLLOW still rejects symlink replacement attacks.
+        flags = getattr(os, "O_PATH", os.O_RDONLY) | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptor = None
+        current = Path(path.anchor)
+        try:
+            descriptor = os.open(path.anchor, flags)
+            for component in path.parts[1:]:
+                current /= component
+                child = os.open(component, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+        except OSError as error:
+            if descriptor is not None:
+                os.close(descriptor)
+            raise self.storage_error(error, current, "accessing storage") from None
+        try:
+            yield descriptor
+        finally:
+            os.close(descriptor)
 
     def browse(self, value: str | None = None):
         if value is None:
@@ -343,28 +402,14 @@ class DirectoryPolicy:
         parent = self.allowed(str(path.parent))
         try:
             if os.name == "posix":
-                # Walk by descriptors with O_NOFOLLOW, preventing parent-symlink swap attacks.
-                descriptor = os.open(parent.anchor, os.O_RDONLY | os.O_DIRECTORY)
-                try:
-                    for component in parent.parts[1:]:
-                        child = os.open(
-                            component,
-                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                            dir_fd=descriptor,
-                        )
-                        os.close(descriptor)
-                        descriptor = child
+                with self.directory_descriptor(str(parent)) as descriptor:
                     os.mkdir(path.name, mode=0o750, dir_fd=descriptor)
-                finally:
-                    os.close(descriptor)
             else:
                 # Development only: approved roots must be private to the current Windows user.
                 self.allowed(str(parent))
                 path.mkdir()
         except FileExistsError:
             raise DomainError("already_exists", "Directory already exists", 409) from None
-        except OSError:
-            raise DomainError(
-                "creation_failed", "Unable to create directory; check permissions"
-            ) from None
+        except OSError as error:
+            raise self.storage_error(error, path, "creating folder") from None
         return self.inspect(str(path))
