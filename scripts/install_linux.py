@@ -332,7 +332,7 @@ def main():
         "mem_limit": "512m",
         "memswap_limit": "512m",
         "networks": ["control"],
-        "group_add": [str(Path("/var/run/docker.sock").stat().st_gid), "1000"],
+        "group_add": [str(Path("/var/run/docker.sock").stat().st_gid), "1000", "10001"],
         "volumes": [
             f"{root}/agent:/state",
             f"{root}/tls-agent:/tls:ro",

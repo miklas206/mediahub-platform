@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.28 - 2026-09-30
+
+- Preserve the Agent's supplementary private-state group 10001 alongside primary media group 1000. An explicit Docker USER group in v0.4.26 discarded membership needed to read host storage evidence and blocked Plex recovery.
+- Explicitly retain Plex VPN's outbound bridge when attaching the internal control network. Reconnect a missing bridge on an owned, stopped VPN before its normal verified start; do not change a running VPN's networks.
+- Extend image CI checks to require both primary media and supplementary private-state groups.
+
 ## 0.4.27 - 2026-09-30
 
 - Label update progress and steps as last received while Core is unreachable, and show a separate reconnecting indicator instead of animating a stale build step.

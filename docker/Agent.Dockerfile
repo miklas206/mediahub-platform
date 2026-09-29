@@ -19,5 +19,7 @@ RUN groupadd --gid 1000 media && groupadd --gid 10001 mediahub \
 COPY pyproject.toml README.md LICENSE ./
 COPY backend/ ./backend/
 COPY agent/ ./agent/
-USER 10001:1000
+# Resolve the primary media GID AND supplementary private-state GID from the
+# image account. An explicit :1000 would discard its mediahub group membership.
+USER 10001
 CMD ["python", "-m", "agent.main"]

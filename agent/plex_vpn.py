@@ -242,11 +242,36 @@ class PlexVPN:
         with contextlib.suppress(DomainError):
             await self.runtime.request("DELETE", f"/containers/{identifier}?v=false")
 
+    async def _ensure_bridge(self, container):
+        """Restore the intended uplink on an owned, stopped VPN only."""
+        if "bridge" in container.get("NetworkSettings", {}).get("Networks", {}):
+            return container
+        if container.get("State", {}).get("Running"):
+            raise DomainError(
+                "plex_vpn_network_invalid",
+                "Plex VPN has no uplink; stop it before repairing its network",
+                409,
+            )
+        network = await self.runtime.request("GET", "/networks/bridge")
+        if network.get("Driver") != "bridge" or network.get("Internal") is not False:
+            raise DomainError(
+                "plex_vpn_network_invalid", "Docker bridge is not an outbound network", 409
+            )
+        await self.runtime.request(
+            "POST", "/networks/bridge/connect", body={"Container": container["Id"]}
+        )
+        checked = await self._container()
+        if "bridge" not in checked.get("NetworkSettings", {}).get("Networks", {}):
+            raise DomainError(
+                "plex_vpn_network_invalid", "Plex VPN uplink could not be verified", 503
+            )
+        return checked
+
     async def _create_container(self):
         policy = self.policy()
         existing = await self._container(required=False)
         if existing:
-            return existing
+            return await self._ensure_bridge(existing)
         await self._ensure_volume()
         outbound_subnets = [policy.lanSubnet]
         control_network = self.runtime.policy().controlNetwork
@@ -269,6 +294,9 @@ class PlexVPN:
             outbound_subnets.append(candidates[0])
         body = {
             "Image": policy.image,
+            # Keep the default bridge explicit when attaching the internal
+            # control network before first start. Internal-only has no route out.
+            "NetworkingConfig": {"EndpointsConfig": {"bridge": {}}},
             "Labels": {
                 "org.mediahub.package": "org.mediahub.plex",
                 "org.mediahub.component": "vpn",
@@ -346,7 +374,7 @@ class PlexVPN:
                     "DELETE", f"/containers/{created['Id']}?force=false&v=false"
                 )
             raise
-        return await self._container()
+        return await self._ensure_bridge(await self._container())
 
     async def _exec(self, container, command, max_output=16384):
         execution = await self.runtime.request(

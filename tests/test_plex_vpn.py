@@ -1,6 +1,7 @@
 import asyncio
 import base64
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from mediahub.errors import DomainError
@@ -13,6 +14,46 @@ from agent.plex_vpn import (
     PlexVPN,
     validate_wireguard_profile,
 )
+
+
+def test_stopped_vpn_missing_bridge_is_reconnected_and_rechecked():
+    item = {
+        "Id": "owned-vpn",
+        "State": {"Running": False},
+        "NetworkSettings": {"Networks": {"control": {}}},
+    }
+    repaired = {**item, "NetworkSettings": {"Networks": {"control": {}, "bridge": {}}}}
+    request = AsyncMock(side_effect=[{"Driver": "bridge", "Internal": False}, {}])
+    fake = SimpleNamespace(
+        runtime=SimpleNamespace(request=request), _container=AsyncMock(return_value=repaired)
+    )
+    assert asyncio.run(PlexVPN._ensure_bridge(fake, item)) == repaired
+    request.assert_any_await("POST", "/networks/bridge/connect", body={"Container": "owned-vpn"})
+    fake._container.assert_awaited_once()
+
+
+def test_vpn_with_bridge_needs_no_network_change():
+    item = {"NetworkSettings": {"Networks": {"bridge": {}, "control": {}}}}
+    request = AsyncMock()
+    fake = SimpleNamespace(runtime=SimpleNamespace(request=request))
+    assert asyncio.run(PlexVPN._ensure_bridge(fake, item)) is item
+    request.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "running,network",
+    [
+        (True, {"Driver": "bridge", "Internal": False}),
+        (False, {"Driver": "bridge", "Internal": True}),
+        (False, {"Driver": "overlay", "Internal": False}),
+    ],
+)
+def test_vpn_repair_rejects_running_container_or_non_egress_network(running, network):
+    request = AsyncMock(return_value=network)
+    fake = SimpleNamespace(runtime=SimpleNamespace(request=request))
+    with pytest.raises(DomainError):
+        asyncio.run(PlexVPN._ensure_bridge(fake, {"State": {"Running": running}}))
+    assert all(call.args[0] == "GET" for call in request.await_args_list)
 
 
 def profile(allowed="0.0.0.0/0"):
