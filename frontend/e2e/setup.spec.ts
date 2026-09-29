@@ -145,7 +145,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       .getByRole("option", { name: "QA Movies", exact: true }),
   ).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: "Upload folder", exact: true }),
+    page.getByRole("button", { name: "Upload", exact: true }),
   ).toBeEnabled();
   const uploadFixture = await mkdtemp(join(tmpdir(), "mediahub-folder-"));
   try {
@@ -170,9 +170,17 @@ test("fresh wizard resumes and completed installation skips setup", async ({
         await route.abort();
       } else await route.continue();
     });
-    await page
-      .getByLabel("Choose folder to upload", { exact: true })
-      .setInputFiles(folder);
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await expect(
+      page.getByRole("group", { name: "Upload options" }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "../.qa/upload-choice-desktop.png",
+      fullPage: true,
+    });
+    const folderChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Folder", exact: true }).click();
+    await (await folderChooser).setFiles(folder);
     await expect(
       page.getByText("2 of 2 files uploaded", { exact: true }),
     ).toBeVisible();
@@ -210,20 +218,28 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       await held;
       await route.abort().catch(() => {});
     });
-    await page
-      .getByLabel("Choose files to upload", { exact: true })
-      .setInputFiles([
-        {
-          name: "cancel-test.mkv",
-          mimeType: "application/octet-stream",
-          buffer: Buffer.alloc(1024, 66),
-        },
-        {
-          name: "queued-test.mkv",
-          mimeType: "application/octet-stream",
-          buffer: Buffer.alloc(1024, 67),
-        },
-      ]);
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("group", { name: "Upload options" }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    const filesChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await (
+      await filesChooser
+    ).setFiles([
+      {
+        name: "cancel-test.mkv",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.alloc(1024, 66),
+      },
+      {
+        name: "queued-test.mkv",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.alloc(1024, 67),
+      },
+    ]);
     await entered;
     await expect(
       page.getByRole("button", {
@@ -264,7 +280,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     releaseChunk();
     await expect(page.getByText("Stopped", { exact: true })).toHaveCount(2);
     await expect(
-      page.getByRole("button", { name: "Upload folder", exact: true }),
+      page.getByRole("button", { name: "Upload", exact: true }),
     ).toBeEnabled();
     await expect(
       page
@@ -277,6 +293,20 @@ test("fresh wizard resumes and completed installation skips setup", async ({
         .getByText("queued-test.mkv", { exact: true }),
     ).toHaveCount(0);
     await page.unroute("**/uploads/*");
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
+    await expect(
+      page.getByRole("group", { name: "Upload options" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: "../.qa/upload-choice-mobile.png",
+      fullPage: true,
+    });
+    await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1440, height: 1000 });
   } finally {
     await rm(uploadFixture, { recursive: true, force: true });

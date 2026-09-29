@@ -23,8 +23,8 @@ it as rollback. Registering or editing a mapping does not move any media or chan
 
 ## Browser uploads
 
-In Storage, select the media location and destination, then choose **Upload files** or
-**Upload folder**. Folder upload includes the selected folder and its subfolders; empty
+In Storage, select the media location and destination, then choose **Upload**, followed by
+**Files** or **Folder**. Folder upload includes the selected folder and its subfolders; empty
 folders are not provided by the browser. Existing directories are reused, while existing
 files are never overwritten. Folder creation requires the local Agent's creation policy
 to be enabled. Technical App Data, Backups and Temporary locations cannot receive uploads.

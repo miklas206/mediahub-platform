@@ -1395,6 +1395,26 @@ button.primary:hover:not(:disabled) {
   gap: 8px;
   flex-wrap: wrap;
 }
+.media-upload-picker {
+  position: relative;
+}
+.media-upload-choices {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  box-shadow: 0 8px 24px #0004;
+}
+.media-upload-choices button {
+  justify-content: flex-start;
+}
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -1824,6 +1844,12 @@ td time {
   .media-browser-toolbar label,
   .media-browser-actions {
     width: 100%;
+  }
+  .media-browser-actions {
+    position: relative;
+  }
+  .media-upload-picker {
+    position: static;
   }
 }
 @media (max-width: 960px) {

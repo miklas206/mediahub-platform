@@ -566,6 +566,28 @@ export function MediaFiles() {
   >([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
+  const uploadPicker = useRef<HTMLDivElement>(null);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const [uploadChoicesOpen, setUploadChoicesOpen] = useState(false);
+  useEffect(() => {
+    if (!uploadChoicesOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (!uploadPicker.current?.contains(event.target as Node))
+        setUploadChoicesOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUploadChoicesOpen(false);
+        uploadButton.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [uploadChoicesOpen]);
   const uploadControllers = useRef(new Map<string, AbortController>());
   const [uploading, setUploading] = useState(false);
   useEffect(() => {
@@ -800,18 +822,6 @@ export function MediaFiles() {
                 ref={fileInput}
                 type="file"
               />
-              <button
-                className="primary"
-                disabled={
-                  !listing ||
-                  !selectedLocation?.writable ||
-                  loading ||
-                  uploading
-                }
-                onClick={() => fileInput.current?.click()}
-              >
-                <Upload size={16} /> Upload files
-              </button>
               <input
                 aria-label="Choose folder to upload"
                 className="visually-hidden"
@@ -821,18 +831,57 @@ export function MediaFiles() {
                 ref={folderInput}
                 onChange={(event) => uploadFiles(event.target.files, true)}
               />
-              <button
-                className="primary"
-                disabled={
-                  !listing ||
-                  !selectedLocation?.writable ||
-                  loading ||
-                  uploading
-                }
-                onClick={() => folderInput.current?.click()}
+              <div
+                className="media-upload-picker"
+                ref={uploadPicker}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget))
+                    setUploadChoicesOpen(false);
+                }}
               >
-                <Folder size={16} /> Upload folder
-              </button>
+                <button
+                  className="primary"
+                  ref={uploadButton}
+                  aria-expanded={uploadChoicesOpen}
+                  aria-controls="media-upload-choices"
+                  disabled={
+                    !listing ||
+                    !selectedLocation?.writable ||
+                    loading ||
+                    uploading
+                  }
+                  onClick={() => setUploadChoicesOpen((open) => !open)}
+                >
+                  <Upload size={16} /> Upload
+                </button>
+                {uploadChoicesOpen && (
+                  <div
+                    className="media-upload-choices"
+                    id="media-upload-choices"
+                    role="group"
+                    aria-label="Upload options"
+                  >
+                    <button
+                      onClick={() => {
+                        setUploadChoicesOpen(false);
+                        uploadButton.current?.focus();
+                        fileInput.current?.click();
+                      }}
+                    >
+                      <FileText size={16} /> Files
+                    </button>
+                    <button
+                      onClick={() => {
+                        setUploadChoicesOpen(false);
+                        uploadButton.current?.focus();
+                        folderInput.current?.click();
+                      }}
+                    >
+                      <Folder size={16} /> Folder
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {uploads.length > 0 && (

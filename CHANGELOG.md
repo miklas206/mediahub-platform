@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.17 - 2026-09-29
+
+- Replace the two storage upload buttons with one Upload button offering Files or Folder.
+- Preserve tus transfers, folder structure and Stop controls.
+
 ## 0.4.16 - 2026-09-29
 
 - Cache Python dependencies before copying application source, reusing the same dependency layer between Core and Agent builds.
