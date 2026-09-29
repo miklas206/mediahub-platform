@@ -10,10 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && printf 'Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: bookworm\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' > /etc/apt/sources.list.d/docker.sources \
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && apt-get clean
-RUN groupadd --gid 10001 mediahub && useradd --uid 10001 --gid mediahub --no-create-home mediahub \
+# Use the shared media group as the primary GID: mergerfs may not resolve
+# Docker-only supplementary groups when checking write access. Keep UID 10001
+# so existing private Agent state and credentials remain owned by this user.
+RUN groupadd --gid 1000 media && groupadd --gid 10001 mediahub \
+    && useradd --uid 10001 --gid media --groups mediahub --no-create-home mediahub \
     && mkdir /state /storage && chown mediahub:mediahub /state /storage
 COPY pyproject.toml README.md LICENSE ./
 COPY backend/ ./backend/
 COPY agent/ ./agent/
-USER 10001:10001
+USER 10001:1000
 CMD ["python", "-m", "agent.main"]

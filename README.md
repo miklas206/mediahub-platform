@@ -169,3 +169,14 @@ fails or the one-hour limit is reached, status requires inspection: remote work 
 be running. Nothing is retried or deleted automatically. Check the target and any created
 LXC before explicitly acknowledging a fresh attempt. On success, open FjordHub on its guest
 IP and chosen port to create its administrator and connect its read-only Access Token.
+
+
+### Agent write access on mergerfs
+
+The Agent image uses UID `10001` and primary GID `1000` from v0.4.26.
+This preserves access to its existing private state while making the shared media group
+available to mergerfs as the primary group, rather than relying only on Docker supplementary
+group resolution. The generated production Compose configuration inherits this image default;
+a normal Agent image update applies it without changing ownership or permissions of existing
+media. Custom Compose configurations with an explicit `user:` override must be reviewed by
+the operator because that override takes precedence over the image's default user.

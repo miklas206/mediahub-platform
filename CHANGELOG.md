@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.26 - 2026-09-30
+
+- Run the Agent image with UID 10001 and primary media GID 1000 so mergerfs writes do not depend on resolving Docker supplementary groups.
+- Preserve Agent state ownership and existing media permissions. The normal image update applies the new identity to installations without a Compose user override.
+- Verify the built production Agent image's effective UID and GID in CI.
+
 ## 0.4.25 - 2026-09-29
 
 - Preserve Agent filesystem and path-policy errors through Core, including HTTP 403 responses for denied writes, read-only storage and disabled directory creation.
