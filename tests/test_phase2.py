@@ -155,6 +155,62 @@ def test_folder_upload_chunks_and_stop(setup_client):
     )
 
 
+def test_tus_upload_offsets_five_mib_limit_and_csrf(setup_client):
+    client = setup_client
+    bootstrap(client)
+    root = client.storage_root
+    identifier = client.post(
+        "/api/v1/storage/locations",
+        json={
+            "name": "Movies",
+            "kind": "movies",
+            "path": str(root),
+        },
+    ).json()["data"]["id"]
+    base = f"/api/v1/storage/locations/{identifier}/uploads"
+    size = 5 * 1024**2
+    session = client.post(
+        base, json={"path": str(root), "filename": "tus.bin", "size": size + 1}
+    ).json()["data"]
+    endpoint = base + "/" + session["id"]
+    headers = {
+        "Tus-Resumable": "1.0.0",
+        "Upload-Offset": "0",
+        "Content-Type": "application/offset+octet-stream",
+    }
+    assert client.options(endpoint).headers["Tus-Version"] == "1.0.0"
+    assert client.head(endpoint).status_code == 412
+    head = client.head(endpoint, headers=headers)
+    assert head.status_code == 200 and not head.content
+    assert head.headers["Upload-Length"] == str(size + 1)
+    assert head.headers["Upload-Offset"] == "0"
+    assert head.headers["Cache-Control"] == "no-store"
+    oversized = client.patch(endpoint, headers=headers, content=b"x" * (size + 1))
+    assert oversized.status_code == 413 and oversized.headers["Tus-Resumable"] == "1.0.0"
+    assert client.head(endpoint, headers=headers).headers["Upload-Offset"] == "0"
+    invalid = client.patch(
+        endpoint, headers={**headers, "Content-Type": "application/octet-stream"}, content=b"x"
+    )
+    assert invalid.status_code == 415
+    accepted = client.patch(endpoint, headers=headers, content=b"x" * size)
+    assert accepted.status_code == 204 and not accepted.content
+    assert accepted.headers["Upload-Offset"] == str(size)
+    assert client.patch(endpoint, headers=headers, content=b"x").status_code == 409
+    # tus-js-client uses HEAD to recover an acknowledgement lost after a PATCH.
+    assert client.head(endpoint, headers=headers).headers["Upload-Offset"] == str(size)
+    assert (
+        client.patch(
+            endpoint, headers={**headers, "Upload-Offset": str(size)}, content=b"y"
+        ).status_code
+        == 204
+    )
+    assert client.post(endpoint + "/finish").json()["data"]["complete"]
+    assert (root / "tus.bin").read_bytes() == b"x" * size + b"y"
+    assert client.delete(endpoint).status_code == 200
+    client.headers.pop("X-MediaHub-CSRF")
+    assert client.patch(endpoint, headers=headers, content=b"x").status_code == 403
+
+
 @pytest.fixture
 def setup_client(tmp_path):
     config = Config(data_dir=tmp_path / "core", _env_file=None)

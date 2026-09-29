@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.4.15 - 2026-09-29
+
+- Use tus-js-client for browser uploads with 5 MiB chunks and automatic offset recovery.
+- Add authenticated tus HEAD/PATCH endpoints while preserving folder uploads, Stop controls and no-overwrite publication.
+
 ## 0.4.14 - 2026-09-29
 
 - Upload a whole folder from Storage, preserving its name and nested files.

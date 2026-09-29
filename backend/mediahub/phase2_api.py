@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -417,6 +418,61 @@ async def storage_upload_chunk(
     if not 0 < length <= 8 * 1024**2 or offset < 0:
         raise DomainError("invalid_upload", "Expected an upload chunk of at most 8 MiB", 400)
     return result(await svc.agent.upload_chunk(upload_id, root, offset, request.stream(), length))
+
+
+@router.head("/storage/locations/{identifier}/uploads/{upload_id}")
+@router.patch("/storage/locations/{identifier}/uploads/{upload_id}")
+@router.options("/storage/locations/{identifier}/uploads/{upload_id}")
+async def tus_storage_upload(
+    identifier: str, upload_id: str, request: Request, user=Depends(administrator)
+):
+    """Tus core protocol for sessions allocated by the authenticated creation API."""
+    headers = {"Tus-Resumable": "1.0.0", "Cache-Control": "no-store"}
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers={**headers, "Tus-Version": "1.0.0"})
+    if request.headers.get("tus-resumable") != "1.0.0":
+        return Response(status_code=412, headers={**headers, "Tus-Version": "1.0.0"})
+    svc = services(request)
+    try:
+        endpoint, root = upload_session_path(svc, identifier, upload_id)
+        if request.method == "HEAD":
+            status = await svc.agent.request("GET", endpoint + "?" + urlencode({"root": root}))
+            return Response(
+                status_code=200,
+                headers={
+                    **headers,
+                    "Upload-Offset": str(status["offset"]),
+                    "Upload-Length": str(status["size"]),
+                },
+            )
+        if request.headers.get("content-type") != "application/offset+octet-stream":
+            raise DomainError(
+                "invalid_upload", "Tus chunks require application/offset+octet-stream", 415
+            )
+        raw_offset = request.headers.get("upload-offset", "")
+        raw_length = request.headers.get("content-length", "")
+        if not re.fullmatch(r"[0-9]{1,16}", raw_offset) or not re.fullmatch(
+            r"[0-9]{1,16}", raw_length
+        ):
+            raise DomainError("invalid_upload", "Upload offset and length are required", 400)
+        offset, length = int(raw_offset), int(raw_length)
+        if length > 5 * 1024**2:
+            raise DomainError("upload_too_large", "Tus chunks must not exceed 5 MiB", 413)
+        if length:
+            status = await svc.agent.upload_chunk(upload_id, root, offset, request.stream(), length)
+        else:
+            status = await svc.agent.request("GET", endpoint + "?" + urlencode({"root": root}))
+            if status["offset"] != offset:
+                raise DomainError("upload_offset", "Upload position changed; check progress", 409)
+        return Response(
+            status_code=204, headers={**headers, "Upload-Offset": str(status["offset"])}
+        )
+    except DomainError as error:
+        return JSONResponse(
+            {"error": {"code": error.code, "message": error.message}},
+            status_code=error.status,
+            headers=headers,
+        )
 
 
 @router.post("/storage/locations/{identifier}/uploads/{upload_id}/finish")

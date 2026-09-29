@@ -1,3 +1,5 @@
+import { Upload } from "tus-js-client";
+
 let csrf = "";
 export const setCsrf = (value: string) => {
   csrf = value;
@@ -62,43 +64,48 @@ type UploadSession = {
   complete: boolean;
 };
 
-function uploadChunk(
+function uploadWithTus(
   endpoint: string,
-  chunk: Blob,
-  onProgress: (loaded: number) => void,
+  file: File,
+  onProgress: (percent: number) => void,
   signal: AbortSignal,
-): Promise<UploadSession> {
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    if (signal.aborted) {
-      reject(new DOMException("Upload stopped", "AbortError"));
-      return;
-    }
-    request.open("PUT", "/api/v1" + endpoint);
-    request.withCredentials = true;
-    request.setRequestHeader("Content-Type", "application/octet-stream");
-    request.setRequestHeader("X-MediaHub-CSRF", csrf);
-    const abort = () => request.abort();
-    signal.addEventListener("abort", abort, { once: true });
-    request.onloadend = () => signal.removeEventListener("abort", abort);
-    request.upload.onprogress = (event) => onProgress(event.loaded);
-    request.onerror = () =>
-      reject(new Error("Upload connection was interrupted"));
-    request.onabort = () =>
-      reject(new DOMException("Upload stopped", "AbortError"));
-    request.onload = () => {
-      try {
-        const payload = JSON.parse(request.responseText);
-        if (request.status < 200 || request.status >= 300 || !payload.data) {
-          reject(
-            new Error(payload.error?.message || "Upload chunk was rejected"),
+    signal.throwIfAborted();
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const upload = new Upload(file, {
+      uploadUrl: new URL("/api/v1" + endpoint, window.location.origin).href,
+      chunkSize: 5 * 1024 * 1024,
+      retryDelays: [0, 1000, 3000],
+      storeFingerprintForResuming: false,
+      headers: { "X-MediaHub-CSRF": csrf },
+      onProgress: (sent, total) => {
+        if (!signal.aborted)
+          onProgress(
+            total ? Math.min(99, Math.round((100 * sent) / total)) : 0,
           );
-        } else resolve(payload.data);
-      } catch {
-        reject(new Error("MediaHub returned an invalid upload response"));
-      }
+      },
+      onSuccess: () => {
+        cleanup();
+        resolve();
+      },
+      onError: (error) => {
+        cleanup();
+        reject(error);
+      },
+    });
+    const abort = () => {
+      cleanup();
+      // Stop the active tus request/retry before the existing session cleanup runs.
+      void upload
+        .abort()
+        .then(
+          () => reject(new DOMException("Upload stopped", "AbortError")),
+          reject,
+        );
     };
-    request.send(chunk);
+    signal.addEventListener("abort", abort, { once: true });
+    upload.start();
   });
 }
 
@@ -122,39 +129,7 @@ export async function uploadMediaFile(
   );
   const endpoint = base + "/" + session.id;
   try {
-    let offset = session.offset;
-    let retries = 0;
-    while (offset < file.size) {
-      signal.throwIfAborted();
-      const end = Math.min(offset + 8 * 1024 * 1024, file.size);
-      try {
-        const result = await uploadChunk(
-          endpoint + "?offset=" + offset,
-          file.slice(offset, end),
-          (loaded) =>
-            onProgress(
-              Math.min(99, Math.round((100 * (offset + loaded)) / file.size)),
-            ),
-          signal,
-        );
-        if (result.offset !== end)
-          throw new Error("Unexpected upload position");
-        offset = result.offset;
-        retries = 0;
-      } catch (error) {
-        signal.throwIfAborted();
-        if (++retries > 2) throw error;
-        // A response can be lost after the Agent has stored the chunk.
-        const current = await api<UploadSession>(
-          endpoint,
-          "GET",
-          undefined,
-          signal,
-        );
-        if (current.offset < offset || current.offset > end) throw error;
-        offset = current.offset;
-      }
-    }
+    await uploadWithTus(endpoint, file, onProgress, signal);
     signal.throwIfAborted();
     let result: UploadSession;
     try {

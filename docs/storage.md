@@ -29,7 +29,7 @@ folders are not provided by the browser. Existing directories are reused, while 
 files are never overwritten. Folder creation requires the local Agent's creation policy
 to be enabled. Technical App Data, Backups and Temporary locations cannot receive uploads.
 
-Uploads use a sequential queue and 8 MiB requests, so large files do not require a single
+Uploads use tus-js-client, a sequential queue and 5 MiB requests, so large files do not require a single
 large proxy request or buffering the entire file in memory. The file limit is 512 GiB,
 subject to available space; a selection may contain up to 10,000 files and 32 folder levels.
 Keep the page open. This is not a persistent transfer manager: reopening the page does
@@ -43,7 +43,9 @@ the stored offset before retrying, preventing duplicated data. Cancel removes th
 file; if the browser loses connectivity before cancellation reaches the Agent, abandoned
 sessions are cleaned after 24 hours of inactivity, checked every 30 minutes. Empty directories
 created for an interrupted folder upload may remain. Core and its local Agent must both
-be upgraded to 0.4.14 or newer for these controls.
+be upgraded to 0.4.15 or newer for the tus upload controls. The authenticated creation API
+allocates a session; tus-js-client transfers via its upload URL using HEAD/PATCH. The
+existing finish API publishes the completed file and the cancel API removes unfinished data.
 
 Capacity is per filesystem, not the sum of logical folders on the same disk. MediaHub does not
 format disks or attach raw filesystems. Container paths and host mounts must be mapped explicitly;

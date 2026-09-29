@@ -158,7 +158,11 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     );
     await writeFile(join(folder, "Subtitles", "sample.srt"), "Test subtitle");
     let droppedResponse = false;
-    await page.route("**/uploads/*?offset=*", async (route) => {
+    await page.route("**/uploads/*", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
+      expect(route.request().postDataBuffer()!.length).toBeLessThanOrEqual(
+        5 * 1024 * 1024,
+      );
       if (!droppedResponse) {
         droppedResponse = true;
         const accepted = await route.fetch();
@@ -173,7 +177,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       page.getByText("2 of 2 files uploaded", { exact: true }),
     ).toBeVisible();
     expect(droppedResponse).toBe(true);
-    await page.unroute("**/uploads/*?offset=*");
+    await page.unroute("**/uploads/*");
     await expect(
       page.getByRole("button", { name: /Test Film.*Folder/ }),
     ).toBeVisible();
@@ -200,7 +204,8 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     const held = new Promise<void>((resolve) => {
       releaseChunk = resolve;
     });
-    await page.route("**/uploads/*?offset=*", async (route) => {
+    await page.route("**/uploads/*", async (route) => {
+      if (route.request().method() !== "PATCH") return route.continue();
       chunkEntered();
       await held;
       await route.abort().catch(() => {});
@@ -271,7 +276,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
         .locator(".media-file-list")
         .getByText("queued-test.mkv", { exact: true }),
     ).toHaveCount(0);
-    await page.unroute("**/uploads/*?offset=*");
+    await page.unroute("**/uploads/*");
     await page.setViewportSize({ width: 1440, height: 1000 });
   } finally {
     await rm(uploadFixture, { recursive: true, force: true });
