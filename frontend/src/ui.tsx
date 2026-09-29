@@ -41,6 +41,7 @@ import { api, setCsrf } from "./api";
 import { bytes, uptime } from "./format";
 import { SetupWizard } from "./wizard";
 import { PlatformVersion } from "./platform-version";
+import { SidebarClock } from "./sidebar-clock";
 import { BackupsPage } from "./backups";
 import { UpdatesPage } from "./updates";
 import {
@@ -572,6 +573,7 @@ function Shell({
               <LogOut size={18} />
             </button>
           </div>
+          <SidebarClock />
         </div>
       </aside>
       <div className="workspace">

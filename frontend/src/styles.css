@@ -280,6 +280,19 @@ nav a.active {
   margin-top: auto;
   padding-top: 26px;
 }
+.sidebar-clock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-clock time {
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
 .preview-label {
   display: flex;
   gap: 12px;
@@ -1416,7 +1429,10 @@ button.primary:hover:not(:disabled) {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
-  font: 12px/1.6 ui-monospace, Consolas, monospace;
+  font:
+    12px/1.6 ui-monospace,
+    Consolas,
+    monospace;
 }
 .media-drop-area.drag-active {
   outline: 2px dashed var(--accent);
