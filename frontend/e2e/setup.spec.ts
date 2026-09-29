@@ -67,6 +67,70 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     page.getByRole("heading", { name: "Storage", exact: true }),
   ).toBeVisible();
   await page.getByLabel("Name", { exact: true }).fill("QA Movies");
+  // A delayed response must not replace the folder selected afterwards.
+  let releaseSlow!: () => void;
+  const slowResponse = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  let slowStarted!: () => void;
+  const slowRequest = new Promise<void>((resolve) => {
+    slowStarted = resolve;
+  });
+  await page.route("**/api/v1/agent/directories**", async (route) => {
+    const path = new URL(route.request().url()).searchParams.get("path");
+    if (path === "/slow") {
+      slowStarted();
+      await slowResponse;
+    }
+    await route.fulfill({
+      json: {
+        data: {
+          path,
+          parent: null,
+          folders: path
+            ? [
+                {
+                  name: path === "/slow" ? "Stale child" : "Current child",
+                  path: `${path}/child`,
+                },
+              ]
+            : [
+                { name: "Slow folder", path: "/slow" },
+                { name: "Current folder", path: "/current" },
+              ],
+        },
+      },
+    });
+  });
+  await page
+    .getByRole("button", { name: "Browse server", exact: true })
+    .click();
+  const browser = page.getByRole("dialog", { name: "Browse server folders" });
+  await browser
+    .getByRole("button", { name: "Slow folder", exact: true })
+    .click();
+  await slowRequest;
+  await expect(
+    browser.getByRole("button", { name: "Current folder", exact: true }),
+  ).toHaveCount(0);
+  await browser
+    .getByRole("button", { name: "Parent folder", exact: true })
+    .click();
+  await browser
+    .getByRole("button", { name: "Current folder", exact: true })
+    .click();
+  await expect(
+    browser.getByRole("button", { name: "Current child", exact: true }),
+  ).toBeVisible();
+  releaseSlow();
+  await page.unrouteAll({ behavior: "wait" });
+  await expect(
+    browser.getByRole("button", { name: "Current child", exact: true }),
+  ).toBeVisible();
+  await expect(
+    browser.getByRole("button", { name: "Stale child", exact: true }),
+  ).toHaveCount(0);
+  await browser.getByRole("button", { name: "Close folder browser" }).click();
   await page
     .getByRole("button", { name: "Browse server", exact: true })
     .click();

@@ -163,6 +163,44 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     page.getByRole("heading", { name: "No media folders registered" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Updates", exact: true }).click();
+  let checkResult = {
+    count: 0,
+    items: [],
+    lastError: "Release source unavailable",
+  };
+  await page.route("**/api/v1/updates/check", (route) =>
+    route.fulfill({ json: { data: checkResult } }),
+  );
+  const checkAll = page.getByRole("button", {
+    name: "Check all now",
+    exact: true,
+  });
+  await checkAll.click();
+  await expect(
+    page.getByRole("alert", { name: "Check all updates progress" }),
+  ).toContainText("Update check incomplete: Release source unavailable");
+  await expect(
+    page.getByText("Everything is up to date.", { exact: true }),
+  ).toHaveCount(0);
+  checkResult = {
+    count: 1,
+    items: [],
+    lastError: "Release source unavailable",
+  };
+  await checkAll.click();
+  await expect(
+    page.getByText(
+      "1 verified update found; other sources could not be checked.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  checkResult = { count: 0, items: [], lastError: "" };
+  await checkAll.click();
+  await expect(
+    page.getByText("Everything is up to date.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.unroute("**/api/v1/updates/check");
   const githubCheck = page.getByRole("button", {
     name: "Check GitHub",
     exact: true,
@@ -245,7 +283,13 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   ).toBeVisible();
   await expect(
     page.getByRole("progressbar", { name: "Install MediaHub update" }),
-  ).toHaveAttribute("aria-valuenow", "62");
+  ).not.toHaveAttribute("aria-valuenow");
+  await expect(
+    page.getByRole("progressbar", { name: "Install MediaHub update" }),
+  ).toHaveAttribute(
+    "aria-valuetext",
+    "Last known progress: 62%. Waiting for connection.",
+  );
   await page.getByText("Console", { exact: true }).click();
   await expect(page.getByLabel("Update console")).toContainText("#1 CACHED");
   pollState = "success";

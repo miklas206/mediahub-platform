@@ -37,18 +37,38 @@ import type {
 } from "./phase2-types";
 
 export function useLoad<T>(path: string) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState("");
+  const [result, setResult] = useState<{
+    path: string;
+    data?: T;
+    error: string;
+  }>({ path, error: "" });
+  const activeRequest = useRef<AbortController | null>(null);
   const reload = useCallback(() => {
-    api<T>(path)
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    api<T>(path, "GET", undefined, controller.signal)
       .then((d) => {
-        setData(d);
-        setError("");
+        if (!controller.signal.aborted) setResult({ path, data: d, error: "" });
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        if (!controller.signal.aborted)
+          setResult((current) => ({
+            path,
+            data: current.path === path ? current.data : undefined,
+            error: e.message,
+          }));
+      });
   }, [path]);
-  useEffect(reload, [reload]);
-  return { data, error, reload };
+  useEffect(() => {
+    reload();
+    return () => activeRequest.current?.abort();
+  }, [reload]);
+  return {
+    data: result.path === path ? result.data : undefined,
+    error: result.path === path ? result.error : "",
+    reload,
+  };
 }
 export function Panel({
   title,
