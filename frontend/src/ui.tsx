@@ -40,6 +40,7 @@ import {
 import { api, setCsrf } from "./api";
 import { bytes, uptime } from "./format";
 import { SetupWizard } from "./wizard";
+import { PlatformVersion } from "./platform-version";
 import { BackupsPage } from "./backups";
 import { UpdatesPage } from "./updates";
 import {
@@ -366,7 +367,9 @@ function Login({
         )}
         <div className="login-foot">
           <ShieldCheck size={16} /> Your private media workspace{" "}
-          <span>v0.4.17</span>
+          <span>
+            v<PlatformVersion />
+          </span>
         </div>
       </div>
     </main>
@@ -587,7 +590,7 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "0.4.17"}</span>
+            <span className="version">v{metrics?.version || "…"}</span>
           </div>
         </header>
         <main className="main-content">
@@ -714,7 +717,7 @@ function Shell({
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "0.4.17"}
+              {metrics?.version || "…"}
             </span>
             <span>Self-hosted · Your media, your control</span>
           </footer>

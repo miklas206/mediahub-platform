@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { api, setCsrf } from "./api";
 import { SecuritySettings } from "./security";
+import { PlatformVersion } from "./platform-version";
 import { PlexInstallPage } from "./plex-install";
 import type { User } from "./contracts";
 import {
@@ -190,7 +191,9 @@ export function SetupWizard({
           <span>
             SETUP · STEP {draft.step + 1} OF {steps.length}
           </span>
-          <span>0.4.17</span>
+          <span>
+            <PlatformVersion />
+          </span>
         </header>
         <div className="wizard-body">
           <div className="page-heading">

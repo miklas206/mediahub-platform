@@ -109,6 +109,44 @@ source-aware Core will then disable source installation. Do not alter media.
 
 ## Progress and failure recovery
 
+### Incremental builds (0.4.18)
+
+Routine releases reuse Docker layers for unchanged inputs. Python runs directly
+from the copied application source with dependencies from `requirements.lock`;
+there is no per-release Python package installation. The frontend build uses a
+package manifest without its release version, and the UI reads the installed
+version from Core. A backend-only release therefore reuses the frontend bundle.
+Changes to dependencies or build recipes still invalidate the affected layers.
+
+The new host helper fingerprints Agent inputs and records the result in the
+root-owned `agent-build-cache.json` only after successful health checks. It ignores
+frontend files, the Core Dockerfile and distribution-version-only changes. Shared
+backend code, Agent code, dependencies and the Agent recipe remain inputs. The
+Agent Dockerfile must not depend on frontend files or the Core Dockerfile; expand
+the fingerprint inputs if that build contract ever changes.
+If the fingerprint and the installed immutable image match, the Agent remains
+running and only Core is built, snapshotted and replaced. Missing, invalid or
+mismatched cache evidence causes a normal full build. The first update with the
+new helper establishes the baseline. An unchanged Agent can report an older
+distribution version because its executable code has not changed.
+
+**Existing hosts:** Core updates do not replace the root-owned host helper. From
+a reviewed checkout of v0.4.18 or newer, run the existing migration command once
+(with no update running or queued):
+
+```sh
+sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository miklas206/mediahub-platform
+```
+
+Use your configured repository if this is a fork. The command refreshes the helper
+without installing a Core release or restarting running applications. Without this
+refresh, the Dockerfile cache improvements apply but the old helper still processes
+both services. Subsequent normal updates need no helper refresh for this feature.
+Release downloads still contain the complete verified source archive; incremental
+behavior concerns builds and service replacement, not byte-range patch downloads.
+
+### Transaction status
+
 The update card reports download, build, backup, replacement and verification.
 Only replacement causes a short Core disconnect. `succeeded` means local health
 checks passed; `rolled_back` means restoration succeeded; `failed` requires

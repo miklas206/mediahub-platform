@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.18 - 2026-09-29
+
+- Reuse the frontend build across backend-only releases: read the displayed version from Core and exclude package release metadata from Docker build inputs.
+- Run Python application source directly with locked dependencies, eliminating repeated package/build-tool installation for source edits.
+- Skip building, stopping, snapshotting and recreating an unchanged local Agent. Bind reuse to a root-owned source fingerprint and the installed immutable image; rebuild if evidence is missing or invalid.
+- Preserve Core backup and rollback while an unchanged Agent continues running. The first update establishes the Agent fingerprint.
+- Existing hosts must refresh the root-owned updater once using `scripts/enable_source_updates.py` from this version's checkout to enable Agent reuse. Normal Core updates do not replace that helper. Dockerfile improvements work with the existing source updater.
+
 ## 0.4.17 - 2026-09-29
 
 - Replace the two storage upload buttons with one Upload button offering Files or Folder.

@@ -241,6 +241,129 @@ def test_source_builds_both_images_before_stopping_and_never_loads_images(tmp_pa
     assert not list(root.glob("source-build-*"))
 
 
+def cached_source_updater(tmp_path, monkeypatch):
+    updater, root, commands = source_updater(tmp_path, monkeypatch)
+    extracted = tmp_path / "fingerprint-source"
+    updater._extract_source(updater.test_stage / "mediahub-source.tar.gz", extracted)
+    cache = {
+        "agentFingerprint": updater._agent_fingerprint(extracted),
+        "agentImage": "sha256:" + "4" * 64,
+    }
+    (root / "agent-build-cache.json").write_text(json.dumps(cache), encoding="utf-8")
+    compose = json.loads(updater.compose.read_text())
+    compose["services"]["agent"]["image"] = cache["agentImage"]
+    updater.compose.write_text(json.dumps(compose), encoding="utf-8")
+    return updater, root, commands
+
+
+def test_unchanged_agent_is_not_built_stopped_recreated_or_snapshotted(tmp_path, monkeypatch):
+    updater, root, commands = cached_source_updater(tmp_path, monkeypatch)
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    builds = [args for args in commands if args[:2] == ["docker", "build"]]
+    assert len(builds) == 1 and "mediahub-core:" in builds[0][5]
+    mutations = [
+        args
+        for args in commands
+        if args[:2] == ["docker", "compose"] and ("stop" in args or "up" in args)
+    ]
+    assert mutations and all("agent" not in args for args in mutations)
+    backup = root / "update-backups" / OPERATION
+    assert (backup / "data/mediahub.db").is_file()
+    assert not (backup / "agent").exists()
+
+
+@pytest.mark.parametrize("invalid", ["corrupt", "changed", "different-image", "missing-image"])
+def test_agent_cache_miss_builds_and_updates_both_roles(tmp_path, monkeypatch, invalid):
+    updater, root, commands = cached_source_updater(tmp_path, monkeypatch)
+    cache_path = root / "agent-build-cache.json"
+    cache = json.loads(cache_path.read_text())
+    if invalid == "corrupt":
+        cache_path.write_text("invalid json")
+    elif invalid == "changed":
+        cache["agentFingerprint"] = "0" * 64
+        cache_path.write_text(json.dumps(cache))
+    elif invalid == "different-image":
+        cache["agentImage"] = "sha256:" + "5" * 64
+        cache_path.write_text(json.dumps(cache))
+    else:
+        runner = updater.runner
+
+        def missing_image(args, capture=True):
+            if args[:3] == ["docker", "image", "inspect"] and args[-1] == cache["agentImage"]:
+                raise ValueError("Image removed")
+            return runner(args, capture)
+
+        updater.runner = missing_image
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    assert len([args for args in commands if args[:2] == ["docker", "build"]]) == 2
+    assert any("stop" in args and "agent" in args for args in commands)
+
+
+def test_core_only_rollback_preserves_running_agent_state(tmp_path, monkeypatch):
+    updater, root, commands = cached_source_updater(tmp_path, monkeypatch)
+    original_compose = updater.compose.read_bytes()
+    original_cache = (root / "agent-build-cache.json").read_bytes()
+    wait = updater._wait
+    failed = False
+
+    def fail_once(service, health=False, timeout=150):
+        nonlocal failed
+        if service == "core" and health and not failed:
+            failed = True
+            (root / "agent/state.json").write_text("Agent continued working")
+            raise ValueError("Core unhealthy")
+        return wait(service, health, timeout)
+
+    updater._wait = fail_once
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "rolled_back"
+    assert updater.compose.read_bytes() == original_compose
+    assert (root / "agent-build-cache.json").read_bytes() == original_cache
+    assert (root / "agent/state.json").read_text() == "Agent continued working"
+    assert not any("agent" in args and ("up" in args or "stop" in args) for args in commands)
+
+
+def test_agent_fingerprint_ignores_ui_and_release_version_but_tracks_runtime(tmp_path):
+    source = tmp_path / "source"
+    for name in ("frontend", "backend/mediahub", "agent", "docker"):
+        (source / name).mkdir(parents=True, exist_ok=True)
+    files = {
+        "pyproject.toml": '[project]\nversion = "0.4.17"\n',
+        "backend/mediahub/__init__.py": '__version__ = "0.4.17"\n',
+        "backend/mediahub/api.py": "shared = 1\n",
+        "agent/main.py": "agent = 1\n",
+        "requirements.lock": "dependency==1\n",
+        "docker/Agent.Dockerfile": "FROM python\n",
+        "frontend/package.json": '{"version":"0.4.17"}',
+        "frontend/ui.tsx": "old UI",
+        "docker/Dockerfile": "old Core recipe",
+    }
+    for name, content in files.items():
+        (source / name).write_text(content, encoding="utf-8")
+    fingerprint = HostUpdater._agent_fingerprint(source)
+    for name in ("pyproject.toml", "backend/mediahub/__init__.py", "frontend/package.json"):
+        path = source / name
+        path.write_text(path.read_text().replace("0.4.17", "0.4.18"), encoding="utf-8")
+    (source / "frontend/ui.tsx").write_text("new UI")
+    (source / "docker/Dockerfile").write_text("new Core recipe")
+    assert HostUpdater._agent_fingerprint(source) == fingerprint
+    for name in (
+        "agent/main.py",
+        "backend/mediahub/api.py",
+        "requirements.lock",
+        "docker/Agent.Dockerfile",
+    ):
+        path = source / name
+        original = path.read_bytes()
+        path.write_bytes(original + b"changed\n")
+        assert HostUpdater._agent_fingerprint(source) != fingerprint
+        path.write_bytes(original)
+    (source / "agent/main.py").unlink()
+    assert HostUpdater._agent_fingerprint(source) != fingerprint
+
+
 def test_failed_source_build_leaves_running_services_and_config_untouched(tmp_path, monkeypatch):
     updater, root, commands = source_updater(tmp_path, monkeypatch)
     original = updater.compose.read_bytes()

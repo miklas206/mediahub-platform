@@ -60,6 +60,8 @@ class HostUpdater:
         self.operation = None
         self.target = None
         self.steps = []
+        self.changed_roles = ("core", "agent")
+        self.pending_build_cache = None
 
     @staticmethod
     def _run(args, capture=True):
@@ -387,6 +389,52 @@ class HostUpdater:
         for directory, _, _ in os.walk(destination):
             Path(directory).chmod(0o755)
 
+    @staticmethod
+    def _agent_fingerprint(source):
+        """Conservative source identity; only UI and release-only metadata are ignored."""
+        digest = hashlib.sha256(b"mediahub-agent-inputs-v1\0")
+        for path in sorted(source.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(source).as_posix()
+            if relative.startswith("frontend/") or relative == "docker/Dockerfile":
+                continue
+            content = path.read_bytes()
+            if relative == "pyproject.toml":
+                content = re.sub(
+                    rb'(?m)^version = "[0-9]+\.[0-9]+\.[0-9]+"\r?$', b'version = "release"', content
+                )
+            elif relative == "backend/mediahub/__init__.py":
+                content = re.sub(
+                    rb'(?m)^__version__ = "[0-9]+\.[0-9]+\.[0-9]+"\r?$',
+                    b'__version__ = "release"',
+                    content,
+                )
+            digest.update(relative.encode() + b"\0")
+            digest.update(str(path.stat().st_mode & 0o111).encode() + b"\0")
+            digest.update(hashlib.sha256(content).digest())
+        return digest.hexdigest()
+
+    def _reusable_agent(self, fingerprint):
+        # Only trust an identity recorded by this root-owned helper after health
+        # verification, bound to the currently configured immutable image.
+        try:
+            cache = json.loads(self._trusted_file(self.root / "agent-build-cache.json"))
+            image = cache["agentImage"]
+            compose = json.loads(self._trusted_file(self.compose, 2 * 1024**2))
+            if (
+                cache["agentFingerprint"] == fingerprint
+                and isinstance(image, str)
+                and LOADED_IMAGE.fullmatch(image)
+                and compose["services"]["agent"]["image"] == image
+                and self.command("docker", "image", "inspect", "--format", "{{.Id}}", image)
+                == image
+            ):
+                return image
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            pass
+        return None
+
     def _build_source_images(self, stage, manifest):
         """Build before stopping services. Never pass credentials or host data to Docker."""
         if shutil.disk_usage(self.root).free < 8 * 1024**3:
@@ -405,7 +453,13 @@ class HostUpdater:
             if project.get("project", {}).get("version") != manifest["version"]:
                 raise ValueError("Source version does not match requested version")
             images = {}
+            fingerprint = self._agent_fingerprint(source)
+            reusable_agent = self._reusable_agent(fingerprint)
             for index, role in enumerate(("core", "agent")):
+                if role == "agent" and reusable_agent:
+                    images[role] = reusable_agent
+                    self.status("building", 67, "Agent source unchanged; keeping the running Agent")
+                    continue
                 self.status(
                     "building", 62 + index * 5, f"Building {role} from GitHub source on this server"
                 )
@@ -457,6 +511,11 @@ class HostUpdater:
                     capture=False,
                 )
                 images[role] = image_id
+            self.changed_roles = ("core",) if reusable_agent else ("core", "agent")
+            self.pending_build_cache = {
+                "agentFingerprint": fingerprint,
+                "agentImage": images["agent"],
+            }
             return images
         finally:
             shutil.rmtree(workspace)
@@ -504,10 +563,13 @@ class HostUpdater:
         raise ValueError(f"{service} did not become healthy")
 
     def _backup_preflight(self):
-        total = sum(self._tree_size(self.root / name) for name in ("data", "agent"))
+        total = sum(self._tree_size(self.root / name) for name in self._state_directories())
         if shutil.disk_usage(self.root).free < total * 2 + 1024**3:
             raise ValueError("Insufficient space for rollback snapshot")
         return total
+
+    def _state_directories(self):
+        return tuple("data" if role == "core" else "agent" for role in self.changed_roles)
 
     def _copy_configuration(self, backup):
         temporary = self.backups / ("." + self.operation + "-preparing")
@@ -516,7 +578,7 @@ class HostUpdater:
         temporary.mkdir(mode=0o700, parents=True)
         try:
             shutil.copy2(self.compose, temporary / "compose.json")
-            for name in ("data", "agent"):
+            for name in self._state_directories():
                 shutil.copytree(self.root / name, temporary / name, symlinks=False)
                 self._copy_ownership(self.root / name, temporary / name)
             os.replace(temporary, backup)
@@ -540,9 +602,9 @@ class HostUpdater:
             os.chown(target, details.st_uid, details.st_gid, follow_symlinks=False)
 
     def _restore_configuration(self, backup):
-        self._compose_command("stop", "-t", "30", "core", "agent", capture=False)
+        self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
         shutil.copy2(backup / "compose.json", self.compose)
-        for name in ("data", "agent"):
+        for name in self._state_directories():
             current = self.root / name
             failed = self.root / f"{name}.failed-{self.operation}"
             if failed.exists():
@@ -556,7 +618,8 @@ class HostUpdater:
                     shutil.rmtree(current)
                 os.replace(failed, current)
                 raise
-        self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
+        if "agent" in self.changed_roles:
+            self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
         self._wait("agent")
         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
         self._wait("core", health=True)
@@ -601,6 +664,8 @@ class HostUpdater:
                     )
                     self.steps[2]["state"] = "pending"
                     built_images = self._build_source_images(stage, manifest)
+                    if self.changed_roles == ("core",):
+                        self.steps[3]["label"] = "Replace Core; keep unchanged Agent"
                     self.steps[1]["state"] = "complete"
                     self.steps[2]["state"] = "running"
                 else:
@@ -610,7 +675,7 @@ class HostUpdater:
                         if repository != trusted_repositories[role]:
                             raise ValueError("Release image is outside the trusted repository")
                 offset = 1 if source_mode else 0
-                self.status("installing", 70, "Stopping control services for a safe snapshot")
+                self.status("installing", 70, "Stopping changed services for a safe snapshot")
                 compose = self._read_json(self.compose, 2 * 1024 * 1024)
                 if compose.get("name") != "mediahub-platform" or set(
                     compose.get("services", {})
@@ -618,14 +683,14 @@ class HostUpdater:
                     raise ValueError("Compose ownership validation failed")
                 self._backup_preflight()
                 services_stopped = True
-                self._compose_command("stop", "-t", "30", "core", "agent", capture=False)
+                self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
                 backup_destination = self.backups / self.operation
                 self._copy_configuration(backup_destination)
                 backup = backup_destination
                 self.steps[1 + offset]["state"] = "complete"
                 self.steps[2 + offset]["state"] = "running"
-                self.status("installing", 72, "Loading immutable Core and Agent images")
-                for role in ("core", "agent"):
+                self.status("installing", 72, "Applying images for changed services")
+                for role in self.changed_roles:
                     compose["services"][role]["image"] = (
                         built_images[role]
                         if built_images
@@ -634,13 +699,21 @@ class HostUpdater:
                     compose["services"][role].pop("build", None)
                     compose["services"][role]["pull_policy"] = "never"
                 self._atomic_json(self.compose, compose, uid=0, gid=0)
-                self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
+                if "agent" in self.changed_roles:
+                    self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
                 self._wait("agent")
                 self._compose_command("up", "-d", "--no-deps", "core", capture=False)
                 self.steps[2 + offset]["state"] = "complete"
                 self.steps[-1]["state"] = "running"
                 self.status("verifying", 90, "Verifying the updated MediaHub services")
                 self._wait("core", health=True)
+                if self.pending_build_cache is not None:
+                    self._atomic_json(
+                        self.root / "agent-build-cache.json",
+                        self.pending_build_cache,
+                        uid=0,
+                        gid=0,
+                    )
                 self._atomic_text(self.installed_version, self.target)
                 self.steps[-1]["state"] = "complete"
                 self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
@@ -671,7 +744,8 @@ class HostUpdater:
                     if backup and backup.is_dir():
                         self._restore_configuration(backup)
                     elif services_stopped:
-                        self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
+                        if "agent" in self.changed_roles:
+                            self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
                         self._wait("agent")
                         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
                         self._wait("core", health=True)
