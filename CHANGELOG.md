@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Serialize release publishing by target tag so overlapping runs cannot collide while uploading the same release assets.
+
 ## 0.4.29 - 2026-09-30
 
 - Release merged PR #1: cancel superseded folder requests so delayed responses cannot replace the current folder; retain loaded data on failed refreshes of the same path.
