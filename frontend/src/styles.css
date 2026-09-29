@@ -176,6 +176,7 @@ nav {
 }
 nav a {
   display: flex;
+  min-height: 48px;
   gap: 13px;
   align-items: center;
   color: var(--muted);
@@ -194,15 +195,18 @@ nav a.active {
   color: var(--accent);
 }
 .nav-app-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
-  gap: 4px;
-  align-items: center;
+  position: relative;
 }
 .nav-app-heading > a {
   min-width: 0;
+  width: 100%;
+  padding-right: 48px;
 }
 .nav-expand {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
   width: 36px;
   height: 36px;
   padding: 0;
