@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.29 - 2026-09-30
+
+- Release merged PR #1: cancel superseded folder requests so delayed responses cannot replace the current folder; retain loaded data on failed refreshes of the same path.
+- Report aggregate update-check errors as incomplete checks while keeping successfully discovered updates visible. Clear old notices before checking again.
+- Add browser regression coverage for folder navigation and incomplete update checks, and correct the disconnected-progress accessibility assertion.
+
 ## 0.4.28 - 2026-09-30
 
 - Preserve the Agent's supplementary private-state group 10001 alongside primary media group 1000. An explicit Docker USER group in v0.4.26 discarded membership needed to read host storage evidence and blocked Plex recovery.
