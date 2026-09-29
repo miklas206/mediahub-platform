@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import tomllib
 import uuid
@@ -62,9 +63,12 @@ class HostUpdater:
         self.steps = []
         self.changed_roles = ("core", "agent")
         self.pending_build_cache = None
+        self.log_lines = []
+        self.last_status = None
+        self.private_log_block = False
 
     @staticmethod
-    def _run(args, capture=True):
+    def _run(args, capture=True, on_output=None):
         source_build = args[:2] == ["docker", "build"]
         environment = None
         if source_build:
@@ -79,6 +83,8 @@ class HostUpdater:
                 "BUILDX_CONFIG": str(config / "buildx"),
                 "DOCKER_HOST": "unix:///var/run/docker.sock",
             }
+        if source_build and on_output:
+            return HostUpdater._stream_build(args, environment, on_output)
         result = subprocess.run(
             args,
             check=True,
@@ -94,7 +100,82 @@ class HostUpdater:
         return output.strip()
 
     def command(self, *args, capture=True):
+        if args[:2] == ("docker", "build") and self.runner == self._run:
+            return self._run(list(map(str, args)), capture, self._build_output)
         return self.runner(list(map(str, args)), capture=capture)
+
+    @staticmethod
+    def _stream_build(args, environment, on_output):
+        # Independent read/write handles avoid pipe deadlocks and preserve the
+        # existing build timeout. Raw output stays in the root-only workspace.
+        with tempfile.TemporaryDirectory(dir=Path(args[-1]).parent) as temporary:
+            path = Path(temporary) / "build.log"
+            with path.open("wb") as output:
+                process = subprocess.Popen(
+                    args, stdout=output, stderr=subprocess.STDOUT, env=environment
+                )
+                deadline = time.monotonic() + 1800
+                pending = ""
+                try:
+                    with path.open("rb") as incoming:
+                        while True:
+                            chunk = incoming.read(65536)
+                            if chunk:
+                                pending += chunk.decode("utf-8", errors="replace")
+                                lines = (
+                                    pending.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                                )
+                                pending = lines.pop()
+                                if len(pending) > 4096:
+                                    lines.append(pending[:4096])
+                                    pending = ""
+                                if lines:
+                                    on_output(lines)
+                            elif process.poll() is not None:
+                                break
+                            else:
+                                time.sleep(0.5)
+                            if time.monotonic() > deadline:
+                                raise subprocess.TimeoutExpired(args, 1800)
+                            if incoming.tell() > 32 * 1024**2:
+                                raise ValueError("Build output exceeded safety limit")
+                    if pending:
+                        on_output([pending])
+                    if process.returncode:
+                        raise subprocess.CalledProcessError(process.returncode, args)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait()
+        return ""
+
+    def _append_log(self, line):
+        if "-----BEGIN " in line and "PRIVATE KEY-----" in line:
+            self.private_log_block = True
+        if self.private_log_block:
+            if "-----END " in line and "PRIVATE KEY-----" in line:
+                self.private_log_block = False
+            return
+        line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+        line = re.sub(r"(?i)\b(?:github_pat_|gh[pousr]_)[a-z0-9_]+", "[redacted]", line)
+        line = re.sub(r"(?i)(authorization\s*[:=]\s*|bearer\s+).*", r"\1[redacted]", line)
+        line = re.sub(
+            r"(?i)(token|password|passkey|secret|api[_-]?key)(\s*[:=]\s*).*",
+            r"\1\2[redacted]",
+            line,
+        )
+        line = re.sub(r"(https?://)[^/\s@]+@", r"\1[redacted]@", line)
+        line = re.sub(r"(https?://[^\s?]+)\?\S+", r"\1?[redacted]", line)
+        line = "".join(c for c in line if c.isprintable()).strip()
+        if line:
+            self.log_lines.append(time.strftime("%H:%M:%S UTC ", time.gmtime()) + line[:200])
+            self.log_lines = self.log_lines[-40:]
+
+    def _build_output(self, lines):
+        for line in lines:
+            self._append_log(line)
+        if self.last_status:
+            self.status(*self.last_status)
 
     @staticmethod
     def _directory(path, owner=None):
@@ -194,6 +275,10 @@ class HostUpdater:
         return repository
 
     def status(self, state, progress, message):
+        current = (state, progress, message)
+        if current != self.last_status:
+            self._append_log(message)
+        self.last_status = current
         self._atomic_json(
             self.updates / "status.json",
             {
@@ -205,6 +290,7 @@ class HostUpdater:
                 "fromVersion": self.request.get("fromVersion"),
                 "toVersion": self.target,
                 "steps": self.steps,
+                "logs": self.log_lines,
                 "updatedAt": time.time(),
             },
         )
@@ -470,6 +556,7 @@ class HostUpdater:
                 self.command(
                     "docker",
                     "build",
+                    "--progress=plain",
                     "--file",
                     source / dockerfile,
                     "--tag",

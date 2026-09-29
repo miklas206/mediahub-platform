@@ -3,6 +3,7 @@ import io
 import json
 import os
 import stat
+import sys
 import tarfile
 from types import SimpleNamespace
 
@@ -14,6 +15,54 @@ from scripts.platform_update_host import HostUpdater, version_key
 OPERATION = "a" * 32
 CORE_REPOSITORY = "ghcr.io/example/mediahub-core"
 AGENT_REPOSITORY = "ghcr.io/example/mediahub-agent"
+
+
+def test_build_console_streams_output_and_propagates_failed_exit(tmp_path):
+    lines = []
+    source = tmp_path / "source"
+    source.mkdir()
+    HostUpdater._stream_build(
+        [sys.executable, "-c", "print('#1 CACHED'); print('#2 DONE')", str(source)],
+        dict(os.environ),
+        lines.extend,
+    )
+    assert lines == ["#1 CACHED", "#2 DONE"]
+    with pytest.raises(host_module.subprocess.CalledProcessError):
+        HostUpdater._stream_build(
+            [sys.executable, "-c", "import sys; print('build failed'); sys.exit(1)", str(source)],
+            dict(os.environ),
+            lines.extend,
+        )
+    assert lines[-1] == "build failed"
+    assert list(tmp_path.iterdir()) == [source]
+
+
+def test_build_console_redacts_secrets_and_bounds_status_size(tmp_path):
+    updater = HostUpdater(tmp_path)
+    for line in [
+        "token=private-token",
+        "Authorization: Bearer private-auth",
+        "https://user:password@example.com/repo?secret=abc",
+        "ghp_private",
+        "-----BEGIN PRIVATE KEY-----",
+        "private-key-body",
+        "-----END PRIVATE KEY-----",
+    ]:
+        updater._append_log(line)
+    output = "\n".join(updater.log_lines)
+    for secret in (
+        "private-token",
+        "private-auth",
+        "user:password",
+        "abc",
+        "ghp_private",
+        "private-key-body",
+    ):
+        assert secret not in output
+    for _ in range(100):
+        updater._append_log("\u4e00" * 2000)
+    assert len(updater.log_lines) == 40
+    assert len(json.dumps({"logs": updater.log_lines})) < 60000
 
 
 class TestUpdater(HostUpdater):
@@ -261,7 +310,7 @@ def test_unchanged_agent_is_not_built_stopped_recreated_or_snapshotted(tmp_path,
     updater.process()
     assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
     builds = [args for args in commands if args[:2] == ["docker", "build"]]
-    assert len(builds) == 1 and "mediahub-core:" in builds[0][5]
+    assert len(builds) == 1 and "mediahub-core:" in builds[0][builds[0].index("--tag") + 1]
     mutations = [
         args
         for args in commands

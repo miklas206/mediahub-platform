@@ -97,6 +97,90 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     fullPage: true,
     animations: "disabled",
   });
+  // Exercise update polling locally; no host update is submitted.
+  const buildStatus = {
+    enabled: true,
+    state: "building",
+    progress: 62,
+    message: "Building core",
+    steps: [{ label: "Build on this server", state: "running" }],
+    logs: ["#1 CACHED", "#2 RUN pnpm build"],
+  };
+  await page.route("**/api/v1/updates/platform", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          configured: true,
+          repository: "example/mediahub",
+          installedVersion: "0.4.19",
+          latestVersion: "0.4.20",
+          updateAvailable: true,
+          installReady: true,
+          updateMethod: "source",
+          assets: {},
+          message: "QA release",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/updates/platform/install", (route) =>
+    route.fulfill({ json: { data: buildStatus } }),
+  );
+  let pollState = "offline";
+  await page.route("**/api/v1/updates/platform/operation", (route) =>
+    pollState === "offline"
+      ? route.fulfill({
+          status: 503,
+          json: { error: { message: "Temporarily unavailable" } },
+        })
+      : route.fulfill({
+          json: {
+            data: {
+              ...buildStatus,
+              state: "succeeded",
+              progress: 100,
+              message: "QA update complete",
+              steps: [{ label: "Build on this server", state: "complete" }],
+              logs: [...buildStatus.logs, "#3 DONE"],
+            },
+          },
+        }),
+  );
+  await page.getByRole("button", { name: "Check GitHub", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page
+    .getByRole("button", { name: "Install update", exact: true })
+    .click();
+  await expect(page.getByText(/Connection interrupted. Keeping/)).toBeVisible();
+  await expect(
+    page.getByText("Build on this server", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", { name: "Install MediaHub update" }),
+  ).toHaveAttribute("aria-valuenow", "62");
+  await page.getByText("Console", { exact: true }).click();
+  await expect(page.getByLabel("Update console")).toContainText("#1 CACHED");
+  pollState = "success";
+  await expect(
+    page.getByRole("progressbar", { name: "Install MediaHub update" }),
+  ).toHaveAttribute("aria-valuenow", "100");
+  await expect(page.getByLabel("Update console")).toContainText("#3 DONE");
+  await page.screenshot({
+    path: "../.qa/update-console-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: "../.qa/update-console-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("link", { name: "App Store", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Add only what you need." }),

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,6 +21,7 @@ export type OperationState = {
   message: string;
   steps: OperationStep[];
   details: string[];
+  console?: string[];
 };
 
 export function redactOperationDetail(value: string) {
@@ -45,6 +47,12 @@ export function OperationProgress({
 }: {
   operation: OperationState;
 }) {
+  const consoleView = useRef<HTMLPreElement>(null);
+  const followConsole = useRef(true);
+  useEffect(() => {
+    if (operation.console && followConsole.current && consoleView.current)
+      consoleView.current.scrollTop = consoleView.current.scrollHeight;
+  }, [operation.console]);
   const progress = Math.max(0, Math.min(100, Math.round(operation.progress)));
   return (
     <section
@@ -79,13 +87,36 @@ export function OperationProgress({
           </li>
         ))}
       </ol>
-      {operation.details.length > 0 && (
-        <details className="operation-details">
+      {(operation.details.length > 0 || operation.console) && (
+        <details
+          className="operation-details"
+          onToggle={(event) => {
+            if (
+              event.currentTarget.open &&
+              operation.console &&
+              followConsole.current &&
+              consoleView.current
+            )
+              consoleView.current.scrollTop = consoleView.current.scrollHeight;
+          }}
+        >
           <summary>
-            <span>Technical details</span>
+            <span>{operation.console ? "Console" : "Technical details"}</span>
             <ChevronDown size={16} />
           </summary>
-          <pre>{operation.details.map(redactOperationDetail).join("\n")}</pre>
+          <pre
+            ref={consoleView}
+            onScroll={(event) => {
+              const view = event.currentTarget;
+              followConsole.current =
+                view.scrollHeight - view.clientHeight - view.scrollTop < 24;
+            }}
+            aria-label={operation.console ? "Update console" : undefined}
+          >
+            {[...operation.details, ...(operation.console || [])]
+              .map(redactOperationDetail)
+              .join("\n")}
+          </pre>
         </details>
       )}
     </section>

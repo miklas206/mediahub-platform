@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.20 - 2026-09-29
+
+- Preserve actual update steps, progress and console history across temporary connection failures instead of replacing them with a fixed 82% fallback that omits Build.
+- Add an expandable Console to platform update progress, with bounded live history and automatic scrolling that pauses when reading older lines. Keep the result visible after completion.
+- Stream bounded, redacted Docker build output from the host helper. Existing helpers retain status-message history; detailed build output requires a one-time helper refresh from this checkout.
+
 ## 0.4.19 - 2026-09-29
 
 - Accept files and whole folders dropped directly onto the existing Media files panel, preserving nested paths and mixed selections.

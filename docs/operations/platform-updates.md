@@ -147,10 +147,24 @@ behavior concerns builds and service replacement, not byte-range patch downloads
 
 ### Transaction status
 
+Starting with 0.4.20, expand **Console** on the update progress card to see recent
+status and build output. Temporary disconnections retain the last real percentage,
+steps and history; successful completion keeps the console available to read.
+The updated host helper publishes the last 40 sanitized build lines, while the
+browser retains up to 120 observed lines. It is a rolling console, not a complete
+downloadable build transcript. Common credential patterns are redacted before
+publication; raw temporary build output stays in the private build workspace and
+is removed afterward. No interactive commands can be entered through this view.
+
+Existing hosts need the same one-time `scripts/enable_source_updates.py` command
+above, from a checkout of **v0.4.20 or newer**, to publish Docker output. Updating
+Core alone enables stable progress and status-message history but cannot make an
+old host helper emit build logs. Do not refresh the helper during an active update.
+
 The update card reports download, build, backup, replacement and verification.
 Only replacement causes a short Core disconnect. `succeeded` means local health
 checks passed; `rolled_back` means restoration succeeded; `failed` requires
-review of the protected status file. No raw credentials or build output is shown.
+review of the protected status file. Build output is bounded and redacted.
 The two newest successful configuration snapshots are retained. Failed-state
 directories remain for administrator recovery. Do not delete recovery state until
 the deployment is confirmed healthy. Docker build cache is not automatically

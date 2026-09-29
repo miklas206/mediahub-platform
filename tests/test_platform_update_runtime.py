@@ -15,6 +15,21 @@ def digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def test_status_exposes_bounded_optional_build_console(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    path = spool / "status.json"
+    payload = {"state": "building", "progress": 62, "logs": ["x" * 300] * 50}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert updater.status()["logs"] == ["x" * 240] * 40
+    payload["logs"] = "invalid shape"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert updater.status()["logs"] == []
+    del payload["logs"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert updater.status()["state"] == "building"
+    assert updater.status()["logs"] == []
+
+
 def release_fixture():
     core = b"bounded-core-image-bundle"
     agent = b"bounded-agent-image-bundle"

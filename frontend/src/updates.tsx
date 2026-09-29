@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "./api";
+import { disconnectedUpdate, mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, Panel, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
 import {
@@ -78,6 +79,7 @@ type PlatformOperation = {
   fromVersion?: string | null;
   toVersion?: string | null;
   steps?: Array<{ label?: string; state?: string }>;
+  logs?: string[];
 };
 
 function operationTask(
@@ -122,6 +124,7 @@ function platformOperation(value: PlatformOperation): OperationState {
       value.state === "succeeded" ? "success" : failed ? "error" : "running",
     progress: value.progress,
     message: value.message,
+    console: value.logs || [],
     steps: (value.steps || []).map((step) => ({
       label: step.label || "Update step",
       state: operationStepState(step.state),
@@ -173,7 +176,15 @@ export function UpdatesPage() {
   const release = checkedPlatformRelease || platformRelease.data;
 
   function updateOperation(key: string, operation: OperationState) {
-    setOperations((current) => ({ ...current, [key]: operation }));
+    setOperations((current) => ({
+      ...current,
+      [key]: operation.console
+        ? mergeUpdateConsole(
+            current[key]?.console ? current[key] : undefined,
+            operation,
+          )
+        : operation,
+    }));
   }
 
   useEffect(() => {
@@ -511,27 +522,22 @@ export function UpdatesPage() {
         result = await api<PlatformOperation>("/updates/platform/operation");
       } catch (caught) {
         if (Date.now() >= deadline) throw caught;
-        updateOperation("platform", {
-          title: "Install MediaHub update",
-          status: "running",
-          progress: 82,
-          message:
-            "MediaHub is restarting. Waiting for the secure health check…",
-          steps: [
-            { label: "Download verified release", state: "complete" },
-            { label: "Back up configuration", state: "complete" },
-            { label: "Replace Core and Agent", state: "running" },
-            { label: "Verify health or roll back", state: "pending" },
-          ],
-          details: ["The browser will reconnect automatically"],
-        });
+        setOperations((current) => ({
+          ...current,
+          platform: current.platform
+            ? disconnectedUpdate(current.platform)
+            : undefined,
+        }));
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
         continue;
       }
       updateOperation("platform", platformOperation(result));
       if (result.state === "succeeded") {
         setNotice(result.message);
-        window.setTimeout(() => window.location.reload(), 1200);
+        setCheckedPlatformRelease(undefined);
+        platform.reload();
+        platformRelease.reload();
+        updateSummary.reload();
         return;
       }
       if (

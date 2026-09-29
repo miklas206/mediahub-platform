@@ -217,6 +217,11 @@ class PlatformUpdateRuntime:
                 "operationId": str(value.get("operationId") or "")[:64] or None,
                 "steps": list(value.get("steps") or [])[:10],
                 "updatedAt": value.get("updatedAt"),
+                "logs": [
+                    line[:240] for line in value.get("logs", [])[-40:] if isinstance(line, str)
+                ]
+                if isinstance(value.get("logs"), list)
+                else [],
             }
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return {
