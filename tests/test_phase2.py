@@ -17,6 +17,7 @@ from sqlalchemy import select, text
 from agent.discovery import discovery_report
 from agent.fixtures import containers
 from agent.main import AgentConfig, AgentRuntime, create_agent, initialize
+from agent.uploads import UploadSessions
 
 
 class LocalAgent:
@@ -24,6 +25,7 @@ class LocalAgent:
 
     def __init__(self, root):
         self.policy = DirectoryPolicy([root], True)
+        self.uploads = UploadSessions(self.policy, root.parent / "upload-state")
         self.calls = []
         self.available = True
 
@@ -37,6 +39,19 @@ class LocalAgent:
 
     async def request(self, method, path, payload=None):
         self.calls.append((method, path))
+        if path == "/v1/uploads":
+            return self.uploads.create(
+                payload["root"], payload["path"], payload["filename"], payload["size"]
+            )
+        if path.startswith("/v1/uploads/"):
+            parsed = urlsplit(path)
+            identifier = parsed.path.split("/")[3]
+            root = parse_qs(parsed.query)["root"][0]
+            if method == "DELETE":
+                return await self.uploads.cancel(identifier, root)
+            if parsed.path.endswith("/finish"):
+                return await self.uploads.finish(identifier, root)
+            return await self.uploads.status(identifier, root)
         if path == "/v1/discovery":
             return discovery_report(containers(), True)
         if path == "/v1/directories/inspect":
@@ -54,6 +69,90 @@ class LocalAgent:
     async def upload(self, path, filename, content, expected_size=None):
         self.calls.append(("PUT", "/v1/files/upload"))
         return await self.policy.upload(path, filename, content, expected_size)
+
+    async def upload_chunk(self, identifier, root, offset, content, expected_size):
+        return await self.uploads.chunk(identifier, root, offset, content)
+
+
+def test_folder_upload_chunks_and_stop(setup_client):
+    client = setup_client
+    bootstrap(client)
+    root = client.storage_root / "movies"
+    root.mkdir()
+    identifier = client.post(
+        "/api/v1/storage/locations",
+        json={
+            "name": "Movies",
+            "kind": "movies",
+            "path": str(root),
+        },
+    ).json()["data"]["id"]
+    base = f"/api/v1/storage/locations/{identifier}"
+    created = client.post(
+        base + "/files/folder", json={"path": str(root), "relativePath": "Film/Subtitles"}
+    )
+    assert created.status_code == 200, created.text
+    directory = Path(created.json()["data"]["path"])
+    assert directory == root / "Film" / "Subtitles"
+    for invalid in [
+        "../outside",
+        "/absolute",
+        "valid/../outside",
+        "valid//bad",
+        "C:/bad",
+        "bad\\name",
+    ]:
+        assert (
+            client.post(
+                base + "/files/folder", json={"path": str(root), "relativePath": invalid}
+            ).status_code
+            == 400
+        )
+    assert not (root / "valid").exists()
+    assert (
+        client.post(
+            base + "/files/folder", json={"path": str(root.parent), "relativePath": "outside"}
+        ).status_code
+        == 403
+    )
+    session = client.post(
+        base + "/uploads", json={"path": str(directory), "filename": "captions.srt", "size": 6}
+    )
+    assert session.status_code == 200, session.text
+    endpoint = base + "/uploads/" + session.json()["data"]["id"]
+    assert client.put(endpoint + "?offset=0", content=b"abc").status_code == 200
+    assert client.get(endpoint).json()["data"]["offset"] == 3
+    assert client.post(endpoint + "/finish").status_code == 409
+    assert client.put(endpoint + "?offset=0", content=b"abc").status_code == 409
+    assert client.put(endpoint + "?offset=3", content=b"def").status_code == 200
+    assert client.post(endpoint + "/finish").json()["data"]["complete"]
+    assert client.delete(endpoint).status_code == 200
+    assert (directory / "captions.srt").read_bytes() == b"abcdef"
+    duplicate = client.post(
+        base + "/uploads", json={"path": str(directory), "filename": "captions.srt", "size": 6}
+    )
+    assert duplicate.status_code == 409
+    session = client.post(
+        base + "/uploads", json={"path": str(root), "filename": "stopped.mkv", "size": 6}
+    )
+    endpoint = base + "/uploads/" + session.json()["data"]["id"]
+    assert client.put(endpoint + "?offset=0", content=b"abc").status_code == 200
+    assert client.delete(endpoint).json()["data"]["cancelled"]
+    assert not (root / "stopped.mkv").exists()
+    assert not list(root.rglob(".mediahub-upload-*.part"))
+    client.headers.pop("X-MediaHub-CSRF")
+    assert (
+        client.post(
+            base + "/uploads", json={"path": str(root), "filename": "csrf", "size": 0}
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            base + "/files/folder", json={"path": str(root), "relativePath": "csrf"}
+        ).status_code
+        == 403
+    )
 
 
 @pytest.fixture

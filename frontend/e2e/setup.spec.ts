@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 test("fresh wizard resumes and completed installation skips setup", async ({
   page,
@@ -141,6 +144,138 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       .getByLabel("Media location")
       .getByRole("option", { name: "QA Movies", exact: true }),
   ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Upload folder", exact: true }),
+  ).toBeEnabled();
+  const uploadFixture = await mkdtemp(join(tmpdir(), "mediahub-folder-"));
+  try {
+    const folder = join(uploadFixture, "Test Film");
+    await mkdir(join(folder, "Subtitles"), { recursive: true });
+    // Cross the chunk boundary with generated data, not a real movie.
+    await writeFile(
+      join(folder, "sample.mkv"),
+      Buffer.alloc(9 * 1024 * 1024, 65),
+    );
+    await writeFile(join(folder, "Subtitles", "sample.srt"), "Test subtitle");
+    let droppedResponse = false;
+    await page.route("**/uploads/*?offset=*", async (route) => {
+      if (!droppedResponse) {
+        droppedResponse = true;
+        const accepted = await route.fetch();
+        expect(accepted.ok()).toBe(true);
+        await route.abort();
+      } else await route.continue();
+    });
+    await page
+      .getByLabel("Choose folder to upload", { exact: true })
+      .setInputFiles(folder);
+    await expect(
+      page.getByText("2 of 2 files uploaded", { exact: true }),
+    ).toBeVisible();
+    expect(droppedResponse).toBe(true);
+    await page.unroute("**/uploads/*?offset=*");
+    await expect(
+      page.getByRole("button", { name: /Test Film.*Folder/ }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /Test Film.*Folder/ }).click();
+    await expect(
+      page.locator(".media-file-list").getByText("sample.mkv", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /Subtitles.*Folder/ }).click();
+    await expect(
+      page.locator(".media-file-list").getByText("sample.srt", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Parent folder", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Parent folder", exact: true })
+      .click();
+
+    let releaseChunk!: () => void;
+    let chunkEntered!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      chunkEntered = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      releaseChunk = resolve;
+    });
+    await page.route("**/uploads/*?offset=*", async (route) => {
+      chunkEntered();
+      await held;
+      await route.abort().catch(() => {});
+    });
+    await page
+      .getByLabel("Choose files to upload", { exact: true })
+      .setInputFiles([
+        {
+          name: "cancel-test.mkv",
+          mimeType: "application/octet-stream",
+          buffer: Buffer.alloc(1024, 66),
+        },
+        {
+          name: "queued-test.mkv",
+          mimeType: "application/octet-stream",
+          buffer: Buffer.alloc(1024, 67),
+        },
+      ]);
+    await entered;
+    await expect(
+      page.getByRole("button", {
+        name: "Stop upload cancel-test.mkv",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "../.qa/upload-stop-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() =>
+        page
+          .locator(".sidebar")
+          .evaluate((el) => el.getBoundingClientRect().right),
+      )
+      .toBeLessThanOrEqual(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: "../.qa/upload-stop-mobile.png",
+      fullPage: true,
+    });
+    await expect(
+      page.getByRole("button", { name: "Stop all", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Stop upload queued-test.mkv", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Stop upload cancel-test.mkv", exact: true })
+      .click();
+    releaseChunk();
+    await expect(page.getByText("Stopped", { exact: true })).toHaveCount(2);
+    await expect(
+      page.getByRole("button", { name: "Upload folder", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page
+        .locator(".media-file-list")
+        .getByText("cancel-test.mkv", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .locator(".media-file-list")
+        .getByText("queued-test.mkv", { exact: true }),
+    ).toHaveCount(0);
+    await page.unroute("**/uploads/*?offset=*");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  } finally {
+    await rm(uploadFixture, { recursive: true, force: true });
+  }
   await page.getByRole("link", { name: "Dashboard", exact: false }).click();
   await expect(
     page.getByText("Agent connected", { exact: true }),

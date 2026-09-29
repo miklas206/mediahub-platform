@@ -11,6 +11,15 @@ from mediahub.errors import DomainError
 class RuntimeAgent(Protocol):
     async def request(self, method: str, path: str, payload: dict | None = None): ...
 
+    async def upload_chunk(
+        self,
+        identifier: str,
+        root: str,
+        offset: int,
+        content: AsyncIterable[bytes],
+        expected_size: int,
+    ): ...
+
     async def upload(
         self,
         path: str,
@@ -81,6 +90,26 @@ class AgentClient:
     async def upload(self, path, filename, content, expected_size=None):
         """Stream an upload to the authenticated Agent without buffering it in Core."""
 
+        return await self._stream_upload(
+            "/v1/files/upload",
+            {
+                "path": path,
+                "filename": filename,
+                **({"expected_size": str(expected_size)} if expected_size is not None else {}),
+            },
+            content,
+            expected_size,
+        )
+
+    async def upload_chunk(self, identifier, root, offset, content, expected_size):
+        return await self._stream_upload(
+            "/v1/uploads/" + identifier,
+            {"root": root, "offset": str(offset)},
+            content,
+            expected_size,
+        )
+
+    async def _stream_upload(self, endpoint, params, content, expected_size):
         try:
             token = self.token or Path(self.config.agent_token_file).read_text().strip()
             if len(token) < 40:
@@ -107,16 +136,8 @@ class AgentClient:
                 ),
             ) as client:
                 response = await client.put(
-                    "/v1/files/upload",
-                    params={
-                        "path": path,
-                        "filename": filename,
-                        **(
-                            {"expected_size": str(expected_size)}
-                            if expected_size is not None
-                            else {}
-                        ),
-                    },
+                    endpoint,
+                    params=params,
                     content=content,
                     headers=headers,
                 )

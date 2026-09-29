@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hmac
 import os
 import platform
@@ -43,6 +44,7 @@ from agent.seedbox_install import PrepareSeedbox, SeedboxInstaller
 from agent.seedbox_status import SeedboxStatus
 from agent.seedbox_torrents import TorrentService
 from agent.seedbox_workflow import SeedboxWorkflow
+from agent.uploads import UploadSessions
 from agent.vpn_locations import LocationService
 
 
@@ -174,6 +176,13 @@ class CreateRequest(DirectoryRequest):
     confirmed_path: str
 
 
+class UploadRequest(StrictModel):
+    root: str = Field(min_length=1, max_length=4096)
+    path: str = Field(min_length=1, max_length=4096)
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(ge=0, le=512 * 1024**3)
+
+
 class RemoveRuntimeRequest(StrictModel):
     confirmedInstallationId: str = Field(min_length=1, max_length=80)
 
@@ -197,6 +206,7 @@ def create_agent(config: AgentConfig | None = None):
         config.create_enabled,
     )
     runtime = AgentRuntime(config)
+    uploads = UploadSessions(policy, config.state_dir / "uploads")
     seedbox = SeedboxInstaller(config.seedbox_policy_file)
     seedbox_status = SeedboxStatus(seedbox, config.docker_socket)
 
@@ -221,6 +231,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @asynccontextmanager
     async def lifespan(app):
+        cleanup = asyncio.create_task(uploads.cleanup())
         if config.seedbox_policy_file:
             control.monitor_task = asyncio.create_task(control.monitor())
         if config.plex_policy_file:
@@ -228,6 +239,9 @@ def create_agent(config: AgentConfig | None = None):
         yield
         await plex.close()
         await control.close()
+        cleanup.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await cleanup
 
     async def authorize(request: Request):
         provided = request.headers.get("authorization", "")
@@ -506,6 +520,26 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/files")
     async def files(path: str):
         return await asyncio.to_thread(policy.list_entries, path)
+
+    @app.post("/v1/uploads")
+    async def begin_upload(body: UploadRequest):
+        return uploads.create(body.root, body.path, body.filename, body.size)
+
+    @app.get("/v1/uploads/{identifier}")
+    async def upload_status(identifier: str, root: str):
+        return await uploads.status(identifier, root)
+
+    @app.put("/v1/uploads/{identifier}")
+    async def upload_chunk(identifier: str, root: str, offset: int, request: Request):
+        return await uploads.chunk(identifier, root, offset, request.stream())
+
+    @app.post("/v1/uploads/{identifier}/finish")
+    async def finish_upload(identifier: str, root: str):
+        return await uploads.finish(identifier, root)
+
+    @app.delete("/v1/uploads/{identifier}")
+    async def cancel_upload(identifier: str, root: str):
+        return await uploads.cancel(identifier, root)
 
     @app.put("/v1/files/upload")
     async def upload_file(

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.14 - 2026-09-29
+
+- Upload a whole folder from Storage, preserving its name and nested files.
+- Add Stop beside each file's progress and Stop all for the upload queue.
+- Transfer large files in bounded 8 MiB chunks with persisted offsets and recovery from lost acknowledgements.
+- Serialize cancellation with in-flight writes, remove unfinished temporary files, and preserve completed media and existing files.
+- Clean abandoned sessions after 24 hours and warn before leaving an active upload page.
+- Cover nested folder uploads, chunk retries, active/queued cancellation and responsive controls in browser tests.
+
 ## 0.4.13 - 2026-09-29
 
 - Show only approved media roots in the torrent destination selector; existing movie-title folders no longer appear.

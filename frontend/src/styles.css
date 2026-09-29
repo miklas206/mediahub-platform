@@ -1410,9 +1410,15 @@ button.primary:hover:not(:disabled) {
   display: grid;
   gap: 8px;
 }
+.media-upload-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 .media-upload-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 30%);
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 30%) auto;
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
@@ -1491,7 +1497,10 @@ button.primary:hover:not(:disabled) {
 }
 @media (max-width: 680px) {
   .media-upload-item {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .media-upload-item > div:first-child {
+    grid-column: 1 / -1;
   }
 }
 .media-file-row small {

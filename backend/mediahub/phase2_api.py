@@ -1,4 +1,5 @@
 import platform
+import re
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -17,6 +18,7 @@ from mediahub.contracts import StorageInput, StrictModel
 from mediahub.db import InstalledApp, Setting, StorageLocation
 from mediahub.errors import DomainError
 from mediahub.network import cookie_options
+from mediahub.path_policy import DirectoryPolicy
 from mediahub.plex_api import router as plex_router
 from mediahub.seedbox_daily_api import router as daily_router
 from mediahub.seedbox_wizard_api import router as wizard_router
@@ -41,6 +43,17 @@ class Revision(StrictModel):
 class PathBody(StrictModel):
     path: str = Field(min_length=1, max_length=4096)
     confirmed_path: str | None = None
+
+
+class UploadFolder(StrictModel):
+    path: str = Field(min_length=1, max_length=4096)
+    relativePath: str = Field(min_length=1, max_length=4096)
+
+
+class BeginUpload(StrictModel):
+    path: str = Field(min_length=1, max_length=4096)
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(ge=0, le=512 * 1024**3)
 
 
 class ConfigValues(StrictModel):
@@ -348,6 +361,137 @@ async def storage_files(
             "truncated": listing["truncated"],
         }
     )
+
+
+def upload_root(svc, identifier):
+    with svc.sessions() as db:
+        record = db.get(StorageLocation, identifier)
+        if not record:
+            raise DomainError("not_found", "Storage location not found", 404)
+        if record.kind in {"appdata", "backups", "temp"}:
+            raise DomainError(
+                "storage_not_writable", "Technical storage cannot receive uploads", 403
+            )
+        return Path(record.path)
+
+
+def upload_session_path(svc, identifier, upload_id):
+    if not re.fullmatch(r"[a-f0-9]{32}", upload_id):
+        raise DomainError("invalid_upload", "Invalid upload identifier", 400)
+    return "/v1/uploads/" + upload_id, str(upload_root(svc, identifier))
+
+
+@router.post("/storage/locations/{identifier}/uploads")
+async def begin_storage_upload(
+    identifier: str, body: BeginUpload, request: Request, user=Depends(administrator)
+):
+    svc = services(request)
+    root = upload_root(svc, identifier)
+    selected = Path(body.path)
+    if not selected.is_absolute() or ".." in selected.parts or not selected.is_relative_to(root):
+        raise DomainError("path_not_allowed", "Choose a folder inside this media location", 403)
+    return result(
+        await svc.agent.request("POST", "/v1/uploads", {**body.model_dump(), "root": str(root)})
+    )
+
+
+@router.get("/storage/locations/{identifier}/uploads/{upload_id}")
+async def storage_upload_status(
+    identifier: str, upload_id: str, request: Request, user=Depends(administrator)
+):
+    svc = services(request)
+    endpoint, root = upload_session_path(svc, identifier, upload_id)
+    return result(await svc.agent.request("GET", endpoint + "?" + urlencode({"root": root})))
+
+
+@router.put("/storage/locations/{identifier}/uploads/{upload_id}")
+async def storage_upload_chunk(
+    identifier: str, upload_id: str, request: Request, offset: int, user=Depends(administrator)
+):
+    svc = services(request)
+    _, root = upload_session_path(svc, identifier, upload_id)
+    try:
+        length = int(request.headers.get("content-length", "-1"))
+    except ValueError:
+        length = -1
+    if not 0 < length <= 8 * 1024**2 or offset < 0:
+        raise DomainError("invalid_upload", "Expected an upload chunk of at most 8 MiB", 400)
+    return result(await svc.agent.upload_chunk(upload_id, root, offset, request.stream(), length))
+
+
+@router.post("/storage/locations/{identifier}/uploads/{upload_id}/finish")
+async def finish_storage_upload(
+    identifier: str, upload_id: str, request: Request, user=Depends(administrator)
+):
+    svc = services(request)
+    endpoint, root = upload_session_path(svc, identifier, upload_id)
+    uploaded = await svc.agent.request("POST", endpoint + "/finish?" + urlencode({"root": root}))
+    svc.events.record(
+        "storage.file.uploaded", "storage", f"File uploaded ({uploaded['size']} bytes)"
+    )
+    return result(uploaded)
+
+
+@router.delete("/storage/locations/{identifier}/uploads/{upload_id}")
+async def cancel_storage_upload(
+    identifier: str, upload_id: str, request: Request, user=Depends(administrator)
+):
+    svc = services(request)
+    endpoint, root = upload_session_path(svc, identifier, upload_id)
+    return result(await svc.agent.request("DELETE", endpoint + "?" + urlencode({"root": root})))
+
+
+@router.post("/storage/locations/{identifier}/files/folder")
+async def prepare_upload_folder(
+    identifier: str, body: UploadFolder, request: Request, user=Depends(administrator)
+):
+    """Create only the selected upload hierarchy within one registered media root."""
+    svc = services(request)
+    with svc.sessions() as db:
+        record = db.get(StorageLocation, identifier)
+        if not record:
+            raise DomainError("not_found", "Storage location not found", 404)
+        if record.kind in {"appdata", "backups", "temp"}:
+            raise DomainError(
+                "storage_not_writable", "Technical storage cannot receive uploads", 403
+            )
+        root = Path(record.path)
+    selected = Path(body.path)
+    if not selected.is_absolute() or ".." in selected.parts or not selected.is_relative_to(root):
+        raise DomainError("path_not_allowed", "Choose a folder inside this media location", 403)
+    parts = body.relativePath.split("/")
+    if len(parts) > 32:
+        raise DomainError("invalid_upload", "Upload folder nesting exceeds 32 levels", 400)
+    # Validate every component before creating anything, including empty components.
+    for part in parts:
+        DirectoryPolicy._upload_filename(part)
+        if Path(part).drive or ":" in part:
+            raise DomainError("invalid_upload", "Choose a valid folder name", 400)
+    checked = await svc.agent.request("POST", "/v1/directories/inspect", {"path": str(selected)})
+    if not checked["exists"] or not checked["writable"]:
+        raise DomainError("storage_not_writable", "Upload destination is not writable", 403)
+    for part in parts:
+        selected /= part
+        checked = await svc.agent.request(
+            "POST", "/v1/directories/inspect", {"path": str(selected)}
+        )
+        if not checked["exists"]:
+            try:
+                await svc.agent.request(
+                    "POST",
+                    "/v1/directories/create",
+                    {"path": str(selected), "confirmed_path": str(selected)},
+                )
+            except DomainError as error:
+                if error.code != "already_exists":
+                    raise
+        # Recheck paths created concurrently; the Agent rejects files and symlinks.
+        checked = await svc.agent.request(
+            "POST", "/v1/directories/inspect", {"path": str(selected)}
+        )
+        if not checked["exists"] or not checked["writable"]:
+            raise DomainError("storage_not_writable", "Upload folder is not writable", 403)
+    return result({"path": str(selected)})
 
 
 @router.post("/storage/locations/{identifier}/files/upload")

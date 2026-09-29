@@ -28,9 +28,11 @@ export async function api<T>(
   path: string,
   method = "GET",
   data?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch("/api/v1" + path, {
     method,
+    signal,
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
@@ -53,50 +55,128 @@ export async function api<T>(
   return payload.data;
 }
 
-export function uploadMediaFile<T>(
+type UploadSession = {
+  id: string;
+  offset: number;
+  size: number;
+  complete: boolean;
+};
+
+function uploadChunk(
+  endpoint: string,
+  chunk: Blob,
+  onProgress: (loaded: number) => void,
+  signal: AbortSignal,
+): Promise<UploadSession> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    if (signal.aborted) {
+      reject(new DOMException("Upload stopped", "AbortError"));
+      return;
+    }
+    request.open("PUT", "/api/v1" + endpoint);
+    request.withCredentials = true;
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+    request.setRequestHeader("X-MediaHub-CSRF", csrf);
+    const abort = () => request.abort();
+    signal.addEventListener("abort", abort, { once: true });
+    request.onloadend = () => signal.removeEventListener("abort", abort);
+    request.upload.onprogress = (event) => onProgress(event.loaded);
+    request.onerror = () =>
+      reject(new Error("Upload connection was interrupted"));
+    request.onabort = () =>
+      reject(new DOMException("Upload stopped", "AbortError"));
+    request.onload = () => {
+      try {
+        const payload = JSON.parse(request.responseText);
+        if (request.status < 200 || request.status >= 300 || !payload.data) {
+          reject(
+            new Error(payload.error?.message || "Upload chunk was rejected"),
+          );
+        } else resolve(payload.data);
+      } catch {
+        reject(new Error("MediaHub returned an invalid upload response"));
+      }
+    };
+    request.send(chunk);
+  });
+}
+
+export async function uploadMediaFile(
   locationId: string,
   path: string,
   file: File,
   onProgress: (percent: number) => void,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const query = new URLSearchParams({ path, filename: file.name });
-    const request = new XMLHttpRequest();
-    request.open(
-      "POST",
-      `/api/v1/storage/locations/${encodeURIComponent(locationId)}/files/upload?${query}`,
-    );
-    request.withCredentials = true;
-    request.setRequestHeader("Content-Type", "application/octet-stream");
-    request.setRequestHeader("X-MediaHub-CSRF", csrf);
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
-      }
-    };
-    request.onerror = () => reject(new Error("Upload connection was interrupted"));
-    request.onabort = () => reject(new Error("Upload was cancelled"));
-    request.onload = () => {
-      let payload: {
-        data?: T;
-        error?: { code?: string; message?: string } | null;
-      } = {};
+  signal: AbortSignal = new AbortController().signal,
+): Promise<UploadSession> {
+  const base = `/storage/locations/${encodeURIComponent(locationId)}/uploads`;
+  const session = await api<UploadSession>(
+    base,
+    "POST",
+    {
+      path,
+      filename: file.name,
+      size: file.size,
+    },
+    signal,
+  );
+  const endpoint = base + "/" + session.id;
+  try {
+    let offset = session.offset;
+    let retries = 0;
+    while (offset < file.size) {
+      signal.throwIfAborted();
+      const end = Math.min(offset + 8 * 1024 * 1024, file.size);
       try {
-        payload = JSON.parse(request.responseText);
-      } catch {
-        reject(new Error("MediaHub returned an invalid upload response"));
-        return;
+        const result = await uploadChunk(
+          endpoint + "?offset=" + offset,
+          file.slice(offset, end),
+          (loaded) =>
+            onProgress(
+              Math.min(99, Math.round((100 * (offset + loaded)) / file.size)),
+            ),
+          signal,
+        );
+        if (result.offset !== end)
+          throw new Error("Unexpected upload position");
+        offset = result.offset;
+        retries = 0;
+      } catch (error) {
+        signal.throwIfAborted();
+        if (++retries > 2) throw error;
+        // A response can be lost after the Agent has stored the chunk.
+        const current = await api<UploadSession>(
+          endpoint,
+          "GET",
+          undefined,
+          signal,
+        );
+        if (current.offset < offset || current.offset > end) throw error;
+        offset = current.offset;
       }
-      if (request.status === 401 && payload.error?.code === "unauthorized") {
-        window.dispatchEvent(new Event("session-expired"));
-      }
-      if (request.status < 200 || request.status >= 300 || payload.data === undefined) {
-        reject(new Error(payload.error?.message || "File could not be uploaded"));
-        return;
-      }
-      onProgress(100);
-      resolve(payload.data);
-    };
-    request.send(file);
-  });
+    }
+    signal.throwIfAborted();
+    let result: UploadSession;
+    try {
+      result = await api<UploadSession>(
+        endpoint + "/finish",
+        "POST",
+        {},
+        signal,
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      result = await api<UploadSession>(endpoint, "GET", undefined, signal);
+      if (!result.complete) throw error;
+    }
+    if (!result.complete) throw new Error("Upload was not finalized");
+    onProgress(100);
+    return result;
+  } finally {
+    // Remove session metadata or unfinished data; completed media is never deleted.
+    // A disconnected browser is covered by the Agent's stale-session cleanup.
+    await api(endpoint, "DELETE", undefined, AbortSignal.timeout(15000)).catch(
+      () => {},
+    );
+  }
 }

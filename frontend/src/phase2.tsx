@@ -559,11 +559,39 @@ export function MediaFiles() {
       id: string;
       name: string;
       progress: number;
-      state: "uploading" | "complete" | "error";
+      state:
+        "queued" | "uploading" | "stopping" | "stopped" | "complete" | "error";
       message?: string;
     }[]
   >([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const uploadControllers = useRef(new Map<string, AbortController>());
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => {
+    const controllers = uploadControllers.current;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (controllers.size) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      controllers.forEach((controller) => controller.abort());
+    };
+  }, []);
+  const stopUpload = (id?: string) => {
+    uploadControllers.current.forEach((controller, key) => {
+      if (!id || key === id) controller.abort();
+    });
+    setUploads((current) =>
+      current.map((item) =>
+        (!id || item.id === id) && ["uploading", "queued"].includes(item.state)
+          ? { ...item, state: item.state === "queued" ? "stopped" : "stopping" }
+          : item,
+      ),
+    );
+  };
+
   const available = (locations.data || []).filter((item) =>
     mediaKinds.has(item.kind),
   );
@@ -600,45 +628,116 @@ export function MediaFiles() {
   const selectedLocation = available.find((item) => item.id === locationId);
 
   const uploadFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files?.length || !listing) return;
-      for (const [index, file] of Array.from(files).entries()) {
-        const id = `${Date.now()}-${index}-${file.name}`;
-        setUploads((current) => [
-          ...current,
-          { id, name: file.name, progress: 0, state: "uploading" },
-        ]);
-        try {
-          await uploadMediaFile(locationId, listing.path, file, (progress) =>
+    async (files: FileList | null, folder = false) => {
+      if (!files?.length || !listing || uploadControllers.current.size) return;
+      const selected = Array.from(files);
+      if (selected.length > 10000) {
+        setError("Choose a folder with at most 10,000 files per upload.");
+        return;
+      }
+      setUploading(true);
+      setError("");
+      const queue = selected.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        controller: new AbortController(),
+        name: folder ? file.webkitRelativePath : file.name,
+      }));
+      queue.forEach((item) =>
+        uploadControllers.current.set(item.id, item.controller),
+      );
+      setUploads(
+        queue.map((item) => ({
+          id: item.id,
+          name: item.name,
+          progress: 0,
+          state: "queued",
+        })),
+      );
+      const directories = new Map<string, string>();
+      try {
+        for (const { id, file, controller } of queue) {
+          const signal = controller.signal;
+          try {
+            signal.throwIfAborted();
             setUploads((current) =>
               current.map((item) =>
-                item.id === id ? { ...item, progress } : item,
+                item.id === id ? { ...item, state: "uploading" } : item,
               ),
-            ),
-          );
-          setUploads((current) =>
-            current.map((item) =>
-              item.id === id
-                ? { ...item, progress: 100, state: "complete" }
-                : item,
-            ),
-          );
-        } catch (caught) {
-          setUploads((current) =>
-            current.map((item) =>
-              item.id === id
-                ? {
-                    ...item,
-                    state: "error",
-                    message: (caught as Error).message,
-                  }
-                : item,
-            ),
-          );
+            );
+            let destination = listing.path;
+            if (folder) {
+              const parts = file.webkitRelativePath.split("/");
+              if (
+                parts.length < 2 ||
+                parts.pop() !== file.name ||
+                parts.some(
+                  (p) => !p || p === "." || p === ".." || p.includes("\\"),
+                )
+              ) {
+                throw new Error(
+                  "The browser did not provide a valid folder path",
+                );
+              }
+              const relativePath = parts.join("/");
+              if (!directories.has(relativePath)) {
+                const created = await api<{ path: string }>(
+                  `/storage/locations/${locationId}/files/folder`,
+                  "POST",
+                  {
+                    path: listing.path,
+                    relativePath,
+                  },
+                  signal,
+                );
+                directories.set(relativePath, created.path);
+              }
+              destination = directories.get(relativePath)!;
+            }
+            signal.throwIfAborted();
+            await uploadMediaFile(
+              locationId,
+              destination,
+              file,
+              (progress) => {
+                if (!signal.aborted)
+                  setUploads((current) =>
+                    current.map((item) =>
+                      item.id === id ? { ...item, progress } : item,
+                    ),
+                  );
+              },
+              signal,
+            );
+            setUploads((current) =>
+              current.map((item) =>
+                item.id === id
+                  ? { ...item, progress: 100, state: "complete" }
+                  : item,
+              ),
+            );
+          } catch (caught) {
+            setUploads((current) =>
+              current.map((item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      state: signal.aborted ? "stopped" : "error",
+                      message: (caught as Error).message,
+                    }
+                  : item,
+              ),
+            );
+          } finally {
+            uploadControllers.current.delete(id);
+          }
         }
+      } finally {
+        setUploading(false);
+        await open(locationId, listing.path);
+        if (fileInput.current) fileInput.current.value = "";
+        if (folderInput.current) folderInput.current.value = "";
       }
-      await open(locationId, listing.path);
-      if (fileInput.current) fileInput.current.value = "";
     },
     [listing, locationId, open],
   );
@@ -646,9 +745,9 @@ export function MediaFiles() {
   return (
     <Panel title="Media files">
       <p className="muted">
-        Browse the folders Plex and Seedbox use, and securely upload files from
-        this device. Existing files cannot be overwritten, moved or deleted
-        here.
+        Browse the folders Plex and Seedbox use, and securely upload files or
+        folders from this device. Existing files cannot be overwritten, moved or
+        deleted here.
       </p>
       <ErrorBox error={locations.error || error} />
       {!locations.data ? (
@@ -666,6 +765,7 @@ export function MediaFiles() {
               Media location
               <select
                 value={locationId}
+                disabled={uploading}
                 onChange={(event) => setLocationId(event.target.value)}
               >
                 {available.map((item) => (
@@ -677,7 +777,7 @@ export function MediaFiles() {
             </label>
             <div className="media-browser-actions">
               <button
-                disabled={!listing?.parent || loading}
+                disabled={!listing?.parent || loading || uploading}
                 onClick={() =>
                   listing?.parent && open(locationId, listing.parent)
                 }
@@ -702,15 +802,54 @@ export function MediaFiles() {
               />
               <button
                 className="primary"
-                disabled={!listing || !selectedLocation?.writable || loading}
+                disabled={
+                  !listing ||
+                  !selectedLocation?.writable ||
+                  loading ||
+                  uploading
+                }
                 onClick={() => fileInput.current?.click()}
               >
                 <Upload size={16} /> Upload files
+              </button>
+              <input
+                aria-label="Choose folder to upload"
+                className="visually-hidden"
+                type="file"
+                multiple
+                {...{ webkitdirectory: "" }}
+                ref={folderInput}
+                onChange={(event) => uploadFiles(event.target.files, true)}
+              />
+              <button
+                className="primary"
+                disabled={
+                  !listing ||
+                  !selectedLocation?.writable ||
+                  loading ||
+                  uploading
+                }
+                onClick={() => folderInput.current?.click()}
+              >
+                <Folder size={16} /> Upload folder
               </button>
             </div>
           </div>
           {uploads.length > 0 && (
             <div className="media-upload-list" aria-live="polite">
+              <div className="media-upload-summary">
+                <span>
+                  {uploads.filter((item) => item.state === "complete").length}{" "}
+                  of {uploads.length} files uploaded
+                </span>
+                {uploading && (
+                  <button onClick={() => stopUpload()}>Stop all</button>
+                )}
+              </div>
+              <p className="muted">
+                Folders keep their structure. Empty folders are not included.
+                Keep this page open; stopping keeps completed files.
+              </p>
               {uploads.map((item) => (
                 <div
                   className={`media-upload-item ${item.state}`}
@@ -723,12 +862,27 @@ export function MediaFiles() {
                         ? "Upload complete"
                         : item.state === "error"
                           ? item.message
-                          : `${item.progress}% uploaded`}
+                          : item.state === "queued"
+                            ? "Waiting"
+                            : item.state === "stopped"
+                              ? "Stopped"
+                              : item.state === "stopping"
+                                ? "Stopping and cleaning up..."
+                                : `${item.progress}% uploaded`}
                     </small>
                   </div>
                   <div className="media-upload-progress">
                     <span style={{ width: `${item.progress}%` }} />
                   </div>
+                  {["queued", "uploading", "stopping"].includes(item.state) && (
+                    <button
+                      aria-label={`Stop upload ${item.name}`}
+                      disabled={item.state === "stopping"}
+                      onClick={() => stopUpload(item.id)}
+                    >
+                      {item.state === "stopping" ? "Stopping..." : "Stop"}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -741,7 +895,7 @@ export function MediaFiles() {
             {listing?.items.map((item) => (
               <button
                 className="media-file-row"
-                disabled={item.type === "file"}
+                disabled={item.type === "file" || uploading}
                 key={item.path}
                 onClick={() =>
                   item.type === "folder" && open(locationId, item.path)
