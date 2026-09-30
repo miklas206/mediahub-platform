@@ -2,11 +2,11 @@ import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from mediahub.db import User
+from mediahub.db import Setting, User
 from mediahub.errors import DomainError
 from mediahub.fjordhub_deploy import (
     DeployConfig,
@@ -91,6 +91,61 @@ def test_authenticated_admin_and_csrf_required(client, logged_in, monkeypatch):
     monkeypatch.setattr("mediahub.fjordhub_deploy.FjordHubDeploy.launch", lambda *args: None)
     client.cookies.clear()
     assert client.get("/api/v1/fjordhub/deployment").status_code == 401
+    assert client.get("/api/v1/fjordhub/deployment/target").status_code == 401
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        ("192.168.1.126:/downloads", "192.168.1.126"),
+        ("10.10.2.8:/media", "10.10.2.8"),
+        ("8.8.8.8:/media", None),
+        ("127.0.0.1:/media", None),
+        ("not-an-address", None),
+    ],
+)
+def test_target_discovery_uses_bound_storage(logged_in, monkeypatch, source, expected):
+    svc = logged_in.app.state.services
+    with svc.sessions.begin() as db:
+        db.add(Setting(key="seedbox_installation", value={"hostId": "seedbox-test"}))
+    agent = SimpleNamespace(request=AsyncMock(return_value={"storage": {"source": source}}))
+    client = MagicMock(return_value=agent)
+    monkeypatch.setattr(svc.hosts, "client", client)
+    response = logged_in.get("/api/v1/fjordhub/deployment/target?target=lxc")
+    assert response.status_code == 200
+    assert response.json()["data"]["host"] == expected
+    client.assert_called_once_with("seedbox-test")
+    agent.request.assert_awaited_once_with("GET", "/v1/seedbox/status")
+    # The storage host must never be assumed to be a direct Linux deployment target.
+    assert (
+        logged_in.get("/api/v1/fjordhub/deployment/target?target=linux").json()["data"]["host"]
+        is None
+    )
+
+
+def test_discovery_reuses_success_and_handles_offline_agent(logged_in, monkeypatch):
+    svc = logged_in.app.state.services
+    with svc.sessions.begin() as db:
+        db.add(Setting(key="seedbox_installation", value={"hostId": "seedbox-test"}))
+    monkeypatch.setattr(
+        svc.hosts, "client", MagicMock(side_effect=DomainError("offline", "Offline", 503))
+    )
+    assert logged_in.get("/api/v1/fjordhub/deployment/target").json()["data"]["host"] is None
+    with svc.sessions.begin() as db:
+        db.add(
+            Setting(
+                key="fjordhub.deployment.test",
+                value={
+                    "state": "succeeded",
+                    "host": "10.1.2.3",
+                    "config": {"target": "lxc"},
+                },
+            )
+        )
+    assert logged_in.get("/api/v1/fjordhub/deployment/target").json()["data"] == {
+        "host": "10.1.2.3",
+        "source": "previous-installation",
+    }
 
 
 def test_job_idempotency_busy_failure_ack_and_restart(logged_in, monkeypatch):

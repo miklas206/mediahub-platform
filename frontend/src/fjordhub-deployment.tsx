@@ -33,9 +33,46 @@ export function FjordHubDeployment({
   const [pending, setPending] = useState(false);
   const requestId = useRef("");
   const consoleRef = useRef<HTMLPreElement>(null);
+  const hostEdited = useRef(false);
+  const [findingHost, setFindingHost] = useState(false);
+  const [hostSource, setHostSource] = useState("");
   const busy = pending || job?.state === "running";
   const needsInspection =
     job?.state === "failed" || job?.state === "interrupted";
+
+  useEffect(() => {
+    const controller = new AbortController();
+    hostEdited.current = false;
+    setHost("");
+    setHostSource("");
+    setFingerprint("");
+    setVerified(false);
+    requestId.current = "";
+    setFindingHost(true);
+    void api<{ host: string | null; source: string | null }>(
+      endpoint + "/target?target=" + config.target,
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((suggestion) => {
+        if (
+          !controller.signal.aborted &&
+          !hostEdited.current &&
+          suggestion.host
+        ) {
+          setHost(suggestion.host);
+          setHostSource(suggestion.source || "");
+        }
+      })
+      .catch(() => {
+        // Manual entry remains available when discovery cannot reach the Agent.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFindingHost(false);
+      });
+    return () => controller.abort();
+  }, [config.target]);
 
   useEffect(() => {
     onBusy(busy);
@@ -140,8 +177,12 @@ export function FjordHubDeployment({
               SSH server IP
               <input
                 value={host}
-                placeholder="192.168.1.126"
+                placeholder={
+                  findingHost ? "Finding server IP…" : "Server LAN IP"
+                }
                 onChange={(e) => {
+                  hostEdited.current = true;
+                  setHostSource("");
                   setHost(e.target.value);
                   setFingerprint("");
                   setVerified(false);
@@ -172,6 +213,17 @@ export function FjordHubDeployment({
               />
             </label>
           </fieldset>
+          <p role="status">
+            {findingHost
+              ? "Finding the server address from your existing connections…"
+              : hostSource === "configured-storage"
+                ? "Address filled from your configured storage server. You can change it if Proxmox runs on another host."
+                : hostSource === "previous-installation"
+                  ? "Address filled from your previous successful installation."
+                  : !host
+                    ? "No server address could be found automatically. Enter its LAN IP to continue."
+                    : ""}
+          </p>
           <div className="button-row">
             <button
               type="button"
