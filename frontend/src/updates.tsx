@@ -5,6 +5,7 @@ import { api } from "./api";
 import { disconnectedUpdate, mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, Panel, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
+import { runUpdateAll, updateAllPlan } from "./update-all";
 import {
   OperationProgress,
   type OperationState,
@@ -197,6 +198,57 @@ export function UpdatesPage({
   const [checkedPlatformRelease, setCheckedPlatformRelease] =
     useState<PlatformRelease>();
   const release = checkedPlatformRelease || platformRelease.data;
+  const batchPlan = updateAllPlan(updateSummary.data?.items || [], apps || []);
+
+  async function installAll() {
+    if (!apps || !batchPlan.tasks.length || busy) return;
+    if (
+      !window.confirm(
+        `Update ${batchPlan.tasks.map((task) => task.name).join(", ")}? Plex playback may pause. Core updates last and reloads the page when finished.${batchPlan.manual.length ? ` Manual updates remain: ${batchPlan.manual.map((item) => item.name).join(", ")}.` : ""}`,
+      )
+    )
+      return;
+    setBusy("all-install");
+    setError("");
+    setNotice("");
+    try {
+      const outcome = await runUpdateAll(batchPlan, api, (operation) => {
+        setOperations((current) => ({ ...current, batch: operation }));
+      });
+      if (outcome.coreUpdated && !outcome.failed) {
+        window.location.reload();
+        return;
+      }
+      await Promise.all(
+        batchPlan.tasks
+          .filter((task) => task.kind === "plex")
+          .map(async (task) => {
+            try {
+              const result = await api<{ report: Versions }>(
+                `/apps/${encodeURIComponent(task.id)}/runtime`,
+              );
+              setVersions((current) => ({
+                ...current,
+                [task.id]: result.report,
+              }));
+              await api(
+                `/apps/${encodeURIComponent(task.id)}/update-check`,
+                "POST",
+              );
+            } catch {
+              setNotice(
+                "The update queue has finished, but the latest app status could not be refreshed. Use Check all now to retry.",
+              );
+            }
+          }),
+      );
+      updateSummary.reload();
+      platformRelease.reload();
+      setCheckedPlatformRelease(undefined);
+    } finally {
+      setBusy("");
+    }
+  }
 
   function updateOperation(key: string, operation: OperationState) {
     setOperations((current) => ({
@@ -667,6 +719,19 @@ export function UpdatesPage({
             </p>
           </div>
           <div className="button-row">
+            {!!updateSummary.data?.count && (
+              <button
+                className="primary"
+                disabled={!!busy || !apps || !batchPlan.tasks.length}
+                onClick={() => void installAll()}
+              >
+                <RefreshCw
+                  size={16}
+                  className={busy === "all-install" ? "spin" : ""}
+                />
+                {busy === "all-install" ? "Updating all…" : "Update all"}
+              </button>
+            )}
             <button disabled={!!busy} onClick={() => void checkAll()}>
               <RefreshCw
                 className={busy === "all-check" ? "spin" : ""}
@@ -697,6 +762,19 @@ export function UpdatesPage({
             </button>
           </div>
         ))}
+        {batchPlan.manual.length > 0 && (
+          <p className="muted">
+            Manual update required:{" "}
+            {batchPlan.manual.map((item) => item.name).join(", ")}. These apps
+            do not yet have an automatic installer.
+          </p>
+        )}
+        {busy === "all-install" && (
+          <p role="status">
+            Keep this page open while the update queue runs. Core updates last.
+          </p>
+        )}
+        {operations.batch && <OperationProgress operation={operations.batch} />}
         {operations.all && <OperationProgress operation={operations.all} />}
       </Panel>
       <div className="apps-grid updates-grid">
