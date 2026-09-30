@@ -8,8 +8,18 @@ Older Agents without a commit marker are shown as needing an update, not as curr
 2. Open Updates over HTTPS and find Seedbox Agent.
 3. Read and verify the SSH fingerprint for the automatically selected paired host.
 4. Enter that host's root SSH password and choose Prepare SSH for update.
-5. Choose Update Agent or Update all. Prepared credentials expire after 15 minutes,
-   are consumed by one job and are never written to the database or remote files.
+5. Optionally enable Remember SSH access before verification. Only successfully verified
+   credentials are saved, encrypted using MediaHub's existing encryption key and bound
+   to the paired host ID, IP, SSH port and trusted fingerprint. They survive Core restarts
+   and enable Update Agent and Update all without entering the password again.
+6. Without Remember, preparation expires after 15 minutes and is consumed by one job.
+   Forget saved SSH access removes the encrypted entry and temporary preparation; it does
+   not cancel a job already running. Passwords are never returned to the browser or logs.
+   Verify saved SSH access reconnects and can reconcile an interrupted remote job.
+
+Saved credentials reside on the MediaHub server, not in browser storage. First setup
+still requires valid root SSH access. A forgotten password must be recovered or reset
+through an existing administrator console; this feature does not bypass SSH authentication.
 
 The console includes build progress and verification. Update all updates Agent before
 Core; an Agent failure stops the queue. qBittorrent's displayed version is independent.
@@ -37,7 +47,7 @@ A detached worker and host lock prevent loss of SSH from leaving an unverified i
 accepted, or concurrent jobs replacing the Agent simultaneously.
 
 Jobs and backups are stored in /var/lib/mediahub-agent-updates/<operationId> on the
-Seedbox host, mode 0700. Core persists sanitized console/status only. If Core or SSH
+Seedbox host, mode 0700. Core persists sanitized console/status and, only when explicitly selected, an encrypted SSH credential entry. If Core or SSH
 was interrupted, wait for remote completion/rollback and prepare SSH again to reconcile
 the saved job before retrying. Do not start another host update outside MediaHub concurrently.
 

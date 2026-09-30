@@ -46,3 +46,13 @@ async def install(request: Request):
 @router.get("/operation")
 def operation(request: Request):
     return result(services(request).agent_updates.operation())
+
+
+@router.delete("/credentials")
+def forget_credentials(request: Request):
+    return result(services(request).agent_updates.forget_setup())
+
+
+@router.post("/prepare-saved")
+async def prepare_saved(request: Request):
+    return result(await asyncio.to_thread(services(request).agent_updates.prepare_saved))

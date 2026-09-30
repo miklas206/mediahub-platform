@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 import paramiko
+from cryptography.fernet import InvalidToken
 from pydantic import Field, SecretStr
 from sqlalchemy import select
 
@@ -22,12 +23,14 @@ from mediahub.fjordhub_deploy import PinnedKey, SSHAddress, clean_line, probe
 from mediahub.platform_source import GitHubSourceProvider, download_source, normalize_source
 
 KEY = "seedbox.agent.update"
+SSH_KEY = "seedbox.agent.ssh.encrypted"
 
 
 class SSHSetup(StrictModel):
     password: SecretStr = Field(min_length=1, max_length=1024)
     fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
     port: int = Field(default=22, ge=1, le=65535)
+    remember: bool = False
 
 
 class AgentUpdates:
@@ -61,19 +64,71 @@ class AgentUpdates:
                 self.prepared = None
             return bool(self.prepared and self.prepared[0] == identifier)
 
+    def saved_setup(self, identifier, address):
+        with self.svc.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
+            encrypted = row.value.get("encrypted") if row else None
+        if not encrypted:
+            return None
+        try:
+            value = json.loads(self.svc.catalog.cipher.decrypt(encrypted.encode()))
+            if value["hostId"] != identifier or value["host"] != address.host:
+                return None
+            return SSHSetup(**value["setup"])
+        except (InvalidToken, ValueError, KeyError, TypeError, AttributeError):
+            raise DomainError(
+                "agent_ssh_storage",
+                "Saved SSH access cannot be decrypted; forget it and prepare SSH again",
+                409,
+            ) from None
+
+    def save_setup(self, identifier, address, setup):
+        payload = {
+            "hostId": identifier,
+            "host": address.host,
+            "setup": {
+                **setup.model_dump(mode="json"),
+                "password": setup.password.get_secret_value(),
+            },
+        }
+        encrypted = self.svc.catalog.cipher.encrypt(json.dumps(payload).encode()).decode()
+        with self.svc.sessions.begin() as db:
+            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
+            if row:
+                row.value = {"encrypted": encrypted}
+            else:
+                db.add(Setting(key=SSH_KEY, value={"encrypted": encrypted}))
+
+    def forget_setup(self):
+        with self.lock, self.svc.sessions.begin() as db:
+            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
+            if row:
+                db.delete(row)
+            self.prepared = None
+        return {"credentialsStored": False, "installReady": False}
+
+    def prepare_saved(self):
+        identifier, _, address = self.binding()
+        setup = self.saved_setup(identifier, address)
+        if setup is None:
+            raise DomainError("agent_ssh_required", "No saved SSH access for this host", 409)
+        return self.prepare(setup)
+
     async def check(self):
         identifier, client, address = self.binding()
         version = await client.request("GET", "/v1/version")
         checked = await GitHubSourceProvider(
             version.get("version", "unknown"), version.get("sourceCommit")
         ).check(self.svc.settings.get().release_repository, self.svc.release_credentials.token())
+        stored = self.saved_setup(identifier, address) is not None
         return {
             **checked,
             "id": "seedbox-agent",
             "name": "Seedbox Agent",
             "host": address.host,
             "hostId": identifier,
-            "installReady": self.ready(identifier),
+            "installReady": self.ready(identifier) or stored,
+            "credentialsStored": stored,
             "installedVersion": version.get("sourceCommit") or version.get("version"),
             "message": checked.get("message")
             if checked.get("configured") is False
@@ -143,6 +198,10 @@ class AgentUpdates:
         finally:
             client.close()
         with self.lock:
+            if setup.remember:
+                self.save_setup(identifier, address, setup)
+            else:
+                self.forget_setup()
             self.prepared = (identifier, time.monotonic() + 900, setup)
 
         def expire():
@@ -155,7 +214,10 @@ class AgentUpdates:
         timer.start()
         return {
             "installReady": True,
-            "message": "SSH verified for one update within 15 minutes; password is held only in memory",
+            "credentialsStored": setup.remember,
+            "message": "SSH verified and saved encrypted on this MediaHub server"
+            if setup.remember
+            else "SSH verified for one update within 15 minutes; password is held only in memory",
         }
 
     def fingerprint(self, port):
@@ -182,11 +244,15 @@ class AgentUpdates:
                 )
             if not checked["updateAvailable"]:
                 raise DomainError("agent_current", "Agent already matches GitHub main", 409)
-            if not self.ready(identifier):
+            setup = (
+                self.prepared[2]
+                if self.ready(identifier)
+                else self.saved_setup(identifier, address)
+            )
+            if setup is None:
                 raise DomainError(
                     "agent_ssh_required", "Prepare the Seedbox Agent SSH connection first", 409
                 )
-            setup = self.prepared[2]
             self.prepared = None
             job = {
                 "operationId": uuid4().hex,

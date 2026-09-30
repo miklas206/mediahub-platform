@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from mediahub import agent_update_worker as worker
-from mediahub.agent_updates import SSHSetup
+from mediahub.agent_updates import AgentUpdates, SSHSetup
 from mediahub.errors import DomainError
 
 
@@ -211,3 +211,79 @@ def test_check_all_includes_agent_update(logged_in, monkeypatch):
     assert item["latestVersion"] == "a" * 40
     assert item["updateAvailable"]
     assert summary["count"] >= 1
+
+
+def test_remembered_ssh_is_encrypted_bound_to_host_and_survives_restart(logged_in, monkeypatch):
+    from mediahub.agent_updates import SSH_KEY
+    from mediahub.db import Setting
+    from sqlalchemy import select
+
+    svc = logged_in.app.state.services
+    updater = svc.agent_updates
+    address = SimpleNamespace(host="192.168.1.20")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+    from unittest.mock import Mock
+
+    connection = Mock()
+    monkeypatch.setattr(updater, "connect", lambda *args: connection)
+    setup = SSHSetup(
+        password="example-private-password", fingerprint="SHA256:" + "a" * 43, remember=True
+    )
+    result = updater.prepare(setup)
+    assert result["credentialsStored"]
+    assert "example-private-password" not in json.dumps(result)
+    with svc.sessions() as db:
+        stored = db.scalar(select(Setting).where(Setting.key == SSH_KEY)).value
+        assert "example-private-password" not in json.dumps(stored)
+        assert "fingerprint" not in stored
+    restarted = AgentUpdates(svc)
+    restored = restarted.saved_setup("seedbox", address)
+    assert restored.password.get_secret_value() == "example-private-password"
+    assert restored.fingerprint == setup.fingerprint
+    assert restarted.saved_setup("other", address) is None
+    assert restarted.saved_setup("seedbox", SimpleNamespace(host="192.168.1.21")) is None
+    restarted.forget_setup()
+    assert restarted.saved_setup("seedbox", address) is None
+
+
+def test_failed_ssh_verification_does_not_save_password(logged_in, monkeypatch):
+    updater = logged_in.app.state.services.agent_updates
+    address = SimpleNamespace(host="192.168.1.20")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+
+    def fail(*args):
+        raise DomainError("agent_ssh_failed", "Rejected", 409)
+
+    monkeypatch.setattr(updater, "connect", fail)
+    with pytest.raises(DomainError):
+        updater.prepare(SSHSetup(password="wrong", fingerprint="SHA256:" + "a" * 43, remember=True))
+    assert updater.saved_setup("seedbox", address) is None
+
+
+def test_saved_access_enables_update_without_new_password(logged_in, monkeypatch):
+    updater = logged_in.app.state.services.agent_updates
+    address = SimpleNamespace(host="192.168.1.20")
+    remote = SimpleNamespace(request=AsyncMock(return_value={"version": "0.4.3"}))
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", remote, address))
+    updater.save_setup(
+        "seedbox",
+        address,
+        SSHSetup(password="saved-private", fingerprint="SHA256:" + "a" * 43, remember=True),
+    )
+    monkeypatch.setattr(
+        "mediahub.agent_updates.GitHubSourceProvider.check",
+        AsyncMock(return_value={"latestCommit": "a" * 40, "updateAvailable": True}),
+    )
+    checked = asyncio.run(updater.check())
+    assert checked["installReady"] and checked["credentialsStored"]
+    assert "saved-private" not in json.dumps(checked)
+    from unittest.mock import Mock
+
+    thread = Mock()
+    monkeypatch.setattr("mediahub.agent_updates.threading.Thread", thread)
+    job = asyncio.run(updater.start())
+    assert job["state"] == "running"
+    assert thread.call_args.kwargs["args"][-1].password.get_secret_value() == "saved-private"
+    thread.return_value.start.assert_called_once()
+    assert "saved-private" not in json.dumps(updater.operation())
+    assert updater.saved_setup("seedbox", address) is not None
