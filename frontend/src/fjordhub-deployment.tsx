@@ -234,7 +234,8 @@ export function FjordHubDeployment({
             </button>
           </div>
           {fingerprint && (
-            <div className="notice">
+            <div className="notice deployment-fingerprint">
+              <strong>Next step: confirm the server identity</strong>
               <p>
                 Server fingerprint:{" "}
                 <code style={{ overflowWrap: "anywhere" }}>{fingerprint}</code>
@@ -246,15 +247,29 @@ export function FjordHubDeployment({
                   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
                 </code>
               </p>
-              <label>
+              <label className="deployment-trust-confirmation">
                 <input
                   type="checkbox"
+                  aria-label="I recognize and trust this server fingerprint."
+                  aria-describedby="deployment-trust-help"
                   checked={verified}
                   disabled={busy}
                   onChange={(e) => setVerified(e.target.checked)}
-                />{" "}
-                I recognize and trust this server fingerprint.
+                />
+                <span>
+                  <strong>
+                    {verified
+                      ? "Server confirmed"
+                      : "Confirm server to continue"}
+                  </strong>
+                  <span>I recognize and trust this server fingerprint.</span>
+                </span>
               </label>
+              <p id="deployment-trust-help">
+                {verified
+                  ? "Confirmation complete. Enter the root password, then press the install button below."
+                  : "After checking the fingerprint, click the confirmation above to enable the next step."}
+              </p>
             </div>
           )}
           <p>

@@ -1030,6 +1030,53 @@ nav a.active {
   margin-bottom: 16px;
   font-size: 14px;
 }
+.deployment-fingerprint code {
+  overflow-wrap: anywhere;
+}
+.deployment-trust-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 76px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.deployment-trust-confirmation:hover,
+.deployment-trust-confirmation:has(input:checked) {
+  background: var(--accent-bg);
+}
+.deployment-trust-confirmation:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.deployment-trust-confirmation input[type="checkbox"] {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: inherit;
+}
+.deployment-trust-confirmation > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.deployment-trust-confirmation strong {
+  color: var(--accent);
+  font-size: 16px;
+}
+.deployment-trust-confirmation:has(input:disabled) {
+  cursor: default;
+  opacity: 0.7;
+}
 .success {
   padding: 13px 17px;
   border: 1px solid #31534c;
