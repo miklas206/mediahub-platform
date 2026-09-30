@@ -46,6 +46,7 @@ from mediahub.phase2_api import router as phase2_router
 from mediahub.platform_update_runtime import PlatformUpdateRuntime
 from mediahub.release_credentials import GitHubReleaseCredentials
 from mediahub.security_api import router as security_router
+from mediahub.seedbox_reachability import SeedboxReachability
 from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
@@ -93,6 +94,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.platform_update = PlatformUpdateRuntime(svc)
         svc.hosts = HostRegistry(svc)
         svc.agent_updates = AgentUpdates(svc)
+        svc.seedbox_reachability = SeedboxReachability(svc)
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions)
         register_remote_apps(svc)
@@ -130,10 +132,14 @@ def create_app(config: Config | None = None) -> FastAPI:
         host_collector = asyncio.create_task(collect_hosts())
         integration_collector = asyncio.create_task(svc.integrations.poll())
         update_collector = asyncio.create_task(svc.updates.poll())
+        port_collector = asyncio.create_task(svc.seedbox_reachability.poll())
         rss_collector = asyncio.create_task(svc.rss_feeds.poll())
         try:
             yield
         finally:
+            port_collector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await port_collector
             collector.cancel()
             host_collector.cancel()
             integration_collector.cancel()

@@ -579,15 +579,7 @@ export function UpdatesPage({
       setLatest((current) => ({ ...current, ...reported }));
       if (result.lastError)
         setError(`Update check incomplete: ${result.lastError}`);
-      setNotice(
-        result.lastError
-          ? result.count
-            ? `${result.count} verified update${result.count === 1 ? "" : "s"} found; other sources could not be checked.`
-            : ""
-          : result.count
-            ? `${result.count} verified update${result.count === 1 ? " is" : "s are"} available.`
-            : "Everything is up to date.",
-      );
+      setNotice("");
       updateSummary.reload();
       platformRelease.reload();
       setCheckedPlatformRelease(undefined);
@@ -704,7 +696,7 @@ export function UpdatesPage({
   }
 
   return (
-    <div className="stack">
+    <div className="stack updates-page">
       <p className="muted">
         Verified updates with configuration rollback and media kept separate.
       </p>
@@ -752,26 +744,35 @@ export function UpdatesPage({
             <Link to="/settings">Change schedule →</Link>
           </div>
         </div>
-        {updateSummary.data?.count ? (
-          <p className="update-count-summary">
-            <Bell size={17} /> <strong>{updateSummary.data.count}</strong>{" "}
-            update{updateSummary.data.count === 1 ? "" : "s"} available
-          </p>
-        ) : (
-          <p className="muted">No verified updates are currently waiting.</p>
-        )}
-        {updateSummary.data?.notifications.map((notification) => (
-          <div className="update-notification" key={notification.id}>
-            <Bell size={17} />
-            <div>
-              <strong>{notification.message}</strong>
-              <span>{new Date(notification.timestamp).toLocaleString()}</span>
-            </div>
-            <button onClick={() => void dismissNotification(notification.id)}>
-              Dismiss
+        <div className="update-summary-line" role="status">
+          <Bell size={17} />
+          <strong>
+            {updateSummary.data?.count
+              ? `Updates available: ${updateSummary.data.items
+                  .filter((item) => item.updateAvailable)
+                  .map((item) => item.name)
+                  .join(", ")}`
+              : !updateSummary.data?.checkedAt
+                ? "Checking update status..."
+                : updateSummary.data.lastError
+                  ? "Some update sources could not be checked"
+                  : "All checked components are up to date"}
+          </strong>
+          {!!updateSummary.data?.notifications.length && (
+            <button
+              className="ghost"
+              onClick={() =>
+                void Promise.all(
+                  updateSummary.data!.notifications.map((item) =>
+                    dismissNotification(item.id),
+                  ),
+                )
+              }
+            >
+              Dismiss notification
             </button>
-          </div>
-        ))}
+          )}
+        </div>
         {batchPlan.manual.length > 0 && (
           <p className="muted">
             Manual update required:{" "}
@@ -784,8 +785,18 @@ export function UpdatesPage({
             Keep this page open while the update queue runs. Core updates last.
           </p>
         )}
-        {operations.batch && <OperationProgress operation={operations.batch} />}
-        {operations.all && <OperationProgress operation={operations.all} />}
+        {operations.batch &&
+          (operations.batch.status === "success" ? (
+            <details>
+              <summary>Latest update console</summary>
+              <OperationProgress operation={operations.batch} />
+            </details>
+          ) : (
+            <OperationProgress operation={operations.batch} />
+          ))}
+        {operations.all && operations.all.status !== "success" && (
+          <OperationProgress operation={operations.all} />
+        )}
       </Panel>
       <div className="apps-grid updates-grid">
         <Panel title="MediaHub Core">
@@ -815,9 +826,6 @@ export function UpdatesPage({
                   : release?.repository || "Choose in Settings"}
             </span>
           </div>
-          <p className="update-card-message">
-            {release?.message || "Checking main for code changes…"}
-          </p>
           <div className="button-row">
             <button
               onClick={() => void checkPlatform()}
@@ -846,7 +854,8 @@ export function UpdatesPage({
             <OperationProgress operation={operations.platform} />
           )}
           <details className="update-card-advanced">
-            <summary>Advanced update settings</summary>
+            <summary>Details and update settings</summary>
+            <p>{release?.message || "Checking main for code changes..."}</p>
             <p className="muted">
               Source: {release?.repository || "Not configured"}. Installation
               {release?.updateMethod === "source"
@@ -905,12 +914,7 @@ export function UpdatesPage({
         {apps?.some(
           (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
         ) && (
-          <div style={{ gridColumn: "1 / -1" }}>
-            <AgentUpdates
-              busy={!!busy}
-              onChange={() => updateSummary.reload()}
-            />
-          </div>
+          <AgentUpdates busy={!!busy} onChange={() => updateSummary.reload()} />
         )}
         {apps
           ?.filter((app) => !app.isMock)
@@ -993,25 +997,34 @@ export function UpdatesPage({
                   <OperationProgress operation={operations[app.id]!} />
                 )}
                 {!isPlex && !isCloudflare && (
-                  <p className="muted update-card-message">
-                    VPN and torrent-client updates require a coordinated,
-                    fail-closed deployment. Routine restarts are available from
-                    the app page.
-                  </p>
+                  <details className="update-card-details">
+                    <summary>Update details</summary>
+                    <p className="muted">
+                      VPN and torrent-client updates require a coordinated,
+                      fail-closed deployment. Routine restarts are available
+                      from the app page.
+                    </p>
+                  </details>
                 )}
                 {isPlex && (
-                  <p className="muted update-card-message">
-                    MediaHub checks Plex releases and creates a configuration
-                    rollback snapshot before an update. Media files stay
-                    separate.
-                  </p>
+                  <details className="update-card-details">
+                    <summary>Update details</summary>
+                    <p className="muted">
+                      MediaHub checks Plex releases and creates a configuration
+                      rollback snapshot before an update. Media files stay
+                      separate.
+                    </p>
+                  </details>
                 )}
                 {isCloudflare && (
-                  <p className="muted update-card-message">
-                    Monitoring checks tunnel health and official Cloudflare
-                    releases. Installation guidance is available from the app
-                    page without exposing the tunnel publicly.
-                  </p>
+                  <details className="update-card-details">
+                    <summary>Update details</summary>
+                    <p className="muted">
+                      Monitoring checks tunnel health and official Cloudflare
+                      releases. Installation guidance is available from the app
+                      page without exposing the tunnel publicly.
+                    </p>
+                  </details>
                 )}
               </Panel>
             );

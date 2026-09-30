@@ -24,6 +24,7 @@ class Driver:
 
     async def apply_forwarded_port(self, port):
         self.calls.append(("qbit", port))
+        return True
 
 
 def test_renew_change_expiry_and_secret_safe_failure():
@@ -33,6 +34,7 @@ def test_renew_change_expiry_and_secret_safe_failure():
         p = PortForwarding(driver, lambda: now[0], lambda: 1000 + now[0])
         first = await p.renew()
         assert first["status"] == "healthy" and first["lastRenewed"] == 1100
+        assert first["listenerVerified"]
         await p.renew()
         assert driver.calls.count("lease") == 1
         now[0] += 31
@@ -63,5 +65,24 @@ def test_initial_request_before_client_and_namespace_replacement():
         assert (await p.apply_current())["status"] == "degraded"
         p.invalidate()
         assert p.public()["currentPort"] is None
+
+    asyncio.run(scenario())
+
+
+def test_missing_listener_does_not_claim_reachable_or_lose_configured_port():
+    from agent.port_listener import ListeningPortError
+
+    async def scenario():
+        driver = Driver()
+
+        async def failed(port):
+            raise ListeningPortError("private details")
+
+        driver.apply_forwarded_port = failed
+        state = await PortForwarding(driver).renew()
+        assert state["status"] == "degraded"
+        assert state["qBittorrentVerified"]
+        assert not state["listenerVerified"]
+        assert "private details" not in state["lastError"]
 
     asyncio.run(scenario())

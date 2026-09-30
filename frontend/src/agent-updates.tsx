@@ -124,122 +124,131 @@ export function AgentUpdates({
         <span>Latest on GitHub main</span>
         <strong>{check?.latestCommit?.slice(0, 12) || "Not checked"}</strong>
       </div>
-      <p className="muted">
-        {check?.message || "Checks the separately paired Seedbox Agent."}
-      </p>
+      {!check?.latestCommit && (
+        <p className="muted">
+          {check?.message || "Checking the paired Seedbox Agent..."}
+        </p>
+      )}
       <button disabled={disabled} onClick={() => void act(reload)}>
         Check Agent update
       </button>
       {check?.updateAvailable && (
-        <fieldset disabled={disabled}>
-          <legend>Prepare Agent update</legend>
-          <p>
-            SSH server: <strong>{check.host}</strong> (paired Seedbox host).
-            Enter this host's root password. It is kept only in memory for one
-            update, up to 15 minutes.
-          </p>
-          <label>
-            SSH port
-            <input
-              type="number"
-              min={1}
-              max={65535}
-              value={port}
-              onChange={(e) => {
-                setPort(Number(e.target.value));
-                setFingerprint("");
-                setTrusted(false);
-              }}
-            />
-          </label>
-          <button
-            onClick={() =>
-              void act(async () => {
-                const data = await api<{ fingerprint: string }>(
-                  "/updates/seedbox-agent/fingerprint",
-                  "POST",
-                  { port },
-                );
-                setFingerprint(data.fingerprint);
-                setTrusted(false);
-              })
-            }
-          >
-            Read SSH fingerprint
-          </button>
-          {fingerprint && (
-            <>
-              <p style={{ overflowWrap: "anywhere" }}>{fingerprint}</p>
-              <p className="muted">
-                Compare this with the SSH host fingerprint on the Seedbox
-                server.
-              </p>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={trusted}
-                  onChange={(e) => setTrusted(e.target.checked)}
-                />
-                I recognize and trust this server fingerprint
-              </label>
-            </>
-          )}
-          <label>
-            Root SSH password
-            <input
-              type="password"
-              autoComplete="off"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <button
-            disabled={!trusted || !password}
-            onClick={() =>
-              void act(async () => {
-                await api("/updates/seedbox-agent/prepare", "POST", {
-                  port,
-                  fingerprint,
-                  password,
-                });
-                setPassword("");
-                await reload();
-              })
-            }
-          >
-            Prepare SSH for update
-          </button>
-          <p>
+        <details className="agent-update-setup">
+          <summary>
             {check.installReady
-              ? "SSH is ready. Use Update Agent or Update all."
-              : "Prepare SSH to enable installation."}
-          </p>
-          <button
-            className="primary"
-            disabled={!check.installReady}
-            onClick={() =>
-              void act(async () => {
-                await runUpdateAll(
-                  updateAllPlan(
-                    [
-                      {
-                        id: "seedbox-agent",
-                        name: "Seedbox Agent",
-                        updateAvailable: true,
-                      },
-                    ],
-                    [],
-                  ),
-                  api,
-                  setOperation,
-                );
-                await reload();
-              })
-            }
-          >
-            Update Agent
-          </button>
-        </fieldset>
+              ? "SSH ready - update Agent"
+              : "Prepare SSH and update Agent"}
+          </summary>
+          <fieldset disabled={disabled}>
+            <legend>Prepare Agent update</legend>
+            <p>
+              SSH server: <strong>{check.host}</strong> (paired Seedbox host).
+              Enter this host's root password. It is kept only in memory for one
+              update, up to 15 minutes.
+            </p>
+            <label>
+              SSH port
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(e) => {
+                  setPort(Number(e.target.value));
+                  setFingerprint("");
+                  setTrusted(false);
+                }}
+              />
+            </label>
+            <button
+              onClick={() =>
+                void act(async () => {
+                  const data = await api<{ fingerprint: string }>(
+                    "/updates/seedbox-agent/fingerprint",
+                    "POST",
+                    { port },
+                  );
+                  setFingerprint(data.fingerprint);
+                  setTrusted(false);
+                })
+              }
+            >
+              Read SSH fingerprint
+            </button>
+            {fingerprint && (
+              <>
+                <p style={{ overflowWrap: "anywhere" }}>{fingerprint}</p>
+                <p className="muted">
+                  Compare this with the SSH host fingerprint on the Seedbox
+                  server.
+                </p>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={trusted}
+                    onChange={(e) => setTrusted(e.target.checked)}
+                  />
+                  I recognize and trust this server fingerprint
+                </label>
+              </>
+            )}
+            <label>
+              Root SSH password
+              <input
+                type="password"
+                autoComplete="off"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+            <button
+              disabled={!trusted || !password}
+              onClick={() =>
+                void act(async () => {
+                  await api("/updates/seedbox-agent/prepare", "POST", {
+                    port,
+                    fingerprint,
+                    password,
+                  });
+                  setPassword("");
+                  await reload();
+                })
+              }
+            >
+              Prepare SSH for update
+            </button>
+            <p>
+              {check.installReady
+                ? "SSH is ready. Use Update Agent or Update all."
+                : "Prepare SSH to enable installation."}
+            </p>
+            <button
+              className="primary"
+              disabled={!check.installReady}
+              onClick={() =>
+                void act(async () => {
+                  await runUpdateAll(
+                    updateAllPlan(
+                      [
+                        {
+                          id: "seedbox-agent",
+                          name: "Seedbox Agent",
+                          updateAvailable: true,
+                        },
+                      ],
+                      [],
+                    ),
+                    api,
+                    setOperation,
+                  );
+                  await reload();
+                })
+              }
+            >
+              Update Agent
+            </button>
+          </fieldset>
+        </details>
       )}
       {operation && <OperationProgress operation={operation} />}
     </Panel>

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Request
 
-from mediahub.api import administrator, result
+from mediahub.api import administrator, result, services
 from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction, TorrentRetention, VPNLocation
 from mediahub.seedbox_wizard_api import target
 
@@ -43,3 +43,13 @@ async def retention(body: TorrentRetention, request: Request):
 @router.post("/locations", status_code=202)
 async def change_location(body: VPNLocation, request: Request):
     return result(await target(request).request("POST", "/v1/seedbox/locations", body.model_dump()))
+
+
+@router.get("/port-reachability")
+def port_status(request: Request):
+    return result(services(request).seedbox_reachability.status())
+
+
+@router.post("/port-reachability")
+async def check_port(request: Request):
+    return result(await services(request).seedbox_reachability.check())

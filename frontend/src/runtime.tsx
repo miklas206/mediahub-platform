@@ -1,3 +1,4 @@
+import { PortReachability } from "./port-reachability";
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { Link, useParams } from "react-router-dom";
@@ -33,6 +34,9 @@ export type Runtime = {
     lastRenewed: number | null;
     expiresAt: number | null;
     qBittorrentVerified: boolean;
+    listenerVerified?: boolean;
+    listenerCheckSupported?: boolean;
+    lastError?: string | null;
     plexVerified?: boolean;
   };
   control?: {
@@ -277,6 +281,11 @@ function SeedboxPanel({ report: r }: { report: Runtime }) {
             />
           </dl>
           <h3>Torrent port forwarding</h3>
+          {r.portForwarding?.lastError && (
+            <p role="alert" className="notice">
+              {r.portForwarding.lastError}
+            </p>
+          )}
           <dl>
             <Row
               label="Lease status"
@@ -295,12 +304,31 @@ function SeedboxPanel({ report: r }: { report: Runtime }) {
               value={stamp(r.portForwarding?.expiresAt)}
             />
             <div className="runtime-row">
-              <dt>qBittorrent port verified</dt>
+              <dt>qBittorrent port configured</dt>
               <dd>
                 <Verified value={r.portForwarding?.qBittorrentVerified} />
               </dd>
             </div>
+            <div className="runtime-row">
+              <dt>Listening socket on VPN port</dt>
+              <dd>
+                {r.portForwarding?.listenerVerified
+                  ? "Verified"
+                  : r.portForwarding?.listenerCheckSupported
+                    ? "Not listening / not verified"
+                    : "Update Agent to check socket"}
+              </dd>
+            </div>
           </dl>
+          <PortReachability
+            address={vpn?.externalIp}
+            port={r.portForwarding?.currentPort}
+            eligible={
+              !!vpn?.verified &&
+              r.portForwarding?.status === "healthy" &&
+              (r.portForwarding?.expiresAt || 0) > Date.now() / 1000
+            }
+          />
           <p className="muted">
             Torrent traffic through the VPN only. No router or WebUI port is
             opened.

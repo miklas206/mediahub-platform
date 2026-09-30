@@ -42,6 +42,9 @@ class PortForwardStatus(PublicModel):
     lastRenewed: float | None = None
     expiresAt: float | None = None
     qBittorrentVerified: bool = False
+    listenerVerified: bool = False
+    listenerCheckSupported: bool = False
+    lastError: str | None = None
     plexVerified: bool = False
 
 

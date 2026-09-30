@@ -11,6 +11,7 @@ import httpx
 from mediahub.apps.seedbox import SeedboxInstallation, compose_plan
 
 from agent.forwarding_rules import owned_ports
+from agent.port_listener import ListeningPortError
 from agent.ram_secrets import RuntimeSecrets
 from agent.seedbox_install import policy_host_mounts_verified, policy_mounts_verified
 
@@ -308,6 +309,24 @@ class ScopedDriver:
             settings = response.json()
             if settings.get("listen_port") != port or settings.get("upnp") is not False:
                 raise ValueError("Forwarded port verification failed")
+        # Preferences are not evidence of an actual listening socket. Allow a
+        # bounded rebind window after qBittorrent changes its port.
+        for attempt in range(8):
+            try:
+                await self.execute(
+                    torrent,
+                    [
+                        "python3",
+                        "-c",
+                        Path(__file__).with_name("port_listener.py").read_text(),
+                        str(port),
+                    ],
+                )
+                return True
+            except ValueError:
+                if attempt == 7:
+                    raise ListeningPortError("Torrent listening socket not found") from None
+                await asyncio.sleep(0.25)
 
     async def remove_runtime(self):
         # Container identity and ownership checked immediately before each deletion.
