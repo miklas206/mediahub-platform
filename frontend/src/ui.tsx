@@ -407,8 +407,11 @@ function Shell({
   const [dashboardSections, setDashboardSections] =
     useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
-  const { data: navigationApps, reload: reloadNavigationApps } =
-    useData<AppInfo[]>("/apps");
+  const {
+    data: navigationApps,
+    error: navigationAppsError,
+    reload: reloadNavigationApps,
+  } = useData<AppInfo[]>("/apps");
   const { data: updateSummary, reload: reloadUpdateSummary } = useData<{
     count: number;
   }>("/updates/summary");
@@ -712,7 +715,15 @@ function Shell({
                 />
               }
             />
-            <Route path="/updates" element={<UpdatesPage />} />
+            <Route
+              path="/updates"
+              element={
+                <UpdatesPage
+                  apps={navigationApps}
+                  appsError={navigationAppsError}
+                />
+              }
+            />
             <Route path="/backups" element={<BackupsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

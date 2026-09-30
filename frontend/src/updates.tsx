@@ -172,8 +172,13 @@ function scheduleLabel(hours: number | undefined) {
   return `Every ${hours} hours`;
 }
 
-export function UpdatesPage() {
-  const apps = useLoad<AppInfo[]>("/apps");
+export function UpdatesPage({
+  apps,
+  appsError = "",
+}: {
+  apps: AppInfo[] | undefined;
+  appsError?: string;
+}) {
   const platform = useLoad<{ version: string }>("/system/status");
   const platformRelease = useLoad<PlatformRelease>("/updates/platform");
   const updateSummary = useLoad<UpdateSummary>("/updates/summary");
@@ -207,7 +212,7 @@ export function UpdatesPage() {
 
   useEffect(() => {
     let active = true;
-    for (const app of apps.data || []) {
+    for (const app of apps || []) {
       if (!app.detailPath) continue;
       void api<{ report: Versions }>(`/apps/${app.id}/runtime`)
         .then((result) => {
@@ -220,7 +225,7 @@ export function UpdatesPage() {
     return () => {
       active = false;
     };
-  }, [apps.data]);
+  }, [apps]);
 
   useEffect(() => {
     const reported: Record<string, string> = {};
@@ -642,7 +647,7 @@ export function UpdatesPage() {
       <p className="muted">
         Verified updates with configuration rollback and media kept separate.
       </p>
-      <ErrorBox error={error || apps.error} />
+      <ErrorBox error={error || appsError} />
       <ErrorBox error={platformRelease.error || updateSummary.error} />
       {notice && (
         <p className="success" role="status">
@@ -824,7 +829,7 @@ export function UpdatesPage() {
             </p>
           </details>
         </Panel>
-        {apps.data
+        {apps
           ?.filter((app) => !app.isMock)
           .map((app) => {
             const version = versions[app.id];
