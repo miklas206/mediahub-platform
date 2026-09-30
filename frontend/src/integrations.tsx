@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
 import { bytes } from "./format";
 import { ErrorBox, Panel } from "./phase2";
 import "./integrations.css";
+import { FjordHubTokenGuide, fjordHubLink } from "./fjordhub-token-guide";
+import { ArrowUpRight } from "lucide-react";
 
 type Row = Record<string, string | number>;
 type Snapshot = {
@@ -48,26 +56,75 @@ const statusLabels: Record<string, string> = {
 };
 const label = (s: string) => statusLabels[s] || s;
 
-function useIntegrations() {
+export function useIntegrations() {
+  const request = useRef<AbortController | null>(null);
   const [items, setItems] = useState<Integration[]>([]),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     try {
-      setItems(await api<Integration[]>("/integrations"));
-      setError("");
+      const items = await api<Integration[]>(
+        "/integrations",
+        "GET",
+        undefined,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) {
+        setItems(items);
+        setError("");
+      }
     } catch (e) {
-      setError((e as Error).message);
+      if (!controller.signal.aborted) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
   useEffect(() => {
     void reload();
     const timer = setInterval(() => void reload(), 15000);
-    return () => clearInterval(timer);
+    const refresh = () => void reload();
+    window.addEventListener("integrations-changed", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("integrations-changed", refresh);
+      request.current?.abort();
+    };
   }, [reload]);
   return { items, error, loading, reload };
+}
+
+export function IntegrationAppLinks({ items }: { items: Integration[] }) {
+  return (
+    <>
+      {items
+        .filter((row) => row.enabled && row.tokenConfigured)
+        .map((row) => {
+          const href = fjordHubLink(row.baseUrl);
+          if (!href) return null;
+          const healthy =
+            ["online", "degraded"].includes(row.snapshot.status) &&
+            !row.snapshot.stale;
+          return (
+            <a
+              key={row.id}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open ${row.name} · ${href}`}
+            >
+              <span
+                className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
+              />
+              <span>{row.name}</span>
+              <ArrowUpRight size={13} aria-hidden="true" />
+            </a>
+          );
+        })}
+    </>
+  );
 }
 
 export function IntegrationsCard() {
@@ -88,7 +145,10 @@ export function IntegrationsCard() {
               <strong>{row.name}</strong>
               <small>
                 {label(row.snapshot.status)} ·{" "}
-                {(row.snapshot.apps || []).length} {row.snapshot.capabilities?.includes("docker.resources.read") ? "app groups" : "catalog entries"}
+                {(row.snapshot.apps || []).length}{" "}
+                {row.snapshot.capabilities?.includes("docker.resources.read")
+                  ? "app groups"
+                  : "catalog entries"}
               </small>
             </div>
             <Link to="/integrations">View</Link>
@@ -102,7 +162,13 @@ export function IntegrationsCard() {
   );
 }
 
-export function IntegrationsPage() {
+export function IntegrationsPage({
+  onUrlChange,
+  showTokenGuide = true,
+}: {
+  onUrlChange?: (url: string) => void;
+  showTokenGuide?: boolean;
+} = {}) {
   const { items, error, loading, reload } = useIntegrations();
   const [name, setName] = useState("FjordHub"),
     [baseUrl, setUrl] = useState(""),
@@ -113,8 +179,13 @@ export function IntegrationsPage() {
     [test, setTest] = useState<Snapshot | null>(null),
     [notice, setNotice] = useState("");
   useEffect(() => {
-    void api<{baseUrl: string | null}>("/integrations/fjordhub/defaults")
-      .then((value) => { if (value.baseUrl) setUrl((current) => current || value.baseUrl!); })
+    onUrlChange?.(baseUrl);
+  }, [baseUrl, onUrlChange]);
+  useEffect(() => {
+    void api<{ baseUrl: string | null }>("/integrations/fjordhub/defaults")
+      .then((value) => {
+        if (value.baseUrl) setUrl((current) => current || value.baseUrl!);
+      })
       .catch(() => {});
   }, []);
   async function submit(event: FormEvent) {
@@ -137,6 +208,7 @@ export function IntegrationsPage() {
         setTest(null);
         setNotice("Saved securely. Access Token will not be displayed again.");
         await reload();
+        window.dispatchEvent(new Event("integrations-changed"));
       }
     } catch (e) {
       setFailure((e as Error).message);
@@ -150,6 +222,7 @@ export function IntegrationsPage() {
     try {
       await api(`/integrations/${id}/${action}`, "POST", {});
       await reload();
+      window.dispatchEvent(new Event("integrations-changed"));
     } catch (e) {
       setFailure((e as Error).message);
     } finally {
@@ -190,11 +263,13 @@ export function IntegrationsPage() {
             />
           </label>
           <p className="muted">
-            Enter FjordHub’s normal local URL, without an API path. MediaHub adds
-            the supported read-only route automatically. Current FjordHub versions
-            expose Docker resource usage; older versions may expose only a catalog. Public
-            Cloudflare access cannot be used for this LAN-only endpoint.
+            Enter FjordHub’s normal local URL, without an API path. MediaHub
+            adds the supported read-only route automatically. Current FjordHub
+            versions expose Docker resource usage; older versions may expose
+            only a catalog. Public Cloudflare access cannot be used for this
+            LAN-only endpoint.
           </p>
+          {showTokenGuide && <FjordHubTokenGuide baseUrl={baseUrl} />}
           <label>
             Access Token
             <input
@@ -244,7 +319,12 @@ export function IntegrationsPage() {
                 FjordHub {test.version || "version unavailable"} · API{" "}
                 {test.api_version || "not verified"}
               </p>
-              {test.status === "online" && <p>{test.apps?.length ?? 0} entries found · Capabilities: {test.capabilities?.join(", ")} · Read-only integration</p>}
+              {test.status === "online" && (
+                <p>
+                  {test.apps?.length ?? 0} entries found · Capabilities:{" "}
+                  {test.capabilities?.join(", ")} · Read-only integration
+                </p>
+              )}
               {test.failed_endpoint && (
                 <p>Endpoint requiring attention: {test.failed_endpoint}</p>
               )}
@@ -306,15 +386,24 @@ export function IntegrationsPage() {
               </button>
             </div>
             <small className="muted">
-              Refresh respects provider backoff and the sync interval. External
-              storage is informational, never mounted by MediaHub.
+              {row.enabled &&
+              row.snapshot.capabilities?.includes("docker.resources.read")
+                ? row.snapshot.stale
+                  ? "Connection interrupted. Showing the last measurements while retrying automatically."
+                  : "Live resource updates approximately every 5 seconds."
+                : "Status updates automatically."}{" "}
+              Provider retry delays are respected.
             </small>
             {(row.snapshot.warnings || []).map((warning, i) => (
               <p role="note" key={i}>
                 {warning}
               </p>
             ))}
-            <h3>{row.snapshot.capabilities?.includes("docker.resources.read") ? "Installed app groups" : "Installable app catalog"}</h3>
+            <h3>
+              {row.snapshot.capabilities?.includes("docker.resources.read")
+                ? "Installed app groups"
+                : "Installable app catalog"}
+            </h3>
             {!row.snapshot.apps?.length ? (
               <p>No apps reported by the API.</p>
             ) : (
@@ -323,7 +412,9 @@ export function IntegrationsPage() {
                   <div className="app-row-name">
                     <strong>{app.name || app.id || "Unnamed app"}</strong>
                     <small>
-                      {app.running_count !== undefined ? `${app.running_count} / ${app.container_count ?? "?"} containers running` : app.description || "No description provided"}
+                      {app.running_count !== undefined
+                        ? `${app.running_count} / ${app.container_count ?? "?"} containers running`
+                        : app.description || "No description provided"}
                     </small>
                   </div>
                 </div>
@@ -358,8 +449,16 @@ export function IntegrationsPage() {
                   {Object.entries(row.snapshot.metrics || {}).map(
                     ([key, value]) => (
                       <div key={key}>
-                        <dt>{key.replaceAll("_", " ").replace(/([A-Z])/g, " $1")}</dt>
-                        <dd>{key.endsWith("Bytes") ? bytes(value) : key.endsWith("Percent") ? `${value.toFixed(1)}%` : value}</dd>
+                        <dt>
+                          {key.replaceAll("_", " ").replace(/([A-Z])/g, " $1")}
+                        </dt>
+                        <dd>
+                          {key.endsWith("Bytes")
+                            ? bytes(value)
+                            : key.endsWith("Percent")
+                              ? `${value.toFixed(1)}%`
+                              : value}
+                        </dd>
                       </div>
                     ),
                   )}

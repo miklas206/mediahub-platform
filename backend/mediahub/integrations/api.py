@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field, SecretStr, field_validator
+from sqlalchemy import select
 
 from mediahub.api import authenticated, result, services
 from mediahub.contracts import StrictModel
+from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.integrations.fjordhub import validate_url
 
 router = APIRouter(prefix="/integrations")
 
@@ -41,7 +44,26 @@ async def listing(request: Request, user=Depends(authenticated)):
 
 @router.get("/fjordhub/defaults")
 async def defaults(request: Request, user=Depends(authenticated)):
-    return result({"baseUrl": services(request).config.fjordhub_url})
+    svc = services(request)
+    if svc.config.fjordhub_url:
+        return result({"baseUrl": svc.config.fjordhub_url})
+    with svc.sessions() as db:
+        jobs = db.scalars(
+            select(Setting)
+            .where(Setting.key.startswith("fjordhub.deployment."))
+            .order_by(Setting.created_at.desc())
+        )
+        for row in jobs:
+            job = row.value
+            if job.get("state") != "succeeded":
+                continue
+            for line in reversed(job.get("logs", [])):
+                if line.startswith("MEDIAHUB_FJORDHUB_URL="):
+                    try:
+                        return result({"baseUrl": validate_url(line.split("=", 1)[1], True)})
+                    except ValueError:
+                        continue
+    return result({"baseUrl": None})
 
 
 @router.post("/fjordhub/test")

@@ -53,7 +53,12 @@ import {
 import { SeedboxInstallPage } from "./seedbox-install";
 import { PlexInstallPage } from "./plex-install";
 import { SecuritySettings } from "./security";
-import { IntegrationsCard, IntegrationsPage } from "./integrations";
+import {
+  IntegrationsCard,
+  IntegrationsPage,
+  IntegrationAppLinks,
+  useIntegrations,
+} from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
 import { AppStorePage, CloudflareStorePage, FjordHubStorePage } from "./store";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
@@ -407,6 +412,7 @@ function Shell({
   const [dashboardSections, setDashboardSections] =
     useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
+  const { items: navigationIntegrations } = useIntegrations();
   const {
     data: navigationApps,
     error: navigationAppsError,
@@ -448,6 +454,15 @@ function Shell({
       reloadNavigationApps();
     });
     source.addEventListener("updates.changed", () => reloadUpdateSummary());
+    for (const event of [
+      "integration.updated",
+      "integration.configured",
+      "integration.disconnected",
+    ]) {
+      source.addEventListener(event, () =>
+        window.dispatchEvent(new Event("integrations-changed")),
+      );
+    }
     source.addEventListener("session.expired", () => {
       source.close();
       window.dispatchEvent(new Event("session-expired"));
@@ -530,6 +545,7 @@ function Shell({
                           Loading apps…
                         </span>
                       )}
+                      <IntegrationAppLinks items={navigationIntegrations} />
                     </div>
                   )}
                 </div>

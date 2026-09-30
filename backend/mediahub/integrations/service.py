@@ -131,11 +131,15 @@ class IntegrationService:
                         "retry_after": snapshot.retry_after,
                     }
                 row.failures = 0 if success else min(8, row.failures + 1)
-                delay = snapshot.retry_after or (60 if success else min(3600, 30 * 2**row.failures))
+                interval = 5 if "docker.resources.read" in snapshot.capabilities else 60
+                delay = snapshot.retry_after or (
+                    interval if success else min(3600, 30 * 2**row.failures)
+                )
                 row.next_sync = int(time.time() + delay)
                 if success:
                     row.last_success = now()
                 output = self.public(row)
+            self.events.publish("integration.updated", {"id": identifier})
             if previous.get("status") != snapshot.status:
                 self.events.record(
                     "integration.status",
@@ -175,7 +179,7 @@ class IntegrationService:
 
     async def poll(self):
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(1)
             for row in self.list():
                 if row["enabled"] and row["nextSync"] <= time.time():
                     try:

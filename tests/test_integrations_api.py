@@ -1,8 +1,12 @@
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 from mediahub.db import ExternalIntegration, User
 from mediahub.integrations.fjordhub import FjordHubClient
+from mediahub.integrations.provider import IntegrationSnapshot
 from sqlalchemy import select
 
 
@@ -12,6 +16,42 @@ def body():
         "baseUrl": "https://192.168.50.20:8443",
         "accessToken": "test-private-access-token-123456",
     }
+
+
+@pytest.mark.parametrize(
+    "snapshot,delay",
+    [
+        (
+            IntegrationSnapshot(
+                status="online", capabilities=["docker.resources.read"], metrics={"cpuPercent": 12}
+            ),
+            5,
+        ),
+        (IntegrationSnapshot(status="online"), 60),
+        (IntegrationSnapshot(status="rate_limited", retry_after=120), 120),
+        (IntegrationSnapshot(status="offline"), 60),
+    ],
+)
+def test_resource_refresh_interval_and_backoff(logged_in, monkeypatch, snapshot, delay):
+    monkeypatch.setattr("mediahub.integrations.service.time", SimpleNamespace(time=lambda: 10000))
+    svc = logged_in.app.state.services
+    sync = AsyncMock(return_value=snapshot)
+    svc.integrations.provider_factory = lambda *args, **kwargs: SimpleNamespace(sync=sync)
+    published = []
+    original_publish = svc.events.publish
+
+    def capture(kind, data):
+        published.append((kind, data))
+        original_publish(kind, data)
+
+    monkeypatch.setattr(svc.events, "publish", capture)
+    identifier = logged_in.post("/api/v1/integrations/fjordhub", json=body()).json()["data"]["id"]
+    response = logged_in.post(f"/api/v1/integrations/{identifier}/refresh", json={})
+    assert response.status_code == 200
+    assert response.json()["data"]["nextSync"] == 10000 + delay
+    assert ("integration.updated", {"id": identifier}) in published
+    logged_in.post(f"/api/v1/integrations/{identifier}/refresh", json={})
+    sync.assert_awaited_once()
 
 
 def wire(client, code=200):

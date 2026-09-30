@@ -1030,6 +1030,33 @@ nav a.active {
   margin-bottom: 16px;
   font-size: 14px;
 }
+.fjordhub-open-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 12px;
+  max-width: 100%;
+  padding: 12px 18px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 650;
+}
+.fjordhub-open-link span {
+  min-width: 0;
+}
+.fjordhub-open-link small {
+  display: block;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+}
+.fjordhub-token-steps {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 0;
+}
+.fjordhub-token-steps li {
+  padding: 6px 0 6px 4px;
+}
 .deployment-fingerprint code {
   overflow-wrap: anywhere;
 }

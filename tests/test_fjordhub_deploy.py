@@ -87,6 +87,35 @@ def test_host_identity_must_match():
         PinnedKey("SHA256:" + "A" * 43).missing_host_key(None, "192.168.1.126", key)
 
 
+@pytest.mark.parametrize(
+    "state,url,expected",
+    [
+        ("succeeded", "http://192.168.1.44:8888", "http://192.168.1.44:8888"),
+        ("failed", "http://192.168.1.44:8888", None),
+        ("succeeded", "http://127.0.0.1:8888", None),
+        ("succeeded", "http://user:secret@192.168.1.44:8888", None),
+    ],
+)
+def test_fjordhub_url_from_successful_guest_install(logged_in, state, url, expected):
+    svc = logged_in.app.state.services
+    svc.config.fjordhub_url = None
+    with svc.sessions.begin() as db:
+        db.add(
+            Setting(
+                key="fjordhub.deployment.url-test",
+                value={
+                    "state": state,
+                    "host": "192.168.1.126",
+                    "logs": ["MEDIAHUB_FJORDHUB_URL=" + url],
+                },
+            )
+        )
+    assert (
+        logged_in.get("/api/v1/integrations/fjordhub/defaults").json()["data"]["baseUrl"]
+        == expected
+    )
+
+
 def test_authenticated_admin_and_csrf_required(client, logged_in, monkeypatch):
     monkeypatch.setattr("mediahub.fjordhub_deploy.FjordHubDeploy.launch", lambda *args: None)
     client.cookies.clear()

@@ -1,4 +1,5 @@
 import { FjordHubDeployment } from "./fjordhub-deployment";
+import { FjordHubTokenGuide } from "./fjordhub-token-guide";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -96,6 +97,7 @@ type FjordHubMode = "new" | "existing";
 const fjordHubSteps = ["Deployment", "Storage & ports", "Install", "Connect"];
 
 export function FjordHubStorePage() {
+  const [fjordHubUrl, setFjordHubUrl] = useState("");
   const [step, setStep] = useState(0);
   const [deploying, setDeploying] = useState(false);
   const [mode, setMode] = useState<FjordHubMode>("new");
@@ -405,11 +407,7 @@ export function FjordHubStorePage() {
           <div className="assisted-step fjordhub-connect-step">
             <p className="eyebrow">STEP 4 · CONNECT READ-ONLY</p>
             <h3>Create a FjordHub Access Token</h3>
-            <p>
-              In FjordHub, open Settings → Access Tokens, create a token and
-              copy it once. Enter it below. MediaHub encrypts the token and uses
-              only FjordHub’s read-only integration API.
-            </p>
+            <FjordHubTokenGuide baseUrl={fjordHubUrl} />
             <div className="setup-safety-note">
               <HardDrive size={20} />
               <p>
@@ -452,7 +450,9 @@ export function FjordHubStorePage() {
           )}
         </div>
       </Panel>
-      {step === 3 && <IntegrationsPage />}
+      {step === 3 && (
+        <IntegrationsPage onUrlChange={setFjordHubUrl} showTokenGuide={false} />
+      )}
     </div>
   );
 }
