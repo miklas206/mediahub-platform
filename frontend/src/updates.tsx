@@ -1,3 +1,4 @@
+import { AgentUpdates } from "./agent-updates";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
@@ -242,6 +243,15 @@ export function UpdatesPage({
             }
           }),
       );
+      if (batchPlan.tasks.some((task) => task.kind === "agent")) {
+        try {
+          await api("/updates/seedbox-agent");
+        } catch {
+          setNotice(
+            "The queue finished. Check Agent update to refresh its version status.",
+          );
+        }
+      }
       updateSummary.reload();
       platformRelease.reload();
       setCheckedPlatformRelease(undefined);
@@ -892,6 +902,16 @@ export function UpdatesPage({
             </p>
           </details>
         </Panel>
+        {apps?.some(
+          (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
+        ) && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <AgentUpdates
+              busy={!!busy}
+              onChange={() => updateSummary.reload()}
+            />
+          </div>
+        )}
         {apps
           ?.filter((app) => !app.isMock)
           .map((app) => {

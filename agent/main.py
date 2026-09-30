@@ -283,7 +283,13 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.get("/v1/version")
     async def version():
-        return {"version": "0.4.3", "protocolVersion": 1}
+        from mediahub import __version__
+
+        return {
+            "version": __version__,
+            "protocolVersion": 1,
+            "sourceCommit": os.environ.get("MEDIAHUB_SOURCE_COMMIT"),
+        }
 
     @app.get("/v1/status")
     async def status():

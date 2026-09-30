@@ -158,6 +158,17 @@ class UpdateMonitor:
                 )
             except DomainError:
                 failures += 1
+            try:
+                agent = await self.services.agent_updates.check()
+                items.append(
+                    self._app_result(
+                        {"id": "seedbox-agent", "name": "Seedbox Agent"},
+                        {**agent, "latestVersion": agent.get("latestCommit")},
+                    )
+                )
+            except DomainError as error:
+                if error.code != "agent_host_required":
+                    failures += 1
             for app in self.services.apps.list():
                 if app.get("isMock"):
                     continue

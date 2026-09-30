@@ -17,6 +17,8 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from mediahub import __version__
 from mediahub.agent_client import AgentClient
+from mediahub.agent_updates import AgentUpdates
+from mediahub.agent_updates_api import router as agent_updates_router
 from mediahub.api import router
 from mediahub.apps.cloudflared import (
     register_cloudflared_app,
@@ -90,6 +92,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.platform_update = PlatformUpdateRuntime(svc)
         svc.hosts = HostRegistry(svc)
+        svc.agent_updates = AgentUpdates(svc)
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions)
         register_remote_apps(svc)
@@ -238,6 +241,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
+    app.include_router(agent_updates_router, prefix="/api/v1")
     app.include_router(fjordhub_router, prefix="/api/v1")
     app.include_router(integrations_router, prefix="/api/v1")
     app.include_router(security_router, prefix="/api/v1")

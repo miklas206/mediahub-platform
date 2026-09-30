@@ -21,5 +21,7 @@ COPY backend/ ./backend/
 COPY agent/ ./agent/
 # Resolve the primary media GID AND supplementary private-state GID from the
 # image account. An explicit :1000 would discard its mediahub group membership.
+ARG MEDIAHUB_SOURCE_COMMIT=""
+ENV MEDIAHUB_SOURCE_COMMIT=$MEDIAHUB_SOURCE_COMMIT
 USER 10001
 CMD ["python", "-m", "agent.main"]

@@ -9,12 +9,14 @@ export type AvailableUpdate = {
   name: string;
   updateAvailable: boolean;
 };
-type Task = AvailableUpdate & { kind: "plex" | "core" };
+type Task = AvailableUpdate & { kind: "plex" | "core" | "agent" };
 export function updateAllPlan(items: AvailableUpdate[], apps: AppInfo[]) {
   const tasks: Task[] = [];
   const manual: AvailableUpdate[] = [];
   for (const item of items.filter((item) => item.updateAvailable)) {
     if (item.id === "mediahub-core") tasks.push({ ...item, kind: "core" });
+    else if (item.id === "seedbox-agent")
+      tasks.push({ ...item, kind: "agent" });
     else if (
       apps.some(
         (app) =>
@@ -82,8 +84,10 @@ export async function runUpdateAll(
       }>(
         task.kind === "core"
           ? "/updates/platform"
-          : `/apps/${encodeURIComponent(task.id)}/update-check`,
-        task.kind === "core" ? "GET" : "POST",
+          : task.kind === "agent"
+            ? "/updates/seedbox-agent"
+            : `/apps/${encodeURIComponent(task.id)}/update-check`,
+        task.kind !== "plex" ? "GET" : "POST",
       );
       const available =
         check.supported === false
@@ -99,11 +103,19 @@ export async function runUpdateAll(
       }
       if (available !== true)
         throw Error("The update could not be verified; nothing was installed.");
+      if (task.kind === "agent" && !check.installReady)
+        throw Error(
+          "Prepare SSH in the Seedbox Agent card before starting Update all.",
+        );
       if (task.kind === "core" && !check.installReady)
         throw Error("Core updater is not ready for installation.");
       log(`${task.name}: starting update. Waiting for verified completion…`);
       const started = await request<Status>(
-        task.kind === "core" ? "/updates/platform/install" : "/plex/update",
+        task.kind === "core"
+          ? "/updates/platform/install"
+          : task.kind === "agent"
+            ? "/updates/seedbox-agent/install"
+            : "/plex/update",
         "POST",
       );
       let current = started;
@@ -119,9 +131,14 @@ export async function runUpdateAll(
         if (current.message) log(`${task.name}: ${current.message}`);
         if (current.state === "succeeded") break;
         if (
-          ["failed", "rolled_back", "invalid", "unavailable", "idle"].includes(
-            current.state,
-          )
+          [
+            "failed",
+            "rolled_back",
+            "interrupted",
+            "invalid",
+            "unavailable",
+            "idle",
+          ].includes(current.state)
         )
           throw Error(
             current.message || "Update was not confirmed successful.",
@@ -135,14 +152,16 @@ export async function runUpdateAll(
           const next =
             task.kind === "core"
               ? await request<Status>("/updates/platform/operation")
-              : (
-                  await request<{ report: { operation: Status } }>(
-                    `/apps/${encodeURIComponent(task.id)}/runtime`,
-                  )
-                ).report.operation;
+              : task.kind === "agent"
+                ? await request<Status>("/updates/seedbox-agent/operation")
+                : (
+                    await request<{ report: { operation: Status } }>(
+                      `/apps/${encodeURIComponent(task.id)}/runtime`,
+                    )
+                  ).report.operation;
           if (!next) throw Error("Update status unavailable");
           if (
-            task.kind === "core" &&
+            task.kind !== "plex" &&
             started.operationId &&
             next.operationId !== started.operationId
           ) {

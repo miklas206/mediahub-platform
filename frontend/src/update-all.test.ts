@@ -118,3 +118,81 @@ describe("Update all", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Seedbox Agent updates", () => {
+  const agent = {
+    id: "seedbox-agent",
+    name: "Seedbox Agent",
+    updateAvailable: true,
+  };
+  it("includes the Agent and keeps Core last", () => {
+    expect(
+      updateAllPlan([core, agent], []).tasks.map((task) => task.kind),
+    ).toEqual(["agent", "core"]);
+  });
+  it("requires SSH preparation before sending an install request", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue({ updateAvailable: true, installReady: false });
+    expect(
+      (await runUpdateAll(updateAllPlan([agent], []), request, vi.fn(), pause))
+        .failed,
+    ).toBe(true);
+    expect(request.mock.calls).toEqual([["/updates/seedbox-agent", "GET"]]);
+  });
+  it("waits for the matching Agent job and publishes its console", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ updateAvailable: true, installReady: true })
+      .mockResolvedValueOnce({
+        state: "running",
+        operationId: "new",
+        message: "Starting",
+      })
+      .mockResolvedValueOnce({
+        state: "succeeded",
+        operationId: "old",
+        message: "Old",
+      })
+      .mockResolvedValueOnce({
+        state: "succeeded",
+        operationId: "new",
+        message: "Verified",
+        logs: ["Agent commit verified"],
+      });
+    const publish = vi.fn();
+    expect(
+      (await runUpdateAll(updateAllPlan([agent], []), request, publish, pause))
+        .failed,
+    ).toBe(false);
+    expect(request.mock.calls.map((call) => call[0])).toEqual([
+      "/updates/seedbox-agent",
+      "/updates/seedbox-agent/install",
+      "/updates/seedbox-agent/operation",
+      "/updates/seedbox-agent/operation",
+    ]);
+    expect(publish.mock.calls.at(-1)?.[0].console.join("\n")).toContain(
+      "Agent commit verified",
+    );
+  });
+  it("stops before Core after an interrupted Agent update", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ updateAvailable: true, installReady: true })
+      .mockResolvedValueOnce({
+        state: "interrupted",
+        message: "Connection lost",
+      });
+    expect(
+      (
+        await runUpdateAll(
+          updateAllPlan([core, agent], []),
+          request,
+          vi.fn(),
+          pause,
+        )
+      ).failed,
+    ).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});
