@@ -564,10 +564,9 @@ export function UpdatesPage({
       updateOperation("platform", platformOperation(result));
       if (result.state === "succeeded") {
         setNotice(result.message);
-        setCheckedPlatformRelease(undefined);
-        platform.reload();
-        platformRelease.reload();
-        updateSummary.reload();
+        // Reload the document so the new frontend bundle is loaded as well.
+        // This runs only after the active install completes, never on page load.
+        window.location.reload();
         return;
       }
       if (
@@ -731,20 +730,6 @@ export function UpdatesPage({
           <p className="update-card-message">
             {release?.message || "Checking main for code changes…"}
           </p>
-          {release?.updateMethod === "source" && (
-            <div className="notice">
-              <strong>
-                {release.fastUpdateAvailable
-                  ? "Automatic fast update"
-                  : "Source update"}
-              </strong>
-              <p className="muted">
-                {release.fastUpdateAvailable
-                  ? "The server checks which services changed. An unchanged Agent keeps running while only Core is rebuilt. Otherwise, both services are rebuilt. Docker build cache is reused automatically."
-                  : "Refresh the host updater to enable automatic fast-update detection. Existing source updates remain available."}
-              </p>
-            </div>
-          )}
           <div className="button-row">
             <button
               onClick={() => void checkPlatform()}
