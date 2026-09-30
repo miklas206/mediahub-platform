@@ -5,6 +5,7 @@ import { Application } from "./ui";
 import "./styles.css";
 import "./phase2.css";
 import "./security.css";
+import "./checkboxes.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

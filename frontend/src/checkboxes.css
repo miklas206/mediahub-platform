@@ -1,0 +1,91 @@
+/* Shared across forms, app choices and installation confirmations. */
+:root body label:has(> input[type="checkbox"]) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+:root body label:has(> input[type="checkbox"]:checked) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+:root body label:has(> input[type="checkbox"]:not(:disabled)):hover {
+  border-color: var(--accent);
+}
+
+:root body label:has(> input[type="checkbox"]:disabled) {
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+:root body input[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--muted);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--bg);
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+:root body input[type="checkbox"]:checked,
+:root body input[type="checkbox"]:indeterminate {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:root body input[type="checkbox"]::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  clip-path: polygon(14% 44%, 0 59%, 39% 96%, 100% 20%, 84% 6%, 37% 66%);
+  visibility: hidden;
+}
+
+:root body input[type="checkbox"]:checked::before {
+  visibility: visible;
+}
+
+:root body input[type="checkbox"]:indeterminate::before {
+  clip-path: inset(40% 0);
+  visibility: visible;
+}
+
+:root body input[type="checkbox"]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+:root body input[type="checkbox"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  :root body input[type="checkbox"] {
+    appearance: auto;
+  }
+  :root body input[type="checkbox"]::before {
+    display: none;
+  }
+}
