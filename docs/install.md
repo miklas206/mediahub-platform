@@ -2,7 +2,12 @@
 
 ## Supported baseline
 
-A fresh Debian/Ubuntu Docker host, Python 3, OpenSSL, Docker Engine with Compose
+A fresh Debian/Ubuntu Docker host with at least **6 vCPU and 16 GiB RAM
+(16384 MiB)** is the standard minimum for MediaHub and local apps, including Plex.
+Allocate these resources to the VM/LXC before running the installer. Installation
+and software updates do not resize existing guests or change existing app limits.
+
+The host also requires Python 3, OpenSSL, Docker Engine with Compose
 v2, systemd and cgroup v2. Use a VM or a prepared unprivileged LXC with Docker
 nesting. **Never run the installer on a Proxmox hypervisor or an existing app's
 container.** Do not share a writable raw disk between guests.

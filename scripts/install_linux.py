@@ -88,6 +88,11 @@ def main():
         raise ValueError("Run on the new Linux Docker host as root")
     if Path("/etc/pve").exists():
         raise ValueError("Do not install on the Proxmox hypervisor. Use a new guest")
+    print(
+        "MediaHub standard minimum: 6 vCPU and 16 GiB RAM (16384 MiB). "
+        "Allocate these to this VM/LXC before installation. "
+        "This installer does not resize the guest or existing app limits."
+    )
     image_prefix = args.release_image_prefix
     if not re.fullmatch(r"ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+", image_prefix):
         raise ValueError("Release image prefix must be a lowercase GHCR repository")

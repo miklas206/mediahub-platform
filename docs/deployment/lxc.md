@@ -1,7 +1,13 @@
 # Unprivileged LXC deployment
 
-Create a new unprivileged Debian LXC with approximately 2 cores, 4GiB RAM, 1GiB swap
-and a 32GiB root disk. Enable nesting/keyctl for the Docker workload. Do not switch
+Create a new unprivileged Debian LXC with at least **6 vCPU cores and 16 GiB RAM
+(16384 MiB)**, 1 GiB swap and a 32 GiB root disk. This is the standard minimum
+allocation for MediaHub with local apps, including Plex. Set these resources in
+Proxmox before installation; the installer does not create or resize the guest.
+Existing installations keep their current allocation until changed in Proxmox.
+Container memory limits are separate from the guest allocation; increasing the
+guest RAM does not automatically increase an existing Plex container's limit.
+Enable nesting/keyctl for the Docker workload. Do not switch
 to privileged mode or disable AppArmor merely to work around a failure. Stop and
 review isolation changes first. Use a dedicated VM for untrusted workloads.
 

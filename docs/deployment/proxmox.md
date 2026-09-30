@@ -5,6 +5,11 @@ supported by the registry. The selected installation uses an unprivileged MediaH
 LXC for Core/Agent and future trusted apps, with a separate isolated Seedbox VM.
 Core does not assume all apps run locally.
 
+Use at least **6 vCPU and 16 GiB RAM (16384 MiB)** for the MediaHub guest as the
+standard allocation. This budget covers Core/Agent and local apps such as Plex;
+separate guests need their own resource allocations. Set guest resources in
+Proxmox; a MediaHub software update does not resize an existing guest.
+
 See [LXC deployment](lxc.md), [Hosts](../hosts.md) and [Shared storage](../shared-storage.md).
 Private guest IDs, IPs and discovered paths are stored in ignored instance reports,
 not defaults or sample manifests.
