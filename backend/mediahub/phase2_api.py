@@ -23,6 +23,7 @@ from mediahub.path_policy import DirectoryPolicy
 from mediahub.plex_api import router as plex_router
 from mediahub.seedbox_daily_api import router as daily_router
 from mediahub.seedbox_rss import router as rss_router
+from mediahub.seedbox_rss_feeds import router as rss_feeds_router
 from mediahub.seedbox_wizard_api import router as wizard_router
 from mediahub.setup import NetworkSettings, SaveDraft
 
@@ -30,6 +31,7 @@ router = APIRouter()
 router.include_router(wizard_router)
 router.include_router(daily_router)
 router.include_router(rss_router)
+router.include_router(rss_feeds_router)
 router.include_router(plex_router)
 
 

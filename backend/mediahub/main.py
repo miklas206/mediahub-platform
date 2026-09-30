@@ -44,6 +44,7 @@ from mediahub.phase2_api import router as phase2_router
 from mediahub.platform_update_runtime import PlatformUpdateRuntime
 from mediahub.release_credentials import GitHubReleaseCredentials
 from mediahub.security_api import router as security_router
+from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
 from mediahub.storage import StorageManager
@@ -89,6 +90,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.release_credentials = GitHubReleaseCredentials(config)
         svc.platform_update = PlatformUpdateRuntime(svc)
         svc.hosts = HostRegistry(svc)
+        svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions)
         register_remote_apps(svc)
         if should_register_cloudflared_app(svc):
@@ -125,6 +127,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         host_collector = asyncio.create_task(collect_hosts())
         integration_collector = asyncio.create_task(svc.integrations.poll())
         update_collector = asyncio.create_task(svc.updates.poll())
+        rss_collector = asyncio.create_task(svc.rss_feeds.poll())
         try:
             yield
         finally:
@@ -132,6 +135,9 @@ def create_app(config: Config | None = None) -> FastAPI:
             host_collector.cancel()
             integration_collector.cancel()
             update_collector.cancel()
+            rss_collector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await rss_collector
             with contextlib.suppress(asyncio.CancelledError):
                 await update_collector
             with contextlib.suppress(asyncio.CancelledError):

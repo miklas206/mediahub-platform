@@ -1,0 +1,15 @@
+.seedbox-daily .rss-feed-card button:not(.primary) {
+  background: var(--raised);
+  color: var(--text);
+  border-color: var(--muted);
+}
+.seedbox-daily .rss-feed-card button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.rss-feed-card h3 {
+  overflow-wrap: anywhere;
+}
+.rss-feed-card summary {
+  cursor: pointer;
+  padding: 8px 0;
+}

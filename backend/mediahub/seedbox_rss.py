@@ -119,7 +119,9 @@ def parse_feed(data, base_url):
             url_parts(link)
         rows.append(
             {
-                "id": hashlib.sha256(link.encode()).hexdigest(),
+                "id": hashlib.sha256(
+                    (fields.get("guid") or fields.get("id") or link).encode()
+                ).hexdigest(),
                 "title": fields.get("title", "Untitled")[:300],
                 "published": (
                     fields.get("pubDate") or fields.get("published") or fields.get("updated") or ""
@@ -127,8 +129,8 @@ def parse_feed(data, base_url):
                 "url": link,
             }
         )
-        if len(rows) == 200:
-            break
+        if len(rows) > 5000:
+            raise ValueError("Feed has too many entries for a complete baseline")
     return list({r["id"]: r for r in rows}.values())
 
 

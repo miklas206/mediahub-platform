@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { bytes, uptime } from "./format";
-import { SeedboxRSS } from "./seedbox-rss";
+import { SeedboxRSS } from "./seedbox-rss-feeds";
 
 type Torrent = {
   hash: string;

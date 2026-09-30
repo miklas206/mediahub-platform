@@ -1,18 +1,55 @@
 # Private RSS torrent selection
 
-Open **Apps → Seedbox → RSS torrents**. Paste the complete private HTTPS RSS
-address from your tracker, including its RSS key, then choose **Save and load
-feed**. A key alone does not identify the tracker or its feed endpoint.
+Open **Apps → Seedbox → RSS feeds**. Add a name, the complete private HTTPS RSS
+address from your tracker (including its RSS key), and an approved destination.
+Up to 20 independent feeds are supported. A key alone does not identify the
+tracker or its feed endpoint.
 
-Search the titles, select up to 20 entries, choose an approved download location,
-and click **Add selected**. New torrents are stopped by default. Enable **Start
-selected torrents immediately after safety checks** to start them, or use Resume
+Enable **Automatically download new entries** if wanted, then choose **Add feed
+and skip existing entries**. Saving first reads the complete supported feed and
+persists all current entry IDs as a baseline. None of these entries are submitted
+automatically. If that first fetch fails, no feed is created and nothing starts.
+
+Core checks automatic feeds every five minutes, even with the browser closed.
+Newly discovered entries are persisted in a queue before being added through the
+existing VPN-protected Agent API, with immediate start after safety checks.
+Processed IDs and pending entries survive Core restarts. A retry after an
+uncertain response uses the Agent's existing infohash duplicate check. Torrents
+already present are not restarted or moved to another feed's destination.
+
+Each feed displays its automatic/manual state, saved destination, last check,
+pending count and failure message. **Check feed now** runs the same discovery
+and automatic-download process immediately. Failures preserve the queue and
+history for retry. Up to 20 pending items per feed are processed per pass.
+
+Under **Feed settings**, change the destination or turn automation on/off.
+Enabling it establishes a fresh baseline: current entries, including ones added
+while automation was off, are skipped. Disabling clears pending automatic work;
+torrents already handed to Seedbox continue running. Changing a destination
+affects subsequent submissions, not torrents already installed.
+
+An existing single-feed configuration migrates as manual-only. Choose its
+destination before enabling automation. Migration never activates downloads.
+
+Expand **Browse and select entries manually**, search the titles, select up to 20
+entries, and click **Add selected** to use that feed's saved destination. New
+manual torrents are stopped by default. Enable **Start manually selected torrents
+immediately** to start them, or use Resume
 in the torrent list afterwards. Existing torrent hashes are not added again.
 Failures are reported per item and remain selected for retry.
 
-Use **Refresh feed** to fetch recent entries. Up to 200 entries are displayed.
-There are no automatic download rules. **Remove feed** deletes the saved feed and
-its cached entries; torrents already added to Seedbox are retained.
+Up to 200 entries per feed are displayed; the initial baseline includes all
+entries parsed, up to 5000 within the response size limit. Larger feeds are rejected
+instead of silently establishing a partial baseline. A tracker can only expose
+its current feed window: entries that appear and disappear between checks cannot
+be discovered. GUID/Atom IDs are preferred for stable identity; otherwise the
+download URL is used. Feeds whose IDs change on every request are unsuitable for
+automatic downloading.
+
+**Remove feed** deletes its configuration, history and pending queue; torrents
+already added to Seedbox are retained. History is never silently pruned: a feed
+with 100000 recorded IDs or over 1000 pending entries reports an error rather
+than losing history and risking a backlog download.
 
 The feed address and cached download links are encrypted with Core's existing
 installation key. The API returns titles, publication text and opaque item IDs;
