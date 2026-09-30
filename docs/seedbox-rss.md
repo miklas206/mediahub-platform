@@ -67,5 +67,7 @@ validated public address. Responses are limited to 2 MiB. RSS and Atom enclosure
 are preferred; magnet links and direct torrent links are supported. An HTML
 details page cannot be used as a torrent file.
 
-This feature needs an updated Core/frontend. It reuses the existing Agent torrent
-add API, so it does not introduce an Agent RSS service or require an Agent update.
+RSS discovery needs an updated Core/frontend and reuses the Agent torrent add API.
+Optional [automatic torrent cleanup](torrent-cleanup.md) additionally needs an
+updated Seedbox Agent. Each feed's cleanup rule applies to newly added torrents;
+the default keeps both jobs and files indefinitely.

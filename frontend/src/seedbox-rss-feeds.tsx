@@ -2,9 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import "./rss-feeds.css";
+import {
+  TorrentRetention,
+  defaultRetention,
+  type RetentionRule,
+} from "./torrent-retention";
 
 type Location = { id: string; storageLabel?: string };
 type Feed = {
+  retention?: RetentionRule;
   id: string;
   name: string;
   automatic: boolean;
@@ -18,7 +24,12 @@ type Feed = {
   items: { id: string; title: string; published: string }[];
 };
 type Listing = { feeds: Feed[]; intervalSeconds: number };
-type Props = { storageId?: string; locations: Location[]; onAdded: () => void };
+type Props = {
+  storageId?: string;
+  locations: Location[];
+  onAdded: () => void;
+  retentionSupported?: boolean;
+};
 
 export function SeedboxRSS(props: Props) {
   const [listing, setListing] = useState<Listing>({
@@ -29,6 +40,7 @@ export function SeedboxRSS(props: Props) {
   const [url, setUrl] = useState("");
   const [destination, setDestination] = useState("root");
   const [automatic, setAutomatic] = useState(false);
+  const [retention, setRetention] = useState<RetentionRule>(defaultRetention);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const mutation = useRef(false);
@@ -100,6 +112,7 @@ export function SeedboxRSS(props: Props) {
             name,
             url,
             automatic,
+            retention,
             storageId: props.storageId,
             downloadLocationId: destination,
           }).then((ok) => {
@@ -107,6 +120,7 @@ export function SeedboxRSS(props: Props) {
               setName("");
               setUrl("");
               setAutomatic(false);
+              setRetention(defaultRetention);
             }
           });
         }}
@@ -155,6 +169,12 @@ export function SeedboxRSS(props: Props) {
           />
           Automatically download new entries to this destination
         </label>
+        <TorrentRetention
+          value={retention}
+          onChange={setRetention}
+          disabled={busy}
+          supported={!!props.retentionSupported}
+        />
         <button
           className="primary"
           disabled={
@@ -193,6 +213,7 @@ function FeedCard({
   storageId,
   onAdded,
   busy,
+  retentionSupported,
   change,
 }: Props & {
   feed: Feed;
@@ -202,6 +223,9 @@ function FeedCard({
   const [name, setName] = useState(feed.name);
   const [destination, setDestination] = useState(feed.downloadLocationId);
   const [automatic, setAutomatic] = useState(feed.automatic);
+  const [retention, setRetention] = useState<RetentionRule>(
+    feed.retention || defaultRetention,
+  );
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [start, setStart] = useState(false);
@@ -266,6 +290,7 @@ function FeedCard({
             void change(path, "PUT", {
               name,
               automatic,
+              retention,
               storageId,
               downloadLocationId: destination,
             });
@@ -306,6 +331,12 @@ function FeedCard({
             Disabling clears pending automatic entries; torrents already added
             keep running.
           </p>
+          <TorrentRetention
+            value={retention}
+            onChange={setRetention}
+            disabled={busy || adding}
+            supported={!!retentionSupported}
+          />
           <button
             disabled={
               busy ||
@@ -316,6 +347,12 @@ function FeedCard({
           >
             Save feed settings
           </button>
+          <p className="muted">
+            Cleanup rules apply to future torrents from this feed, including
+            manual selections. Change existing torrents using their Cleanup
+            button. Removing or disabling a feed does not cancel rules already
+            assigned to torrents.
+          </p>
         </form>
       </details>
       <div className="button-row">

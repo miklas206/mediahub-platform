@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from mediahub.apps.manifest import DeviceRequirement
 from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
 from mediahub.apps.seedbox import SeedboxInstallation
-from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction, VPNLocation
+from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction, TorrentRetention, VPNLocation
 from mediahub.apps.seedbox_wizard import (
     ClientImport,
     VPNImport,
@@ -232,11 +232,18 @@ def create_agent(config: AgentConfig | None = None):
     @asynccontextmanager
     async def lifespan(app):
         cleanup = asyncio.create_task(uploads.cleanup())
+        torrent_cleanup = (
+            asyncio.create_task(torrents.retention.poll()) if config.seedbox_policy_file else None
+        )
         if config.seedbox_policy_file:
             control.monitor_task = asyncio.create_task(control.monitor())
         if config.plex_policy_file:
             plex.monitor_task = asyncio.create_task(plex.monitor())
         yield
+        if torrent_cleanup:
+            torrent_cleanup.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await torrent_cleanup
         await plex.close()
         await control.close()
         cleanup.cancel()
@@ -421,6 +428,10 @@ def create_agent(config: AgentConfig | None = None):
     @app.post("/v1/seedbox/torrents/action", dependencies=[Depends(secure_workflow)])
     async def torrent_action(body: TorrentAction):
         return await torrents.action(body)
+
+    @app.post("/v1/seedbox/torrents/retention", dependencies=[Depends(secure_workflow)])
+    async def torrent_retention(body: TorrentRetention):
+        return await torrents.configure_retention(body)
 
     @app.get("/v1/seedbox/locations", dependencies=[Depends(secure_workflow)])
     async def vpn_locations():

@@ -10,11 +10,13 @@ from mediahub.errors import DomainError
 from agent.seedbox_rotation import authenticated_client
 from agent.seedbox_secret_store import SeedboxSecretStore
 from agent.torrent_input import magnet_hash, torrent_hash
+from agent.torrent_retention import RetentionService
 
 
 class TorrentService:
     def __init__(self, control):
         self.control = control
+        self.retention = RetentionService(self)
 
     @contextlib.asynccontextmanager
     async def session(self, mutate=False):
@@ -62,6 +64,7 @@ class TorrentService:
             response = await client.get("/api/v2/torrents/info", params={"limit": 500})
             response.raise_for_status()
             allowed_roots = self.allowed_save_roots(policy, spec)
+            cleanup = self.retention.load(policy)
             rows = []
             for item in response.json():
                 path = PurePosixPath(item.get("save_path", ""))
@@ -85,7 +88,11 @@ class TorrentService:
                             "seeding_time",
                         ]
                     }
-                    | {"actionsAllowed": allowed}
+                    | {
+                        "actionsAllowed": allowed,
+                        "retention": cleanup.get(item.get("hash"), {}).get("rule"),
+                        "retentionMessage": cleanup.get(item.get("hash"), {}).get("error", ""),
+                    }
                 )
             locations = self.download_locations(policy, spec)
             return {
@@ -100,6 +107,7 @@ class TorrentService:
                     for item in locations
                 ],
                 "limit": 500,
+                "retentionSupported": True,
             }
 
     @staticmethod
@@ -232,6 +240,10 @@ class TorrentService:
                 raise DomainError(
                     "torrent_not_observable", "Torrent was not visible after submission", 409
                 )
+            if body.retention.mode != "disabled":
+                await self.retention.register(
+                    client, policy, spec, response.json()[0], body.retention
+                )
             if body.startImmediately:
                 await self.control.driver.storage_guard()
                 ip = await self.control.driver.verify_vpn()
@@ -240,6 +252,16 @@ class TorrentService:
                     await client.post("/api/v2/torrents/start", data={"hashes": identity})
                 ).raise_for_status()
             return {"state": "added", "hash": identity, "started": body.startImmediately}
+
+    async def configure_retention(self, body):
+        async with self.session() as (client, spec, policy):
+            response = await client.get("/api/v2/torrents/info", params={"hashes": body.hash})
+            response.raise_for_status()
+            rows = response.json()
+            if len(rows) != 1:
+                raise DomainError("torrent_missing", "Torrent not found", 404)
+            await self.retention.register(client, policy, spec, rows[0], body.retention)
+            return {"state": "saved"}
 
     async def action(self, body):
         async with self.session(mutate=body.action in {"resume", "recheck"}) as (

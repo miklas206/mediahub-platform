@@ -227,3 +227,28 @@ def test_background_poll_processes_due_feed_without_browser(client, monkeypatch)
 def test_multifeed_routes_are_admin_only(client):
     assert client.get("/api/v1/seedbox/rss/feeds").status_code == 401
     assert client.post("/api/v1/seedbox/rss/feeds/example/refresh").status_code in (401, 403)
+
+
+def test_cleanup_requires_capable_agent_and_is_forwarded_to_new_downloads(client):
+    from mediahub.rss_retention import RetentionRule
+
+    async def run():
+        service, agent = setup(client)
+        request = body().model_copy(
+            update={"retention": RetentionRule(mode="both", action="delete_files")}
+        )
+        with pytest.raises(DomainError):
+            await service.create(request, agent)
+        agent.request.return_value = {
+            "storageId": "downloads",
+            "downloadLocations": [{"id": "root"}],
+            "retentionSupported": True,
+        }
+        feed = (await service.create(request, agent))["feeds"][0]
+        assert feed["retention"]["action"] == "delete_files"
+        # Exercise the actual adapter rather than the test's mocked add helper.
+        saved = service.load()[0]
+        await module.RSSFeeds.add_item(service, agent, saved, entry("b"), True)
+        assert agent.request.call_args.args[2]["retention"]["mode"] == "both"
+
+    asyncio.run(run())

@@ -3,6 +3,11 @@ import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { bytes, uptime } from "./format";
 import { SeedboxRSS } from "./seedbox-rss-feeds";
+import {
+  TorrentRetention,
+  defaultRetention,
+  type RetentionRule,
+} from "./torrent-retention";
 
 type Torrent = {
   hash: string;
@@ -19,6 +24,8 @@ type Torrent = {
   num_leechs?: number;
   category?: string;
   seeding_time?: number;
+  retention?: RetentionRule | null;
+  retentionMessage?: string;
 };
 type DownloadLocation = { id: string; label: string; storageLabel?: string };
 type Listing = {
@@ -26,6 +33,7 @@ type Listing = {
   storageId: string;
   downloadLocations?: DownloadLocation[];
   limit: number;
+  retentionSupported?: boolean;
 };
 type Locations = {
   provider: string;
@@ -51,6 +59,12 @@ export function SeedboxDaily({
 }) {
   const [list, setList] = useState<Listing | null>(null),
     [location, setLocation] = useState<Locations | null>(null);
+  const [retention, setRetention] = useState<RetentionRule>(defaultRetention);
+  const [cleanupEdit, setCleanupEdit] = useState<{
+    hash: string;
+    name: string;
+    rule: RetentionRule;
+  } | null>(null);
   const [error, setError] = useState(""),
     [listError, setListError] = useState(""),
     [locationError, setLocationError] = useState("");
@@ -139,6 +153,7 @@ export function SeedboxDaily({
       const body: Record<string, unknown> = {
         storageId: list.storageId,
         startImmediately: start,
+        retention,
       };
       if (downloadLocation !== "root")
         body.downloadLocationId = downloadLocation;
@@ -163,6 +178,7 @@ export function SeedboxDaily({
       );
       setMagnet("");
       setFile(null);
+      setRetention(defaultRetention);
       setNotice(
         result.state === "already_present"
           ? "Torrent is already present; no settings changed."
@@ -331,6 +347,12 @@ export function SeedboxDaily({
               />{" "}
               Start immediately after safety checks
             </label>
+            <TorrentRetention
+              value={retention}
+              onChange={setRetention}
+              disabled={busy}
+              supported={!!list?.retentionSupported}
+            />
             <button
               className="primary"
               disabled={busy || changing || !list || !!listError}
@@ -348,6 +370,7 @@ export function SeedboxDaily({
         storageId={list?.storageId}
         locations={list?.downloadLocations || []}
         onAdded={reload}
+        retentionSupported={list?.retentionSupported}
       />
       <Panel title="Torrents">
         <ErrorBox error={listError} />
@@ -431,6 +454,31 @@ export function SeedboxDaily({
                       >
                         Remove job
                       </button>
+                      {list?.retentionSupported && (
+                        <button
+                          disabled={busy || changing || !t.actionsAllowed}
+                          onClick={() =>
+                            setCleanupEdit({
+                              hash: t.hash,
+                              name: t.name,
+                              rule: t.retention || defaultRetention,
+                            })
+                          }
+                        >
+                          Cleanup
+                        </button>
+                      )}
+                      {t.retention && (
+                        <small>
+                          Cleanup: {t.retention.mode} ·{" "}
+                          {t.retention.action === "delete_files"
+                            ? "deletes files"
+                            : "keeps files"}
+                        </small>
+                      )}
+                      {t.retentionMessage && (
+                        <small role="status">{t.retentionMessage}</small>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -442,10 +490,50 @@ export function SeedboxDaily({
           <p>No torrents yet. Add a magnet link or torrent file above.</p>
         )}
         <p className="muted">
-          Remove job always keeps files. File deletion is intentionally not
-          available here. Up to 500 torrents shown.
+          Remove job always keeps files. Automatic cleanup can delete files only
+          when you explicitly select that action. Up to 500 torrents shown.
         </p>
       </Panel>
+      {cleanupEdit && (
+        <Panel title="Torrent cleanup settings">
+          <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
+          <TorrentRetention
+            value={cleanupEdit.rule}
+            onChange={(rule) => setCleanupEdit({ ...cleanupEdit, rule })}
+            disabled={busy}
+          />
+          <p className="muted">
+            Applies to this torrent's existing seeding time and uploaded bytes.
+            If its thresholds are already reached, cleanup can run on the next
+            check.
+          </p>
+          <div className="button-row">
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setError("");
+                void api("/seedbox/torrents/retention", "POST", {
+                  hash: cleanupEdit.hash,
+                  retention: cleanupEdit.rule,
+                })
+                  .then(() => {
+                    setCleanupEdit(null);
+                    reload();
+                  })
+                  .catch((e) => setError(e.message))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Save cleanup settings
+            </button>
+            <button disabled={busy} onClick={() => setCleanupEdit(null)}>
+              Cancel
+            </button>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

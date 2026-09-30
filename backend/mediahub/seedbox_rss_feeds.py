@@ -16,6 +16,7 @@ from mediahub.apps.seedbox_daily import AddTorrent
 from mediahub.contracts import StrictModel
 from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.rss_retention import RetentionRule
 from mediahub.seedbox_rss import KEY as LEGACY_KEY
 from mediahub.seedbox_rss import fetch_public, parse_feed, read_feed, url_parts
 from mediahub.seedbox_wizard_api import target
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/seedbox/rss/feeds", dependencies=[Depends(administra
 class FeedOptions(StrictModel):
     name: str = Field(min_length=1, max_length=100)
     automatic: bool = False
+    retention: RetentionRule = Field(default_factory=RetentionRule)
     storageId: str = Field(min_length=1, max_length=128)
     downloadLocationId: str = Field(default="root", pattern=r"^(?:root|location-[a-f0-9]{64})$")
 
@@ -106,6 +108,7 @@ class RSSFeeds:
                         )
                     },
                     "pending": len(f["pending"]),
+                    "retention": f.get("retention", RetentionRule().model_dump()),
                     "baselineCount": len(f["seen"]),
                     "items": [
                         {k: r[k] for k in ("id", "title", "published")} for r in f["items"][:200]
@@ -141,6 +144,10 @@ class RSSFeeds:
 
     async def validate_destination(self, options, client):
         listing = await client.request("GET", "/v1/seedbox/torrents")
+        if options.retention.mode != "disabled" and not listing.get("retentionSupported"):
+            raise DomainError(
+                "retention_agent_update", "Update the Seedbox Agent to use automatic cleanup", 409
+            )
         if options.storageId != listing["storageId"] or options.downloadLocationId not in {
             r["id"] for r in listing.get("downloadLocations", [{"id": "root"}])
         }:
@@ -210,6 +217,7 @@ class RSSFeeds:
             storageId=feed["storageId"],
             downloadLocationId=feed["downloadLocationId"],
             startImmediately=start,
+            retention=feed.get("retention", RetentionRule().model_dump()),
         )
         if row["url"].startswith("magnet:?"):
             payload["magnet"] = row["url"]
