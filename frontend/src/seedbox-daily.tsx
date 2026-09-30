@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { bytes, uptime } from "./format";
+import { SeedboxRSS } from "./seedbox-rss";
 
 type Torrent = {
   hash: string;
@@ -343,6 +344,11 @@ export function SeedboxDaily({
           </form>
         </Panel>
       </div>
+      <SeedboxRSS
+        storageId={list?.storageId}
+        locations={list?.downloadLocations || []}
+        onAdded={reload}
+      />
       <Panel title="Torrents">
         <ErrorBox error={listError} />
         <div className="torrent-table-scroll">
