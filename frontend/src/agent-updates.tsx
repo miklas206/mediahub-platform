@@ -107,6 +107,7 @@ export function AgentUpdates({
             previous?.status === "running"
               ? {
                   ...previous,
+                  connectionLost: true,
                   message:
                     "Connection interrupted; waiting for Agent update status...",
                 }
@@ -376,7 +377,7 @@ export function AgentUpdates({
           </fieldset>
         </details>
       )}
-      {operation && <OperationProgress operation={operation} />}
+      {operation && <OperationProgress activeOnly operation={operation} />}
     </Panel>
   );
 }

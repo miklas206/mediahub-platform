@@ -355,6 +355,22 @@ export function UpdatesPage({
       } catch {
         if (active && generation === commandGeneration.current) {
           connectionInterrupted.current = true;
+          setOperations((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              ["batch", "platform"].map((key) => [
+                key,
+                current[key]?.status === "running"
+                  ? {
+                      ...current[key],
+                      connectionLost: true,
+                      message:
+                        "Connection interrupted; reconnecting to server update status...",
+                    }
+                  : current[key],
+              ]),
+            ),
+          }));
           setServerError(
             "Cannot read server update status. Updates already started continue on the server; reconnecting...",
           );
@@ -862,20 +878,21 @@ export function UpdatesPage({
         )}
         {operations.batch?.status === "running" && (
           <p role="status">
-            Keep this page open while the update queue runs. Core updates last.
+            Updates continue on the server. You can leave this page. Core
+            updates last.
           </p>
         )}
         {operations.batch &&
           (operations.batch.status === "success" ? (
             <details>
               <summary>Latest update console</summary>
-              <OperationProgress operation={operations.batch} />
+              <OperationProgress activeOnly operation={operations.batch} />
             </details>
           ) : (
-            <OperationProgress operation={operations.batch} />
+            <OperationProgress activeOnly operation={operations.batch} />
           ))}
         {operations.all && operations.all.status !== "success" && (
-          <OperationProgress operation={operations.all} />
+          <OperationProgress activeOnly statusOnly operation={operations.all} />
         )}
       </Panel>
       <div className="apps-grid updates-grid">
@@ -931,7 +948,7 @@ export function UpdatesPage({
             </button>
           </div>
           {operations.platform && (
-            <OperationProgress operation={operations.platform} />
+            <OperationProgress activeOnly operation={operations.platform} />
           )}
           <details className="update-card-advanced">
             <summary>Details and update settings</summary>
@@ -1074,7 +1091,10 @@ export function UpdatesPage({
                   </Link>
                 </div>
                 {operations[app.id] && (
-                  <OperationProgress operation={operations[app.id]!} />
+                  <OperationProgress
+                    activeOnly
+                    operation={operations[app.id]!}
+                  />
                 )}
                 {!isPlex && !isCloudflare && (
                   <details className="update-card-details">

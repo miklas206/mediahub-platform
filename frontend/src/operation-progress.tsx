@@ -45,8 +45,12 @@ function StepIcon({ state }: { state: OperationStepState }) {
 
 export function OperationProgress({
   operation,
+  activeOnly = false,
+  statusOnly = false,
 }: {
   operation: OperationState;
+  activeOnly?: boolean;
+  statusOnly?: boolean;
 }) {
   const consoleView = useRef<HTMLPreElement>(null);
   const followConsole = useRef(true);
@@ -54,6 +58,29 @@ export function OperationProgress({
     if (operation.console && followConsole.current && consoleView.current)
       consoleView.current.scrollTop = consoleView.current.scrollHeight;
   }, [operation.console]);
+  if (
+    statusOnly ||
+    (activeOnly && (operation.status !== "running" || operation.connectionLost))
+  ) {
+    const lines = [...operation.details, ...(operation.console || [])];
+    return (
+      <div className="operation-result">
+        <p role={operation.status === "error" ? "alert" : "status"}>
+          {operation.message}
+        </p>
+        {lines.length > 0 && (
+          <details className="operation-details">
+            <summary>
+              {operation.console ? "Console" : "Technical details"}
+            </summary>
+            <pre aria-label={operation.console ? "Update console" : undefined}>
+              {lines.map(redactOperationDetail).join("\n")}
+            </pre>
+          </details>
+        )}
+      </div>
+    );
+  }
   const progress = Math.max(0, Math.min(100, Math.round(operation.progress)));
   return (
     <section
