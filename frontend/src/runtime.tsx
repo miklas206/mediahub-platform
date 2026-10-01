@@ -1,3 +1,4 @@
+import { seedboxStatus } from "./seedbox-status";
 import {
   seedboxSections,
   seedboxSection,
@@ -238,6 +239,7 @@ function SeedboxPanel({
     disk = r.storage,
     host = r.host;
   const counts = q?.apiAuthenticated ? q : undefined;
+  const status = seedboxStatus(r);
   return (
     <div className={`runtime-workspace seedbox-workspace section-${section}`}>
       <header className="runtime-summary">
@@ -247,7 +249,7 @@ function SeedboxPanel({
         </div>
         <div className={`runtime-health ${r.health}`}>
           <ShieldCheck size={22} />
-          {r.health}
+          {status.label}
         </div>
       </header>
       <div className="runtime-observed">
@@ -257,10 +259,15 @@ function SeedboxPanel({
           every 10s
         </span>
       </div>
-      {!r.available && (
-        <div role="alert" className="notice">
-          Agent offline or status unavailable. Previous values are not treated
-          as healthy.
+      {status.message && (
+        <div role="status" className="seedbox-status-notice">
+          <strong>{status.label}</strong>
+          <span>{status.message}</span>
+          {r.available && (
+            <Link to={{ search: "?section=settings" }}>
+              Open runtime controls
+            </Link>
+          )}
         </div>
       )}
       <div className="runtime-panels">

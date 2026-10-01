@@ -1,3 +1,4 @@
+import { appStatusLabel } from "./seedbox-status";
 import { seedboxSections, seedboxSection } from "./seedbox-sections";
 import {
   useCallback,
@@ -543,11 +544,30 @@ function Shell({
                         )
                         .map((app) => (
                           <div key={app.id}>
-                            <NavLink to={app.detailPath || "/apps"}>
+                            <NavLink
+                              to={app.detailPath || "/apps"}
+                              title={
+                                navigationAppsError
+                                  ? "Status unavailable"
+                                  : app.health.summary
+                              }
+                            >
+                              <span className="app-shortcut-name">
+                                {app.name}
+                              </span>
                               <span
-                                className={`app-shortcut-dot ${app.health.status}`}
-                              />
-                              <span>{app.name}</span>
+                                className={`app-shortcut-status ${navigationAppsError ? "unknown" : app.health.status}`}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={`app-shortcut-dot ${navigationAppsError ? "unknown" : app.health.status}`}
+                                />
+                                {appStatusLabel(
+                                  navigationAppsError
+                                    ? "unknown"
+                                    : app.health.status,
+                                )}
+                              </span>
                             </NavLink>
                             {app.packageId === "org.mediahub.seedbox" &&
                               location.pathname === app.detailPath && (

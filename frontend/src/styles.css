@@ -2186,3 +2186,10 @@ td time {
     animation: none;
   }
 }
+
+.app-shortcuts .app-shortcut-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.app-shortcuts .app-shortcut-status { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 10px; font-weight: 600; color: var(--muted); }
+.app-shortcut-status.healthy { color: var(--accent); }
+.app-shortcut-status.degraded { color: #e7c079; }
+.app-shortcut-status.unhealthy, .app-shortcut-status.critical { color: #f4a2a2; }
+.app-shortcut-status .app-shortcut-dot { width: 8px; height: 8px; background: currentColor; }
