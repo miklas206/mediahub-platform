@@ -8,6 +8,7 @@ from sqlalchemy import select
 from mediahub import __version__
 from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.main_branch_watch import MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
 
 STATE_KEY = "update-monitor"
@@ -18,6 +19,7 @@ class UpdateMonitor:
         self.services = services
         self.lock = asyncio.Lock()
         self.check_task = None
+        self.main_watch = MainBranchWatch()
 
     def _load(self):
         with self.services.sessions() as db:
@@ -50,6 +52,11 @@ class UpdateMonitor:
     def summary(self):
         value = self._load()
         value["intervalHours"] = self.services.settings.get().update_check_interval_hours
+        value["mainCheckIntervalSeconds"] = (
+            (60 if self.services.release_credentials.token() else 300)
+            if value["intervalHours"] and self.services.settings.get().release_repository
+            else 0
+        )
         value["notifications"] = self.services.events.notifications(limit=10)
         return value
 
@@ -204,6 +211,23 @@ class UpdateMonitor:
             )
             return self.summary()
 
+    async def check_main_change(self):
+        settings = self.services.settings.get()
+        if not settings.update_check_interval_hours:
+            return
+        if self.check_task and not self.check_task.done():
+            return
+        commit = await self.main_watch.check(
+            settings.release_repository, self.services.release_credentials.token()
+        )
+        if not commit:
+            return
+        core = next(
+            (item for item in self._load()["items"] if item.get("id") == "mediahub-core"), None
+        )
+        if core is None or core.get("latestVersion") != commit:
+            await self.check_all()
+
     async def poll(self):
         await asyncio.sleep(20)
         while True:
@@ -225,6 +249,11 @@ class UpdateMonitor:
             if version_changed or (interval and due):
                 try:
                     await self.check_all()
+                except DomainError:
+                    pass
+            else:
+                try:
+                    await self.check_main_change()
                 except DomainError:
                     pass
             await asyncio.sleep(60)

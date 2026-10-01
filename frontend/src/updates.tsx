@@ -73,6 +73,7 @@ type UpdateSummary = {
   count: number;
   items: UpdateItem[];
   intervalHours: number;
+  mainCheckIntervalSeconds?: number;
   notifications: UpdateNotification[];
   lastError: string | null;
 };
@@ -820,9 +821,15 @@ export function UpdatesPage({
             <ShieldCheck />
             <p>
               <strong>
-                {scheduleLabel(updateSummary.data?.intervalHours)}
+                Full check: {scheduleLabel(updateSummary.data?.intervalHours)}
               </strong>
             </p>
+            {!!updateSummary.data?.mainCheckIntervalSeconds && (
+              <p className="muted">
+                MediaHub checks: every{" "}
+                {updateSummary.data.mainCheckIntervalSeconds / 60} min
+              </p>
+            )}
             <p className="muted">
               Last checked: {checkedAt(updateSummary.data?.checkedAt)}
             </p>
