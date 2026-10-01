@@ -35,6 +35,17 @@ MAX_BUNDLE = 2 * 1024**3
 LOADED_IMAGE = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
+class BuildSpaceError(ValueError):
+    """Safe numeric diagnostic; never expose arbitrary exception text."""
+
+    def __init__(self, free):
+        super().__init__(
+            f"Not enough system disk space to build the update: {free / 1024**3:.2f} GiB free; "
+            "at least 8 GiB required. Free unused Docker build cache or expand the system disk. "
+            "Running services were not changed."
+        )
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -603,8 +614,9 @@ class HostUpdater:
 
     def _build_source_images(self, stage, manifest):
         """Build before stopping services. Never pass credentials or host data to Docker."""
-        if shutil.disk_usage(self.root).free < 8 * 1024**3:
-            raise ValueError("At least 8 GiB of system space is required for source builds")
+        free = shutil.disk_usage(self.root).free
+        if free < 8 * 1024**3:
+            raise BuildSpaceError(free)
         workspace = self.root / ("source-build-" + self.operation)
         workspace.mkdir(mode=0o700)
         try:
@@ -958,7 +970,7 @@ class HostUpdater:
                 )
                 for old in backups[2:]:
                     shutil.rmtree(old)
-            except Exception:
+            except Exception as error:
                 if request is None:
                     raise
                 if not services_stopped:
@@ -968,7 +980,9 @@ class HostUpdater:
                     self.status(
                         "failed",
                         100,
-                        "Update was rejected before any running service was changed",
+                        str(error)
+                        if isinstance(error, BuildSpaceError)
+                        else "Update was rejected before any running service was changed",
                     )
                     return
                 try:

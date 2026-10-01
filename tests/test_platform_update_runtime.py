@@ -398,3 +398,18 @@ def test_commit_staging_supports_unchanged_version(tmp_path, monkeypatch):
     assert request["schemaVersion"] == 3 and request["fromCommit"] == "b" * 40
     manifest = json.loads((spool / request["stage"] / "mediahub-source-release.json").read_text())
     assert manifest["source"]["commit"] == "a" * 40
+
+
+def test_source_install_reports_low_space_before_staging(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    monkeypatch.setattr(PlatformUpdateRuntime, "commit_available", property(lambda self: True))
+    monkeypatch.setattr(PlatformUpdateRuntime, "source_available", property(lambda self: True))
+    monkeypatch.setattr(
+        runtime_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=int(7.99 * 1024**3))
+    )
+    with pytest.raises(DomainError) as error:
+        asyncio.run(updater.install({"sourceChannel": "main", "updateAvailable": True}))
+    assert error.value.code == "platform_update_disk_space"
+    assert "7.99 GiB" in str(error.value)
+    assert updater.task is None
+    assert not (spool / "request.json").exists()

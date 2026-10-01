@@ -588,7 +588,10 @@ def test_source_low_space_does_not_stop_services(tmp_path, monkeypatch):
     updater, root, commands = source_updater(tmp_path, monkeypatch)
     monkeypatch.setattr(host_module.shutil, "disk_usage", lambda _: SimpleNamespace(free=1024))
     updater.process()
-    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+    status = json.loads((root / "updates/status.json").read_text())
+    assert status["state"] == "failed"
+    assert "0.00 GiB free" in status["message"]
+    assert "8 GiB required" in status["message"]
     assert not any("stop" in args or "build" in args for args in commands)
 
 

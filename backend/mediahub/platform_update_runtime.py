@@ -431,6 +431,16 @@ class PlatformUpdateRuntime:
                 "The host updater needs source-build support before this update",
                 409,
             )
+        if source_mode:
+            free = shutil.disk_usage(root).free
+            if free < 8 * 1024**3:
+                raise DomainError(
+                    "platform_update_disk_space",
+                    f"Not enough system disk space: {free / 1024**3:.2f} GiB free; "
+                    "at least 8 GiB required to build the update. Free unused Docker build "
+                    "cache or expand the system disk. No update was started.",
+                    409,
+                )
         operation = uuid.uuid4().hex
         target = str(release["latestVersion"])
         steps = [
