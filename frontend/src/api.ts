@@ -5,6 +5,36 @@ export const setCsrf = (value: string) => {
   csrf = value;
 };
 
+export class ApiResponseError extends Error {
+  constructor(public readonly status: number) {
+    super(
+      "MediaHub returned an unexpected response. The server or proxy may be restarting. Try again shortly.",
+    );
+    this.name = "ApiResponseError";
+  }
+}
+
+async function readApiPayload(response: Response) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    // Proxies may return an HTML error page while Core is restarting.
+    // Never display that body or retry an installation POST here.
+    throw new ApiResponseError(response.status);
+  }
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    (response.ok && !Object.prototype.hasOwnProperty.call(payload, "data"))
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return payload;
+}
+
 export async function downloadBackup(
   data: unknown,
   scope = "core",
@@ -20,7 +50,7 @@ export async function downloadBackup(
     body: JSON.stringify(data),
   });
   if (!response.ok) {
-    const payload = await response.json();
+    const payload = await readApiPayload(response);
     throw new Error(payload.error?.message || "Backup could not be created");
   }
   return response.blob();
@@ -42,7 +72,7 @@ export async function api<T>(
     },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
-  const payload = await response.json();
+  const payload = await readApiPayload(response);
   if (!response.ok) {
     if (
       response.status === 401 &&

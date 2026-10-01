@@ -2,7 +2,7 @@ import { AgentUpdates } from "./agent-updates";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
-import { api } from "./api";
+import { api, ApiResponseError } from "./api";
 import { mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, Panel, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
@@ -232,6 +232,17 @@ export function UpdatesPage({
   const [actionBusy, setBusy] = useState("all-check");
   const [serverBusy, setServerBusy] = useState(true);
   const [serverError, setServerError] = useState("");
+  const connectionInterrupted = useRef(false);
+  function reportError(caught: unknown) {
+    if (caught instanceof ApiResponseError) {
+      connectionInterrupted.current = true;
+      setServerError(
+        "Connection interrupted. Waiting for MediaHub to respond again...",
+      );
+    } else {
+      setError((caught as Error).message);
+    }
+  }
   const busy = actionBusy || (serverBusy ? "server-update" : "");
   const refreshAfterUpdate = useRef(() => {});
   const commandGeneration = useRef(0);
@@ -273,13 +284,15 @@ export function UpdatesPage({
       setServerBusy(job.state === "running");
       setOperations((current) => ({ ...current, batch: queueOperation(job) }));
     } catch (caught) {
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
   }
 
   refreshAfterUpdate.current = () => {
+    platform.reload();
+    privateAccess.reload();
     updateSummary.reload();
     platformRelease.reload();
     setCheckedPlatformRelease(undefined);
@@ -298,6 +311,10 @@ export function UpdatesPage({
           api<PlatformOperation>("/updates/platform/operation"),
         ]);
         if (!active || generation !== commandGeneration.current) return;
+        if (connectionInterrupted.current) {
+          connectionInterrupted.current = false;
+          refreshAfterUpdate.current();
+        }
         setServerError("");
         const coreRunning = [
           "downloading",
@@ -336,10 +353,12 @@ export function UpdatesPage({
           return;
         }
       } catch {
-        if (active)
+        if (active && generation === commandGeneration.current) {
+          connectionInterrupted.current = true;
           setServerError(
             "Cannot read server update status. Updates already started continue on the server; reconnecting...",
           );
+        }
       } finally {
         if (active) timer = window.setTimeout(() => void poll(), 2000);
       }
@@ -442,7 +461,7 @@ export function UpdatesPage({
       if (running) running.state = "error";
       task.details.push("Update request failed · no update was installed");
       task.publish(100, "error", "The release check could not be completed.");
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -494,7 +513,7 @@ export function UpdatesPage({
         "error",
         "Plex was not confirmed healthy. Review the safe error above.",
       );
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -539,7 +558,7 @@ export function UpdatesPage({
       if (running) running.state = "error";
       task.details.push("Credential request failed · secret was not displayed");
       task.publish(100, "error", "Private GitHub access could not be saved.");
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -580,7 +599,7 @@ export function UpdatesPage({
       if (running) running.state = "error";
       task.details.push("Credential removal failed");
       task.publish(100, "error", "Private GitHub access could not be removed.");
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -625,7 +644,7 @@ export function UpdatesPage({
         "error",
         "The GitHub code check could not be completed.",
       );
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -683,7 +702,7 @@ export function UpdatesPage({
         "error",
         "The complete update check could not be finished.",
       );
-      setError((caught as Error).message);
+      reportError(caught);
     } finally {
       setBusy("");
     }
@@ -721,7 +740,7 @@ export function UpdatesPage({
       updateOperation("platform", platformOperation(started));
       setServerBusy(true);
     } catch (caught) {
-      setError((caught as Error).message);
+      reportError(caught);
       setOperations((current) => {
         const existing = current.platform;
         return {
@@ -746,7 +765,7 @@ export function UpdatesPage({
       await api(`/notifications/${encodeURIComponent(id)}/read`, "POST");
       updateSummary.reload();
     } catch (caught) {
-      setError((caught as Error).message);
+      reportError(caught);
     }
   }
 
