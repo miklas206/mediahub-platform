@@ -1,6 +1,7 @@
 import asyncio
 import secrets
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
@@ -267,6 +268,23 @@ async def update_summary(request: Request, user=Depends(authenticated)):
 @router.post("/updates/check")
 async def check_all_updates(request: Request, user=Depends(administrator)):
     return result(await services(request).updates.check_all())
+
+
+class StartUpdateQueue(StrictModel):
+    requestId: UUID
+    ids: list[str] = Field(min_length=1, max_length=50)
+
+
+@router.post("/updates/queue", status_code=202)
+async def start_update_queue(body: StartUpdateQueue, request: Request, user=Depends(administrator)):
+    if request.url.scheme != "https":
+        raise DomainError("https_required", "Use HTTPS to start an update queue", 403)
+    return result(await services(request).update_queue.start(body.ids, body.requestId))
+
+
+@router.get("/updates/queue")
+async def update_queue_status(request: Request, user=Depends(authenticated)):
+    return result(services(request).update_queue.status())
 
 
 @router.get("/notifications")

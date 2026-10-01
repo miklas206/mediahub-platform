@@ -53,6 +53,7 @@ from mediahub.setup import SetupService
 from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
+from mediahub.update_queue import UpdateQueue
 
 logger = logging.getLogger("mediahub.core")
 
@@ -101,6 +102,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
         svc.updates = UpdateMonitor(svc)
+        svc.update_queue = UpdateQueue(svc)
         svc.imports = ImportPlanner(sessions, svc.agent, svc.apps)
         svc.snapshot = svc.system.status()
         app.state.services = svc
@@ -134,9 +136,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         update_collector = asyncio.create_task(svc.updates.poll())
         port_collector = asyncio.create_task(svc.seedbox_reachability.poll())
         rss_collector = asyncio.create_task(svc.rss_feeds.poll())
+        svc.update_queue.resume()
         try:
             yield
         finally:
+            await svc.update_queue.stop()
             port_collector.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await port_collector

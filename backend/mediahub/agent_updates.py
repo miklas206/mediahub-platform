@@ -409,13 +409,19 @@ class AgentUpdates:
                         job.update(current)
                         self.save(job)
                         if current["state"] == "verifying":
+                            verification_message = None
                             try:
                                 version = asyncio.run(agent.request("GET", "/v1/version"))
                                 if version.get("sourceCommit") == checked["latestCommit"]:
                                     with sftp.open(remote + "/accepted", "w") as accept:
                                         accept.write(checked["latestCommit"])
-                            except DomainError:
-                                pass
+                                else:
+                                    verification_message = "Verification: Agent responded, but its installed commit does not match the requested update"
+                            except DomainError as error:
+                                verification_message = "Verification: " + setup.log_line(str(error))
+                            if verification_message and verification_message not in job["logs"]:
+                                job["logs"] = (job["logs"] + [verification_message])[-200:]
+                                self.save(job)
                         if current["state"] in {"succeeded", "failed", "rolled_back"}:
                             return
                         time.sleep(2)

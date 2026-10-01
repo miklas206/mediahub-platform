@@ -3,10 +3,10 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "./api";
-import { disconnectedUpdate, mergeUpdateConsole } from "./update-progress";
+import { mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, Panel, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
-import { runUpdateAll, updateAllPlan } from "./update-all";
+import { updateAllPlan } from "./update-all";
 import {
   OperationProgress,
   type OperationState,
@@ -174,6 +174,45 @@ function scheduleLabel(hours: number | undefined) {
   return `Every ${hours} hours`;
 }
 
+type QueueStatus = {
+  operationId?: string;
+  state: string;
+  message?: string;
+  progress?: number;
+  coreUpdated?: boolean;
+  summaryUpdated?: boolean;
+  logs: string[];
+  items: { name: string; state: string }[];
+};
+function queueOperation(job: QueueStatus): OperationState {
+  return {
+    title: "Update all",
+    status:
+      job.state === "succeeded"
+        ? "success"
+        : job.state === "running"
+          ? "running"
+          : "error",
+    progress: job.progress || 0,
+    message: job.message || "Updates continue on the server",
+    console: job.logs,
+    details: [
+      "You can navigate away, refresh or close the browser. Return here to follow progress.",
+    ],
+    steps: job.items.map((item) => ({
+      label: item.name,
+      state:
+        item.state === "complete"
+          ? "complete"
+          : item.state === "error"
+            ? "error"
+            : item.state === "pending"
+              ? "pending"
+              : "running",
+    })),
+  };
+}
+
 export function UpdatesPage({
   apps,
   appsError = "",
@@ -190,7 +229,12 @@ export function UpdatesPage({
   const [versions, setVersions] = useState<Record<string, Versions>>({});
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState("all-check");
+  const [actionBusy, setBusy] = useState("all-check");
+  const [serverBusy, setServerBusy] = useState(true);
+  const [serverError, setServerError] = useState("");
+  const busy = actionBusy || (serverBusy ? "server-update" : "");
+  const refreshAfterUpdate = useRef(() => {});
+  const commandGeneration = useRef(0);
   const [latest, setLatest] = useState<Record<string, string>>({});
   const [githubToken, setGithubToken] = useState("");
   const [operations, setOperations] = useState<
@@ -213,60 +257,99 @@ export function UpdatesPage({
     if (!apps || !batchPlan.tasks.length || busy) return;
     if (
       !window.confirm(
-        `Update ${batchPlan.tasks.map((task) => task.name).join(", ")}? Plex playback may pause. Core updates last and reloads the page when finished.${batchPlan.manual.length ? ` Manual updates remain: ${batchPlan.manual.map((item) => item.name).join(", ")}.` : ""}`,
+        `Update ${batchPlan.tasks.map((task) => task.name).join(", ")}? Plex playback may pause. Updates continue on the server if you leave or close this page. Core updates last.${batchPlan.manual.length ? ` Manual updates remain: ${batchPlan.manual.map((item) => item.name).join(", ")}.` : ""}`,
       )
     )
       return;
+    commandGeneration.current += 1;
     setBusy("all-install");
     setError("");
     setNotice("");
     try {
-      const outcome = await runUpdateAll(batchPlan, api, (operation) => {
-        setOperations((current) => ({ ...current, batch: operation }));
+      const job = await api<QueueStatus>("/updates/queue", "POST", {
+        requestId: crypto.randomUUID(),
+        ids: batchPlan.tasks.map((task) => task.id),
       });
-      if (outcome.coreUpdated && !outcome.failed) {
-        window.location.reload();
-        return;
-      }
-      await Promise.all(
-        batchPlan.tasks
-          .filter((task) => task.kind === "plex")
-          .map(async (task) => {
-            try {
-              const result = await api<{ report: Versions }>(
-                `/apps/${encodeURIComponent(task.id)}/runtime`,
-              );
-              setVersions((current) => ({
-                ...current,
-                [task.id]: result.report,
-              }));
-              await api(
-                `/apps/${encodeURIComponent(task.id)}/update-check`,
-                "POST",
-              );
-            } catch {
-              setNotice(
-                "The update queue has finished, but the latest app status could not be refreshed. Use Check all now to retry.",
-              );
-            }
-          }),
-      );
-      if (batchPlan.tasks.some((task) => task.kind === "agent")) {
-        try {
-          await api("/updates/seedbox-agent");
-        } catch {
-          setNotice(
-            "The queue finished. Check Agent update to refresh its version status.",
-          );
-        }
-      }
-      updateSummary.reload();
-      platformRelease.reload();
-      setCheckedPlatformRelease(undefined);
+      setServerBusy(job.state === "running");
+      setOperations((current) => ({ ...current, batch: queueOperation(job) }));
+    } catch (caught) {
+      setError((caught as Error).message);
     } finally {
       setBusy("");
     }
   }
+
+  refreshAfterUpdate.current = () => {
+    updateSummary.reload();
+    platformRelease.reload();
+    setCheckedPlatformRelease(undefined);
+  };
+  useEffect(() => {
+    let active = true;
+    let timer: number | undefined;
+    let observedQueue = "";
+    let observedCore = "";
+    let lastQueue = "";
+    async function poll() {
+      const generation = commandGeneration.current;
+      try {
+        const [queue, core] = await Promise.all([
+          api<QueueStatus>("/updates/queue"),
+          api<PlatformOperation>("/updates/platform/operation"),
+        ]);
+        if (!active || generation !== commandGeneration.current) return;
+        setServerError("");
+        const coreRunning = [
+          "downloading",
+          "staged",
+          "building",
+          "installing",
+          "verifying",
+          "rolling_back",
+        ].includes(core.state);
+        setServerBusy(queue.state === "running" || coreRunning);
+        if (queue.state === "running") observedQueue = queue.operationId || "";
+        if (coreRunning) observedCore = core.operationId || "";
+        if (queue.state !== "idle") {
+          setOperations((current) => ({
+            ...current,
+            batch: queueOperation(queue),
+          }));
+          const signature = `${queue.operationId}:${queue.state}:${queue.summaryUpdated}`;
+          if (queue.state !== "running" && signature !== lastQueue)
+            refreshAfterUpdate.current();
+          lastQueue = signature;
+        }
+        if (core.state !== "idle" && core.state !== "unavailable") {
+          setOperations((current) => ({
+            ...current,
+            platform: platformOperation(core),
+          }));
+        }
+        if (
+          (queue.state === "succeeded" &&
+            queue.coreUpdated &&
+            observedQueue === queue.operationId) ||
+          (core.state === "succeeded" && observedCore === core.operationId)
+        ) {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        if (active)
+          setServerError(
+            "Cannot read server update status. Updates already started continue on the server; reconnecting...",
+          );
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(), 2000);
+      }
+    }
+    void poll();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   function updateOperation(key: string, operation: OperationState) {
     setOperations((current) => ({
@@ -606,43 +689,6 @@ export function UpdatesPage({
     }
   }
 
-  async function waitForPlatformUpdate() {
-    const deadline = Date.now() + 75 * 60 * 1000;
-    while (Date.now() < deadline) {
-      let result: PlatformOperation;
-      try {
-        result = await api<PlatformOperation>("/updates/platform/operation");
-      } catch (caught) {
-        if (Date.now() >= deadline) throw caught;
-        setOperations((current) => ({
-          ...current,
-          platform: current.platform
-            ? disconnectedUpdate(current.platform)
-            : undefined,
-        }));
-        await new Promise((resolve) => window.setTimeout(resolve, 2000));
-        continue;
-      }
-      updateOperation("platform", platformOperation(result));
-      if (result.state === "succeeded") {
-        setNotice(result.message);
-        // Reload the document so the new frontend bundle is loaded as well.
-        // This runs only after the active install completes, never on page load.
-        window.location.reload();
-        return;
-      }
-      if (
-        ["failed", "rolled_back", "invalid", "unavailable"].includes(
-          result.state,
-        )
-      ) {
-        throw new Error(result.message);
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-    }
-    throw new Error("The update did not complete within the safety timeout.");
-  }
-
   async function installPlatform() {
     if (
       !release?.latestVersion ||
@@ -651,6 +697,7 @@ export function UpdatesPage({
       )
     )
       return;
+    commandGeneration.current += 1;
     setBusy("platform-install");
     setError("");
     updateOperation("platform", {
@@ -672,7 +719,7 @@ export function UpdatesPage({
         "POST",
       );
       updateOperation("platform", platformOperation(started));
-      await waitForPlatformUpdate();
+      setServerBusy(true);
     } catch (caught) {
       setError((caught as Error).message);
       setOperations((current) => {
@@ -707,8 +754,10 @@ export function UpdatesPage({
     <div className="stack updates-page">
       <p className="muted">
         Verified updates with configuration rollback and media kept separate.
+        Updates continue on the server if you leave, refresh or close this page.
+        Return here to follow progress.
       </p>
-      <ErrorBox error={error || appsError} />
+      <ErrorBox error={error || serverError || appsError} />
       <ErrorBox error={platformRelease.error || updateSummary.error} />
       {notice && (
         <p className="success" role="status">
@@ -737,9 +786,13 @@ export function UpdatesPage({
               >
                 <RefreshCw
                   size={16}
-                  className={busy === "all-install" ? "spin" : ""}
+                  className={
+                    operations.batch?.status === "running" ? "spin" : ""
+                  }
                 />
-                {busy === "all-install" ? "Updating all…" : "Update all"}
+                {operations.batch?.status === "running"
+                  ? "Updating all…"
+                  : "Update all"}
               </button>
             )}
             <button disabled={!!busy} onClick={() => void checkAll()}>
@@ -788,7 +841,7 @@ export function UpdatesPage({
             do not yet have an automatic installer.
           </p>
         )}
-        {busy === "all-install" && (
+        {operations.batch?.status === "running" && (
           <p role="status">
             Keep this page open while the update queue runs. Core updates last.
           </p>
