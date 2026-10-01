@@ -15,6 +15,7 @@ from agent.port_forwarding import PortLeaseError
 from agent.port_listener import ListeningPortError
 from agent.ram_secrets import RuntimeSecrets
 from agent.seedbox_install import policy_host_mounts_verified, policy_mounts_verified
+from agent.seeding_policy import ensure_seeding_limits
 
 
 class ScopedDriver:
@@ -363,6 +364,7 @@ class ScopedDriver:
             settings = response.json()
             if settings.get("listen_port") != port or settings.get("upnp") is not False:
                 raise ValueError("Forwarded port verification failed")
+            await ensure_seeding_limits(client, settings)
         # Preferences are not evidence of an actual listening socket. Allow a
         # bounded rebind window after qBittorrent changes its port.
         for attempt in range(8):
@@ -561,6 +563,7 @@ class ScopedDriver:
                     response.raise_for_status()
                     if response.json().get("current_network_interface") != "tun0":
                         raise ValueError("qBittorrent VPN binding invalid")
+                    await ensure_seeding_limits(qbit, response.json())
                 break
             except httpx.HTTPError:
                 if time.monotonic() >= deadline:
