@@ -70,7 +70,8 @@ input,
 select {
   -webkit-tap-highlight-color: transparent;
 }
-button {
+button,
+a.button-link {
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -85,7 +86,8 @@ button {
     background 0.15s,
     border-color 0.15s;
 }
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+a.button-link:hover {
   background: var(--accent-bg);
   border-color: var(--accent);
 }

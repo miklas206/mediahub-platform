@@ -1388,8 +1388,8 @@ export function CatalogPage({
                     </Link>
                   ) : null}
                   {app.id === "org.mediahub.fjordhub" && (
-                    <Link to="/store/fjordhub/uninstall">
-                      Uninstall FjordHub
+                    <Link className="button-link" to="/store/fjordhub/uninstall">
+                      Uninstall
                     </Link>
                   )}
                   {installedApp && showInstalled && (
