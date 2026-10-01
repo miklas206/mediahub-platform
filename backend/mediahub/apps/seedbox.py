@@ -20,7 +20,7 @@ class SeedboxInstallation(StrictModel):
     gid: int = Field(default=1000, ge=1000, le=65535)
     webPort: int = Field(default=18080, ge=1024, le=65535)
     vpnMemoryMiB: int = Field(default=256, ge=128, le=512)
-    torrentMemoryMiB: int = Field(default=512, ge=256, le=1024)
+    torrentMemoryMiB: int = Field(default=1024, ge=256, le=16384)
 
 
 class SeedboxExtraStorage(StrictModel):

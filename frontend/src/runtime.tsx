@@ -66,6 +66,8 @@ export type Runtime = {
     countryCode?: string | null;
   };
   qBittorrent?: {
+    oomKilled?: boolean;
+    memoryLimitMiB?: number;
     healthy: boolean;
     running: boolean;
     version: string | null;

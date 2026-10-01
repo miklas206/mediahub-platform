@@ -167,6 +167,10 @@ class SeedboxStatus:
                             )
                 torrent = await inspect("torrent")
                 report["qBittorrent"]["running"] = torrent["State"]["Running"]
+                report["qBittorrent"]["oomKilled"] = bool(torrent["State"].get("OOMKilled"))
+                report["qBittorrent"]["memoryLimitMiB"] = (
+                    torrent["HostConfig"].get("Memory", 0) // 1024**2
+                )
                 namespace_ok = torrent["HostConfig"]["NetworkMode"] == "container:" + vpn["Id"]
                 if torrent["State"]["Running"] and namespace_ok:
                     namespace_ok = await execute(
@@ -193,6 +197,7 @@ class SeedboxStatus:
                         torrents.raise_for_status()
                         rows = torrents.json()
                         report["qBittorrent"] = {
+                            **report["qBittorrent"],
                             "healthy": True,
                             "running": True,
                             "apiAuthenticated": True,

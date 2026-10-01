@@ -52,6 +52,12 @@ export function seedboxStatus(r: Runtime): { label: string; message?: string } {
       message:
         "The VPN connection has not passed verification. qBittorrent cannot safely start until the VPN checks pass.",
     };
+  if (!r.qBittorrent?.healthy && r.qBittorrent?.oomKilled) {
+    return {
+      label: "Memory limit reached",
+      message: `Docker reports that qBittorrent was killed after exceeding its memory limit. Current limit: ${r.qBittorrent.memoryLimitMiB || "unknown"} MiB. Check memory allocation before retrying.`,
+    };
+  }
   if (!r.qBittorrent?.healthy)
     return {
       label: r.qBittorrent?.running

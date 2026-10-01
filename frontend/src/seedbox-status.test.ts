@@ -51,3 +51,20 @@ describe("Seedbox status", () => {
     expect(appStatusLabel("unknown")).toBe("Unknown");
   });
 });
+
+it("explains memory kills only while torrent checks fail", () => {
+  const r = {
+    ...report,
+    control: undefined,
+    vpn: { verified: true },
+    qBittorrent: { healthy: false, oomKilled: true, memoryLimitMiB: 512 },
+  } as Runtime;
+  expect(seedboxStatus(r).label).toBe("Memory limit reached");
+  expect(
+    seedboxStatus({
+      ...r,
+      health: "healthy",
+      qBittorrent: { ...r.qBittorrent!, healthy: true },
+    }).label,
+  ).toBe("Healthy");
+});

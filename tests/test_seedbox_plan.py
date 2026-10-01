@@ -157,3 +157,12 @@ def test_legacy_mapping_cannot_shadow_system_or_existing_storage(change):
 def test_duplicate_legacy_mount_rejected():
     with pytest.raises(ValidationError):
         paths(extraStorage=[extra(), extra()])
+
+
+def test_torrent_memory_supports_ten_gib_without_changing_vpn_budget():
+    plan = compose_plan(spec(torrentMemoryMiB=10240), paths())
+    assert plan["services"]["torrent"]["mem_limit"] == "10240m"
+    assert plan["services"]["torrent"]["memswap_limit"] == "10240m"
+    assert plan["services"]["vpn"]["mem_limit"] == "256m"
+    with pytest.raises(ValidationError):
+        spec(torrentMemoryMiB=16385)
