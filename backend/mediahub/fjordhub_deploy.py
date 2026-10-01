@@ -142,6 +142,7 @@ def commands(config):
     )
     network = "dhcp" if config.network == "dhcp" else config.address + ",gw=" + config.gateway
     values["networkSpec"] = f"name=eth0,bridge={config.bridge},ip={network},ip6=manual"
+    values["proxmox"] = TEMPLATES["proxmox"]
     return render(TEMPLATES["lxc"])
 
 

@@ -309,9 +309,18 @@ export function FjordHubStorePage() {
                 />
                 <small>
                   Path inside the guest. LXC mode creates a separate managed
-                  data disk here, included in backups.
+                  data disk here, included in backups. Existing media folders must
+                  be mounted separately; selecting a storage pool does not import files.
                 </small>
               </label>
+              {config.target === "lxc" && (
+                <p className="muted">
+                  LXC setup creates a dedicated read-only Proxmox API account
+                  (PVEAuditor across the cluster) and verifies storage discovery.
+                  The API connection uses FjordHub's default self-signed TLS mode
+                  without certificate verification. Use a trusted private network.
+                </p>
+              )}
               <label>
                 Direct FjordHub port
                 <input

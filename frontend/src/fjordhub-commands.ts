@@ -131,6 +131,7 @@ export function fjordHubCommands(c: FjordHubConfig): string {
   return render(templates.lxc, {
     ...c,
     guest,
+    proxmox: templates.proxmox,
     ctidLine: c.ctid
       ? `CTID=${quote(c.ctid)}`
       : "CTID=$(pvesh get /cluster/nextid)",
