@@ -80,6 +80,8 @@ class TorrentService:
                             "dlspeed",
                             "upspeed",
                             "ratio",
+                            "uploaded",
+                            "downloaded",
                             "eta",
                             "size",
                             "num_seeds",

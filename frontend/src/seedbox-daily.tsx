@@ -18,6 +18,8 @@ type Torrent = {
   dlspeed: number;
   upspeed: number;
   ratio: number;
+  uploaded?: number;
+  downloaded?: number;
   eta: number;
   size: number;
   actionsAllowed: boolean;
@@ -378,7 +380,7 @@ export function SeedboxDaily({
                       "Status",
                       "Download",
                       "Upload",
-                      "Ratio",
+                      "Client ratio",
                       "ETA",
                       "Size",
                       "Actions",
@@ -411,7 +413,19 @@ export function SeedboxDaily({
                       <td>{t.state}</td>
                       <td>{bytes(t.dlspeed)}/s</td>
                       <td>{bytes(t.upspeed)}/s</td>
-                      <td>{t.ratio.toFixed(2)}</td>
+                      <td title="qBittorrent upload/download history for this torrent. Tracker totals and credited traffic may differ.">
+                        {t.ratio.toFixed(2)}
+                        {typeof t.uploaded === "number" &&
+                          typeof t.downloaded === "number" && (
+                            <small
+                              className="muted"
+                              style={{ display: "block", whiteSpace: "nowrap" }}
+                            >
+                              {bytes(t.uploaded)} up / {bytes(t.downloaded)}{" "}
+                              down
+                            </small>
+                          )}
+                      </td>
                       <td>
                         {t.eta < 0 || t.eta >= 8640000 ? "—" : uptime(t.eta)}
                       </td>
