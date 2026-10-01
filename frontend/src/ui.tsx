@@ -1,3 +1,4 @@
+import { seedboxSections, seedboxSection } from "./seedbox-sections";
 import {
   useCallback,
   useEffect,
@@ -7,6 +8,7 @@ import {
 } from "react";
 import {
   NavLink,
+  Link,
   Navigate,
   Route,
   Routes,
@@ -540,12 +542,45 @@ function Shell({
                           left.name.localeCompare(right.name),
                         )
                         .map((app) => (
-                          <NavLink to={app.detailPath || "/apps"} key={app.id}>
-                            <span
-                              className={`app-shortcut-dot ${app.health.status}`}
-                            />
-                            <span>{app.name}</span>
-                          </NavLink>
+                          <div key={app.id}>
+                            <NavLink to={app.detailPath || "/apps"}>
+                              <span
+                                className={`app-shortcut-dot ${app.health.status}`}
+                              />
+                              <span>{app.name}</span>
+                            </NavLink>
+                            {app.packageId === "org.mediahub.seedbox" &&
+                              location.pathname === app.detailPath && (
+                                <div className="seedbox-subnav">
+                                  {seedboxSections.map(([key, label]) => (
+                                    <Link
+                                      key={key}
+                                      to={`${app.detailPath}?section=${key}`}
+                                      className={
+                                        seedboxSection(
+                                          new URLSearchParams(
+                                            location.search,
+                                          ).get("section"),
+                                        ) === key
+                                          ? "active"
+                                          : ""
+                                      }
+                                      aria-current={
+                                        seedboxSection(
+                                          new URLSearchParams(
+                                            location.search,
+                                          ).get("section"),
+                                        ) === key
+                                          ? "page"
+                                          : undefined
+                                      }
+                                    >
+                                      {label}
+                                    </Link>
+                                  ))}
+                                </div>
+                              )}
+                          </div>
                         ))}
                       {!navigationApps && (
                         <span className="app-shortcuts-loading">

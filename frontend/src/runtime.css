@@ -573,3 +573,7 @@
   accent-color: #64d5b9;
   display: block;
 }
+
+.seedbox-sections { display: flex; flex-wrap: wrap; gap: 8px; }
+.seedbox-subnav { padding-left: 18px; border-left: 1px solid var(--border); margin-left: 12px; }
+.seedbox-subnav a { font-size: 0.85rem; }

@@ -63,9 +63,11 @@ type Locations = {
 };
 
 export function SeedboxDaily({
+  section,
   externalIp,
   forwarding,
 }: {
+  section: "torrents" | "vpn";
   externalIp?: string | null;
   forwarding?: string;
 }) {
@@ -239,367 +241,395 @@ export function SeedboxDaily({
         </p>
       )}
       <div className="runtime-panels">
-        <Panel title="VPN Location">
-          <ErrorBox error={locationError} />
-          <div className="runtime-row">
-            <span>Current</span>
-            <strong>{location?.current?.country || "Not identified"}</strong>
-          </div>
-          <div className="runtime-row">
-            <span>External IP</span>
-            <strong>{externalIp || "Not verified"}</strong>
-          </div>
-          <div className="runtime-row">
-            <span>Port forwarding</span>
-            <strong>{forwarding || "Not verified"}</strong>
-          </div>
-          <label>
-            Country
-            <select
-              value={selected}
-              disabled={busy || changing}
-              onChange={(e) => {
-                setCountry(e.target.value);
-                setServer("automatic");
-              }}
-            >
-              <option value="">Select country</option>
-              {location?.countries.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Server
-            <select
-              value={server}
-              disabled={busy || changing}
-              onChange={(e) => setServer(e.target.value)}
-            >
-              <option value="automatic">Automatic · P2P server</option>
-              {location?.servers
-                .filter((s) => s.country === selected)
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} · {s.id}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {server === "automatic" && (
+        {section === "vpn" && (
+          <Panel title="VPN Location">
+            <ErrorBox error={locationError} />
+            <div className="runtime-row">
+              <span>Current</span>
+              <strong>{location?.current?.country || "Not identified"}</strong>
+            </div>
+            <div className="runtime-row">
+              <span>External IP</span>
+              <strong>{externalIp || "Not verified"}</strong>
+            </div>
+            <div className="runtime-row">
+              <span>Port forwarding</span>
+              <strong>{forwarding || "Not verified"}</strong>
+            </div>
             <label>
-              Compare server speeds
+              Country
               <select
-                value={
-                  intervalHours ?? location?.automation?.intervalHours ?? 6
-                }
+                value={selected}
                 disabled={busy || changing}
-                onChange={(e) => setIntervalHours(Number(e.target.value))}
+                onChange={(e) => {
+                  setCountry(e.target.value);
+                  setServer("automatic");
+                }}
               >
-                <option value={6}>
-                  Every 6 hours ? switch only for a clear improvement
-                </option>
-                <option value={24}>Once a day ? fewer interruptions</option>
-                <option value={0}>Only when I select automatic manually</option>
+                <option value="">Select country</option>
+                {location?.countries.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
             </label>
-          )}
-          {location?.automation?.message && (
-            <p role="status">{location.automation.message}</p>
-          )}
-          {location?.automation?.samples &&
-            Object.entries(location.automation.samples).map(([id, sample]) => (
-              <p className="muted" key={id}>
-                {id}: {sample.downloadMbps} Mbps down / {sample.uploadMbps} Mbps
-                up
-              </p>
-            ))}
-          <button
-            className="primary"
-            disabled={busy || changing || !location?.available || !selected}
-            onClick={() => void change()}
-          >
-            Change VPN location
-          </button>
-          {location?.operation && location.operation.state !== "idle" ? (
-            <OperationProgress
-              activeOnly
-              operation={{
-                title: "VPN switch and qBittorrent restart",
-                status: changing
-                  ? "running"
-                  : location.operation.state === "healthy"
-                    ? "success"
-                    : "error",
-                progress: location.operation.progress ?? 0,
-                message:
-                  locationError && changing
-                    ? "Reconnecting to VPN switch status. The server continues working."
-                    : location.operation.step || "Preparing VPN switch",
-                connectionLost: Boolean(locationError),
-                steps: [],
-                details: location.operation.server
-                  ? [`Server: ${location.operation.server}`]
-                  : [],
-              }}
-            />
-          ) : (
-            <p role="status">Ready</p>
-          )}
-          <p className="muted">
-            {location?.current?.countryEvidence}.{" "}
-            {location?.automaticDescription}
-          </p>
-        </Panel>
-        <Panel title="Add Torrent">
-          <form onSubmit={(e) => void add(e)}>
             <label>
-              Input type
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="magnet">Magnet Link</option>
-                <option value="file">Torrent File</option>
-              </select>
-            </label>
-            {mode === "magnet" ? (
-              <label>
-                Magnet link
-                <textarea
-                  value={magnet}
-                  onChange={(e) => setMagnet(e.target.value)}
-                  maxLength={16384}
-                  required
-                  placeholder="magnet:?xt=urn:btih:…"
-                  autoComplete="off"
-                />
-              </label>
-            ) : (
-              <label>
-                Torrent file
-                <input
-                  type="file"
-                  accept=".torrent"
-                  required
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                />
-              </label>
-            )}
-            <label>
-              Download location
+              Server
               <select
-                value={downloadLocation}
-                disabled={
-                  busy || changing || !(list?.downloadLocations?.length ?? 0)
-                }
-                onChange={(event) => setDownloadLocation(event.target.value)}
+                value={server}
+                disabled={busy || changing}
+                onChange={(e) => setServer(e.target.value)}
               >
-                {list?.downloadLocations?.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.storageLabel || "Downloads"}
-                  </option>
-                ))}
+                <option value="automatic">Automatic · P2P server</option>
+                {location?.servers
+                  .filter((s) => s.country === selected)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} · {s.id}
+                    </option>
+                  ))}
               </select>
             </label>
-            {downloadLocationsSupported === false && (
-              <p className="muted">
-                This Seedbox Agent still supports the Downloads top folder only.
-                Install the matching Agent update and configure writable logical
-                storage to enable Film, TV and Other choices.
-              </p>
+            {server === "automatic" && (
+              <label>
+                Compare server speeds
+                <select
+                  value={
+                    intervalHours ?? location?.automation?.intervalHours ?? 6
+                  }
+                  disabled={busy || changing}
+                  onChange={(e) => setIntervalHours(Number(e.target.value))}
+                >
+                  <option value={6}>
+                    Every 6 hours ? switch only for a clear improvement
+                  </option>
+                  <option value={24}>Once a day ? fewer interruptions</option>
+                  <option value={0}>
+                    Only when I select automatic manually
+                  </option>
+                </select>
+              </label>
             )}
-            <label>
-              <input
-                type="checkbox"
-                checked={start}
-                onChange={(e) => setStart(e.target.checked)}
-              />{" "}
-              Start immediately after safety checks
-            </label>
-            <TorrentRetention
-              value={retention}
-              onChange={setRetention}
-              disabled={busy}
-              supported={!!list?.retentionSupported}
-            />
+            {location?.automation?.message && (
+              <p role="status">{location.automation.message}</p>
+            )}
+            {location?.automation?.samples &&
+              Object.entries(location.automation.samples).map(
+                ([id, sample]) => (
+                  <p className="muted" key={id}>
+                    {id}: {sample.downloadMbps} Mbps down / {sample.uploadMbps}{" "}
+                    Mbps up
+                  </p>
+                ),
+              )}
             <button
               className="primary"
-              disabled={busy || changing || !list || !!listError}
+              disabled={busy || changing || !location?.available || !selected}
+              onClick={() => void change()}
             >
-              Add torrent
+              Change VPN location
             </button>
+            {location?.operation && location.operation.state !== "idle" ? (
+              <OperationProgress
+                activeOnly
+                operation={{
+                  title: "VPN switch and qBittorrent restart",
+                  status: changing
+                    ? "running"
+                    : location.operation.state === "healthy"
+                      ? "success"
+                      : "error",
+                  progress: location.operation.progress ?? 0,
+                  message:
+                    locationError && changing
+                      ? "Reconnecting to VPN switch status. The server continues working."
+                      : location.operation.step || "Preparing VPN switch",
+                  connectionLost: Boolean(locationError),
+                  steps: [],
+                  details: location.operation.server
+                    ? [`Server: ${location.operation.server}`]
+                    : [],
+                }}
+              />
+            ) : (
+              <p role="status">Ready</p>
+            )}
             <p className="muted">
-              Paused by default. Only approved media locations can be selected.
-              Private tracker links are not included in MediaHub events.
+              {location?.current?.countryEvidence}.{" "}
+              {location?.automaticDescription}
             </p>
-          </form>
-        </Panel>
-      </div>
-      <SeedboxRSS
-        storageId={list?.storageId}
-        locations={list?.downloadLocations || []}
-        onAdded={reload}
-        retentionSupported={list?.retentionSupported}
-      />
-      <Panel title="Torrents">
-        <ErrorBox error={listError} />
-        <div className="torrent-table-scroll">
-          <table className="torrent-table">
-            <thead>
-              <tr>
-                {[
-                  "Name",
-                  "Progress",
-                  "Status",
-                  "Download",
-                  "Upload",
-                  "Ratio",
-                  "ETA",
-                  "Size",
-                  "Actions",
-                ].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {list?.items.map((t) => (
-                <tr key={t.hash}>
-                  <td className="torrent-name">
-                    {t.name}
-                    <small className="muted">
-                      {t.num_seeds ?? 0} seeds · {t.num_leechs ?? 0} peers
-                      {t.category ? ` · ${t.category}` : ""}
-                      {t.seeding_time
-                        ? ` · Seeded ${uptime(t.seeding_time)}`
-                        : ""}
-                    </small>
-                  </td>
-                  <td>
-                    <progress
-                      max={1}
-                      value={t.progress}
-                      aria-label={`${t.name} progress`}
-                    />
-                    <small>{(t.progress * 100).toFixed(1)}%</small>
-                  </td>
-                  <td>{t.state}</td>
-                  <td>{bytes(t.dlspeed)}/s</td>
-                  <td>{bytes(t.upspeed)}/s</td>
-                  <td>{t.ratio.toFixed(2)}</td>
-                  <td>{t.eta < 0 || t.eta >= 8640000 ? "—" : uptime(t.eta)}</td>
-                  <td>{bytes(t.size)}</td>
-                  <td>
-                    <div className="torrent-actions">
-                      <button
-                        disabled={
-                          busy || changing || !!listError || !t.actionsAllowed
-                        }
-                        onClick={() => void action(t.hash, "pause")}
-                      >
-                        Pause
-                      </button>
-                      <button
-                        disabled={
-                          busy || changing || !!listError || !t.actionsAllowed
-                        }
-                        onClick={() => void action(t.hash, "resume")}
-                      >
-                        Resume
-                      </button>
-                      <button
-                        disabled={
-                          busy || changing || !!listError || !t.actionsAllowed
-                        }
-                        onClick={() => void action(t.hash, "recheck")}
-                      >
-                        Recheck
-                      </button>
-                      <button
-                        disabled={
-                          busy || changing || !!listError || !t.actionsAllowed
-                        }
-                        onClick={() => void action(t.hash, "remove")}
-                      >
-                        Remove job
-                      </button>
-                      {list?.retentionSupported && (
-                        <button
-                          disabled={busy || changing || !t.actionsAllowed}
-                          onClick={() =>
-                            setCleanupEdit({
-                              hash: t.hash,
-                              name: t.name,
-                              rule: t.retention || defaultRetention,
-                            })
-                          }
-                        >
-                          Cleanup
-                        </button>
-                      )}
-                      {t.retention && (
-                        <small>
-                          Cleanup: {t.retention.mode} ·{" "}
-                          {t.retention.action === "delete_files"
-                            ? "deletes files"
-                            : "keeps files"}
-                        </small>
-                      )}
-                      {t.retentionMessage && (
-                        <small role="status">{t.retentionMessage}</small>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!list?.items.length && !listError && (
-          <p>No torrents yet. Add a magnet link or torrent file above.</p>
+          </Panel>
         )}
-        <p className="muted">
-          Remove job always keeps files. Automatic cleanup can delete files only
-          when you explicitly select that action. Up to 500 torrents shown.
-        </p>
-      </Panel>
-      {cleanupEdit && (
-        <Panel title="Torrent cleanup settings">
-          <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
-          <TorrentRetention
-            value={cleanupEdit.rule}
-            onChange={(rule) => setCleanupEdit({ ...cleanupEdit, rule })}
-            disabled={busy}
+        {section === "torrents" && (
+          <Panel title="Add Torrent">
+            <form onSubmit={(e) => void add(e)}>
+              <label>
+                Input type
+                <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                  <option value="magnet">Magnet Link</option>
+                  <option value="file">Torrent File</option>
+                </select>
+              </label>
+              {mode === "magnet" ? (
+                <label>
+                  Magnet link
+                  <textarea
+                    value={magnet}
+                    onChange={(e) => setMagnet(e.target.value)}
+                    maxLength={16384}
+                    required
+                    placeholder="magnet:?xt=urn:btih:…"
+                    autoComplete="off"
+                  />
+                </label>
+              ) : (
+                <label>
+                  Torrent file
+                  <input
+                    type="file"
+                    accept=".torrent"
+                    required
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+              )}
+              <label>
+                Download location
+                <select
+                  value={downloadLocation}
+                  disabled={
+                    busy || changing || !(list?.downloadLocations?.length ?? 0)
+                  }
+                  onChange={(event) => setDownloadLocation(event.target.value)}
+                >
+                  {list?.downloadLocations?.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.storageLabel || "Downloads"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {downloadLocationsSupported === false && (
+                <p className="muted">
+                  This Seedbox Agent still supports the Downloads top folder
+                  only. Install the matching Agent update and configure writable
+                  logical storage to enable Film, TV and Other choices.
+                </p>
+              )}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={start}
+                  onChange={(e) => setStart(e.target.checked)}
+                />{" "}
+                Start immediately after safety checks
+              </label>
+              <TorrentRetention
+                value={retention}
+                onChange={setRetention}
+                disabled={busy}
+                supported={!!list?.retentionSupported}
+              />
+              <button
+                className="primary"
+                disabled={busy || changing || !list || !!listError}
+              >
+                Add torrent
+              </button>
+              <p className="muted">
+                Paused by default. Only approved media locations can be
+                selected. Private tracker links are not included in MediaHub
+                events.
+              </p>
+            </form>
+          </Panel>
+        )}
+      </div>
+      {section === "torrents" && (
+        <>
+          <SeedboxRSS
+            storageId={list?.storageId}
+            locations={list?.downloadLocations || []}
+            onAdded={reload}
+            retentionSupported={list?.retentionSupported}
           />
-          <p className="muted">
-            Applies to this torrent's existing seeding time and uploaded bytes.
-            If its thresholds are already reached, cleanup can run on the next
-            check.
-          </p>
-          <div className="button-row">
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                setError("");
-                void api("/seedbox/torrents/retention", "POST", {
-                  hash: cleanupEdit.hash,
-                  retention: cleanupEdit.rule,
-                })
-                  .then(() => {
-                    setCleanupEdit(null);
-                    reload();
-                  })
-                  .catch((e) => setError(e.message))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Save cleanup settings
-            </button>
-            <button disabled={busy} onClick={() => setCleanupEdit(null)}>
-              Cancel
-            </button>
-          </div>
-        </Panel>
+          <Panel title="Torrents">
+            <ErrorBox error={listError} />
+            <div className="torrent-table-scroll">
+              <table className="torrent-table">
+                <thead>
+                  <tr>
+                    {[
+                      "Name",
+                      "Progress",
+                      "Status",
+                      "Download",
+                      "Upload",
+                      "Ratio",
+                      "ETA",
+                      "Size",
+                      "Actions",
+                    ].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list?.items.map((t) => (
+                    <tr key={t.hash}>
+                      <td className="torrent-name">
+                        {t.name}
+                        <small className="muted">
+                          {t.num_seeds ?? 0} seeds · {t.num_leechs ?? 0} peers
+                          {t.category ? ` · ${t.category}` : ""}
+                          {t.seeding_time
+                            ? ` · Seeded ${uptime(t.seeding_time)}`
+                            : ""}
+                        </small>
+                      </td>
+                      <td>
+                        <progress
+                          max={1}
+                          value={t.progress}
+                          aria-label={`${t.name} progress`}
+                        />
+                        <small>{(t.progress * 100).toFixed(1)}%</small>
+                      </td>
+                      <td>{t.state}</td>
+                      <td>{bytes(t.dlspeed)}/s</td>
+                      <td>{bytes(t.upspeed)}/s</td>
+                      <td>{t.ratio.toFixed(2)}</td>
+                      <td>
+                        {t.eta < 0 || t.eta >= 8640000 ? "—" : uptime(t.eta)}
+                      </td>
+                      <td>{bytes(t.size)}</td>
+                      <td>
+                        <div className="torrent-actions">
+                          <button
+                            disabled={
+                              busy ||
+                              changing ||
+                              !!listError ||
+                              !t.actionsAllowed
+                            }
+                            onClick={() => void action(t.hash, "pause")}
+                          >
+                            Pause
+                          </button>
+                          <button
+                            disabled={
+                              busy ||
+                              changing ||
+                              !!listError ||
+                              !t.actionsAllowed
+                            }
+                            onClick={() => void action(t.hash, "resume")}
+                          >
+                            Resume
+                          </button>
+                          <button
+                            disabled={
+                              busy ||
+                              changing ||
+                              !!listError ||
+                              !t.actionsAllowed
+                            }
+                            onClick={() => void action(t.hash, "recheck")}
+                          >
+                            Recheck
+                          </button>
+                          <button
+                            disabled={
+                              busy ||
+                              changing ||
+                              !!listError ||
+                              !t.actionsAllowed
+                            }
+                            onClick={() => void action(t.hash, "remove")}
+                          >
+                            Remove job
+                          </button>
+                          {list?.retentionSupported && (
+                            <button
+                              disabled={busy || changing || !t.actionsAllowed}
+                              onClick={() =>
+                                setCleanupEdit({
+                                  hash: t.hash,
+                                  name: t.name,
+                                  rule: t.retention || defaultRetention,
+                                })
+                              }
+                            >
+                              Cleanup
+                            </button>
+                          )}
+                          {t.retention && (
+                            <small>
+                              Cleanup: {t.retention.mode} ·{" "}
+                              {t.retention.action === "delete_files"
+                                ? "deletes files"
+                                : "keeps files"}
+                            </small>
+                          )}
+                          {t.retentionMessage && (
+                            <small role="status">{t.retentionMessage}</small>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!list?.items.length && !listError && (
+              <p>No torrents yet. Add a magnet link or torrent file above.</p>
+            )}
+            <p className="muted">
+              Remove job always keeps files. Automatic cleanup can delete files
+              only when you explicitly select that action. Up to 500 torrents
+              shown.
+            </p>
+          </Panel>
+          {cleanupEdit && (
+            <Panel title="Torrent cleanup settings">
+              <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
+              <TorrentRetention
+                value={cleanupEdit.rule}
+                onChange={(rule) => setCleanupEdit({ ...cleanupEdit, rule })}
+                disabled={busy}
+              />
+              <p className="muted">
+                Applies to this torrent's existing seeding time and uploaded
+                bytes. If its thresholds are already reached, cleanup can run on
+                the next check.
+              </p>
+              <div className="button-row">
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    setError("");
+                    void api("/seedbox/torrents/retention", "POST", {
+                      hash: cleanupEdit.hash,
+                      retention: cleanupEdit.rule,
+                    })
+                      .then(() => {
+                        setCleanupEdit(null);
+                        reload();
+                      })
+                      .catch((e) => setError(e.message))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Save cleanup settings
+                </button>
+                <button disabled={busy} onClick={() => setCleanupEdit(null)}>
+                  Cancel
+                </button>
+              </div>
+            </Panel>
+          )}
+        </>
       )}
     </div>
   );

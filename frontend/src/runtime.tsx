@@ -1,7 +1,12 @@
+import {
+  seedboxSections,
+  seedboxSection,
+  type SeedboxSection,
+} from "./seedbox-sections";
 import { PortReachability } from "./port-reachability";
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Activity, Cloud, HardDrive, ShieldCheck, Server } from "lucide-react";
 import { useLoad, Panel, ErrorBox } from "./phase2";
 import { bytes, uptime } from "./format";
@@ -221,7 +226,13 @@ export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
     </div>
   );
 }
-function SeedboxPanel({ report: r }: { report: Runtime }) {
+function SeedboxPanel({
+  report: r,
+  section,
+}: {
+  report: Runtime;
+  section: SeedboxSection;
+}) {
   const vpn = r.vpn,
     q = r.qBittorrent,
     disk = r.storage,
@@ -254,195 +265,215 @@ function SeedboxPanel({ report: r }: { report: Runtime }) {
         </div>
       )}
       <div className="runtime-panels">
-        <Panel title="VPN protection">
-          <div className="runtime-panel-title">
-            <ShieldCheck />
-            <strong>
-              {vpn?.verified
-                ? "Connected · verified"
-                : "Disconnected / unverified"}
-            </strong>
-          </div>
-          <dl>
-            <Row
-              label="External IP"
-              value={vpn?.externalIp || "Not verified"}
-            />
-            <Row label="Provider" value={vpn?.provider || "Unavailable"} />
-            <Row label="Protocol" value={vpn?.protocol || "Unavailable"} />
-            <Row label="Last verified" value={stamp(vpn?.lastVerified)} />
-            <Row
-              label="Container started — not tunnel uptime"
-              value={
-                vpn?.connectedSince
-                  ? new Date(vpn.connectedSince).toLocaleString()
-                  : "Unavailable"
-              }
-            />
-          </dl>
-          <h3>Torrent port forwarding</h3>
-          {r.portForwarding?.lastError && (
-            <p role="alert" className="notice">
-              {r.portForwarding.lastError}
-            </p>
-          )}
-          <dl>
-            <Row
-              label="Lease status"
-              value={r.portForwarding?.status || "Not checked"}
-            />
-            <Row
-              label="Current port"
-              value={r.portForwarding?.currentPort ?? "Not assigned"}
-            />
-            <Row
-              label="Last renewed"
-              value={stamp(r.portForwarding?.lastRenewed)}
-            />
-            <Row
-              label="Lease expires"
-              value={stamp(r.portForwarding?.expiresAt)}
-            />
-            <div className="runtime-row">
-              <dt>qBittorrent port configured</dt>
-              <dd>
-                <Verified value={r.portForwarding?.qBittorrentVerified} />
-              </dd>
+        {section === "vpn" && (
+          <Panel title="VPN protection">
+            <div className="runtime-panel-title">
+              <ShieldCheck />
+              <strong>
+                {vpn?.verified
+                  ? "Connected · verified"
+                  : "Disconnected / unverified"}
+              </strong>
             </div>
-            <div className="runtime-row">
-              <dt>Listening socket on VPN port</dt>
-              <dd>
-                {r.portForwarding?.listenerVerified
-                  ? "Verified"
-                  : r.portForwarding?.listenerCheckSupported
-                    ? "Not listening / not verified"
-                    : "Update Agent to check socket"}
-              </dd>
-            </div>
-          </dl>
-          <PortReachability
-            address={vpn?.externalIp}
-            port={r.portForwarding?.currentPort}
-            eligible={
-              !!vpn?.verified &&
-              r.portForwarding?.status === "healthy" &&
-              (r.portForwarding?.expiresAt || 0) > Date.now() / 1000
-            }
-          />
-          <p className="muted">
-            Torrent traffic through the VPN only. No router or WebUI port is
-            opened.
-          </p>
-        </Panel>
-        <Panel title="qBittorrent">
-          <div className="runtime-panel-title">
-            <Activity />
-            <strong>{q?.running ? "Running" : "Stopped / unavailable"}</strong>
-            <span>{q?.version}</span>
-          </div>
-          <div className="runtime-speeds">
-            <div>
-              <span>Download</span>
-              <strong>{size(q?.downloadSpeed)}/s</strong>
-            </div>
-            <div>
-              <span>Upload</span>
-              <strong>{size(q?.uploadSpeed)}/s</strong>
-            </div>
-          </div>
-          <dl>
-            <div className="runtime-row">
-              <dt>Authenticated API</dt>
-              <dd>
-                <Verified value={q?.apiAuthenticated} />
-              </dd>
-            </div>
-            <div className="runtime-row">
-              <dt>VPN interface binding</dt>
-              <dd>
-                <Verified value={q?.bindingVerified} />
-              </dd>
-            </div>
-            <div className="runtime-row">
-              <dt>Shared VPN namespace</dt>
-              <dd>
-                <Verified value={q?.namespaceVerified} />
-              </dd>
-            </div>
-          </dl>
-          <div className="runtime-counts">
-            {[
-              ["Total", counts?.torrents],
-              ["Downloading", counts?.downloading],
-              ["Seeding", counts?.seeding],
-              ["Paused", counts?.paused],
-              ["Errors", counts?.errors],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <strong>{value ?? "—"}</strong>
-                <span>{label}</span>
+            <dl>
+              <Row
+                label="External IP"
+                value={vpn?.externalIp || "Not verified"}
+              />
+              <Row label="Provider" value={vpn?.provider || "Unavailable"} />
+              <Row label="Protocol" value={vpn?.protocol || "Unavailable"} />
+              <Row label="Last verified" value={stamp(vpn?.lastVerified)} />
+              <Row
+                label="Container started — not tunnel uptime"
+                value={
+                  vpn?.connectedSince
+                    ? new Date(vpn.connectedSince).toLocaleString()
+                    : "Unavailable"
+                }
+              />
+            </dl>
+            <h3>Torrent port forwarding</h3>
+            {r.portForwarding?.lastError && (
+              <p role="alert" className="notice">
+                {r.portForwarding.lastError}
+              </p>
+            )}
+            <dl>
+              <Row
+                label="Lease status"
+                value={r.portForwarding?.status || "Not checked"}
+              />
+              <Row
+                label="Current port"
+                value={r.portForwarding?.currentPort ?? "Not assigned"}
+              />
+              <Row
+                label="Last renewed"
+                value={stamp(r.portForwarding?.lastRenewed)}
+              />
+              <Row
+                label="Lease expires"
+                value={stamp(r.portForwarding?.expiresAt)}
+              />
+              <div className="runtime-row">
+                <dt>qBittorrent port configured</dt>
+                <dd>
+                  <Verified value={r.portForwarding?.qBittorrentVerified} />
+                </dd>
               </div>
-            ))}
-          </div>
-        </Panel>
-        <Panel title="Downloads storage">
-          <div className="runtime-panel-title">
-            <HardDrive />
-            <strong>{disk?.mounted ? "Mounted" : "Storage unavailable"}</strong>
-          </div>
-          <dl>
-            <Row label="Filesystem" value={disk?.filesystem || "Unavailable"} />
-            <Row label="Source" value={disk?.source || "Unavailable"} />
-            <div className="runtime-row">
-              <dt>App UID write/read probe</dt>
-              <dd>
-                <Verified value={disk?.appWritable} />
-              </dd>
+              <div className="runtime-row">
+                <dt>Listening socket on VPN port</dt>
+                <dd>
+                  {r.portForwarding?.listenerVerified
+                    ? "Verified"
+                    : r.portForwarding?.listenerCheckSupported
+                      ? "Not listening / not verified"
+                      : "Update Agent to check socket"}
+                </dd>
+              </div>
+            </dl>
+            <PortReachability
+              address={vpn?.externalIp}
+              port={r.portForwarding?.currentPort}
+              eligible={
+                !!vpn?.verified &&
+                r.portForwarding?.status === "healthy" &&
+                (r.portForwarding?.expiresAt || 0) > Date.now() / 1000
+              }
+            />
+            <p className="muted">
+              Torrent traffic through the VPN only. No router or WebUI port is
+              opened.
+            </p>
+          </Panel>
+        )}
+        {section === "torrents" && (
+          <Panel title="qBittorrent">
+            <div className="runtime-panel-title">
+              <Activity />
+              <strong>
+                {q?.running ? "Running" : "Stopped / unavailable"}
+              </strong>
+              <span>{q?.version}</span>
             </div>
-            <Row label="Mount observation" value={stamp(disk?.verifiedAt)} />
-            <Row label="Capacity" value={size(disk?.totalBytes)} />
-            <Row label="Used" value={size(disk?.usedBytes)} />
-            <Row label="Free" value={size(disk?.freeBytes)} />
-          </dl>
-          {disk?.totalBytes != null && disk.usedBytes != null && (
-            <progress
-              aria-label="Storage used"
-              max={disk.totalBytes}
-              value={disk.usedBytes}
-            />
-          )}
-        </Panel>
-        <Panel title="Seedbox host">
-          <div className="runtime-panel-title">
-            <Server />
-            <strong>{r.agentOnline ? "Agent online" : "Agent offline"}</strong>
-          </div>
-          <dl>
-            <Row
-              label="Docker"
-              value={r.dockerHealthy ? "Available" : "Unavailable"}
-            />
-            <Row
-              label="CPU"
-              value={
-                host?.cpuPercent == null
-                  ? "Sampling / unavailable"
-                  : `${host.cpuPercent.toFixed(1)}% · ${host.cpuCores} cores`
-              }
-            />
-            <Row label="RAM used" value={size(host?.ramUsedBytes)} />
-            <Row label="RAM available" value={size(host?.ramAvailableBytes)} />
-            <Row label="RAM total" value={size(host?.ramTotalBytes)} />
-            <Row
-              label="Host uptime"
-              value={
-                host?.uptimeSeconds == null
-                  ? "Unavailable"
-                  : uptime(host.uptimeSeconds)
-              }
-            />
-          </dl>
-        </Panel>
+            <div className="runtime-speeds">
+              <div>
+                <span>Download</span>
+                <strong>{size(q?.downloadSpeed)}/s</strong>
+              </div>
+              <div>
+                <span>Upload</span>
+                <strong>{size(q?.uploadSpeed)}/s</strong>
+              </div>
+            </div>
+            <dl>
+              <div className="runtime-row">
+                <dt>Authenticated API</dt>
+                <dd>
+                  <Verified value={q?.apiAuthenticated} />
+                </dd>
+              </div>
+              <div className="runtime-row">
+                <dt>VPN interface binding</dt>
+                <dd>
+                  <Verified value={q?.bindingVerified} />
+                </dd>
+              </div>
+              <div className="runtime-row">
+                <dt>Shared VPN namespace</dt>
+                <dd>
+                  <Verified value={q?.namespaceVerified} />
+                </dd>
+              </div>
+            </dl>
+            <div className="runtime-counts">
+              {[
+                ["Total", counts?.torrents],
+                ["Downloading", counts?.downloading],
+                ["Seeding", counts?.seeding],
+                ["Paused", counts?.paused],
+                ["Errors", counts?.errors],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <strong>{value ?? "—"}</strong>
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
+        {section === "settings" && (
+          <Panel title="Downloads storage">
+            <div className="runtime-panel-title">
+              <HardDrive />
+              <strong>
+                {disk?.mounted ? "Mounted" : "Storage unavailable"}
+              </strong>
+            </div>
+            <dl>
+              <Row
+                label="Filesystem"
+                value={disk?.filesystem || "Unavailable"}
+              />
+              <Row label="Source" value={disk?.source || "Unavailable"} />
+              <div className="runtime-row">
+                <dt>App UID write/read probe</dt>
+                <dd>
+                  <Verified value={disk?.appWritable} />
+                </dd>
+              </div>
+              <Row label="Mount observation" value={stamp(disk?.verifiedAt)} />
+              <Row label="Capacity" value={size(disk?.totalBytes)} />
+              <Row label="Used" value={size(disk?.usedBytes)} />
+              <Row label="Free" value={size(disk?.freeBytes)} />
+            </dl>
+            {disk?.totalBytes != null && disk.usedBytes != null && (
+              <progress
+                aria-label="Storage used"
+                max={disk.totalBytes}
+                value={disk.usedBytes}
+              />
+            )}
+          </Panel>
+        )}
+        {section === "settings" && (
+          <Panel title="Seedbox host">
+            <div className="runtime-panel-title">
+              <Server />
+              <strong>
+                {r.agentOnline ? "Agent online" : "Agent offline"}
+              </strong>
+            </div>
+            <dl>
+              <Row
+                label="Docker"
+                value={r.dockerHealthy ? "Available" : "Unavailable"}
+              />
+              <Row
+                label="CPU"
+                value={
+                  host?.cpuPercent == null
+                    ? "Sampling / unavailable"
+                    : `${host.cpuPercent.toFixed(1)}% · ${host.cpuCores} cores`
+                }
+              />
+              <Row label="RAM used" value={size(host?.ramUsedBytes)} />
+              <Row
+                label="RAM available"
+                value={size(host?.ramAvailableBytes)}
+              />
+              <Row label="RAM total" value={size(host?.ramTotalBytes)} />
+              <Row
+                label="Host uptime"
+                value={
+                  host?.uptimeSeconds == null
+                    ? "Unavailable"
+                    : uptime(host.uptimeSeconds)
+                }
+              />
+            </dl>
+          </Panel>
+        )}
       </div>
     </div>
   );
@@ -686,8 +717,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
     </div>
   );
 }
-const views: Record<string, typeof SeedboxPanel> = {
-  seedbox: SeedboxPanel,
+const views: Record<string, typeof PlexPanel> = {
   plex: PlexPanel,
   cloudflare: CloudflaredPanel,
 };
@@ -769,6 +799,8 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
 }
 export function AppRuntimePage() {
   const { appId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = seedboxSection(searchParams.get("section"));
   const { data, error, reload } = useLoad<{
     view: string;
     report: Runtime;
@@ -880,7 +912,41 @@ export function AppRuntimePage() {
         )}
       </div>
       <ErrorBox error={error} />
-      {View && data ? (
+      {data?.view === "seedbox" && (
+        <nav className="seedbox-sections" aria-label="Seedbox sections">
+          {seedboxSections.map(([key, label]) => (
+            <button
+              key={key}
+              className={section === key ? "primary" : ""}
+              aria-current={section === key ? "page" : undefined}
+              onClick={() =>
+                setSearchParams((previous) => {
+                  const next = new URLSearchParams(previous);
+                  next.set("section", key);
+                  return next;
+                })
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      {data?.view === "seedbox" ? (
+        <SeedboxPanel
+          section={section}
+          report={
+            error
+              ? {
+                  health: "offline",
+                  available: false,
+                  agentOnline: false,
+                  cached: false,
+                }
+              : data.report
+          }
+        />
+      ) : View && data ? (
         <View
           report={
             error
@@ -899,8 +965,9 @@ export function AppRuntimePage() {
       {data?.view === "cloudflare" && (
         <CloudflareSetupManager onSaved={reload} />
       )}
-      {data?.view === "seedbox" && (
+      {data?.view === "seedbox" && section !== "settings" && (
         <SeedboxDaily
+          section={section}
           externalIp={data.report.vpn?.externalIp}
           forwarding={data.report.portForwarding?.status}
         />
@@ -932,147 +999,149 @@ export function AppRuntimePage() {
           </p>
         </Panel>
       )}
-      {data && data.view !== "cloudflare" && (
-        <Panel title="Runtime controls">
-          <p>
-            Actions use the paired Agent. Starting revalidates the required
-            storage and app safety checks.
-          </p>
-          <div className="runtime-toolbar">
-            {(data.view === "plex"
-              ? [
-                  ["start", "Start Plex"],
-                  ["stop", "Stop Plex"],
-                  ["restart", "Restart Plex"],
-                ]
-              : [
-                  ["start", "Start Seedbox"],
-                  ["stop", "Stop Seedbox"],
-                  ["restart", "Restart Seedbox"],
-                  ["restart-vpn", "Restart VPN"],
-                  ["restart-qbittorrent", "Restart qBittorrent"],
-                  ["test-vpn", "Test VPN"],
-                ]
-            ).map(([action, label]) => (
-              <button
-                key={action}
-                disabled={
-                  busy ||
-                  !!error ||
-                  !data.report.available ||
-                  control?.operation.state === "running"
-                }
-                onClick={() => act(action)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {actionError && <div role="alert">{actionError}</div>}
-          {data.view === "plex" && (
-            <>
-              <div className="runtime-toolbar">
-                <a className="runtime-primary-link" href={operatorUrl}>
-                  Open Plex settings
-                </a>
+      {data &&
+        data.view !== "cloudflare" &&
+        (data.view !== "seedbox" || section === "settings") && (
+          <Panel title="Runtime controls">
+            <p>
+              Actions use the paired Agent. Starting revalidates the required
+              storage and app safety checks.
+            </p>
+            <div className="runtime-toolbar">
+              {(data.view === "plex"
+                ? [
+                    ["start", "Start Plex"],
+                    ["stop", "Stop Plex"],
+                    ["restart", "Restart Plex"],
+                  ]
+                : [
+                    ["start", "Start Seedbox"],
+                    ["stop", "Stop Seedbox"],
+                    ["restart", "Restart Seedbox"],
+                    ["restart-vpn", "Restart VPN"],
+                    ["restart-qbittorrent", "Restart qBittorrent"],
+                    ["test-vpn", "Test VPN"],
+                  ]
+              ).map(([action, label]) => (
                 <button
-                  disabled={busy || !!error || !data.report.available}
-                  onClick={checkUpdate}
-                >
-                  Check for updates
-                </button>
-                <button
+                  key={action}
                   disabled={
                     busy ||
-                    data.report.operation?.state === "running" ||
                     !!error ||
-                    !data.report.available
+                    !data.report.available ||
+                    control?.operation.state === "running"
                   }
-                  onClick={() => plexUpdate()}
+                  onClick={() => act(action)}
                 >
-                  Update Plex
+                  {label}
                 </button>
-                {data.report.operation?.state === "failed" && (
-                  <button disabled={busy} onClick={() => plexUpdate(true)}>
-                    Restore previous version
-                  </button>
-                )}
-              </div>
-              <p role="status">
-                {data.report.operation?.message || updateResult}
-              </p>
-            </>
-          )}
-          <p role="status">
-            {control?.operation.action || "No operation"}:{" "}
-            {control?.operation.state || "idle"} {control?.operation.message}
-          </p>
-          {!!control?.manualIntervention.length && (
-            <div role="alert">
-              Manual intervention required:{" "}
-              {control.manualIntervention.join(", ")}. Automatic retries are
-              stopped.
+              ))}
             </div>
-          )}
-          <button onClick={() => setShowLogs(!showLogs)}>
-            {showLogs ? "Hide logs" : "View logs"}
-          </button>
-          {operatorUrl && data.view !== "plex" && (
-            <p>
-              <a href={operatorUrl} rel="noreferrer">
-                {data.view === "plex" ? "Open Plex" : "Open qBittorrent"}
-              </a>
-              {data.view === "seedbox" &&
-                " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled."}
+            {actionError && <div role="alert">{actionError}</div>}
+            {data.view === "plex" && (
+              <>
+                <div className="runtime-toolbar">
+                  <a className="runtime-primary-link" href={operatorUrl}>
+                    Open Plex settings
+                  </a>
+                  <button
+                    disabled={busy || !!error || !data.report.available}
+                    onClick={checkUpdate}
+                  >
+                    Check for updates
+                  </button>
+                  <button
+                    disabled={
+                      busy ||
+                      data.report.operation?.state === "running" ||
+                      !!error ||
+                      !data.report.available
+                    }
+                    onClick={() => plexUpdate()}
+                  >
+                    Update Plex
+                  </button>
+                  {data.report.operation?.state === "failed" && (
+                    <button disabled={busy} onClick={() => plexUpdate(true)}>
+                      Restore previous version
+                    </button>
+                  )}
+                </div>
+                <p role="status">
+                  {data.report.operation?.message || updateResult}
+                </p>
+              </>
+            )}
+            <p role="status">
+              {control?.operation.action || "No operation"}:{" "}
+              {control?.operation.state || "idle"} {control?.operation.message}
             </p>
-          )}
-          {showLogs && data.view === "plex" && appId && (
-            <RemoteRuntimeLogs appId={appId} />
-          )}
-          {showLogs && data.view === "seedbox" && (
-            <>
-              <label>
-                Component{" "}
-                <select
-                  value={component}
-                  onChange={(e) => setComponent(e.target.value)}
-                >
-                  {[
-                    "all",
-                    "seedbox",
-                    "vpn",
-                    "qbittorrent",
-                    "storage",
-                    "recovery",
-                  ].map((c) => (
-                    <option key={c} value={c}>
-                      {c === "seedbox" ? "Seedbox Agent" : c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="muted">
-                Safe, structured Agent diagnostics. Raw container output and
-                credentials are never forwarded.
+            {!!control?.manualIntervention.length && (
+              <div role="alert">
+                Manual intervention required:{" "}
+                {control.manualIntervention.join(", ")}. Automatic retries are
+                stopped.
+              </div>
+            )}
+            <button onClick={() => setShowLogs(!showLogs)}>
+              {showLogs ? "Hide logs" : "View logs"}
+            </button>
+            {operatorUrl && data.view !== "plex" && (
+              <p>
+                <a href={operatorUrl} rel="noreferrer">
+                  {data.view === "plex" ? "Open Plex" : "Open qBittorrent"}
+                </a>
+                {data.view === "seedbox" &&
+                  " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled."}
               </p>
-              {control?.events
-                .filter(
-                  (e) =>
-                    component === "all" ||
-                    e.type.startsWith(component + ".") ||
-                    (component === "recovery" && e.type.includes("recovery")),
-                )
-                .slice()
-                .reverse()
-                .map((e, i) => (
-                  <p key={i}>
-                    {stamp(e.timestamp)} · {e.severity} · {e.message}
-                  </p>
-                ))}
-            </>
-          )}
-        </Panel>
-      )}
+            )}
+            {showLogs && data.view === "plex" && appId && (
+              <RemoteRuntimeLogs appId={appId} />
+            )}
+            {showLogs && data.view === "seedbox" && (
+              <>
+                <label>
+                  Component{" "}
+                  <select
+                    value={component}
+                    onChange={(e) => setComponent(e.target.value)}
+                  >
+                    {[
+                      "all",
+                      "seedbox",
+                      "vpn",
+                      "qbittorrent",
+                      "storage",
+                      "recovery",
+                    ].map((c) => (
+                      <option key={c} value={c}>
+                        {c === "seedbox" ? "Seedbox Agent" : c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="muted">
+                  Safe, structured Agent diagnostics. Raw container output and
+                  credentials are never forwarded.
+                </p>
+                {control?.events
+                  .filter(
+                    (e) =>
+                      component === "all" ||
+                      e.type.startsWith(component + ".") ||
+                      (component === "recovery" && e.type.includes("recovery")),
+                  )
+                  .slice()
+                  .reverse()
+                  .map((e, i) => (
+                    <p key={i}>
+                      {stamp(e.timestamp)} · {e.severity} · {e.message}
+                    </p>
+                  ))}
+              </>
+            )}
+          </Panel>
+        )}
     </div>
   );
 }
