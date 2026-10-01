@@ -104,6 +104,8 @@ export function SeedboxRSS(props: Props) {
       <div className="notice">
         Only future entries download automatically. Entries already present when
         you add a feed or enable automatic downloads are recorded and skipped.
+        Older entries and entries without a valid publication date require
+        manual selection.
       </div>
       <form
         onSubmit={(e) => {

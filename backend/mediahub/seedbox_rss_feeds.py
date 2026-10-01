@@ -5,6 +5,8 @@ import base64
 import json
 import logging
 import time
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -24,6 +26,21 @@ from mediahub.seedbox_wizard_api import target
 KEY = "seedbox_rss_feeds"
 INTERVAL = 300
 router = APIRouter(prefix="/seedbox/rss/feeds", dependencies=[Depends(administrator)])
+
+
+def published_after(row, cutoff, now):
+    """Undated, ambiguous and backdated entries require manual selection."""
+    raw = row.get("published", "")
+    try:
+        try:
+            date = parsedate_to_datetime(raw)
+        except (ValueError, TypeError, IndexError):
+            date = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if date.tzinfo is None:
+            return False
+        return cutoff < date.timestamp() <= now
+    except (ValueError, TypeError, OverflowError):
+        return False
 
 
 class FeedOptions(StrictModel):
@@ -172,11 +189,13 @@ class RSSFeeds:
             if any(f["url"] == url for f in feeds):
                 raise DomainError("rss_duplicate", "This feed is already saved", 409)
             await self.validate_destination(body, client)
+            automatic_since = time.time()
             items = await self.fetch(url)
             feeds.append(
                 dict(
                     **body.model_dump(),
                     url=url,
+                    automaticSince=automatic_since if body.automatic else None,
                     id=uuid4().hex,
                     items=items,
                     seen=[r["id"] for r in items],
@@ -196,6 +215,7 @@ class RSSFeeds:
             await self.validate_destination(body, client)
             if body.automatic and not feed["automatic"]:
                 # Enabling after a pause starts from NOW, never from stale cached items.
+                automatic_since = time.time()
                 items = await self.fetch(feed["url"])
                 seen = set(feed["seen"]) | {r["id"] for r in items}
                 if len(seen) > 100000:
@@ -204,7 +224,13 @@ class RSSFeeds:
                         "Feed history is full. Add the feed again to establish a new baseline.",
                         409,
                     )
-                feed.update(items=items, seen=sorted(seen), pending=[], checkedAt=time.time())
+                feed.update(
+                    items=items,
+                    seen=sorted(seen),
+                    pending=[],
+                    checkedAt=time.time(),
+                    automaticSince=automatic_since,
+                )
             if not body.automatic:
                 feed["pending"] = []
             feed.update(body.model_dump())
@@ -251,7 +277,19 @@ class RSSFeeds:
                 feed["seen"] = sorted(seen | {r["id"] for r in new})
                 feed["items"] = items
                 if feed["automatic"]:
-                    feed["pending"].extend(reversed(new))
+                    now = time.time()
+                    if not isinstance(feed.get("automaticSince"), (int, float)):
+                        # Old installations have no reliable activation timestamp.
+                        # Establish a fresh baseline; never replay their old queue.
+                        feed["automaticSince"] = now
+                        feed["pending"] = []
+                    cutoff = feed["automaticSince"]
+                    feed["pending"] = [
+                        r for r in feed["pending"] if published_after(r, cutoff, now)
+                    ]
+                    feed["pending"].extend(
+                        r for r in reversed(new) if published_after(r, cutoff, now)
+                    )
                 feed["error"] = ""
                 feed["checkedAt"] = time.time()
                 self.save(feeds)  # Persist discovery before any external side effect.

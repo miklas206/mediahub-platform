@@ -1,5 +1,7 @@
 import asyncio
 import json
+import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,7 +17,7 @@ def entry(identifier):
     return {
         "id": identifier,
         "title": identifier,
-        "published": "",
+        "published": datetime.now(timezone.utc).isoformat(),
         "url": "magnet:?xt=urn:btih:" + identifier * 40,
     }
 
@@ -250,5 +252,62 @@ def test_cleanup_requires_capable_agent_and_is_forwarded_to_new_downloads(client
         saved = service.load()[0]
         await module.RSSFeeds.add_item(service, agent, saved, entry("b"), True)
         assert agent.request.call_args.args[2]["retention"]["mode"] == "both"
+
+    asyncio.run(run())
+
+
+def test_backdated_changed_id_and_unknown_dates_never_auto_download(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        old = dict(entry("b"), published="Sun, 22 Feb 2026 08:31:39 +0100")
+        missing = dict(entry("c"), published="")
+        future = dict(entry("d"), published="2999-01-01T00:00:00Z")
+        valid = entry("e")
+        service.fetch.return_value = [old, missing, future, valid]
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 1
+        assert service.add_item.call_args.args[2]["id"] == "e"
+
+    asyncio.run(run())
+
+
+def test_legacy_feed_discards_old_pending_and_rebaselines(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0].pop("automaticSince")
+        feeds[0]["pending"] = [entry("b")]
+        service.save(feeds)
+        service.fetch.return_value = [entry("c")]
+        await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+        assert service.load()[0]["pending"] == []
+        service.fetch.return_value = [entry("d")]
+        await service.check(identifier, force=True)
+        assert service.add_item.call_args.args[2]["id"] == "d"
+
+    asyncio.run(run())
+
+
+def test_publication_timezone_and_invalid_dates():
+    from mediahub.seedbox_rss_feeds import published_after
+
+    assert published_after({"published": "2026-10-01T12:00:00Z"}, 1790855999, 1790856001)
+    assert not published_after({"published": "2026-10-01T12:00:00"}, 0, time.time())
+    assert not published_after({"published": "yesterday"}, 0, time.time())
+
+
+def test_saved_pending_is_rechecked_against_activation_time(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0]["pending"] = [dict(entry("b"), published="2020-01-01T00:00:00Z")]
+        service.save(feeds)
+        await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+        assert service.load()[0]["pending"] == []
 
     asyncio.run(run())
