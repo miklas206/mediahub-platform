@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import "./rss-feeds.css";
@@ -31,7 +31,7 @@ type Props = {
   retentionSupported?: boolean;
 };
 
-export function SeedboxRSS(props: Props) {
+export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
   const [listing, setListing] = useState<Listing>({
     feeds: [],
     intervalSeconds: 300,
@@ -95,117 +95,127 @@ export function SeedboxRSS(props: Props) {
     }
   }
   return (
-    <Panel title="RSS feeds">
-      <ErrorBox error={error} />
-      <p>
-        Each feed has its own destination. Automatic feeds are checked every
-        five minutes, even when this page is closed.
-      </p>
-      <div className="notice">
-        Only future entries download automatically. Entries already present when
-        you add a feed or enable automatic downloads are recorded and skipped.
-        Older entries and entries without a valid publication date require
-        manual selection.
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void change("/seedbox/rss/feeds", "POST", {
-            name,
-            url,
-            automatic,
-            retention,
-            storageId: props.storageId,
-            downloadLocationId: destination,
-          }).then((ok) => {
-            if (ok) {
-              setName("");
-              setUrl("");
-              setAutomatic(false);
-              setRetention(defaultRetention);
-            }
-          });
-        }}
-      >
-        <label>
-          Feed name
-          <input
-            value={name}
-            maxLength={100}
-            required
-            onChange={(e) => setName(e.target.value)}
-            placeholder="For example: Nordic movies"
-          />
-        </label>
-        <label>
-          Private RSS address (including RSS key)
-          <input
-            type="password"
-            value={url}
-            required
-            maxLength={8192}
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Complete https:// RSS address"
-          />
-        </label>
-        <label>
-          Destination for this feed
-          <select
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
+    <>
+      <Panel title="Your feeds">
+        <ErrorBox error={error} />
+        <p className="muted">
+          Automatic feeds are checked every five minutes, even when this page is
+          closed.
+        </p>
+        <div className="rss-feed-list">
+          {" "}
+          {busy && <p role="status">Saving or checking feed…</p>}
+          {!listing.feeds.length && <p>No feeds saved yet.</p>}
+          {listing.feeds.map((feed) => (
+            <FeedCard
+              key={feed.id}
+              feed={feed}
+              {...props}
+              busy={busy}
+              change={change}
+            />
+          ))}
+        </div>
+      </Panel>
+      <div className="torrent-input-grid">
+        {props.addTorrent}
+        <Panel title="Add feed">
+          <div className="notice">
+            Only future entries download automatically. Entries already present
+            when you add a feed or enable automatic downloads are recorded and
+            skipped. Older entries and entries without a valid publication date
+            require manual selection.
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void change("/seedbox/rss/feeds", "POST", {
+                name,
+                url,
+                automatic,
+                retention,
+                storageId: props.storageId,
+                downloadLocationId: destination,
+              }).then((ok) => {
+                if (ok) {
+                  setName("");
+                  setUrl("");
+                  setAutomatic(false);
+                  setRetention(defaultRetention);
+                }
+              });
+            }}
           >
-            {props.locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.storageLabel || "Downloads"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={automatic}
-            onChange={(e) => setAutomatic(e.target.checked)}
-          />
-          Automatically download new entries to this destination
-        </label>
-        <TorrentRetention
-          value={retention}
-          onChange={setRetention}
-          disabled={busy}
-          supported={!!props.retentionSupported}
-        />
-        <button
-          className="primary"
-          disabled={
-            busy ||
-            !props.storageId ||
-            !props.locations.some((l) => l.id === destination) ||
-            listing.feeds.length >= 20
-          }
-        >
-          Add feed and skip existing entries
-        </button>
-      </form>
-      <p className="muted">
-        Up to 20 feeds. Private addresses are stored encrypted. Feed and
-        torrent-file requests use MediaHub's connection; torrent transfers use
-        the Seedbox VPN.
-      </p>
-      {busy && <p role="status">Saving or checking feed…</p>}
-      {!listing.feeds.length && <p>No feeds saved yet.</p>}
-      {listing.feeds.map((feed) => (
-        <FeedCard
-          key={feed.id}
-          feed={feed}
-          {...props}
-          busy={busy}
-          change={change}
-        />
-      ))}
-    </Panel>
+            <label>
+              Feed name
+              <input
+                value={name}
+                maxLength={100}
+                required
+                onChange={(e) => setName(e.target.value)}
+                placeholder="For example: Nordic movies"
+              />
+            </label>
+            <label>
+              Private RSS address (including RSS key)
+              <input
+                type="password"
+                value={url}
+                required
+                maxLength={8192}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Complete https:// RSS address"
+              />
+            </label>
+            <label>
+              Destination for this feed
+              <select
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+              >
+                {props.locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.storageLabel || "Downloads"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={automatic}
+                onChange={(e) => setAutomatic(e.target.checked)}
+              />
+              Automatically download new entries to this destination
+            </label>
+            <TorrentRetention
+              value={retention}
+              onChange={setRetention}
+              disabled={busy}
+              supported={!!props.retentionSupported}
+            />
+            <button
+              className="primary"
+              disabled={
+                busy ||
+                !props.storageId ||
+                !props.locations.some((l) => l.id === destination) ||
+                listing.feeds.length >= 20
+              }
+            >
+              Add feed and skip existing entries
+            </button>
+          </form>
+          <p className="muted">
+            Up to 20 feeds. Private addresses are stored encrypted. Feed and
+            torrent-file requests use MediaHub's connection; torrent transfers
+            use the Seedbox VPN.
+          </p>
+        </Panel>
+      </div>
+    </>
   );
 }
 
@@ -258,11 +268,7 @@ function FeedCard({
     }
   }
   return (
-    <section
-      className="panel rss-feed-card"
-      style={{ marginTop: 20, padding: 16 }}
-      aria-label={feed.name}
-    >
+    <section className="panel rss-feed-card" aria-label={feed.name}>
       <h3>{feed.name}</h3>
       <p>
         <strong>
