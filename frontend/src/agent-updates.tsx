@@ -165,9 +165,43 @@ export function AgentUpdates({
           {check?.message || "Checking the paired Seedbox Agent..."}
         </p>
       )}
-      <button disabled={disabled} onClick={() => void act(reload)}>
-        Check Agent update
-      </button>
+      <div className="button-row">
+        <button disabled={disabled} onClick={() => void act(reload)}>
+          Check Agent update
+        </button>
+        {check?.updateAvailable && (
+          <button
+            className="primary"
+            disabled={disabled || !check.installReady}
+            onClick={() =>
+              void act(async () => {
+                starting.current = true;
+                startGeneration.current += 1;
+                try {
+                  const job = await api<Job>(
+                    "/updates/seedbox-agent/install",
+                    "POST",
+                  );
+                  setOperation({
+                    title: "Seedbox Agent update",
+                    status: "running",
+                    progress: 20,
+                    message: job.message,
+                    console: job.logs,
+                    details: [],
+                    steps: [],
+                  });
+                } finally {
+                  starting.current = false;
+                  startGeneration.current += 1;
+                }
+              })
+            }
+          >
+            Update Agent
+          </button>
+        )}
+      </div>
       {check?.credentialsStored && (
         <div className="button-row">
           <span className="muted">
@@ -201,9 +235,7 @@ export function AgentUpdates({
       {check?.updateAvailable && (
         <details className="agent-update-setup">
           <summary>
-            {check.installReady
-              ? "SSH ready - update Agent"
-              : "Prepare SSH and update Agent"}
+            {check.installReady ? "SSH settings" : "Prepare SSH access"}
           </summary>
           <fieldset disabled={disabled}>
             <legend>Prepare Agent update</legend>
@@ -341,36 +373,6 @@ export function AgentUpdates({
                 ? "SSH is ready. Use Update Agent or Update all."
                 : "Prepare SSH to enable installation."}
             </p>
-            <button
-              className="primary"
-              disabled={!check.installReady}
-              onClick={() =>
-                void act(async () => {
-                  starting.current = true;
-                  startGeneration.current += 1;
-                  try {
-                    const job = await api<Job>(
-                      "/updates/seedbox-agent/install",
-                      "POST",
-                    );
-                    setOperation({
-                      title: "Seedbox Agent update",
-                      status: "running",
-                      progress: 20,
-                      message: job.message,
-                      console: job.logs,
-                      details: [],
-                      steps: [],
-                    });
-                  } finally {
-                    starting.current = false;
-                    startGeneration.current += 1;
-                  }
-                })
-              }
-            >
-              Update Agent
-            </button>
           </fieldset>
         </details>
       )}
