@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import io
 import json
+import os
 import sys
 import tarfile
 from types import SimpleNamespace
@@ -49,6 +50,26 @@ def test_worker_rejects_multi_file_compose():
     }
     with pytest.raises(ValueError):
         worker.plan(row, {"services": {"agent": {}}})
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Requires POSIX directory permissions")
+def test_extract_program_is_readable_with_private_worker_umask(tmp_path):
+    archive = tmp_path / "source.tar.gz"
+    with tarfile.open(archive, "w:gz") as output:
+        member = tarfile.TarInfo("mediahub-source/backend/mediahub/apps/__init__.py")
+        member.mode = 0o600
+        member.size = 4
+        output.addfile(member, io.BytesIO(b"test"))
+    target = tmp_path / "private-job"
+    target.mkdir(mode=0o700)
+    previous = os.umask(0o077)
+    try:
+        worker.extract(archive, target)
+    finally:
+        os.umask(previous)
+    assert target.stat().st_mode & 0o777 == 0o700
+    for path in (target / "mediahub-source").rglob("*"):
+        assert path.stat().st_mode & 0o777 == (0o755 if path.is_dir() else 0o644)
 
 
 @pytest.mark.parametrize("accepted,build_fails", [(True, False), (False, False), (False, True)])

@@ -24,4 +24,6 @@ COPY agent/ ./agent/
 ARG MEDIAHUB_SOURCE_COMMIT=""
 ENV MEDIAHUB_SOURCE_COMMIT=$MEDIAHUB_SOURCE_COMMIT
 USER 10001
+# Verify program readability/imports as the actual runtime user before install.
+RUN python -c "import agent.main"
 CMD ["python", "-m", "agent.main"]

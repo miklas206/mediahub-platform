@@ -53,6 +53,12 @@ def extract(archive, destination):
             ):
                 raise ValueError("Unsafe source archive")
             source.extract(member, destination, filter="data")
+    # The data filter ignores archived directory modes. With the worker's
+    # private umask, directories are otherwise 0700 and Docker COPY preserves
+    # those root-only modes in the image used by the unprivileged Agent.
+    source_root = destination / "mediahub-source"
+    for path in [source_root, *source_root.rglob("*")]:
+        path.chmod(0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644)
 
 
 def main(root):
