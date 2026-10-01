@@ -497,14 +497,28 @@ nav a.active {
   height: 4px;
   margin-top: auto;
 }
-.dashboard-columns {
+.dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(270px, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
-.dashboard-columns.single {
-  grid-template-columns: minmax(0, 1fr);
+.dashboard-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dashboard-card > .panel {
+  flex: 1;
+}
+.dashboard-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.dashboard-card .app-row {
+  padding-block: 16px;
+}
+.dashboard-card .app-row-name {
+  overflow-wrap: anywhere;
 }
 .stack {
   display: flex;
@@ -1944,8 +1958,7 @@ td time {
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .dashboard-columns {
-    grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr);
+  .dashboard-grid {
     gap: 18px;
   }
   .host-chip {
@@ -1976,7 +1989,7 @@ td time {
   }
 }
 @media (max-width: 960px) {
-  .dashboard-columns {
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
   .sidebar {

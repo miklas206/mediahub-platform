@@ -900,213 +900,222 @@ function Dashboard({
   }, [revision, reloadActivity]);
   if (!m) return <Loading />;
   const visible = new Set(sections);
-  const hasRightColumn = visible.has("core") || visible.has("network");
+  const cards: { id: DashboardSection; content: ReactNode }[] = [
+    { id: "storage", content: <StorageSummary /> },
+    {
+      id: "apps",
+      content: (
+        <Section
+          title="Your apps"
+          aside={
+            <NavLink className="text-link" to="/apps">
+              View apps <ArrowUpRight size={15} />
+            </NavLink>
+          }
+        >
+          <div className="app-totals">
+            {[
+              ["Installed", apps?.length ?? 0],
+              [
+                "Healthy",
+                apps?.filter((a) => a.health.status === "healthy").length ?? 0,
+              ],
+              [
+                "Needs attention",
+                apps?.filter((a) =>
+                  ["degraded", "unhealthy"].includes(a.health.status),
+                ).length ?? 0,
+              ],
+              [
+                "Unknown",
+                apps?.filter((a) => a.health.status === "unknown").length ?? 0,
+              ],
+            ].map(([label, n]) => (
+              <div key={label}>
+                <strong>{n}</strong>
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+          {apps?.map((app) => (
+            <div className="app-row" key={app.id}>
+              <div className="app-icon">
+                <Box size={23} />
+              </div>
+              <div className="app-row-name">
+                <strong>{app.name}</strong>
+                <small>
+                  {app.isMock ? "Mock adapter" : "Installed"} · v{app.version}
+                </small>
+              </div>
+              <Badge value={app.health.status} />
+            </div>
+          ))}
+          {!apps?.length && (
+            <Empty title="No apps installed">
+              Apps will appear here when registered.
+            </Empty>
+          )}
+          <div className="panel-note">
+            <ShieldCheck size={16} />{" "}
+            {apps?.some((a) => a.isMock)
+              ? "Development mock only. No real services controlled."
+              : apps?.length
+                ? "Apps are monitored through paired Agents or restricted read-only integrations."
+                : "No apps installed."}
+          </div>
+        </Section>
+      ),
+    },
+    { id: "cloudflare", content: <CloudflareTunnelCard /> },
+    { id: "integrations", content: <IntegrationsCard /> },
+    {
+      id: "activity",
+      content: (
+        <Section
+          title="Recent activity"
+          aside={
+            <NavLink className="text-link" to="/activity">
+              Full timeline <ArrowUpRight size={15} />
+            </NavLink>
+          }
+        >
+          <ActivityList items={recentActivity || []} />
+          {activityError && <Notice>{activityError}</Notice>}
+        </Section>
+      ),
+    },
+    {
+      id: "network",
+      content: (
+        <Section title="Network throughput">
+          <div className="network-card">
+            <div>
+              <ArrowDown size={19} />
+              <span>Download</span>
+              <strong>
+                {bytes(m.network.downloadBytesPerSecond)}
+                <small>/s</small>
+              </strong>
+            </div>
+            <div>
+              <ArrowUp size={19} />
+              <span>Upload</span>
+              <strong>
+                {bytes(m.network.uploadBytesPerSecond)}
+                <small>/s</small>
+              </strong>
+            </div>
+          </div>
+          <div className="panel-note">
+            Runtime network totals, not torrent speeds.
+          </div>
+        </Section>
+      ),
+    },
+    {
+      id: "core",
+      content: (
+        <Section
+          title="Core status"
+          aside={<Badge value={live ? "healthy" : "unknown"} />}
+        >
+          <div className="status-rows">
+            <StatusLine
+              label="Backend API"
+              value={live ? "Connected" : "Disconnected"}
+            />
+            <StatusLine
+              label="Realtime"
+              value={live ? "Streaming · SSE" : "Reconnecting"}
+            />
+            <StatusLine
+              label="Runtime control"
+              value="Agent-verified actions"
+            />
+            <StatusLine label="Public ingress" value="Not managed" />
+            <StatusLine label="Release" value={m.version} />
+          </div>
+        </Section>
+      ),
+    },
+    { id: "runtime", content: <RuntimePanel /> },
+    {
+      id: "system",
+      content: (
+        <details className="system-overview">
+          <summary>
+            <span className="system-summary-icon">
+              <Cpu size={18} />
+            </span>
+            <span>
+              <strong>System details</strong>
+              <small>Core resource use, uptime and app runtime status</small>
+            </span>
+            <Badge value={live ? "healthy" : "unknown"} />
+            <ChevronDown className="disclosure-chevron" size={18} />
+          </summary>
+          <div className="system-overview-body">
+            <div className="compact-metrics">
+              <MetricCard
+                icon={<Cpu size={18} />}
+                label="Core CPU"
+                value={
+                  m.cpu.percent == null
+                    ? "Sampling…"
+                    : `${m.cpu.percent.toFixed(1)}%`
+                }
+                detail={`${m.cpu.cores} allocated cores`}
+                percent={m.cpu.percent}
+              />
+              <MetricCard
+                icon={<Server size={18} />}
+                label="Core memory"
+                value={bytes(m.ram.usedBytes)}
+                detail={`${bytes(m.ram.availableBytes)} available`}
+                percent={m.ram.percent}
+              />
+              <MetricCard
+                icon={<Clock3 size={18} />}
+                label="Core uptime"
+                value={uptime(m.coreUptimeSeconds)}
+                detail={`Guest uptime ${uptime(m.uptimeSeconds)}`}
+              />
+            </div>
+            <div className="system-detail-lines">
+              <StatusLine
+                label="Core system disk"
+                value={`${bytes(m.disk.freeBytes)} free of ${bytes(m.disk.totalBytes)}`}
+              />
+              {(apps || []).map((app) => (
+                <StatusLine
+                  key={app.id}
+                  label={app.name}
+                  value={`${app.state} · ${app.health.status}`}
+                />
+              ))}
+            </div>
+            <p className="muted">
+              These numbers describe MediaHub Core, not the complete Proxmox
+              server. Open an app for its own verified runtime details.
+            </p>
+          </div>
+        </details>
+      ),
+    },
+  ];
   return (
     <>
       {error && <Notice>{error}</Notice>}
-      {sections.length > 0 && (
-        <div className={`dashboard-columns ${hasRightColumn ? "" : "single"}`}>
-          <div className="stack">
-            {visible.has("storage") && <StorageSummary />}
-            {visible.has("apps") && (
-              <Section
-                title="Your apps"
-                aside={
-                  <NavLink className="text-link" to="/apps">
-                    View apps <ArrowUpRight size={15} />
-                  </NavLink>
-                }
-              >
-                <div className="app-totals">
-                  {[
-                    ["Installed", apps?.length ?? 0],
-                    [
-                      "Healthy",
-                      apps?.filter((a) => a.health.status === "healthy")
-                        .length ?? 0,
-                    ],
-                    [
-                      "Needs attention",
-                      apps?.filter((a) =>
-                        ["degraded", "unhealthy"].includes(a.health.status),
-                      ).length ?? 0,
-                    ],
-                    [
-                      "Unknown",
-                      apps?.filter((a) => a.health.status === "unknown")
-                        .length ?? 0,
-                    ],
-                  ].map(([label, n]) => (
-                    <div key={label}>
-                      <strong>{n}</strong>
-                      <span>{label}</span>
-                    </div>
-                  ))}
-                </div>
-                {apps?.map((app) => (
-                  <div className="app-row" key={app.id}>
-                    <div className="app-icon">
-                      <Box size={23} />
-                    </div>
-                    <div className="app-row-name">
-                      <strong>{app.name}</strong>
-                      <small>
-                        {app.isMock ? "Mock adapter" : "Installed"} · v
-                        {app.version}
-                      </small>
-                    </div>
-                    <Badge value={app.health.status} />
-                  </div>
-                ))}
-                {!apps?.length && (
-                  <Empty title="No apps installed">
-                    Apps will appear here when registered.
-                  </Empty>
-                )}
-                <div className="panel-note">
-                  <ShieldCheck size={16} />{" "}
-                  {apps?.some((a) => a.isMock)
-                    ? "Development mock only. No real services controlled."
-                    : apps?.length
-                      ? "Apps are monitored through paired Agents or restricted read-only integrations."
-                      : "No apps installed."}
-                </div>
-              </Section>
-            )}
-            {visible.has("activity") && (
-              <Section
-                title="Recent activity"
-                aside={
-                  <NavLink className="text-link" to="/activity">
-                    Full timeline <ArrowUpRight size={15} />
-                  </NavLink>
-                }
-              >
-                <ActivityList items={recentActivity || []} />
-                {activityError && <Notice>{activityError}</Notice>}
-              </Section>
-            )}
-            {visible.has("system") && (
-              <details className="system-overview">
-                <summary>
-                  <span className="system-summary-icon">
-                    <Cpu size={18} />
-                  </span>
-                  <span>
-                    <strong>System details</strong>
-                    <small>
-                      Core resource use, uptime and app runtime status
-                    </small>
-                  </span>
-                  <Badge value={live ? "healthy" : "unknown"} />
-                  <ChevronDown className="disclosure-chevron" size={18} />
-                </summary>
-                <div className="system-overview-body">
-                  <div className="compact-metrics">
-                    <MetricCard
-                      icon={<Cpu size={18} />}
-                      label="Core CPU"
-                      value={
-                        m.cpu.percent == null
-                          ? "Sampling…"
-                          : `${m.cpu.percent.toFixed(1)}%`
-                      }
-                      detail={`${m.cpu.cores} allocated cores`}
-                      percent={m.cpu.percent}
-                    />
-                    <MetricCard
-                      icon={<Server size={18} />}
-                      label="Core memory"
-                      value={bytes(m.ram.usedBytes)}
-                      detail={`${bytes(m.ram.availableBytes)} available`}
-                      percent={m.ram.percent}
-                    />
-                    <MetricCard
-                      icon={<Clock3 size={18} />}
-                      label="Core uptime"
-                      value={uptime(m.coreUptimeSeconds)}
-                      detail={`Guest uptime ${uptime(m.uptimeSeconds)}`}
-                    />
-                  </div>
-                  <div className="system-detail-lines">
-                    <StatusLine
-                      label="Core system disk"
-                      value={`${bytes(m.disk.freeBytes)} free of ${bytes(m.disk.totalBytes)}`}
-                    />
-                    {(apps || []).map((app) => (
-                      <StatusLine
-                        key={app.id}
-                        label={app.name}
-                        value={`${app.state} · ${app.health.status}`}
-                      />
-                    ))}
-                  </div>
-                  <p className="muted">
-                    These numbers describe MediaHub Core, not the complete
-                    Proxmox server. Open an app for its own verified runtime
-                    details.
-                  </p>
-                </div>
-              </details>
-            )}
-            {visible.has("runtime") && <RuntimePanel />}
-            {visible.has("integrations") && <IntegrationsCard />}
-            {visible.has("cloudflare") && <CloudflareTunnelCard />}
-          </div>
-          {hasRightColumn && (
-            <div className="stack">
-              {visible.has("core") && (
-                <Section
-                  title="Core status"
-                  aside={<Badge value={live ? "healthy" : "unknown"} />}
-                >
-                  <div className="status-rows">
-                    <StatusLine
-                      label="Backend API"
-                      value={live ? "Connected" : "Disconnected"}
-                    />
-                    <StatusLine
-                      label="Realtime"
-                      value={live ? "Streaming · SSE" : "Reconnecting"}
-                    />
-                    <StatusLine
-                      label="Runtime control"
-                      value="Agent-verified actions"
-                    />
-                    <StatusLine label="Public ingress" value="Not managed" />
-                    <StatusLine label="Release" value={m.version} />
-                  </div>
-                </Section>
-              )}
-              {visible.has("network") && (
-                <Section title="Network throughput">
-                  <div className="network-card">
-                    <div>
-                      <ArrowDown size={19} />
-                      <span>Download</span>
-                      <strong>
-                        {bytes(m.network.downloadBytesPerSecond)}
-                        <small>/s</small>
-                      </strong>
-                    </div>
-                    <div>
-                      <ArrowUp size={19} />
-                      <span>Upload</span>
-                      <strong>
-                        {bytes(m.network.uploadBytesPerSecond)}
-                        <small>/s</small>
-                      </strong>
-                    </div>
-                  </div>
-                  <div className="panel-note">
-                    Runtime network totals, not torrent speeds.
-                  </div>
-                </Section>
-              )}
+      <div className="dashboard-grid">
+        {cards
+          .filter(({ id }) => visible.has(id))
+          .map(({ id, content }) => (
+            <div className="dashboard-card" key={id} data-section={id}>
+              {content}
             </div>
-          )}
-        </div>
-      )}
+          ))}
+      </div>
     </>
   );
 }
