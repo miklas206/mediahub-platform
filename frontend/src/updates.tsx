@@ -52,6 +52,8 @@ type PlatformRelease = {
 };
 
 type UpdateItem = {
+  checkStatus?: "failed";
+  errorCode?: string;
   id: string;
   name: string;
   installedVersion: string | null;
@@ -690,6 +692,11 @@ export function UpdatesPage({
       task.steps[2].state = "complete";
       task.details.push(`${result.items.length} update sources checked`);
       task.details.push(`${result.count} verified updates available`);
+      for (const item of result.items) {
+        task.details.push(
+          `${item.name}: ${item.message}${item.errorCode ? ` (${item.errorCode})` : ""}`,
+        );
+      }
       task.publish(
         100,
         result.lastError ? "error" : "success",
@@ -891,6 +898,14 @@ export function UpdatesPage({
             </button>
           )}
         </div>
+        {updateSummary.data?.items
+          .filter((item) => item.checkStatus === "failed")
+          .map((item) => (
+            <p className="notice" role="alert" key={item.id}>
+              <strong>{item.name}:</strong> {item.message}
+              {item.errorCode && <small> ({item.errorCode})</small>}
+            </p>
+          ))}
         {batchPlan.manual.length > 0 && (
           <p className="muted">
             Manual update required:{" "}

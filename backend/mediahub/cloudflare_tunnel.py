@@ -346,6 +346,22 @@ class CloudflareTunnelMonitor:
                 raw_tag = str(body.get("tag_name") or "")[:80]
                 normalized = raw_tag.removeprefix("v")
                 latest = Version(normalized)
+            except httpx.HTTPStatusError as error:
+                limited = error.response.status_code == 429 or (
+                    error.response.status_code == 403
+                    and error.response.headers.get("x-ratelimit-remaining") == "0"
+                )
+                raise DomainError(
+                    "update_source_rate_limited" if limited else "update_source_http_error",
+                    "GitHub rate limit reached for cloudflared; try again after the limit resets"
+                    if limited
+                    else f"GitHub cloudflared release lookup returned HTTP {error.response.status_code}",
+                    503,
+                ) from error
+            except httpx.TimeoutException as error:
+                raise DomainError(
+                    "update_source_timeout", "GitHub cloudflared release lookup timed out", 503
+                ) from error
             except (httpx.HTTPError, ValueError, TypeError, InvalidVersion) as error:
                 raise DomainError(
                     "update_check_unavailable",

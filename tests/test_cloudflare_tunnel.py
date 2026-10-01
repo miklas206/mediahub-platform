@@ -277,3 +277,21 @@ def test_configured_monitor_is_registered_as_read_only_app(logged_in, monkeypatc
     action = logged_in.post(f"/api/apps/{app['id']}/actions/restart")
     assert action.status_code == 400
     assert action.json()["error"]["code"] == "read_only_app"
+
+
+@pytest.mark.parametrize(
+    "status,headers,code",
+    [
+        (403, {"x-ratelimit-remaining": "0"}, "update_source_rate_limited"),
+        (502, {}, "update_source_http_error"),
+    ],
+)
+def test_release_http_failure_has_actionable_reason(monkeypatch, status, headers, code):
+    async def handler(request):
+        return httpx.Response(status, headers=headers, text="private upstream body")
+
+    mock_client(monkeypatch, handler)
+    with pytest.raises(DomainError) as failure:
+        asyncio.run(CloudflareTunnelMonitor(config(probes=[]))._latest_release())
+    assert failure.value.code == code
+    assert "private upstream body" not in failure.value.message

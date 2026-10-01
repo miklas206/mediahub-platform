@@ -76,8 +76,26 @@ class UpdateMonitor:
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
         }
 
+    @staticmethod
+    def _failure(app, error):
+        return {
+            "id": app["id"],
+            "name": app["name"],
+            "installedVersion": app.get("version"),
+            "latestVersion": None,
+            "updateAvailable": False,
+            "checkStatus": "failed",
+            "errorCode": error.code if isinstance(error, DomainError) else "update_check_timeout",
+            "message": error.message[:200]
+            if isinstance(error, DomainError)
+            else "Update check timed out after 20 seconds",
+        }
+
     def _store_results(self, items, error=None):
         previous = self._load()
+        failed = [item for item in items if item.get("checkStatus") == "failed"]
+        if failed:
+            error = "Could not check: " + ", ".join(item["name"] for item in failed)
         available = sorted(
             f"{item['id']}:{item.get('latestVersion') or 'available'}"
             for item in items
@@ -100,7 +118,7 @@ class UpdateMonitor:
             self.services.events.read_notifications(
                 event_type="updates.available", source="updates"
             )
-        elif signature != previous.get("signature"):
+        elif signature and signature != previous.get("signature"):
             self.services.events.read_notifications(
                 event_type="updates.available", source="updates"
             )
@@ -172,8 +190,9 @@ class UpdateMonitor:
                         "message": str(platform.get("message") or "Checked")[:200],
                     }
                 )
-            except DomainError:
+            except DomainError as error:
                 failures += 1
+                items.append(self._failure({"id": "mediahub-core", "name": "MediaHub Core"}, error))
             try:
                 agent = await self.services.agent_updates.check()
                 items.append(
@@ -185,6 +204,9 @@ class UpdateMonitor:
             except DomainError as error:
                 if error.code != "agent_host_required":
                     failures += 1
+                    items.append(
+                        self._failure({"id": "seedbox-agent", "name": "Seedbox Agent"}, error)
+                    )
             for app in self.services.apps.list():
                 if app.get("isMock"):
                     continue
@@ -193,18 +215,9 @@ class UpdateMonitor:
                         self.services.apps.adapter(app["id"]).updateCheck(), timeout=20
                     )
                     items.append(self._app_result(app, result))
-                except (DomainError, asyncio.TimeoutError):
+                except (DomainError, asyncio.TimeoutError) as error:
                     failures += 1
-                    items.append(
-                        {
-                            "id": app["id"],
-                            "name": app["name"],
-                            "installedVersion": app.get("version"),
-                            "latestVersion": None,
-                            "updateAvailable": False,
-                            "message": "Update source temporarily unavailable",
-                        }
-                    )
+                    items.append(self._failure(app, error))
             self._store_results(
                 items,
                 "One or more update sources were unavailable" if failures else None,

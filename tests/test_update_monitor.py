@@ -152,3 +152,56 @@ def test_refresh_joins_running_check_and_disconnect_does_not_cancel_it():
         assert len(calls) == 2
 
     asyncio.run(scenario())
+
+
+def test_partial_success_preserves_other_source_failure(logged_in):
+    from mediahub.errors import DomainError
+
+    svc = logged_in.app.state.services
+    failure = svc.updates._failure(
+        {"id": "cloudflare", "name": "Cloudflare Tunnel"},
+        DomainError("update_source_timeout", "GitHub cloudflared release lookup timed out", 503),
+    )
+    svc.updates._store_results([failure])
+    asyncio.run(svc.updates.record_platform({"updateAvailable": False}))
+    summary = svc.updates.summary()
+    assert summary["lastError"] == "Could not check: Cloudflare Tunnel"
+    assert summary["items"][1]["errorCode"] == "update_source_timeout"
+    asyncio.run(
+        svc.updates.record_app(
+            {"id": "cloudflare", "name": "Cloudflare Tunnel"}, {"updateAvailable": False}
+        )
+    )
+    assert svc.updates.summary()["lastError"] is None
+
+
+def test_failed_sources_are_all_identified(logged_in, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from mediahub.errors import DomainError
+
+    svc = logged_in.app.state.services
+    monkeypatch.setattr(
+        svc.updates,
+        "check_platform",
+        AsyncMock(side_effect=DomainError("github_unavailable", "GitHub unavailable")),
+    )
+    monkeypatch.setattr(
+        svc.agent_updates,
+        "check",
+        AsyncMock(side_effect=DomainError("agent_offline", "Agent offline")),
+    )
+    monkeypatch.setattr(
+        svc.apps, "list", lambda: [{"id": "cloudflare", "name": "Cloudflare Tunnel"}]
+    )
+    monkeypatch.setattr(
+        svc.apps,
+        "adapter",
+        lambda _: SimpleNamespace(updateCheck=AsyncMock(side_effect=asyncio.TimeoutError())),
+    )
+    result = asyncio.run(svc.updates.check_all())
+    assert len(result["items"]) == 3
+    assert all(item["checkStatus"] == "failed" for item in result["items"])
+    assert result["items"][2]["errorCode"] == "update_check_timeout"
+    assert result["lastError"] == "Could not check: MediaHub Core, Seedbox Agent, Cloudflare Tunnel"
