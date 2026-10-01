@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { Panel, ErrorBox } from "./phase2";
 import { OperationProgress, type OperationState } from "./operation-progress";
-import { runUpdateAll, updateAllPlan } from "./update-all";
 
 type Check = {
   host: string;
@@ -32,6 +31,10 @@ export function AgentUpdates({
   const [trusted, setTrusted] = useState(false);
   const [working, setWorking] = useState(false);
   const [operation, setOperation] = useState<OperationState>();
+  const startGeneration = useRef(0);
+  const starting = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   async function reload() {
     setCheck(await api<Check>("/updates/seedbox-agent"));
     onChange();
@@ -39,6 +42,7 @@ export function AgentUpdates({
   useEffect(() => {
     let active = true;
     let lastState = "";
+    let timer: number | undefined;
     async function load() {
       try {
         const data = await api<Check>("/updates/seedbox-agent");
@@ -49,12 +53,22 @@ export function AgentUpdates({
     }
     void load();
     async function poll() {
+      const generation = startGeneration.current;
       try {
+        if (starting.current) return;
         const job = await api<Job>("/updates/seedbox-agent/operation");
-        if (!active || job.state === "idle") return;
+        if (
+          !active ||
+          starting.current ||
+          generation !== startGeneration.current ||
+          job.state === "idle"
+        )
+          return;
         if (job.state === "succeeded" && lastState !== "succeeded") {
           await load();
+          if (active) onChangeRef.current();
         }
+        if (!active || generation !== startGeneration.current) return;
         lastState = job.state;
         const running = [
           "running",
@@ -84,7 +98,11 @@ export function AgentUpdates({
           steps: [],
         });
       } catch {
-        if (active)
+        if (
+          active &&
+          !starting.current &&
+          generation === startGeneration.current
+        )
           setOperation((previous) =>
             previous?.status === "running"
               ? {
@@ -94,13 +112,14 @@ export function AgentUpdates({
                 }
               : previous,
           );
+      } finally {
+        if (active) timer = window.setTimeout(() => void poll(), 2000);
       }
     }
     void poll();
-    const timer = window.setInterval(() => void poll(), 2000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, []);
   async function act(action: () => Promise<void>) {
@@ -327,21 +346,26 @@ export function AgentUpdates({
               disabled={!check.installReady}
               onClick={() =>
                 void act(async () => {
-                  await runUpdateAll(
-                    updateAllPlan(
-                      [
-                        {
-                          id: "seedbox-agent",
-                          name: "Seedbox Agent",
-                          updateAvailable: true,
-                        },
-                      ],
-                      [],
-                    ),
-                    api,
-                    setOperation,
-                  );
-                  await reload();
+                  starting.current = true;
+                  startGeneration.current += 1;
+                  try {
+                    const job = await api<Job>(
+                      "/updates/seedbox-agent/install",
+                      "POST",
+                    );
+                    setOperation({
+                      title: "Seedbox Agent update",
+                      status: "running",
+                      progress: 20,
+                      message: job.message,
+                      console: job.logs,
+                      details: [],
+                      steps: [],
+                    });
+                  } finally {
+                    starting.current = false;
+                    startGeneration.current += 1;
+                  }
                 })
               }
             >

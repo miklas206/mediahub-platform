@@ -1,5 +1,5 @@
 import { AgentUpdates } from "./agent-updates";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "./api";
@@ -190,7 +190,7 @@ export function UpdatesPage({
   const [versions, setVersions] = useState<Record<string, Versions>>({});
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState("all-check");
   const [latest, setLatest] = useState<Record<string, string>>({});
   const [githubToken, setGithubToken] = useState("");
   const [operations, setOperations] = useState<
@@ -200,6 +200,14 @@ export function UpdatesPage({
     useState<PlatformRelease>();
   const release = checkedPlatformRelease || platformRelease.data;
   const batchPlan = updateAllPlan(updateSummary.data?.items || [], apps || []);
+
+  const checkedOnEntry = useRef(false);
+  const entryCheck = useRef(checkAll);
+  useEffect(() => {
+    if (checkedOnEntry.current) return;
+    checkedOnEntry.current = true;
+    void entryCheck.current();
+  }, []);
 
   async function installAll() {
     if (!apps || !batchPlan.tasks.length || busy) return;
@@ -721,7 +729,7 @@ export function UpdatesPage({
             </p>
           </div>
           <div className="button-row">
-            {!!updateSummary.data?.count && (
+            {batchPlan.tasks.length > 0 && busy !== "all-check" && (
               <button
                 className="primary"
                 disabled={!!busy || !apps || !batchPlan.tasks.length}
