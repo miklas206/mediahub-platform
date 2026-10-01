@@ -7,7 +7,7 @@ import { PortReachability } from "./port-reachability";
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Activity, Cloud, HardDrive, ShieldCheck, Server } from "lucide-react";
+import { Cloud, HardDrive, ShieldCheck, Server } from "lucide-react";
 import { useLoad, Panel, ErrorBox } from "./phase2";
 import { bytes, uptime } from "./format";
 import "./runtime.css";
@@ -239,12 +239,11 @@ function SeedboxPanel({
     host = r.host;
   const counts = q?.apiAuthenticated ? q : undefined;
   return (
-    <div className="runtime-workspace">
+    <div className={`runtime-workspace seedbox-workspace section-${section}`}>
       <header className="runtime-summary">
         <div>
           <p className="eyebrow">INSTALLED APP · SEEDBOX</p>
-          <h1>Protected downloads</h1>
-          <p>MediaHub Core → paired Agent → isolated runtime</p>
+          <h1>Seedbox</h1>
         </div>
         <div className={`runtime-health ${r.health}`}>
           <ShieldCheck size={22} />
@@ -348,15 +347,14 @@ function SeedboxPanel({
           </Panel>
         )}
         {section === "torrents" && (
-          <Panel title="qBittorrent">
-            <div className="runtime-panel-title">
-              <Activity />
-              <strong>
-                {q?.running ? "Running" : "Stopped / unavailable"}
-              </strong>
-              <span>{q?.version}</span>
-            </div>
-            <div className="runtime-speeds">
+          <div className="seedbox-client-summary">
+            <div className="seedbox-client-metrics">
+              <div>
+                <span>qBittorrent {q?.version}</span>
+                <strong>
+                  {q?.running ? "Running" : "Stopped / unavailable"}
+                </strong>
+              </div>
               <div>
                 <span>Download</span>
                 <strong>{size(q?.downloadSpeed)}/s</strong>
@@ -365,28 +363,6 @@ function SeedboxPanel({
                 <span>Upload</span>
                 <strong>{size(q?.uploadSpeed)}/s</strong>
               </div>
-            </div>
-            <dl>
-              <div className="runtime-row">
-                <dt>Authenticated API</dt>
-                <dd>
-                  <Verified value={q?.apiAuthenticated} />
-                </dd>
-              </div>
-              <div className="runtime-row">
-                <dt>VPN interface binding</dt>
-                <dd>
-                  <Verified value={q?.bindingVerified} />
-                </dd>
-              </div>
-              <div className="runtime-row">
-                <dt>Shared VPN namespace</dt>
-                <dd>
-                  <Verified value={q?.namespaceVerified} />
-                </dd>
-              </div>
-            </dl>
-            <div className="runtime-counts">
               {[
                 ["Total", counts?.torrents],
                 ["Downloading", counts?.downloading],
@@ -395,12 +371,35 @@ function SeedboxPanel({
                 ["Errors", counts?.errors],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <strong>{value ?? "—"}</strong>
                   <span>{label}</span>
+                  <strong>{value ?? "\u2014"}</strong>
                 </div>
               ))}
             </div>
-          </Panel>
+            <details>
+              <summary>Connection checks</summary>
+              <dl>
+                <div className="runtime-row">
+                  <dt>Authenticated API</dt>
+                  <dd>
+                    <Verified value={q?.apiAuthenticated} />
+                  </dd>
+                </div>
+                <div className="runtime-row">
+                  <dt>VPN interface binding</dt>
+                  <dd>
+                    <Verified value={q?.bindingVerified} />
+                  </dd>
+                </div>
+                <div className="runtime-row">
+                  <dt>Shared VPN namespace</dt>
+                  <dd>
+                    <Verified value={q?.namespaceVerified} />
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          </div>
         )}
         {section === "settings" && (
           <Panel title="Downloads storage">
@@ -799,7 +798,7 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
 }
 export function AppRuntimePage() {
   const { appId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const section = seedboxSection(searchParams.get("section"));
   const { data, error, reload } = useLoad<{
     view: string;
@@ -915,20 +914,20 @@ export function AppRuntimePage() {
       {data?.view === "seedbox" && (
         <nav className="seedbox-sections" aria-label="Seedbox sections">
           {seedboxSections.map(([key, label]) => (
-            <button
+            <Link
               key={key}
-              className={section === key ? "primary" : ""}
-              aria-current={section === key ? "page" : undefined}
-              onClick={() =>
-                setSearchParams((previous) => {
-                  const next = new URLSearchParams(previous);
+              to={{
+                search: (() => {
+                  const next = new URLSearchParams(searchParams);
                   next.set("section", key);
-                  return next;
-                })
-              }
+                  return next.toString();
+                })(),
+              }}
+              className={section === key ? "selected" : ""}
+              aria-current={section === key ? "page" : undefined}
             >
               {label}
-            </button>
+            </Link>
           ))}
         </nav>
       )}

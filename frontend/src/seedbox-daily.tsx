@@ -240,7 +240,11 @@ export function SeedboxDaily({
           {notice}
         </p>
       )}
-      <div className="runtime-panels">
+      <div
+        className={
+          section === "vpn" ? "vpn-location-content" : "torrent-empty-container"
+        }
+      >
         {section === "vpn" && (
           <Panel title="VPN Location">
             <ErrorBox error={locationError} />
@@ -359,99 +363,9 @@ export function SeedboxDaily({
             </p>
           </Panel>
         )}
-        {section === "torrents" && (
-          <Panel title="Add Torrent">
-            <form onSubmit={(e) => void add(e)}>
-              <label>
-                Input type
-                <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                  <option value="magnet">Magnet Link</option>
-                  <option value="file">Torrent File</option>
-                </select>
-              </label>
-              {mode === "magnet" ? (
-                <label>
-                  Magnet link
-                  <textarea
-                    value={magnet}
-                    onChange={(e) => setMagnet(e.target.value)}
-                    maxLength={16384}
-                    required
-                    placeholder="magnet:?xt=urn:btih:…"
-                    autoComplete="off"
-                  />
-                </label>
-              ) : (
-                <label>
-                  Torrent file
-                  <input
-                    type="file"
-                    accept=".torrent"
-                    required
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  />
-                </label>
-              )}
-              <label>
-                Download location
-                <select
-                  value={downloadLocation}
-                  disabled={
-                    busy || changing || !(list?.downloadLocations?.length ?? 0)
-                  }
-                  onChange={(event) => setDownloadLocation(event.target.value)}
-                >
-                  {list?.downloadLocations?.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.storageLabel || "Downloads"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {downloadLocationsSupported === false && (
-                <p className="muted">
-                  This Seedbox Agent still supports the Downloads top folder
-                  only. Install the matching Agent update and configure writable
-                  logical storage to enable Film, TV and Other choices.
-                </p>
-              )}
-              <label>
-                <input
-                  type="checkbox"
-                  checked={start}
-                  onChange={(e) => setStart(e.target.checked)}
-                />{" "}
-                Start immediately after safety checks
-              </label>
-              <TorrentRetention
-                value={retention}
-                onChange={setRetention}
-                disabled={busy}
-                supported={!!list?.retentionSupported}
-              />
-              <button
-                className="primary"
-                disabled={busy || changing || !list || !!listError}
-              >
-                Add torrent
-              </button>
-              <p className="muted">
-                Paused by default. Only approved media locations can be
-                selected. Private tracker links are not included in MediaHub
-                events.
-              </p>
-            </form>
-          </Panel>
-        )}
       </div>
       {section === "torrents" && (
         <>
-          <SeedboxRSS
-            storageId={list?.storageId}
-            locations={list?.downloadLocations || []}
-            onAdded={reload}
-            retentionSupported={list?.retentionSupported}
-          />
           <Panel title="Torrents">
             <ErrorBox error={listError} />
             <div className="torrent-table-scroll">
@@ -581,7 +495,7 @@ export function SeedboxDaily({
               </table>
             </div>
             {!list?.items.length && !listError && (
-              <p>No torrents yet. Add a magnet link or torrent file above.</p>
+              <p>No torrents yet. Add a magnet link or torrent file below.</p>
             )}
             <p className="muted">
               Remove job always keeps files. Automatic cleanup can delete files
@@ -589,6 +503,104 @@ export function SeedboxDaily({
               shown.
             </p>
           </Panel>
+          <div className="torrent-input-grid">
+            <Panel title="Add Torrent">
+              <form onSubmit={(e) => void add(e)}>
+                <label>
+                  Input type
+                  <select
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                  >
+                    <option value="magnet">Magnet Link</option>
+                    <option value="file">Torrent File</option>
+                  </select>
+                </label>
+                {mode === "magnet" ? (
+                  <label>
+                    Magnet link
+                    <textarea
+                      value={magnet}
+                      onChange={(e) => setMagnet(e.target.value)}
+                      maxLength={16384}
+                      required
+                      placeholder="magnet:?xt=urn:btih:…"
+                      autoComplete="off"
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    Torrent file
+                    <input
+                      type="file"
+                      accept=".torrent"
+                      required
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                )}
+                <label>
+                  Download location
+                  <select
+                    value={downloadLocation}
+                    disabled={
+                      busy ||
+                      changing ||
+                      !(list?.downloadLocations?.length ?? 0)
+                    }
+                    onChange={(event) =>
+                      setDownloadLocation(event.target.value)
+                    }
+                  >
+                    {list?.downloadLocations?.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.storageLabel || "Downloads"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {downloadLocationsSupported === false && (
+                  <p className="muted">
+                    This Seedbox Agent still supports the Downloads top folder
+                    only. Install the matching Agent update and configure
+                    writable logical storage to enable Film, TV and Other
+                    choices.
+                  </p>
+                )}
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={start}
+                    onChange={(e) => setStart(e.target.checked)}
+                  />{" "}
+                  Start immediately after safety checks
+                </label>
+                <TorrentRetention
+                  value={retention}
+                  onChange={setRetention}
+                  disabled={busy}
+                  supported={!!list?.retentionSupported}
+                />
+                <button
+                  className="primary"
+                  disabled={busy || changing || !list || !!listError}
+                >
+                  Add torrent
+                </button>
+                <p className="muted">
+                  Paused by default. Only approved media locations can be
+                  selected. Private tracker links are not included in MediaHub
+                  events.
+                </p>
+              </form>
+            </Panel>
+            <SeedboxRSS
+              storageId={list?.storageId}
+              locations={list?.downloadLocations || []}
+              onAdded={reload}
+              retentionSupported={list?.retentionSupported}
+            />
+          </div>
           {cleanupEdit && (
             <Panel title="Torrent cleanup settings">
               <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
