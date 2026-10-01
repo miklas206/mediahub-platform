@@ -57,19 +57,58 @@ def beneath(path, root):
     return path == root or path.startswith(root.rstrip("/") + "/")
 
 
+def gpu_mount(value, index):
+    """Recognize bounded NVIDIA passthrough entries; never remove host sources."""
+    fields = value.split()
+    if len(fields) not in (4, 6) or (len(fields) == 6 and fields[4:] != ["0", "0"]):
+        return None
+    source, target, filesystem, options = fields[:4]
+    if filesystem != "none" or target != source.lstrip("/"):
+        return None
+    library = re.fullmatch(
+        r"/(?:usr/)?lib/x86_64-linux-gnu/(?:nvidia/current/)?"
+        r"(?:libnvidia-(?:ml|ptxjitcompiler|encode)|libcuda|libnvcuvid)\.so(?:\.\d+)*",
+        source,
+    ) or source in {"/usr/bin/nvidia-smi", "/usr/lib/nvidia/current/nvidia-smi"}
+    device = re.fullmatch(r"/dev/nvidia(?:\d+|ctl|-uvm|-uvm-tools|-modeset)", source)
+    directory = source in {"/dev/nvidia-caps", "/sys/class/drm", "/proc/driver/nvidia"}
+    if not (library or device or directory):
+        return None
+    flags = set(options.split(","))
+    required = {"bind", "create=dir" if directory else "create=file"}
+    if library or source.startswith(("/sys/", "/proc/")):
+        required.add("ro")
+    if not required <= flags or not flags <= required | {"optional", "ro"}:
+        return None
+    return {
+        "slot": f"lxc.mount.entry[{index}]",
+        "source": source,
+        "path": "/" + target,
+        "kind": "gpu",
+    }
+
+
 def storage_plan(raw, cfg):
     """Reject every volume that is not the installer's two dedicated disks."""
     if any(line.startswith("[") for line in raw.splitlines()):
         raise ValueError(
             "Snapshots or pending configuration exist; review them before uninstalling."
         )
-    config = dict(line.split(": ", 1) for line in raw.splitlines() if ": " in line)
+    entries = [line.split(": ", 1) for line in raw.splitlines() if ": " in line]
+    config = dict(entries)
     if config.get("hostname") != cfg["hostname"]:
         raise ValueError("LXC identity changed.")
     if config.get("lock") or config.get("protection") == "1" or config.get("template") == "1":
         raise ValueError("The LXC is locked, protected or a template.")
     deleted, kept = [], []
-    for key, value in config.items():
+    mount_index = 0
+    for key, value in entries:
+        if key == "lxc.mount.entry":
+            mount = gpu_mount(value, mount_index)
+            mount_index += 1
+            if mount:
+                kept.append(mount)
+                continue
         if key == "lxc.mount.auto":
             # These are kernel pseudo-filesystems, not disks or media shares.
             # https://linuxcontainers.org/lxc/manpages/man5/lxc.container.conf.5.html
@@ -120,7 +159,11 @@ def storage_plan(raw, cfg):
         raise ValueError("The original system and app-data disks could not both be identified.")
     if len({item["source"] for item in deleted}) != 2:
         raise ValueError("System and app-data disks must be distinct.")
-    return deleted, kept
+    # pct config and the on-disk config may order ordinary properties differently.
+    return (
+        sorted(deleted, key=lambda item: item["slot"] != "rootfs"),
+        sorted(kept, key=lambda item: (item.get("kind") == "gpu", item["slot"])),
+    )
 
 
 def inspect(cfg):

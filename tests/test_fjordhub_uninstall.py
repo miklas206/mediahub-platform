@@ -27,6 +27,72 @@ def test_external_media_is_not_a_disk_to_delete():
     assert kept == [{"slot": "mp1", "source": "/mnt/mediahub-3tb", "path": "/media"}]
 
 
+GPU_FILES = [
+    f"{prefix}/{library}.so.{version}"
+    for prefix, version in (
+        ("/lib/x86_64-linux-gnu", "1"),
+        ("/usr/lib/x86_64-linux-gnu/nvidia/current", "550.163.01"),
+    )
+    for library in (
+        "libnvidia-ml",
+        "libcuda",
+        "libnvidia-ptxjitcompiler",
+        "libnvidia-encode",
+        "libnvcuvid",
+    )
+] + ["/usr/bin/nvidia-smi", "/usr/lib/nvidia/current/nvidia-smi"]
+GPU_DEVICES = [
+    "/dev/" + name
+    for name in ("nvidiactl", "nvidia-uvm", "nvidia-uvm-tools", "nvidia-modeset", "nvidia0")
+]
+GPU_ENTRIES = [f"{path} {path[1:]} none ro,bind,optional,create=file" for path in GPU_FILES]
+GPU_ENTRIES += [f"{path} {path[1:]} none bind,optional,create=file" for path in GPU_DEVICES]
+GPU_ENTRIES += [
+    "/dev/nvidia-caps dev/nvidia-caps none bind,optional,create=dir",
+    "/sys/class/drm sys/class/drm none ro,bind,optional,create=dir",
+    "/proc/driver/nvidia proc/driver/nvidia none ro,bind,optional,create=dir",
+]
+
+
+def test_all_twenty_gpu_mounts_are_preserved_without_losing_repeated_keys():
+    raw = RAW + "".join("\nlxc.mount.entry: " + entry for entry in GPU_ENTRIES)
+    deleted, kept = remote.storage_plan(raw, CFG)
+    assert len(deleted) == 2
+    assert len(kept) == 21  # media bind plus every GPU entry, not just the final one
+    assert {mount["source"] for mount in kept[1:]} == {entry.split()[0] for entry in GPU_ENTRIES}
+    assert all(mount["kind"] == "gpu" for mount in kept[1:])
+    reordered = "".join("lxc.mount.entry: " + entry + "\n" for entry in GPU_ENTRIES)
+    reordered += "\n".join(reversed(RAW.splitlines()))
+    assert remote.storage_plan(reordered, CFG) == (deleted, kept)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "/srv/media movies none bind,optional,create=dir",
+        "/dev/sdb dev/sdb none bind,optional,create=file",
+        "/usr/bin/nvidia-smi movies none ro,bind,optional,create=file",
+        "/usr/bin/nvidia-smi usr/bin/nvidia-smi none bind,optional,create=file",
+        "/usr/bin/nvidia-smi usr/bin/nvidia-smi none ro,rbind,optional,create=file",
+        "/lib/x86_64-linux-gnu/../media lib/x86_64-linux-gnu/../media none ro,bind,optional,create=file",
+    ],
+)
+def test_unknown_or_modified_mount_before_valid_gpu_entry_still_blocks(entry):
+    raw = RAW + "\nlxc.mount.entry: " + entry + "\nlxc.mount.entry: " + GPU_ENTRIES[-1]
+    with pytest.raises(ValueError, match="lxc.mount.entry"):
+        remote.storage_plan(raw, CFG)
+
+
+def test_full_removal_does_not_delete_gpu_host_paths(monkeypatch, tmp_path):
+    calls, conf, external = simulated_host(monkeypatch, tmp_path)
+    conf.write_text(RAW + "".join("\nlxc.mount.entry: " + entry for entry in GPU_ENTRIES))
+    plan = remote.inspect(CFG)
+    assert len(plan["preserveMounts"]) == 21
+    assert remote.execute(CFG, plan["digest"])["state"] == "removed"
+    assert external.exists()
+    assert not any(any(path in call for path in GPU_FILES + GPU_DEVICES) for call in calls)
+
+
 @pytest.mark.parametrize(
     "value", ["proc:rw sys:rw", "proc sys cgroup", "proc:mixed sys:ro cgroup:rw:force"]
 )

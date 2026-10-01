@@ -29,6 +29,11 @@ and confirm that no wanted media are stored on either disk. Media mounts created
 inside the guest rather than through Proxmox bind mounts may require manual
 review. A stopped guest must be started for the ownership/media inspection.
 
+Recognized NVIDIA driver-file and GPU-device passthrough entries are preserved
+and listed separately from media storage in the preview. Every repeated
+`lxc.mount.entry` is checked; an unknown entry still blocks removal even if a
+recognized GPU entry follows it. Standard kernel automounts are also accepted.
+
 Proxmox must report the LXC and both disks gone before removal is reported as
 complete. Failure remains **incomplete**, not success. If the LXC has already
 been removed, another preview can recover the recorded cleanup plan and retry

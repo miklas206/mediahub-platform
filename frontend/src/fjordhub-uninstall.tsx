@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "./api";
 import { Panel } from "./phase2";
 
-type Mount = { slot: string; source: string; path: string };
+type Mount = { slot: string; source: string; path: string; kind?: "gpu" };
 type Plan = {
   state: string;
   message?: string;
@@ -108,6 +108,10 @@ export function FjordHubUninstallPage() {
 
   const removed = job?.uninstall?.state === "removed";
   const supported = job?.config.target === "lxc" && job.state !== "running";
+  const externalMounts =
+    plan?.preserveMounts.filter((mount) => mount.kind !== "gpu") || [];
+  const gpuMounts =
+    plan?.preserveMounts.filter((mount) => mount.kind === "gpu") || [];
   return (
     <div className="stack">
       <Link to="/store">← Back to App Store</Link>
@@ -247,9 +251,9 @@ export function FjordHubUninstallPage() {
                       {plan.accounts.join(", ") || "None found"}.
                     </p>
                     <h3>External storage is preserved</h3>
-                    {plan.preserveMounts.length ? (
+                    {externalMounts.length ? (
                       <ul>
-                        {plan.preserveMounts.map((mount) => (
+                        {externalMounts.map((mount) => (
                           <li key={mount.slot}>
                             <code>{mount.source}</code> → {mount.path}
                           </li>
@@ -260,6 +264,21 @@ export function FjordHubUninstallPage() {
                         No external bind mounts were found in this LXC. Shared
                         media elsewhere are untouched.
                       </p>
+                    )}
+                    {gpuMounts.length > 0 && (
+                      <details>
+                        <summary>
+                          {gpuMounts.length} GPU mounts — host drivers and
+                          devices preserved
+                        </summary>
+                        <ul>
+                          {gpuMounts.map((mount) => (
+                            <li key={mount.slot}>
+                              <code>{mount.source}</code>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
                     )}
                     <p>
                       The matching MediaHub connection is removed. Installation
