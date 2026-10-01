@@ -443,7 +443,11 @@ function Shell({
   }, []);
   useEffect(() => {
     const source = new EventSource("/api/v1/events/stream");
-    source.onopen = () => setLive(true);
+    source.onopen = () => {
+      setLive(true);
+      // Live events are not replayed after a restart or temporary disconnect.
+      reloadUpdateSummary();
+    };
     source.onerror = () => setLive(false);
     source.addEventListener("system.status", (event) => {
       setMetrics(JSON.parse((event as MessageEvent).data));
@@ -471,7 +475,10 @@ function Shell({
   }, [reloadNavigationApps, reloadUpdateSummary]);
   useEffect(() => {
     const refresh = () => {
-      if (!document.hidden) reloadNavigationApps();
+      if (!document.hidden) {
+        reloadNavigationApps();
+        reloadUpdateSummary();
+      }
     };
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
@@ -481,7 +488,7 @@ function Shell({
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [reloadNavigationApps]);
+  }, [reloadNavigationApps, reloadUpdateSummary]);
   const runtimePage = location.pathname.startsWith("/apps/");
   const storePage = location.pathname.startsWith("/store/");
   const title =
