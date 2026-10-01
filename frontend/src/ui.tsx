@@ -644,7 +644,7 @@ function Shell({
             </div>
           )}
           {error && <Notice>{error}</Notice>}
-          {!live && (
+          {!live && location.pathname !== "/updates" && (
             <Notice>
               Live connection interrupted. Reconnecting automatically; displayed
               metrics may be stale.

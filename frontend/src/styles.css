@@ -2164,3 +2164,25 @@ td time {
  .updates-page .updates-grid .panel { grid-template-columns:minmax(0,1fr); }
  .updates-page .updates-grid .panel-heading { padding:12px 12px 0; }
 }
+
+.update-restart-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--accent, #74e0ce);
+  border-radius: 8px;
+  background: rgba(116, 224, 206, 0.08);
+}
+.update-restart-notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.update-restart-notice p {
+  margin: 6px 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-restart-notice .spin {
+    animation: none;
+  }
+}

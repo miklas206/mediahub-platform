@@ -1,3 +1,4 @@
+import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -785,6 +786,17 @@ export function UpdatesPage({
     }
   }
 
+  const updating =
+    operations.platform?.status === "running" ||
+    operations.batch?.status === "running";
+  const restarting =
+    updating &&
+    Boolean(
+      serverError ||
+      operations.platform?.connectionLost ||
+      operations.batch?.connectionLost,
+    );
+
   return (
     <div className="stack updates-page">
       <p className="muted">
@@ -792,8 +804,11 @@ export function UpdatesPage({
         Updates continue on the server if you leave, refresh or close this page.
         Return here to follow progress.
       </p>
-      <ErrorBox error={error || serverError || appsError} />
-      <ErrorBox error={platformRelease.error || updateSummary.error} />
+      {updating && <UpdateRestartNotice disconnected={restarting} />}
+      <ErrorBox error={error || (restarting ? "" : serverError || appsError)} />
+      {!restarting && (
+        <ErrorBox error={platformRelease.error || updateSummary.error} />
+      )}
       {notice && (
         <p className="success" role="status">
           {notice}
