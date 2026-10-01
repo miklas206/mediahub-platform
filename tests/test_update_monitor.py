@@ -78,9 +78,11 @@ def test_same_version_notifies_again_only_after_it_was_no_longer_available(logge
 def test_update_schedule_is_configurable_and_does_not_install(logged_in):
     settings = logged_in.get("/api/v1/settings").json()["data"]
     settings["update_check_interval_hours"] = 72
+    settings["release_repository"] = "owner/repo"
     assert logged_in.put("/api/v1/settings", json=settings).status_code == 200
     summary = logged_in.get("/api/v1/updates/summary").json()["data"]
     assert summary["intervalHours"] == 72
+    assert summary["mainCheckIntervalSeconds"] == 900
     assert summary["count"] == 0
 
 

@@ -3,11 +3,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 from mediahub.main_branch_watch import MainBranchWatch
 from mediahub.update_monitor import UpdateMonitor
 
 
-def test_conditional_checks_are_small_throttled_and_detect_changes():
+@pytest.mark.parametrize("token", [None, "token"])
+def test_conditional_checks_are_small_throttled_and_detect_changes(token):
     async def run():
         now = [1000]
         requests = []
@@ -24,13 +26,16 @@ def test_conditional_checks_are_small_throttled_and_detect_changes():
             )
 
         watch = MainBranchWatch(httpx.MockTransport(respond), lambda: now[0])
-        assert await watch.check("owner/repo", None) == "a" * 40
+        assert await watch.check("owner/repo", token) == "a" * 40
         now[0] += 60
-        assert await watch.check("owner/repo", None) is None
-        now[0] += 240
-        assert await watch.check("owner/repo", None) == "a" * 40
-        now[0] += 300
-        assert await watch.check("owner/repo", None) == "b" * 40
+        assert await watch.check("owner/repo", token) is None
+        now[0] += 839
+        assert await watch.check("owner/repo", token) is None
+        assert len(requests) == 1
+        now[0] += 1
+        assert await watch.check("owner/repo", token) == "a" * 40
+        now[0] += 900
+        assert await watch.check("owner/repo", token) == "b" * 40
         assert len(requests) == 3
 
     asyncio.run(run())
@@ -51,11 +56,15 @@ def test_token_interval_and_rate_limit_backoff():
         await watch.check("owner/repo", "token")
         now[0] += 60
         await watch.check("owner/repo", "token")
+        assert len(requests) == 1
         now[0] += 900
         await watch.check("owner/repo", "token")
         assert len(requests) == 2
         assert watch.commit == "a" * 40
-        assert watch.next_check == 2860
+        assert watch.next_check == 3760
+        now[0] = 3759
+        await watch.check("owner/repo", "token")
+        assert len(requests) == 2
 
     asyncio.run(run())
 

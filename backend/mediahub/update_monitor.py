@@ -8,7 +8,7 @@ from sqlalchemy import select
 from mediahub import __version__
 from mediahub.db import Setting
 from mediahub.errors import DomainError
-from mediahub.main_branch_watch import MainBranchWatch
+from mediahub.main_branch_watch import MAIN_CHECK_INTERVAL_SECONDS, MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
 
 STATE_KEY = "update-monitor"
@@ -53,7 +53,7 @@ class UpdateMonitor:
         value = self._load()
         value["intervalHours"] = self.services.settings.get().update_check_interval_hours
         value["mainCheckIntervalSeconds"] = (
-            (60 if self.services.release_credentials.token() else 300)
+            MAIN_CHECK_INTERVAL_SECONDS
             if value["intervalHours"] and self.services.settings.get().release_repository
             else 0
         )

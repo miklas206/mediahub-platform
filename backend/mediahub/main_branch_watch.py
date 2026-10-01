@@ -7,6 +7,8 @@ import httpx
 
 from mediahub.platform_source import REPOSITORY, SHA, headers
 
+MAIN_CHECK_INTERVAL_SECONDS = 15 * 60
+
 
 class MainBranchWatch:
     def __init__(self, transport=None, clock=time.time):
@@ -25,7 +27,7 @@ class MainBranchWatch:
         now = self.clock()
         if now < self.next_check:
             return None
-        self.next_check = now + (60 if token else 300)
+        self.next_check = now + MAIN_CHECK_INTERVAL_SECONDS
         request_headers = headers(token)
         if self.etag:
             request_headers["If-None-Match"] = self.etag
