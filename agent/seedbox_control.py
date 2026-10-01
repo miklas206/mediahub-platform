@@ -7,6 +7,7 @@ import os
 import time
 from pathlib import Path
 
+import httpx
 from mediahub.errors import DomainError
 
 from agent.install_files import read_json, save_json
@@ -137,6 +138,33 @@ class SeedboxControl:
         self.job = asyncio.create_task(self.perform(action))
         return {"state": "accepted", "action": action}
 
+    async def uninstall_status(self):
+        self.initialize()
+        policy, spec = self.driver.binding()
+        path = Path(policy.workRoot) / "runtime-removal.json"
+        removed = read_json(path) if path.exists() else {}
+        if removed.get("installationId") == spec.installationId:
+            for service in ("torrent", "vpn"):
+                try:
+                    await self.driver.container(service)
+                except httpx.HTTPStatusError as error:
+                    if error.response.status_code == 404:
+                        continue
+                    raise
+                break
+            else:
+                return {
+                    "state": "succeeded",
+                    "installationId": spec.installationId,
+                    "dataPreserved": True,
+                }
+        operation = self.operation if self.operation.get("action") == "remove-runtime" else {}
+        return {
+            "state": operation.get("state", "ready"),
+            "installationId": spec.installationId,
+            "message": operation.get("message"),
+        }
+
     async def uninstall(self, installation_id):
         self.initialize()
         _, spec = self.driver.binding()
@@ -177,6 +205,8 @@ class SeedboxControl:
                     draft = read_json(wizard)
                     draft.update(step=0, revision=draft["revision"] + 1, preflight=None)
                     save_json(wizard, draft)
+                _, spec = self.driver.binding()
+                save_json(root / "runtime-removal.json", {"installationId": spec.installationId})
                 self.emit("seedbox.runtime_removed", "info")
             self.operation.update(
                 state="succeeded",

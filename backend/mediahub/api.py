@@ -193,12 +193,16 @@ async def app_update_check(app_id: str, request: Request, user=Depends(administr
 async def remove_runtime(
     app_id: str, body: RemoveRuntimeRequest, request: Request, user=Depends(administrator)
 ):
-    adapter = services(request).apps.adapter(app_id)
-    if not hasattr(adapter, "definition"):
-        raise DomainError(
-            "unsupported_action", "Runtime-only removal is not supported by this app", 400
-        )
-    return result(await adapter.uninstall(body.confirmedInstallationId))
+    from mediahub.app_removal import remove_app
+
+    return result(await remove_app(services(request), app_id, body.confirmedInstallationId))
+
+
+@router.get("/apps/{app_id}/uninstall")
+async def uninstall_status(app_id: str, request: Request, user=Depends(administrator)):
+    from mediahub.app_removal import removal_status
+
+    return result(await removal_status(services(request), app_id))
 
 
 @router.get("/storage")

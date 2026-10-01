@@ -64,3 +64,30 @@ async def test_arbitrary_action_rejected_before_initialization(tmp_path):
     with pytest.raises(DomainError):
         await control.submit("delete-all")
     assert control.lifecycle is None
+
+
+@pytest.mark.anyio
+async def test_removed_status_requires_missing_containers_not_just_old_marker(tmp_path):
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    from agent.install_files import save_json
+
+    control = controller(tmp_path)
+    control.initialize()
+    control.driver.binding = lambda: (
+        SimpleNamespace(workRoot=str(tmp_path)),
+        SimpleNamespace(installationId="seedbox-test"),
+    )
+    assert (await control.uninstall_status())["state"] == "ready"
+    save_json(tmp_path / "runtime-removal.json", {"installationId": "seedbox-test"})
+    control.driver.container = AsyncMock(return_value={"Id": "still-present"})
+    assert (await control.uninstall_status())["state"] == "ready"
+
+    def missing(_):
+        response = httpx.Response(404, request=httpx.Request("GET", "http://docker/container"))
+        raise httpx.HTTPStatusError("missing", request=response.request, response=response)
+
+    control.driver.container = AsyncMock(side_effect=missing)
+    assert (await control.uninstall_status())["state"] == "succeeded"

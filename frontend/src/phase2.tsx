@@ -1,3 +1,4 @@
+import { AppUninstall } from "./app-uninstall";
 import {
   useCallback,
   useEffect,
@@ -1386,6 +1387,17 @@ export function CatalogPage({
                       Set up FjordHub →
                     </Link>
                   ) : null}
+                  {connected && app.id === "org.mediahub.fjordhub" && (
+                    <Link to="/store/fjordhub">
+                      Check installation / uninstall
+                    </Link>
+                  )}
+                  {installedApp && showInstalled && (
+                    <AppUninstall
+                      app={installedApp}
+                      onRemoved={installed.reload}
+                    />
+                  )}
                   {app.repository && (
                     <a href={app.repository} target="_blank" rel="noreferrer">
                       Source →

@@ -36,6 +36,77 @@ class PlexRuntime:
         self.libraries_ready = False
         self.vpn = PlexVPN(self)
 
+    async def uninstall_status(self):
+        policy = self.control.policy()
+        path = self.state_dir / "plex-removal.json"
+        record = read_json(path) if path.exists() else {}
+        if record.get("installationId") == policy.installationId:
+            from urllib.parse import quote
+
+            filters = quote(
+                json.dumps(
+                    {
+                        "label": [
+                            "org.mediahub.installation=" + policy.installationId,
+                            "org.mediahub.package=org.mediahub.plex",
+                        ]
+                    }
+                )
+            )
+            containers = await self.request("GET", "/containers/json?all=true&filters=" + filters)
+            vpn = await self.vpn._container(required=False) if policy.vpnEnabled else None
+            if not containers and vpn is None:
+                return {
+                    "state": "succeeded",
+                    "installationId": policy.installationId,
+                    "dataPreserved": True,
+                }
+        operation = self.operation if self.operation.get("action") == "remove-runtime" else {}
+        return {
+            "state": operation.get("state", "ready"),
+            "installationId": policy.installationId,
+            "message": operation.get("message"),
+        }
+
+    async def uninstall(self, installation_id):
+        policy = self.control.policy()
+        if installation_id != policy.installationId:
+            raise DomainError(
+                "confirmation_required", "Exact installation confirmation required", 409
+            )
+        if self.operation.get("state") == "running" or self.control.lock.locked():
+            raise DomainError("operation_busy", "Another Plex operation is running", 409)
+        self.operation = {"state": "running", "action": "remove-runtime"}
+        self.update_task = asyncio.create_task(self.remove_runtime(policy))
+        return {"state": "accepted", "dataPreserved": True}
+
+    async def remove_runtime(self, policy):
+        try:
+            async with self.control.lock:
+                plex = await self.control.inspect(policy)
+                vpn = await self.vpn._container() if policy.vpnEnabled else None
+                if plex["State"].get("Running"):
+                    await self.checkpoint(policy)
+                self.control.save_intent(policy, False)
+                for item in (plex, vpn):
+                    if item is None:
+                        continue
+                    if item["State"].get("Running"):
+                        await self.request("POST", f"/containers/{item['Id']}/stop?t=30")
+                    await self.request("DELETE", f"/containers/{item['Id']}?force=false&v=false")
+                save_json(
+                    self.state_dir / "plex-removal.json", {"installationId": policy.installationId}
+                )
+                self.operation.update(
+                    state="succeeded",
+                    message="Plex runtime removed; media, settings and credentials preserved",
+                )
+                self.control.record("runtime_removed")
+        except Exception:
+            self.operation.update(
+                state="failed", message="Runtime removal stopped; persistent data was not deleted"
+            )
+
     def policy(self):
         try:
             return PlexInstallPolicy.model_validate(read_json(Path(self.policy_file)))

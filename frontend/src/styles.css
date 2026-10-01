@@ -2193,3 +2193,5 @@ td time {
 .app-shortcut-status.degraded { color: #e7c079; }
 .app-shortcut-status.unhealthy, .app-shortcut-status.critical { color: #f4a2a2; }
 .app-shortcut-status .app-shortcut-dot { width: 8px; height: 8px; background: currentColor; }
+
+.app-removal-dialog { position: fixed; z-index: 100; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 32px)); max-height: 90vh; overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 100vmax #0009; }

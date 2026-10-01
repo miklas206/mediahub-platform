@@ -170,7 +170,7 @@ class AppManager:
 
     def list(self):
         with self.sessions() as db:
-            query = select(InstalledApp.id)
+            query = select(InstalledApp.id).where(InstalledApp.state != "uninstalled")
             if not (self.config.dev_mode and self.config.mock_app):
                 query = query.where(InstalledApp.is_mock.is_(False))
             ids = db.scalars(query).all()

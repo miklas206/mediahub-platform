@@ -132,7 +132,11 @@ def register_cloudflared_app(svc):
             app.name = manifest.name
             if Version(app.version) < Version(manifest.version):
                 app.version = manifest.version
-            app.state = "monitored" if configured else "not_configured"
+            app.state = (
+                "monitored"
+                if configured
+                else ("uninstalled" if app.state == "uninstalled" else "not_configured")
+            )
         app_id = app.id
     svc.apps.adapters[app_id] = CloudflaredAppAdapter(svc.cloudflare_tunnel, svc.events, app_id)
     if created:

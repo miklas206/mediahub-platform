@@ -3,6 +3,7 @@ import { api } from "./api";
 import type { FjordHubConfig } from "./fjordhub-commands";
 
 type Deployment = {
+  verification?: { state: string; message: string; checkedAt: number };
   id: string;
   state: "running" | "succeeded" | "failed" | "interrupted";
   host: string;
@@ -129,6 +130,39 @@ export function FjordHubDeployment({
       setError((e as Error).message);
     } finally {
       setPending(false);
+    }
+  };
+  const inspectInstallation = async (remove = false) => {
+    if (!job || !verified || !password) return;
+    if (
+      remove &&
+      !window.confirm(
+        "Remove this FjordHub deployment's containers? Active use will stop. The LXC, source, app data and settings are kept.",
+      )
+    )
+      return;
+    setPending(true);
+    setError("");
+    try {
+      const verification = await api<NonNullable<Deployment["verification"]>>(
+        endpoint + "/inspect",
+        "POST",
+        {
+          host,
+          port: Number(port),
+          fingerprint,
+          password,
+          jobId: job.id,
+          remove,
+          confirmedJobId: remove ? job.id : undefined,
+        },
+      );
+      setJob({ ...job, verification });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPending(false);
+      setPassword("");
     }
   };
   const install = async () => {
@@ -310,11 +344,13 @@ export function FjordHubDeployment({
             }
             onClick={() => void install()}
           >
-            {busy
-              ? "Installation in progress…"
-              : config.target === "lxc"
-                ? "Create LXC and install FjordHub"
-                : "Install FjordHub"}
+            {pending
+              ? "Working..."
+              : busy
+                ? "Installation in progress…"
+                : config.target === "lxc"
+                  ? "Create LXC and install FjordHub"
+                  : "Install FjordHub"}
           </button>
           {error && (
             <p className="error" role="alert">
@@ -329,11 +365,44 @@ export function FjordHubDeployment({
             {job.state === "running"
               ? "Installing FjordHub"
               : job.state === "succeeded"
-                ? "FjordHub installed"
+                ? "Previous installation completed"
                 : "Installation needs attention"}{" "}
             · {job.host}
           </strong>
-          <p role="status">{job.message}</p>
+          <p role="status">
+            {job.state === "succeeded"
+              ? "This is the previous installation result, not proof that FjordHub is still installed."
+              : job.message}
+          </p>
+          {job.verification && (
+            <p role="status">
+              <strong>{job.verification.state}</strong>:{" "}
+              {job.verification.message} Last checked:{" "}
+              {new Date(job.verification.checkedAt * 1000).toLocaleString()}
+            </p>
+          )}
+          {job.state !== "running" && (
+            <>
+              <p>
+                Enter the SSH password and verify the host fingerprint above to
+                check the actual installation. No password is stored.
+              </p>
+              <div className="runtime-toolbar">
+                <button
+                  disabled={busy || !verified || !password || host !== job.host}
+                  onClick={() => void inspectInstallation()}
+                >
+                  Check actual installation
+                </button>
+                <button
+                  disabled={busy || !verified || !password || host !== job.host}
+                  onClick={() => void inspectInstallation(true)}
+                >
+                  Uninstall FjordHub - keep data
+                </button>
+              </div>
+            </>
+          )}
           {job.state === "running" && (
             <p>
               You can leave this page and return to see progress. Keep MediaHub

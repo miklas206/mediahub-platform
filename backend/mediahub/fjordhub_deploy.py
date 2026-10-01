@@ -189,6 +189,7 @@ class FjordHubDeploy:
     def __init__(self, sessions):
         self.sessions = sessions
         self.lock = threading.RLock()
+        self.inspection_lock = threading.Lock()
         with sessions.begin() as db:
             for row in db.scalars(select(Setting).where(Setting.key.startswith(PREFIX))):
                 if row.value.get("state") == "running":
@@ -214,7 +215,9 @@ class FjordHubDeploy:
             row.value = {**job, "updatedAt": now(), "logs": list(job["logs"])}
 
     def start(self, body):
-        with self.lock, self.sessions.begin() as db:
+        if self.inspection_lock.locked():
+            raise DomainError("deployment_busy", "An installation check or removal is running", 409)
+        with self.inspection_lock, self.lock, self.sessions.begin() as db:
             key = PREFIX + str(body.requestId)
             previous = db.scalar(select(Setting).where(Setting.key == key))
             if previous:
@@ -289,6 +292,9 @@ class FjordHubDeploy:
                                 line, pending = pending[:4096], pending[4096:]
                             line = clean_line(line, password)
                             if line:
+                                created = re.search(r"Created LXC ([0-9]{3,9})", line)
+                                if created:
+                                    job["actualCtid"] = created[1]
                                 job["logs"] = (job["logs"] + [line])[-300:]
                     elif channel.exit_status_ready():
                         if pending:

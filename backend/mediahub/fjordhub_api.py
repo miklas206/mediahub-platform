@@ -7,6 +7,7 @@ from mediahub.api import administrator, result, services
 from mediahub.db import Setting
 from mediahub.errors import DomainError
 from mediahub.fjordhub_deploy import DeployRequest, SSHAddress, probe
+from mediahub.fjordhub_inspect import InspectDeployment, inspect_deployment
 
 router = APIRouter(prefix="/fjordhub/deployment", dependencies=[Depends(administrator)])
 
@@ -59,3 +60,8 @@ def host_fingerprint(body: SSHAddress):
 @router.post("")
 def start(body: DeployRequest, request: Request):
     return result(services(request).fjordhub_deploy.start(body))
+
+
+@router.post("/inspect")
+def inspect_existing(body: InspectDeployment, request: Request):
+    return result(inspect_deployment(services(request).fjordhub_deploy, body))

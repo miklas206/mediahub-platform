@@ -526,6 +526,18 @@ def create_agent(config: AgentConfig | None = None):
     async def seedbox_logs():
         return {"entries": control.events[-100:]}
 
+    @app.get("/v1/seedbox/uninstall-status")
+    async def seedbox_uninstall_status():
+        return await control.uninstall_status()
+
+    @app.get("/v1/plex/uninstall-status")
+    async def plex_uninstall_status():
+        return await plex_runtime.uninstall_status()
+
+    @app.post("/v1/plex/uninstall", dependencies=[Depends(secure_workflow)], status_code=202)
+    async def plex_uninstall(body: RemoveRuntimeRequest):
+        return await plex_runtime.uninstall(body.confirmedInstallationId)
+
     @app.post("/v1/seedbox/uninstall", status_code=202)
     async def seedbox_uninstall(body: RemoveRuntimeRequest):
         return await control.uninstall(body.confirmedInstallationId)
