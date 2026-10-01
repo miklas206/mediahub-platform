@@ -1387,9 +1387,9 @@ export function CatalogPage({
                       Set up FjordHub →
                     </Link>
                   ) : null}
-                  {connected && app.id === "org.mediahub.fjordhub" && (
-                    <Link to="/store/fjordhub">
-                      Check installation / uninstall
+                  {app.id === "org.mediahub.fjordhub" && (
+                    <Link to="/store/fjordhub/uninstall">
+                      Uninstall FjordHub
                     </Link>
                   )}
                   {installedApp && showInstalled && (

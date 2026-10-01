@@ -64,6 +64,7 @@ import {
 } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
 import { AppStorePage, CloudflareStorePage, FjordHubStorePage } from "./store";
+import { FjordHubUninstallPage } from "./fjordhub-uninstall";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   OperationProgress,
@@ -725,6 +726,10 @@ function Shell({
             <Route path="/apps/:appId" element={<AppRuntimePage />} />
             <Route path="/store/cloudflare" element={<CloudflareStorePage />} />
             <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
+            <Route
+              path="/store/fjordhub/uninstall"
+              element={<FjordHubUninstallPage />}
+            />
             <Route path="/store" element={<AppStorePage />} />
             <Route
               path="/"

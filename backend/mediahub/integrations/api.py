@@ -54,6 +54,8 @@ async def defaults(request: Request, user=Depends(authenticated)):
         )
         for row in jobs:
             job = row.value
+            if job.get("uninstall", {}).get("state") == "removed":
+                return result({"baseUrl": None})
             # The guest emits this marker only after its health check. Proxmox
             # setup can fail afterwards, without making the guest URL invalid.
             # Never fall back to a different, older installation's address.

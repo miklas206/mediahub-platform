@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { Link } from "react-router-dom";
 import type { FjordHubConfig } from "./fjordhub-commands";
 
 type Deployment = {
@@ -394,12 +395,9 @@ export function FjordHubDeployment({
                 >
                   Check actual installation
                 </button>
-                <button
-                  disabled={busy || !verified || !password || host !== job.host}
-                  onClick={() => void inspectInstallation(true)}
-                >
-                  Uninstall FjordHub - keep data
-                </button>
+                <Link to="/store/fjordhub/uninstall">
+                  Uninstall FjordHub — preserve external media
+                </Link>
               </div>
             </>
           )}

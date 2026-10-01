@@ -8,6 +8,7 @@ from mediahub.db import Setting
 from mediahub.errors import DomainError
 from mediahub.fjordhub_deploy import DeployRequest, SSHAddress, probe
 from mediahub.fjordhub_inspect import InspectDeployment, inspect_deployment
+from mediahub.fjordhub_uninstall import UninstallDeployment, uninstall_deployment
 
 router = APIRouter(prefix="/fjordhub/deployment", dependencies=[Depends(administrator)])
 
@@ -65,3 +66,8 @@ def start(body: DeployRequest, request: Request):
 @router.post("/inspect")
 def inspect_existing(body: InspectDeployment, request: Request):
     return result(inspect_deployment(services(request).fjordhub_deploy, body))
+
+
+@router.post("/uninstall")
+def uninstall_existing(body: UninstallDeployment, request: Request):
+    return result(uninstall_deployment(services(request), body))
