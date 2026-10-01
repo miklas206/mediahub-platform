@@ -8,7 +8,9 @@ INSTALL_DIR=${2:-/opt/fjordhub}
 [[ "$CTID" =~ ^[0-9]+$ ]] && [[ "$INSTALL_DIR" =~ ^/(opt|srv|mnt)/[a-zA-Z0-9_./-]+$ ]] || exit 1
 [ "$(id -u)" -eq 0 ] && [ -d /etc/pve ] || { echo 'Run on the Proxmox host as root.' >&2; exit 1; }
 NODE=$(basename "$(readlink -f /etc/pve/local)")
-API_IP=$(perl -MJSON::PP -0777 -e 'my $node=shift; my $m=decode_json(<>); print $m->{nodelist}{$node}{ip} // die "Missing node IP\n"' "$NODE" /etc/pve/.members)
+# Use Proxmox's resolver: standalone nodes may lack an IP in .members.
+# It falls back to the node's host resolution, just like Proxmox itself.
+API_IP=$(perl -MPVE::Cluster -e 'PVE::Cluster::cfs_update(); my $ip = PVE::Cluster::remote_node_ip(shift); die "Cannot resolve Proxmox node IP; check node hostname and /etc/hosts\n" if !defined($ip) || $ip eq ""; print $ip;' "$NODE")
 [[ "$API_IP" == *:* ]] && API_IP="[$API_IP]"
 API_URL="https://$API_IP:8006"
 # Refuse accidental replacement of an administrator's existing credentials.

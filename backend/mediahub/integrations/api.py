@@ -45,25 +45,26 @@ async def listing(request: Request, user=Depends(authenticated)):
 @router.get("/fjordhub/defaults")
 async def defaults(request: Request, user=Depends(authenticated)):
     svc = services(request)
-    if svc.config.fjordhub_url:
-        return result({"baseUrl": svc.config.fjordhub_url})
     with svc.sessions() as db:
         jobs = db.scalars(
             select(Setting)
             .where(Setting.key.startswith("fjordhub.deployment."))
             .order_by(Setting.created_at.desc())
+            .limit(1)
         )
         for row in jobs:
             job = row.value
-            if job.get("state") != "succeeded":
-                continue
+            # The guest emits this marker only after its health check. Proxmox
+            # setup can fail afterwards, without making the guest URL invalid.
+            # Never fall back to a different, older installation's address.
             for line in reversed(job.get("logs", [])):
                 if line.startswith("MEDIAHUB_FJORDHUB_URL="):
                     try:
                         return result({"baseUrl": validate_url(line.split("=", 1)[1], True)})
                     except ValueError:
                         continue
-    return result({"baseUrl": None})
+            return result({"baseUrl": None})
+    return result({"baseUrl": svc.config.fjordhub_url})
 
 
 @router.post("/fjordhub/test")

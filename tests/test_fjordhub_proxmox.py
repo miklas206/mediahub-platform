@@ -18,6 +18,42 @@ CHECK = SCRIPT.split("<<'MEDIAHUB_CHECK'\n")[1].split("\nMEDIAHUB_CHECK")[0]
 TOKEN = {"full-tokenid": "mediahub-fjordhub-210-test@pve!inventory", "value": "test-secret"}
 
 
+@pytest.mark.parametrize("address", ["192.168.1.126", "fd00::126", ""])
+def test_node_discovery_uses_native_resolver_and_propagates_failure(tmp_path, address):
+    # Proxmox modules are host-only. Exercise the real shell/Perl invocation
+    # against their contract, without requiring a node entry in .members.
+    modules = tmp_path / "PVE"
+    modules.mkdir()
+    (modules / "Cluster.pm").write_text(
+        "package PVE::Cluster;\n"
+        "my $updated = 0;\n"
+        "sub cfs_update { $updated = 1; }\n"
+        "sub remote_node_ip {\n"
+        "  die 'Cluster state not loaded' unless $updated;\n"
+        "  die 'Wrong node' unless shift eq 'node2';\n"
+        "  return $ENV{TEST_NODE_IP};\n"
+        "}\n1;\n"
+    )
+    discovery = SCRIPT.split("API_IP=", 1)[1].split("# Refuse", 1)[0]
+    bash = "C:/Program Files/Git/bin/bash.exe" if os.name == "nt" else "/bin/bash"
+    result = subprocess.run(
+        [bash, "-s"],
+        input="set -e\nNODE=node2\nAPI_IP=" + discovery + '\nprintf "%s" "$API_URL"\n',
+        text=True,
+        capture_output=True,
+        cwd=tmp_path,
+        env={**os.environ, "PERL5LIB": ".", "TEST_NODE_IP": address},
+    )
+    if address:
+        assert result.returncode == 0, result.stderr
+        host = f"[{address}]" if ":" in address else address
+        assert result.stdout == f"https://{host}:8006"
+    else:
+        assert result.returncode != 0
+        assert "Cannot resolve Proxmox node IP" in result.stderr
+        assert result.stdout == ""
+
+
 def write_env(folder, token=TOKEN):
     return subprocess.run(
         [sys.executable, "-c", WRITE_ENV, str(folder), "https://192.168.1.2:8006", "node2", "210"],

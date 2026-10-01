@@ -25,6 +25,17 @@ working Proxmox integration. It preserves the LXC and application data.
 
 ## Repair an existing MediaHub installation
 
+If the installer stopped with `Missing node IP` after the guest became healthy,
+the application is already installed. The current helper uses Proxmox's native
+node-address resolver, including hostname resolution when membership metadata
+does not contain an IP. Update MediaHub and run the helper below for the existing
+CTID; do not rerun the LXC creation installer. An unresolvable hostname still
+stops setup before credentials are created; check the node's `/etc/hosts`/DNS.
+
+The connection form uses the latest guest's health-checked URL even when the
+subsequent Proxmox configuration fails. If that deployment has no valid URL,
+the form stays empty instead of linking to an older guest or configured default.
+
 Update FjordHub and FjordFlix first: old FjordHub versions do not have the
 `/api/hub/apps/fjordflix/library` endpoint. Missing/old endpoints may appear as a
 login/SSO error in FjordFlix, separately from missing Proxmox credentials.

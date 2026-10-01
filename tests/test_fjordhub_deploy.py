@@ -91,14 +91,15 @@ def test_host_identity_must_match():
     "state,url,expected",
     [
         ("succeeded", "http://192.168.1.44:8888", "http://192.168.1.44:8888"),
-        ("failed", "http://192.168.1.44:8888", None),
+        ("failed", "http://192.168.1.44:8888", "http://192.168.1.44:8888"),
+        ("interrupted", "http://192.168.1.44:8888", "http://192.168.1.44:8888"),
         ("succeeded", "http://127.0.0.1:8888", None),
         ("succeeded", "http://user:secret@192.168.1.44:8888", None),
     ],
 )
-def test_fjordhub_url_from_successful_guest_install(logged_in, state, url, expected):
+def test_fjordhub_url_from_healthy_guest_even_if_later_setup_fails(logged_in, state, url, expected):
     svc = logged_in.app.state.services
-    svc.config.fjordhub_url = None
+    svc.config.fjordhub_url = "http://192.168.1.112:8888"
     with svc.sessions.begin() as db:
         db.add(
             Setting(
@@ -114,6 +115,36 @@ def test_fjordhub_url_from_successful_guest_install(logged_in, state, url, expec
         logged_in.get("/api/v1/integrations/fjordhub/defaults").json()["data"]["baseUrl"]
         == expected
     )
+
+
+@pytest.mark.parametrize("latest_url", [None, "http://192.168.1.224:8888"])
+def test_latest_deployment_never_links_to_an_older_guest(logged_in, latest_url):
+    svc = logged_in.app.state.services
+    svc.config.fjordhub_url = "http://192.168.1.112:8888"
+    with svc.sessions.begin() as db:
+        db.add(
+            Setting(
+                key="fjordhub.deployment.old",
+                created_at=1,
+                value={
+                    "state": "succeeded",
+                    "logs": ["MEDIAHUB_FJORDHUB_URL=http://192.168.1.112:8888"],
+                },
+            )
+        )
+        db.add(
+            Setting(
+                key="fjordhub.deployment.new",
+                created_at=2,
+                value={
+                    "state": "failed",
+                    "logs": (["MEDIAHUB_FJORDHUB_URL=" + latest_url] if latest_url else []),
+                },
+            )
+        )
+    assert logged_in.get("/api/v1/integrations/fjordhub/defaults").json()["data"] == {
+        "baseUrl": latest_url
+    }
 
 
 def test_authenticated_admin_and_csrf_required(client, logged_in, monkeypatch):
