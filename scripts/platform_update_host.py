@@ -854,6 +854,79 @@ class HostUpdater:
         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
         self._wait("core", health=True)
 
+    def _cleanup_update_images(self):
+        """Only remove owned source tags, preserving containers and rollback images."""
+        protected = set()
+        compose_files = [self.compose] + [
+            path / "compose.json" for path in self.backups.iterdir() if path.is_dir()
+        ]
+        for path in compose_files:
+            value = self._read_json(path, 2 * 1024 * 1024)
+            for role in ("core", "agent"):
+                reference = value["services"][role]["image"]
+                image = self.command("docker", "image", "inspect", "--format", "{{.Id}}", reference)
+                if not LOADED_IMAGE.fullmatch(image):
+                    raise ValueError("Rollback image could not be verified")
+                protected.add(image)
+        containers = self.command("docker", "ps", "-aq").splitlines()
+        for container in containers:
+            image = self.command("docker", "inspect", "--format", "{{.Image}}", container)
+            if not LOADED_IMAGE.fullmatch(image):
+                raise ValueError("Container image could not be verified")
+            protected.add(image)
+        candidates = {}
+        listing = self.command("docker", "image", "ls", "--no-trunc", "--format", "{{json .}}")
+        for line in listing.splitlines():
+            row = json.loads(line)
+            image = row["ID"]
+            tag = row["Repository"] + ":" + row["Tag"]
+            candidates.setdefault(image, []).append(tag)
+        removed = 0
+        for image, tags in candidates.items():
+            if image in protected or not LOADED_IMAGE.fullmatch(image):
+                continue
+            if not all(
+                re.fullmatch(
+                    r"mediahub-(core|agent):source-[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]{12}", tag
+                )
+                for tag in tags
+            ):
+                continue
+            # No --force: Docker provides a final guard against container use.
+            self.command("docker", "image", "rm", *tags)
+            removed += len(tags)
+        self._append_log(
+            f"Cleanup removed {removed} unused MediaHub source tags; rollback images retained"
+        )
+
+    def _cleanup_after_success(self, stage):
+        # Maintenance is best effort and must never roll back a verified update.
+        try:
+            shutil.rmtree(stage)
+            backups = sorted(
+                (path for path in self.backups.iterdir() if path.is_dir()),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            for old in backups[2:]:
+                if old.is_symlink() or old.resolve().parent != self.backups.resolve():
+                    raise ValueError("Unsafe backup path")
+                shutil.rmtree(old)
+            self._cleanup_update_images()
+            self.command(
+                "docker",
+                "builder",
+                "prune",
+                "--force",
+                "--filter",
+                "until=24h",
+                "--keep-storage",
+                "4GB",
+            )
+        except Exception:
+            self._append_log("Update succeeded; some optional cleanup could not be completed")
+        self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
+
     def process(self):
         if fcntl is None or not hasattr(os, "geteuid") or os.geteuid() != 0:
             raise ValueError("Host updater must run as root")
@@ -962,14 +1035,7 @@ class HostUpdater:
                     self.write_installed_source(manifest["source"])
                 self.steps[-1]["state"] = "complete"
                 self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
-                shutil.rmtree(stage)
-                backups = sorted(
-                    (path for path in self.backups.iterdir() if path.is_dir()),
-                    key=lambda path: path.stat().st_mtime,
-                    reverse=True,
-                )
-                for old in backups[2:]:
-                    shutil.rmtree(old)
+                self._cleanup_after_success(stage)
             except Exception as error:
                 if request is None:
                     raise

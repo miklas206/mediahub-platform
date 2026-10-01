@@ -753,3 +753,67 @@ def test_commit_request_rejects_stale_installed_commit_before_stopping(tmp_path,
     updater.process()
     assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
     assert not any("stop" in args for args in commands)
+
+
+def test_cleanup_preserves_current_rollback_container_and_foreign_images(tmp_path):
+    updater = TestUpdater(tmp_path)
+    updater.backups.mkdir()
+    ids = {
+        name: "sha256:" + char * 64
+        for name, char in zip(["current", "rollback", "container", "old", "foreign"], "abcde")
+    }
+    updater.compose.write_text(
+        json.dumps(
+            {"services": {"core": {"image": ids["current"]}, "agent": {"image": ids["current"]}}}
+        )
+    )
+    backup = updater.backups / OPERATION
+    backup.mkdir()
+    (backup / "compose.json").write_text(
+        json.dumps(
+            {"services": {"core": {"image": ids["rollback"]}, "agent": {"image": ids["rollback"]}}}
+        )
+    )
+    rows = [
+        {"ID": image, "Repository": "mediahub-core", "Tag": "source-0.4.29-" + str(i) * 12}
+        for i, image in enumerate(ids.values())
+    ]
+    rows.append({"ID": ids["foreign"], "Repository": "other-app", "Tag": "keep"})
+    deleted = []
+
+    def command(*args):
+        if args[:3] == ("docker", "image", "inspect"):
+            return args[-1]
+        if args[:3] == ("docker", "ps", "-aq"):
+            return "container-id"
+        if args[:2] == ("docker", "inspect"):
+            return ids["container"]
+        if args[:3] == ("docker", "image", "ls"):
+            return "\n".join(json.dumps(row) for row in rows)
+        if args[:3] == ("docker", "image", "rm"):
+            deleted.extend(args[3:])
+            return ""
+        raise AssertionError(args)
+
+    updater.command = command
+    updater._cleanup_update_images()
+    assert deleted == ["mediahub-core:source-0.4.29-333333333333"]
+
+
+def test_cleanup_failure_cannot_change_verified_update_to_failed(tmp_path, monkeypatch):
+    updater = TestUpdater(tmp_path)
+    updater.backups.mkdir()
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    states = []
+    updater.target = "0.4.29"
+    updater.status = lambda state, *args: states.append(state)
+
+    def fail():
+        raise RuntimeError("private diagnostic")
+
+    monkeypatch.setattr(updater, "_cleanup_update_images", fail)
+    updater._cleanup_after_success(stage)
+    assert states == ["succeeded"]
+    assert "private diagnostic" not in "\n".join(updater.log_lines)
+    assert any("cleanup" in line for line in updater.log_lines)
