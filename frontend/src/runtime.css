@@ -565,7 +565,15 @@
 }
 .torrent-actions {
   display: flex;
+  align-items: center;
   gap: 0.35rem;
+}
+.torrent-actions > button {
+  flex: 0 0 6.5rem;
+  width: 6.5rem;
+  height: 2.75rem;
+  padding: 0 0.5rem;
+  white-space: nowrap;
 }
 .torrent-table progress {
   width: 7rem;
