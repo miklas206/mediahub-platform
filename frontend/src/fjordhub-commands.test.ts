@@ -28,6 +28,10 @@ it("generates separate LXC disks and configures chosen values without exposing a
   expect(commands).toContain("secrets.token_hex(32)");
   expect(commands).toContain("values['FJORDHUB_HOST_DIR']");
   expect(commands).toContain("docker compose config --quiet");
+  expect(commands).toContain('bash -s -- "$CTID"');
+  expect(commands).toContain('"PROXMOX_VMID": sys.argv[4]');
+  expect(commands).toContain("--roles PVEAuditor");
+  expect(commands).toContain("Proxmox storage, disks and LXC mount discovery verified.");
   expect(commands).not.toContain("pct destroy");
   expect(commands).not.toContain("--privileged");
 });
@@ -47,6 +51,7 @@ it("supports DHCP, static networking and existing Debian hosts", () => {
   ).toContain("ip=192.168.1.50/24,gw=192.168.1.1");
   const linux = fjordHubCommands({ ...defaults, target: "linux" });
   expect(linux).not.toContain("pct create");
+  expect(linux).not.toContain("pveum user add");
   expect(linux).toContain("Source path already exists; stopping.");
   expect(linux).toContain("App-data path is not empty; stopping.");
 });
