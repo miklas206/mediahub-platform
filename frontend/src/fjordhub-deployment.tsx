@@ -204,8 +204,8 @@ export function FjordHubDeployment({
           <p>
             Connect as root to{" "}
             {config.target === "lxc" ? "your Proxmox node" : "the Debian host"}.
-            MediaHub runs the displayed installer after you press Install. The
-            SSH password is used for this job only and is not saved.
+            MediaHub installs FjordHub automatically after you press Install.
+            The SSH password is used for this job only and is not saved.
           </p>
           <fieldset disabled={busy} className="store-form-grid">
             <label>

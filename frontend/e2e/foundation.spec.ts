@@ -96,12 +96,18 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await page.getByLabel("IPv4 address/prefix").fill("192.168.1.50/24");
   await page.getByLabel("IPv4 gateway").fill("192.168.1.1");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  const generated = page.getByLabel("FjordHub installation commands");
-  await expect(generated).toContainText("pct create");
-  await expect(generated).toContainText("CTID='210'");
-  await expect(generated).toContainText("STORAGE='ssd-test'");
-  await expect(generated).toContainText("ip=192.168.1.50/24,gw=192.168.1.1");
-  await expect(generated).toContainText("APP_PORT='9090'");
+  await expect(
+    page.getByLabel("Automatic FjordHub installation"),
+  ).toBeVisible();
+  await expect(page.getByLabel("FjordHub installation commands")).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "Copy commands" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Download script" }),
+  ).toHaveCount(0);
   await page.screenshot({
     path: "../.qa/fjordhub-commands-desktop.png",
     fullPage: true,

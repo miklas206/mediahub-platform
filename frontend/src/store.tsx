@@ -1,6 +1,6 @@
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Check,
@@ -17,7 +17,6 @@ import { IntegrationsPage } from "./integrations";
 import { CatalogPage, Panel } from "./phase2";
 import {
   defaultFjordHubConfig,
-  fjordHubCommands,
   fjordHubErrors,
   type FjordHubConfig,
 } from "./fjordhub-commands";
@@ -109,37 +108,7 @@ export function FjordHubStorePage() {
   const field = (key: keyof FjordHubConfig, value: string) =>
     setConfig((current) => ({ ...current, [key]: value }));
   const errors = fjordHubErrors(config);
-  const [copyMessage, setCopyMessage] = useState("");
-  const installCommands = useMemo(() => {
-    try {
-      return fjordHubCommands(config);
-    } catch {
-      return "";
-    }
-  }, [config]);
   const canContinue = !deploying && (step !== 1 || errors.length === 0);
-  const copyCommands = async () => {
-    try {
-      await navigator.clipboard.writeText(installCommands);
-      setCopyMessage(
-        "Commands copied. Run them yourself on the indicated host.",
-      );
-    } catch {
-      setCopyMessage(
-        "Clipboard unavailable. Select the commands below or download the script.",
-      );
-    }
-  };
-  const downloadCommands = () => {
-    const url = URL.createObjectURL(
-      new Blob([installCommands + "\n"], { type: "text/x-shellscript" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "mediahub-fjordhub-setup.sh";
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
 
   return (
     <div className="stack store-install-page">
@@ -309,16 +278,18 @@ export function FjordHubStorePage() {
                 />
                 <small>
                   Path inside the guest. LXC mode creates a separate managed
-                  data disk here, included in backups. Existing media folders must
-                  be mounted separately; selecting a storage pool does not import files.
+                  data disk here, included in backups. Existing media folders
+                  must be mounted separately; selecting a storage pool does not
+                  import files.
                 </small>
               </label>
               {config.target === "lxc" && (
                 <p className="muted">
                   LXC setup creates a dedicated read-only Proxmox API account
-                  (PVEAuditor across the cluster) and verifies storage discovery.
-                  The API connection uses FjordHub's default self-signed TLS mode
-                  without certificate verification. Use a trusted private network.
+                  (PVEAuditor across the cluster) and verifies storage
+                  discovery. The API connection uses FjordHub's default
+                  self-signed TLS mode without certificate verification. Use a
+                  trusted private network.
                 </p>
               )}
               <label>
@@ -364,53 +335,6 @@ export function FjordHubStorePage() {
           visible={step === 2}
           onBusy={setDeploying}
         />
-
-        {step === 2 && (
-          <div className="assisted-step">
-            <p className="eyebrow">STEP 3 · INSTALL FROM THE OFFICIAL SOURCE</p>
-            <h3>
-              {config.target === "lxc"
-                ? "Run in the Proxmox node Shell as root"
-                : "Run as root on a fresh Debian 12 or 13 host"}
-            </h3>
-            <p>
-              Use the install button above, or run these commands manually.
-              Review the storage and network settings first. If it stops after
-              creating the LXC, inspect that container before starting again.
-            </p>
-            <div className="button-row">
-              <button type="button" onClick={copyCommands}>
-                Copy commands
-              </button>
-              <button type="button" onClick={downloadCommands}>
-                Download script
-              </button>
-            </div>
-            {copyMessage && <p role="status">{copyMessage}</p>}
-            <pre
-              className="install-command-block"
-              aria-label="FjordHub installation commands"
-            >
-              {installCommands}
-            </pre>
-            <div className="setup-review-grid">
-              <span>DATA_DIR in .env</span>
-              <strong>{dataPath}</strong>
-              <span>APP_PORT in .env</span>
-              <strong>{appPort}</strong>
-              <span>TZ in .env</span>
-              <strong>{timezone}</strong>
-              <span>SECRET_KEY in .env</span>
-              <strong>
-                Generated and written automatically when you run the script
-              </strong>
-            </div>
-            <p className="muted">
-              After the containers are healthy, open FjordHub on the direct port
-              and finish its own administrator setup.
-            </p>
-          </div>
-        )}
 
         {step === 3 && (
           <div className="assisted-step fjordhub-connect-step">
