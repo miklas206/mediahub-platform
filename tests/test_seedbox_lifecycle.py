@@ -175,3 +175,31 @@ async def test_manual_start_does_not_reset_rolling_automatic_budget():
         assert lifecycle.reserve_attempt("vpn")
     await lifecycle.action("start")
     assert not lifecycle.reserve_attempt("vpn")
+
+
+@pytest.mark.anyio
+async def test_new_port_is_written_before_start_and_listener_required():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    lifecycle, driver, *_ = setup()
+
+    async def prepare(port):
+        assert port == 45000
+        driver.calls.append("prepare-port")
+
+    driver.prepare_torrent_port = prepare
+    driver.forwarding = SimpleNamespace(
+        invalidate=lambda: None,
+        renew=AsyncMock(return_value={"status": "pending_client", "currentPort": 45000}),
+        apply_current=AsyncMock(return_value={"status": "degraded"}),
+    )
+    with pytest.raises(DomainError):
+        await lifecycle.action("restart")
+    assert driver.calls.index("prepare-port") < driver.calls.index("start-torrent")
+    assert driver.calls[-1] == "stop-torrent"
+    driver.calls.clear()
+    driver.forwarding.renew.return_value = {"status": "degraded", "currentPort": None}
+    with pytest.raises(DomainError):
+        await lifecycle.action("restart")
+    assert "start-torrent" not in driver.calls

@@ -527,6 +527,12 @@ class ScopedDriver:
                     raise ValueError("VPN verification timed out") from None
                 await asyncio.sleep(2)
 
+    async def prepare_torrent_port(self, port):
+        from agent.torrent_port import configure_stopped_port
+
+        _, spec = self.binding()
+        await configure_stopped_port(self, port, spec)
+
     async def start_torrent(self):
         await self.storage_guard()
         vpn, torrent = await self.container("vpn"), await self.container("torrent")

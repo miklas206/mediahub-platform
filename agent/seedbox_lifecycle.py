@@ -44,7 +44,10 @@ class Lifecycle:
         forwarding = getattr(self.driver, "forwarding", None)
         if forwarding:
             forwarding.invalidate()
-            await forwarding.renew(apply=False)
+            lease = await forwarding.renew(apply=False)
+            if lease["status"] != "pending_client":
+                raise ValueError("VPN port allocation not verified")
+            await self.driver.prepare_torrent_port(lease["currentPort"])
         # Storage can disappear during tunnel establishment. Check again.
         await self.driver.storage_guard()
         await self.driver.device_guard()
@@ -54,7 +57,8 @@ class Lifecycle:
             await self.driver.verify_torrent(vpn_ip)
             await self.driver.storage_guard()
             if forwarding:
-                await forwarding.apply_current()
+                if (await forwarding.apply_current())["status"] != "healthy":
+                    raise ValueError("Torrent listener not verified")
         except BaseException:
             await self.driver.stop_torrent()
             raise

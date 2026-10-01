@@ -202,6 +202,43 @@ class SeedboxControl:
             self.operation["finishedAt"] = time.time()
             self.status.cached = None
 
+    async def restart_after_update(self):
+        commit = os.environ.get("MEDIAHUB_SOURCE_COMMIT", "")
+        if not commit:
+            return
+        try:
+            self.initialize()
+            self.driver.binding()  # No installed runtime: nothing to restart.
+            if self.lifecycle.state.get("runtimeAgentCommit") == commit:
+                return
+            # Record the attempt first so a crash cannot cause a restart loop.
+            self.lifecycle.state["runtimeAgentCommit"] = commit
+            self.lifecycle.persist()
+            if (
+                not self.lifecycle.state["desiredRunning"]
+                or self.lifecycle.state["manualIntervention"]
+            ):
+                return
+            self.operation = {
+                "state": "running",
+                "action": "post-update-restart",
+                "message": "Restarting VPN and qBittorrent after Agent update",
+                "startedAt": time.time(),
+            }
+            await self.perform("restart")
+            self.emit(
+                "seedbox.post_update_restart_" + self.operation["state"],
+                "info" if self.operation["state"] == "succeeded" else "error",
+            )
+        except FileNotFoundError:
+            return
+        except Exception:
+            self.operation = {
+                "state": "failed",
+                "action": "post-update-restart",
+                "message": "Post-update restart could not be verified; inspect Seedbox status",
+            }
+
     async def monitor(self):
         while True:
             await asyncio.sleep(10)

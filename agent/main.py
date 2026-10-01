@@ -239,6 +239,7 @@ def create_agent(config: AgentConfig | None = None):
             asyncio.create_task(locations.optimizer.poll()) if config.seedbox_policy_file else None
         )
         if config.seedbox_policy_file:
+            control.job = asyncio.create_task(control.restart_after_update())
             control.monitor_task = asyncio.create_task(control.monitor())
         if config.plex_policy_file:
             plex.monitor_task = asyncio.create_task(plex.monitor())

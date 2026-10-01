@@ -159,7 +159,7 @@ def main(root):
         if config_path.read_bytes() != original:
             raise ValueError("Compose configuration changed while building")
         status(
-            "installing", "Replacing only the Agent; torrent client, VPN and media stay in place"
+            "installing", "Replacing Agent; the new Agent restarts and verifies the running Seedbox runtime"
         )
         temp = config_path.with_name(config_path.name + ".agent-update.tmp")
         temp.write_bytes(updated)
