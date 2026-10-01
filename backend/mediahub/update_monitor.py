@@ -17,6 +17,7 @@ class UpdateMonitor:
     def __init__(self, services):
         self.services = services
         self.lock = asyncio.Lock()
+        self.check_task = None
 
     def _load(self):
         with self.services.sessions() as db:
@@ -138,8 +139,16 @@ class UpdateMonitor:
         self._store_results(retained)
 
     async def check_all(self):
-        if self.lock.locked():
-            raise DomainError("update_check_busy", "An update check is already running", 409)
+        # Refreshes and scheduled checks share the same in-flight result.
+        # A disconnected HTTP request must not cancel the server-side check.
+        if self.check_task is None or self.check_task.done():
+            self.check_task = asyncio.create_task(self._check_all())
+            self.check_task.add_done_callback(
+                lambda task: task.exception() if not task.cancelled() else None
+            )
+        return await asyncio.shield(self.check_task)
+
+    async def _check_all(self):
         async with self.lock:
             items = []
             failures = 0

@@ -116,3 +116,39 @@ def test_platform_install_api_stays_locked_without_host_updater(logged_in):
     install = logged_in.post("/api/v1/updates/platform/install")
     assert install.status_code == 409
     assert install.json()["error"]["code"] == "platform_updater_unavailable"
+
+
+def test_refresh_joins_running_check_and_disconnect_does_not_cancel_it():
+    from mediahub.update_monitor import UpdateMonitor
+
+    async def scenario():
+        monitor = UpdateMonitor(None)
+        started = asyncio.Event()
+        release = asyncio.Event()
+        calls = []
+
+        async def check():
+            calls.append(True)
+            started.set()
+            await release.wait()
+            return {"count": 2}
+
+        monitor._check_all = check
+        original = asyncio.create_task(monitor.check_all())
+        await started.wait()
+        original.cancel()
+        try:
+            await original
+        except asyncio.CancelledError:
+            pass
+        refreshed = asyncio.create_task(monitor.check_all())
+        scheduled = asyncio.create_task(monitor.check_all())
+        await asyncio.sleep(0)
+        assert calls == [True]
+        release.set()
+        assert await refreshed == {"count": 2}
+        assert await scheduled == {"count": 2}
+        assert await monitor.check_all() == {"count": 2}
+        assert len(calls) == 2
+
+    asyncio.run(scenario())
