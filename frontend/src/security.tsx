@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
 import { ShieldCheck, KeyRound, Monitor, RefreshCw } from "lucide-react";
 import { api, setCsrf } from "./api";
@@ -112,7 +113,7 @@ export function SecuritySettings() {
     }
   }
   return (
-    <section className="security-workspace">
+    <LayoutGroup id="security-extra-1" className="security-workspace">
       <header>
         <div>
           <span className="eyebrow">ACCOUNT PROTECTION</span>
@@ -145,7 +146,7 @@ export function SecuritySettings() {
           <button onClick={() => setCodes([])}>I have saved these codes</button>
         </div>
       )}
-      <div className="security-grid">
+      <LayoutGroup id="security-SecuritySettings-1" className="security-grid">
         <article className="security-card">
           <ShieldCheck />
           <h3>Authenticator app</h3>
@@ -230,7 +231,7 @@ export function SecuritySettings() {
             <button disabled={busy}>Change password</button>
           </form>
         </article>
-      </div>
+      </LayoutGroup>
       {status?.totpEnabled && (
         <article className="security-card">
           <ShieldCheck />
@@ -298,7 +299,7 @@ export function SecuritySettings() {
           </div>
         ))}
       </article>
-    </section>
+    </LayoutGroup>
   );
 }
 

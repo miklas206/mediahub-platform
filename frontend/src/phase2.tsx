@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { AppUninstall } from "./app-uninstall";
 import {
   useCallback,
@@ -492,7 +493,7 @@ export function StorageWorkspace() {
     setMessage("Location saved. No existing files were moved.");
   };
   return (
-    <div className="stack">
+    <LayoutGroup id="phase2-StorageWorkspace-1" className="stack">
       <Panel title="Storage locations">
         <ErrorBox error={error} />
         {message && <p className="success">{message}</p>}
@@ -557,7 +558,7 @@ export function StorageWorkspace() {
           }}
         />
       )}
-    </div>
+    </LayoutGroup>
   );
 }
 
@@ -1333,7 +1334,7 @@ export function CatalogPage({
           ))}
         </div>
       ) : (
-        <div className="apps-grid store-grid">
+        <LayoutGroup id="phase2-CatalogPage-1" className="apps-grid store-grid">
           {visibleApps?.map((app) => {
             const installedApp = installed.data?.find(
               (item) => item.packageId === app.id,
@@ -1561,7 +1562,7 @@ export function CatalogPage({
               </section>
             );
           })}
-        </div>
+        </LayoutGroup>
       )}
       {plan && (
         <Panel title="Installation preview — not executable">

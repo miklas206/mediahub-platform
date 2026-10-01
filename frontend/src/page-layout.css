@@ -1,0 +1,73 @@
+.layout-toolbar,
+.layout-item-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.layout-toolbar {
+  margin-bottom: 20px;
+}
+.layout-toolbar > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.layout-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.layout-save-status:empty {
+  display: none;
+}
+.layout-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.layout-item > .panel,
+.layout-item > .dashboard-card {
+  flex: 1;
+}
+.layout-item-tools {
+  padding: 8px;
+  border: 1px dashed var(--accent);
+  border-radius: 9px;
+  margin-bottom: 8px;
+  background: var(--surface);
+}
+.layout-item-tools button {
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.layout-item-tools .layout-drag-handle {
+  flex: 1;
+  min-width: 0;
+  cursor: grab;
+  text-align: left;
+}
+.layout-drag-handle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layout-item.is-drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+.layout-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.dashboard-grid > .layout-item:nth-last-child(2):nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.layout-item > .dashboard-card {
+  grid-column: auto;
+}

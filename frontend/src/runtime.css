@@ -59,7 +59,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
 }
-.runtime-panels > .panel {
+.runtime-panels > .layout-item > .panel {
   margin: 0;
   min-width: 0;
 }
@@ -412,7 +412,7 @@
 .store-grid {
   align-items: stretch;
 }
-.store-grid > .store-card {
+.store-grid > .layout-item > .store-card {
   display: flex;
   flex-direction: column;
   min-height: 28rem;
@@ -531,7 +531,7 @@
     align-items: flex-start;
     flex-direction: column;
   }
-  .store-grid > .store-card {
+  .store-grid > .layout-item > .store-card {
     min-height: 0;
   }
 }

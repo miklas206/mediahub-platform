@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { useState, type FormEvent } from "react";
 import { Archive, ShieldCheck } from "lucide-react";
 import { downloadBackup } from "./api";
@@ -50,7 +51,7 @@ export function BackupsPage() {
   return (
     <div className="stack">
       <ErrorBox error={error || failure} />
-      <div className="runtime-panels">
+      <LayoutGroup id="backups-BackupsPage-1" className="runtime-panels">
         <Panel
           title={`${scope === "core" ? "MediaHub" : scope === "plex" ? "Plex" : "Seedbox"} configuration backup`}
         >
@@ -171,7 +172,7 @@ export function BackupsPage() {
           </form>
           <p role="status">{message}</p>
         </Panel>
-      </div>
+      </LayoutGroup>
     </div>
   );
 }

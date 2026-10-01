@@ -1,3 +1,4 @@
+import { LayoutGroup, PageLayout } from "./page-layout";
 import { appStatusLabel } from "./seedbox-status";
 import { seedboxSections, seedboxSection } from "./seedbox-sections";
 import {
@@ -713,103 +714,108 @@ function Shell({
               metrics may be stale.
             </Notice>
           )}
-          <Routes>
-            <Route path="/apps/install/plex" element={<PlexInstallPage />} />
-            <Route
-              path="/apps/install/seedbox"
-              element={<SeedboxInstallPage />}
-            />
-            <Route
-              path="/apps/:appId/install"
-              element={<SeedboxInstallPage />}
-            />
-            <Route path="/apps/:appId" element={<AppRuntimePage />} />
-            <Route path="/store/cloudflare" element={<CloudflareStorePage />} />
-            <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
-            <Route
-              path="/store/fjordhub/uninstall"
-              element={<FjordHubUninstallPage />}
-            />
-            <Route path="/store" element={<AppStorePage />} />
-            <Route
-              path="/"
-              element={
-                <Dashboard
-                  metrics={metrics}
-                  revision={revision}
-                  live={live}
-                  sections={dashboardSections}
-                />
-              }
-            />
-            <Route
-              path="/apps"
-              element={
-                <div className="stack">
-                  <Apps revision={revision} />
-                  <section className="store-callout">
-                    <div>
-                      <strong>Looking for another app?</strong>
-                      <p>
-                        Browse guided installations without mixing them into the
-                        apps you already run.
-                      </p>
-                    </div>
-                    <NavLink className="primary" to="/store">
-                      Open App Store →
-                    </NavLink>
-                  </section>
-                </div>
-              }
-            />
-            <Route
-              path="/storage"
-              element={
-                <div className="stack">
-                  <MediaFiles />
-                  <StorageSummary />
-                  {advancedMode && (
-                    <details className="technical-disclosure">
-                      <summary>Technical storage mappings</summary>
-                      <div className="stack">
-                        <LogicalStoragePanel />
-                        <StorageWorkspace />
+          <PageLayout
+            key={`${user.id}:${location.pathname}:${new URLSearchParams(location.search).get("section") || ""}`}
+            storageKey={`${user.id}:${location.pathname}:${new URLSearchParams(location.search).get("section") || ""}`}
+          >
+            <Routes>
+              <Route path="/apps/install/plex" element={<PlexInstallPage />} />
+              <Route
+                path="/apps/install/seedbox"
+                element={<SeedboxInstallPage />}
+              />
+              <Route
+                path="/apps/:appId/install"
+                element={<SeedboxInstallPage />}
+              />
+              <Route path="/apps/:appId" element={<AppRuntimePage />} />
+              <Route path="/store/cloudflare" element={<CloudflareStorePage />} />
+              <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
+              <Route
+                path="/store/fjordhub/uninstall"
+                element={<FjordHubUninstallPage />}
+              />
+              <Route path="/store" element={<AppStorePage />} />
+              <Route
+                path="/"
+                element={
+                  <Dashboard
+                    metrics={metrics}
+                    revision={revision}
+                    live={live}
+                    sections={dashboardSections}
+                  />
+                }
+              />
+              <Route
+                path="/apps"
+                element={
+                  <LayoutGroup id="ui-Shell-1" className="stack">
+                    <Apps revision={revision} />
+                    <section className="store-callout">
+                      <div>
+                        <strong>Looking for another app?</strong>
+                        <p>
+                          Browse guided installations without mixing them into the
+                          apps you already run.
+                        </p>
                       </div>
-                    </details>
-                  )}
-                </div>
-              }
-            />
-            <Route path="/hosts" element={<HostsPage />} />
-            <Route path="/integrations" element={<IntegrationsPage />} />
-            <Route
-              path="/activity"
-              element={<ActivityPage revision={revision} />}
-            />
-            <Route path="/logs" element={<Logs />} />
-            <Route
-              path="/settings"
-              element={
-                <SettingsExtensions
-                  general={<SettingsPage />}
-                  maintenance={<MaintenancePage />}
-                  security={<SecuritySettings />}
-                  advanced={advancedMode}
-                />
-              }
-            />
-            <Route
-              path="/updates"
-              element={
-                <UpdatesPage
-                  apps={navigationApps}
-                  appsError={navigationAppsError}
-                />
-              }
-            />
-            <Route path="/backups" element={<BackupsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+                      <NavLink className="primary" to="/store">
+                        Open App Store →
+                      </NavLink>
+                    </section>
+                  </LayoutGroup>
+                }
+              />
+              <Route
+                path="/storage"
+                element={
+                  <LayoutGroup id="ui-Shell-2" className="stack">
+                    <MediaFiles />
+                    <StorageSummary />
+                    {advancedMode && (
+                      <details className="technical-disclosure">
+                        <summary>Technical storage mappings</summary>
+                        <LayoutGroup id="ui-Shell-3" className="stack">
+                          <LogicalStoragePanel />
+                          <StorageWorkspace />
+                        </LayoutGroup>
+                      </details>
+                    )}
+                  </LayoutGroup>
+                }
+              />
+              <Route path="/hosts" element={<HostsPage />} />
+              <Route path="/integrations" element={<IntegrationsPage />} />
+              <Route
+                path="/activity"
+                element={<ActivityPage revision={revision} />}
+              />
+              <Route path="/logs" element={<Logs />} />
+              <Route
+                path="/settings"
+                element={
+                  <SettingsExtensions
+                    general={<SettingsPage />}
+                    maintenance={<MaintenancePage />}
+                    security={<SecuritySettings />}
+                    advanced={advancedMode}
+                  />
+                }
+              />
+              <Route
+                path="/updates"
+                element={
+                  <UpdatesPage
+                    apps={navigationApps}
+                    appsError={navigationAppsError}
+                  />
+                }
+              />
+              <Route path="/backups" element={<BackupsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </PageLayout>
           <footer className="footer">
             <span>
               MediaHub Core <span className="muted">/</span>{" "}
@@ -1107,7 +1113,7 @@ function Dashboard({
   return (
     <>
       {error && <Notice>{error}</Notice>}
-      <div className="dashboard-grid">
+      <LayoutGroup id="ui-Dashboard-1" className="dashboard-grid">
         {cards
           .filter(({ id }) => visible.has(id))
           .map(({ id, content }) => (
@@ -1115,7 +1121,7 @@ function Dashboard({
               {content}
             </div>
           ))}
-      </div>
+      </LayoutGroup>
     </>
   );
 }
@@ -1191,7 +1197,7 @@ function Apps({ revision }: { revision: number }) {
           ))}
         </div>
       ) : data.length ? (
-        <div className="apps-grid">
+        <LayoutGroup id="ui-Apps-1" className="apps-grid">
           {[...data]
             .sort((left, right) => left.name.localeCompare(right.name))
             .map((app) => (
@@ -1248,7 +1254,7 @@ function Apps({ revision }: { revision: number }) {
                 )}
               </section>
             ))}
-        </div>
+        </LayoutGroup>
       ) : (
         <Empty title="No apps installed">The app registry is empty.</Empty>
       )}
@@ -1934,7 +1940,7 @@ function MaintenancePage() {
   };
 
   return (
-    <div className="stack">
+    <LayoutGroup id="ui-MaintenancePage-1" className="stack">
       <Section
         title="Maintenance"
         aside={
@@ -2062,7 +2068,7 @@ function MaintenancePage() {
         </div>
         {seedboxApp && <SeedboxDeviceMaintenance appId={seedboxApp.id} />}
       </Section>
-    </div>
+    </LayoutGroup>
   );
 }
 

@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
 import { useState } from "react";
@@ -23,7 +24,7 @@ import {
 
 export function AppStorePage() {
   return (
-    <div className="stack app-store-page">
+    <LayoutGroup id="store-AppStorePage-1" className="stack app-store-page">
       <section className="store-hero">
         <div className="store-hero-icon">
           <Store size={28} />
@@ -38,7 +39,7 @@ export function AppStorePage() {
         </div>
       </section>
       <CatalogPage showInstalled />
-    </div>
+    </LayoutGroup>
   );
 }
 

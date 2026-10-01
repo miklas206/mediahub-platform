@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import {
   useCallback,
   useEffect,
@@ -230,7 +231,7 @@ export function IntegrationsPage({
     }
   }
   return (
-    <div className="stack integrations-page">
+    <LayoutGroup id="integrations-IntegrationsPage-1" className="stack integrations-page">
       <div>
         <p className="muted">
           Read-only external services. Separate from managed hosts and apps.
@@ -478,6 +479,6 @@ export function IntegrationsPage({
           </div>
         </Panel>
       ))}
-    </div>
+    </LayoutGroup>
   );
 }

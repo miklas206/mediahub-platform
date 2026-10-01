@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
 import { Server, HardDrive } from "lucide-react";
 import { api } from "./api";
@@ -82,7 +83,7 @@ export function HostsPage() {
     }
   }
   return (
-    <div className="stack">
+    <LayoutGroup id="hosts-HostsPage-1" className="stack">
       <Panel title="Hosts & agents">
         <p className="muted">
           Each host has its own runtime, permissions and storage paths. Status
@@ -93,7 +94,7 @@ export function HostsPage() {
           Refresh hosts
         </button>
       </Panel>
-      <div className="apps-grid">
+      <LayoutGroup id="hosts-HostsPage-2" className="apps-grid">
         {hosts.data?.map((host) => (
           <Panel key={host.id} title={host.name}>
             <div className="button-row">
@@ -155,7 +156,7 @@ export function HostsPage() {
             )}
           </Panel>
         ))}
-      </div>
+      </LayoutGroup>
       <Panel title="Pair a remote agent">
         <p className="muted">
           HTTPS with a trusted certificate is required on Core and the remote
@@ -196,7 +197,7 @@ export function HostsPage() {
           </div>
         )}
       </Panel>
-    </div>
+    </LayoutGroup>
   );
 }
 

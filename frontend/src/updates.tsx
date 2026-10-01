@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -806,7 +807,7 @@ export function UpdatesPage({
     );
 
   return (
-    <div className="stack updates-page">
+    <LayoutGroup id="updates-UpdatesPage-1" className="stack updates-page">
       <p className="muted">
         Verified updates with configuration rollback and media kept separate.
         Updates continue on the server if you leave, refresh or close this page.
@@ -932,7 +933,7 @@ export function UpdatesPage({
           <OperationProgress activeOnly statusOnly operation={operations.all} />
         )}
       </Panel>
-      <div className="apps-grid updates-grid">
+      <LayoutGroup id="updates-UpdatesPage-2" className="apps-grid updates-grid">
         <Panel title="MediaHub Core">
           <div className="runtime-row">
             <span>Installed</span>
@@ -1166,7 +1167,7 @@ export function UpdatesPage({
               </Panel>
             );
           })}
-      </div>
-    </div>
+      </LayoutGroup>
+    </LayoutGroup>
   );
 }

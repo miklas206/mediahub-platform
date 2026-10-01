@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
@@ -235,7 +236,7 @@ export function SeedboxDaily({
   }
   const selected = country || location?.current?.country || "";
   return (
-    <div className="stack seedbox-daily">
+    <LayoutGroup id="seedbox-daily-extra-1" className="stack seedbox-daily">
       <ErrorBox error={error} />
       {notice && (
         <p role="status" className="notice">
@@ -657,6 +658,6 @@ export function SeedboxDaily({
           )}
         </>
       )}
-    </div>
+    </LayoutGroup>
   );
 }

@@ -1174,13 +1174,13 @@ nav a.active {
   grid-template-columns: repeat(auto-fit, minmax(265px, 1fr));
   align-items: stretch;
 }
-.updates-grid > .panel {
+.updates-grid > .layout-item > .panel {
   align-self: stretch;
   display: flex;
   min-width: 0;
   flex-direction: column;
 }
-.updates-grid > .panel > .phase-content {
+.updates-grid > .layout-item > .panel > .phase-content {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -2143,7 +2143,7 @@ td time {
 
 /* Updates: one compact list, detailed setup opens only when needed. */
 .updates-page .updates-grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
-.updates-page .updates-grid > .panel { display: block; }
+.updates-page .updates-grid > .layout-item > .panel { display: block; }
 .updates-page .updates-grid .panel > .phase-content { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px 24px; padding: 14px 18px; }
 .updates-page .updates-grid .runtime-row { min-height: 0; padding: 7px 0; gap: 12px; align-items: center; }
 .updates-page .updates-grid .runtime-row strong { overflow-wrap: anywhere; text-align: right; }

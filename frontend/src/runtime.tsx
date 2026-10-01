@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { runtimeIssues } from "./runtime-issues";
 import { seedboxStatus } from "./seedbox-status";
 import {
@@ -274,7 +275,7 @@ function SeedboxPanel({
           )}
         </div>
       )}
-      <div className="runtime-panels">
+      <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
         {section === "vpn" && (
           <Panel title="VPN protection">
             <div className="runtime-panel-title">
@@ -484,7 +485,7 @@ function SeedboxPanel({
             </dl>
           </Panel>
         )}
-      </div>
+      </LayoutGroup>
     </div>
   );
 }
@@ -516,7 +517,7 @@ function RuntimeIssues({
 function PlexPanel({ report: r }: { report: Runtime }) {
   const p = r.plex;
   return (
-    <div className="runtime-workspace">
+    <LayoutGroup id="runtime-workspace-1" className="runtime-workspace">
       <header className="runtime-summary">
         <div>
           <p className="eyebrow">INSTALLED APP · PLEX</p>
@@ -526,7 +527,7 @@ function PlexPanel({ report: r }: { report: Runtime }) {
         <div className={`runtime-health ${r.health}`}>{r.health}</div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
-      <div className="runtime-grid">
+      <LayoutGroup id="runtime-extra-1" className="runtime-panels">
         <Panel title="Plex server">
           <dl>
             <Row
@@ -626,14 +627,14 @@ function PlexPanel({ report: r }: { report: Runtime }) {
             separate writable storage.
           </p>
         </Panel>
-      </div>
-    </div>
+      </LayoutGroup>
+    </LayoutGroup>
   );
 }
 function CloudflaredPanel({ report: r }: { report: Runtime }) {
   const c = r.cloudflare;
   return (
-    <div className="runtime-workspace">
+    <LayoutGroup id="runtime-workspace-2" className="runtime-workspace">
       <header className="runtime-summary">
         <div>
           <p className="eyebrow">INSTALLED APP · INFRASTRUCTURE</p>
@@ -656,7 +657,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
         </span>
       </div>
       <RuntimeIssues report={r} kind="cloudflare" />
-      <div className="runtime-panels">
+      <LayoutGroup id="runtime-CloudflaredPanel-1" className="runtime-panels">
         <Panel title="Tunnel and connector">
           <div className="runtime-panel-title">
             <Cloud />
@@ -736,7 +737,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
             unavailable.
           </p>
         </Panel>
-      </div>
+      </LayoutGroup>
       <Panel title="Security model">
         <div className="runtime-panel-title">
           <ShieldCheck />
@@ -754,7 +755,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
           a standalone binary.
         </p>
       </Panel>
-    </div>
+    </LayoutGroup>
   );
 }
 const views: Record<string, typeof PlexPanel> = {
@@ -943,7 +944,7 @@ export function AppRuntimePage() {
     }
   };
   return (
-    <div className="stack">
+    <LayoutGroup id="runtime-AppRuntimePage-1" className="stack">
       <div className="runtime-toolbar">
         <Link to="/apps">← All apps</Link>
         <button onClick={reload}>Refresh status</button>
@@ -1182,6 +1183,6 @@ export function AppRuntimePage() {
             )}
           </Panel>
         )}
-    </div>
+    </LayoutGroup>
   );
 }
