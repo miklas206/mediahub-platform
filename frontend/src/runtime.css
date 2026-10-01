@@ -622,3 +622,8 @@
 .seedbox-status-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; border: 1px solid #776044; background: #30291f; border-radius: 8px; padding: 14px 16px; color: #f3c890; }
 .seedbox-status-notice span { flex: 1 1 320px; }
 .seedbox-status-notice a { flex: none; color: var(--accent); }
+
+.runtime-issues { border: 1px solid #776044; background: #30291f; border-radius: 8px; padding: 14px 16px; color: #f3c890; overflow-wrap: anywhere; }
+.runtime-issues ul { margin: 8px 0 0; padding-left: 20px; }
+.runtime-issues li + li { margin-top: 6px; }
+.runtime-issues.critical, .runtime-issues.unhealthy, .runtime-issues.offline { border-color: #82454f; background: #351f26; color: #ffb5bc; }

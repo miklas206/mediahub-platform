@@ -1,3 +1,4 @@
+import { runtimeIssues } from "./runtime-issues";
 import type { Runtime } from "./runtime";
 
 export function appStatusLabel(status: string) {
@@ -71,8 +72,7 @@ export function seedboxStatus(r: Runtime): { label: string; message?: string } {
     return {
       label: appStatusLabel(r.health),
       message:
-        r.portForwarding?.lastError ||
-        "Some runtime checks have not passed. Review the VPN and storage status.",
+        r.portForwarding?.lastError || runtimeIssues(r, "seedbox").join(" "),
     };
   return { label: "Healthy" };
 }

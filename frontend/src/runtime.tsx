@@ -1,3 +1,4 @@
+import { runtimeIssues } from "./runtime-issues";
 import { seedboxStatus } from "./seedbox-status";
 import {
   seedboxSections,
@@ -28,6 +29,7 @@ export type Runtime = {
     memoryBytes: number | null;
     cpuPercent: number | null;
   };
+  checks?: { name: string; status: string; message?: string }[];
   health: string;
   available: boolean;
   observedAt?: number;
@@ -486,6 +488,31 @@ function SeedboxPanel({
     </div>
   );
 }
+function RuntimeIssues({
+  report,
+  kind,
+}: {
+  report: Runtime;
+  kind: "cloudflare" | "plex";
+}) {
+  const issues = runtimeIssues(report, kind);
+  if (!issues.length) return null;
+  return (
+    <div role="status" className={`runtime-issues ${report.health}`}>
+      <strong>
+        {["critical", "unhealthy", "offline"].includes(report.health)
+          ? "Action required"
+          : "Warning"}
+        : what needs attention
+      </strong>
+      <ul>
+        {issues.map((issue) => (
+          <li key={issue}>{issue}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 function PlexPanel({ report: r }: { report: Runtime }) {
   const p = r.plex;
   return (
@@ -498,6 +525,7 @@ function PlexPanel({ report: r }: { report: Runtime }) {
         </div>
         <div className={`runtime-health ${r.health}`}>{r.health}</div>
       </header>
+      <RuntimeIssues report={r} kind="plex" />
       <div className="runtime-grid">
         <Panel title="Plex server">
           <dl>
@@ -627,11 +655,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
           every 10s
         </span>
       </div>
-      {!c?.configured && (
-        <div role="alert" className="notice">
-          Cloudflare Tunnel monitoring is not configured for this installation.
-        </div>
-      )}
+      <RuntimeIssues report={r} kind="cloudflare" />
       <div className="runtime-panels">
         <Panel title="Tunnel and connector">
           <div className="runtime-panel-title">
@@ -669,11 +693,19 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
             />
             <Row
               label="Requests observed"
-              value={c?.totalRequests?.toLocaleString() ?? "Unavailable"}
+              value={
+                c?.metricsReachable
+                  ? (c.totalRequests?.toLocaleString() ?? "Unavailable")
+                  : "Unavailable"
+              }
             />
             <Row
               label="Errors observed"
-              value={c?.requestErrors?.toLocaleString() ?? "Unavailable"}
+              value={
+                c?.metricsReachable
+                  ? (c.requestErrors?.toLocaleString() ?? "Unavailable")
+                  : "Unavailable"
+              }
             />
           </dl>
         </Panel>
