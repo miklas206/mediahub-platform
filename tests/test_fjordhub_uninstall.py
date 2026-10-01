@@ -28,6 +28,34 @@ def test_external_media_is_not_a_disk_to_delete():
 
 
 @pytest.mark.parametrize(
+    "value", ["proc:rw sys:rw", "proc sys cgroup", "proc:mixed sys:ro cgroup:rw:force"]
+)
+def test_kernel_automounts_are_not_mistaken_for_media_disks(value):
+    assert remote.storage_plan(RAW + "\nlxc.mount.auto: " + value, CFG) == remote.storage_plan(
+        RAW, CFG
+    )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "unused0: local-lvm:vm-103-disk-2",
+        "lxc.mount.entry: /srv/media movies none bind 0 0",
+        "lxc.mount.auto: proc sys /srv/media",
+        "lxc.mount.fstab: /etc/custom-fstab",
+        "lxc.rootfs.path: /srv/other",
+    ],
+)
+def test_blocked_preview_identifies_entry_and_lxc_without_exposing_values(entry):
+    with pytest.raises(ValueError) as error:
+        remote.storage_plan(RAW + "\n" + entry, CFG)
+    assert entry.split(": ")[0] in str(error.value)
+    assert "pct config 103" in str(error.value)
+    assert "Nothing has been deleted" in str(error.value)
+    assert entry.split(": ", 1)[1] not in str(error.value)
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         RAW + "\nmp2: local-lvm:vm-103-disk-2,mp=/movies",

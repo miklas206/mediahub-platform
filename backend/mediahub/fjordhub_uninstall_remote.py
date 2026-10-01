@@ -70,9 +70,23 @@ def storage_plan(raw, cfg):
         raise ValueError("The LXC is locked, protected or a template.")
     deleted, kept = [], []
     for key, value in config.items():
+        if key == "lxc.mount.auto":
+            # These are kernel pseudo-filesystems, not disks or media shares.
+            # https://linuxcontainers.org/lxc/manpages/man5/lxc.container.conf.5.html
+            allowed = {"proc", "proc:mixed", "proc:rw", "sys", "sys:mixed", "sys:ro", "sys:rw"}
+            allowed.update(
+                kind + mode + force
+                for kind in ("cgroup", "cgroup-full")
+                for mode in ("", ":mixed", ":ro", ":rw")
+                for force in ("", ":force")
+            )
+            if all(item in allowed for item in value.split()):
+                continue
         if key.startswith("unused") or key.startswith("lxc.mount") or key.startswith("lxc.rootfs"):
             raise ValueError(
-                "Unclassified disks or custom mounts exist; review them before uninstalling."
+                f"Preview blocked by {key} in LXC {cfg['ctid']}. "
+                f"Inspect this entry with 'pct config {cfg['ctid']}' on Proxmox. "
+                "Its storage ownership cannot be verified automatically. Nothing has been deleted."
             )
         if key != "rootfs" and not re.fullmatch(r"mp\d+", key):
             continue

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
 import { Panel } from "./phase2";
@@ -35,6 +35,10 @@ export function FjordHubUninstallPage() {
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const feedback = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) feedback.current?.focus();
+  }, [error]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,7 +117,7 @@ export function FjordHubUninstallPage() {
         Docker data and settings. External media on shared storage are
         preserved.
       </p>
-      {error && (
+      {error && (!job || removed || !supported) && (
         <p className="error" role="alert">
           {error}
         </p>
@@ -212,6 +216,17 @@ export function FjordHubUninstallPage() {
                 >
                   {pending ? "Working…" : "Preview uninstall"}
                 </button>
+                {error && (
+                  <div
+                    className="notice stack"
+                    role="alert"
+                    tabIndex={-1}
+                    ref={feedback}
+                  >
+                    <strong>The uninstall check could not complete</strong>
+                    <p>{error}</p>
+                  </div>
+                )}
                 {plan?.state === "ready" && (
                   <section className="stack" aria-label="Uninstall plan">
                     <h3>Remove LXC {plan.ctid} permanently</h3>
