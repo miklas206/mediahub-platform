@@ -287,3 +287,62 @@ def test_saved_access_enables_update_without_new_password(logged_in, monkeypatch
     thread.return_value.start.assert_called_once()
     assert "saved-private" not in json.dumps(updater.operation())
     assert updater.saved_setup("seedbox", address) is not None
+
+
+def test_private_key_is_encrypted_restored_and_passed_to_ssh(logged_in, monkeypatch):
+    from unittest.mock import Mock
+
+    import paramiko
+    from mediahub.agent_updates import SSH_KEY_V2
+    from mediahub.db import Setting
+    from sqlalchemy import select
+
+    key = paramiko.RSAKey.generate(2048)
+    output = io.StringIO()
+    key.write_private_key(output)
+    private = output.getvalue()
+    setup = SSHSetup(private_key=private, fingerprint="SHA256:" + "a" * 43, remember=True)
+    svc = logged_in.app.state.services
+    updater = svc.agent_updates
+    address = SimpleNamespace(host="192.168.1.20")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+    connection = Mock()
+    monkeypatch.setattr("mediahub.agent_updates.paramiko.SSHClient", lambda: connection)
+    updater.prepare(setup)
+    kwargs = connection.connect.call_args.kwargs
+    assert kwargs["pkey"].get_base64() == key.get_base64()
+    assert kwargs["password"] is None
+    assert not kwargs["allow_agent"] and not kwargs["look_for_keys"]
+    with svc.sessions() as db:
+        stored = db.scalar(select(Setting).where(Setting.key == SSH_KEY_V2)).value
+        assert private.splitlines()[1] not in json.dumps(stored)
+    restored = AgentUpdates(svc).saved_setup("seedbox", address)
+    assert restored.private_key.get_secret_value() == private
+    assert restored.password is None
+    assert restored.log_line(private.splitlines()[1]) == "[redacted]"
+    updater.forget_setup()
+    assert updater.saved_setup("seedbox", address) is None
+
+
+def test_password_on_key_only_host_reports_required_method(monkeypatch):
+    from unittest.mock import Mock
+
+    import paramiko
+
+    client = Mock()
+    client.connect.side_effect = paramiko.BadAuthenticationType("no password", ["publickey"])
+    monkeypatch.setattr("mediahub.agent_updates.paramiko.SSHClient", lambda: client)
+    with pytest.raises(DomainError, match="requires SSH key"):
+        AgentUpdates.connect(
+            SimpleNamespace(host="192.168.1.20"),
+            SSHSetup(password="secret", fingerprint="SHA256:" + "a" * 43),
+        )
+    client.close.assert_called_once()
+
+
+@pytest.mark.parametrize("credentials", [{}, {"password": "secret", "private_key": "key"}])
+def test_ssh_setup_requires_exactly_one_credential(credentials):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        SSHSetup(**credentials, fingerprint="SHA256:" + "a" * 43)

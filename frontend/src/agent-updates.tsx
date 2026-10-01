@@ -24,6 +24,8 @@ export function AgentUpdates({
   const [check, setCheck] = useState<Check>();
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
+  const [authMethod, setAuthMethod] = useState("password");
+  const [privateKey, setPrivateKey] = useState("");
   const [remember, setRemember] = useState(false);
   const [port, setPort] = useState(22);
   const [fingerprint, setFingerprint] = useState("");
@@ -190,9 +192,9 @@ export function AgentUpdates({
               <>
                 <p>
                   SSH server: <strong>{check.host}</strong> (paired Seedbox
-                  host). Enter this host's root password once. Choose whether to
-                  save it encrypted on the MediaHub server or use it for this
-                  update only.
+                  host). Use a root password or an authorized SSH private key.
+                  Save access encrypted on MediaHub or use it for this update
+                  only.
                 </p>
                 <label>
                   SSH port
@@ -241,14 +243,46 @@ export function AgentUpdates({
                   </>
                 )}
                 <label>
-                  Root SSH password
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  Authentication
+                  <select
+                    value={authMethod}
+                    onChange={(e) => {
+                      setAuthMethod(e.target.value);
+                      setPassword("");
+                      setPrivateKey("");
+                    }}
+                  >
+                    <option value="password">Root password</option>
+                    <option value="key">SSH private key</option>
+                  </select>
                 </label>
+                {authMethod === "key" ? (
+                  <label>
+                    SSH private key
+                    <textarea
+                      rows={5}
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={privateKey}
+                      onChange={(e) => setPrivateKey(e.target.value)}
+                    />
+                    <span className="muted">
+                      The matching public key must be authorized for root on the
+                      Seedbox host. Paste an unencrypted OpenSSH or PEM key;
+                      saved access is encrypted by MediaHub.
+                    </span>
+                  </label>
+                ) : (
+                  <label>
+                    Root SSH password
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </label>
+                )}
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -258,16 +292,21 @@ export function AgentUpdates({
                   Remember SSH access for future Agent updates (encrypted)
                 </label>
                 <button
-                  disabled={!trusted || !password}
+                  disabled={
+                    !trusted || !(authMethod === "key" ? privateKey : password)
+                  }
                   onClick={() =>
                     void act(async () => {
                       await api("/updates/seedbox-agent/prepare", "POST", {
                         port,
                         fingerprint,
-                        password,
+                        ...(authMethod === "key"
+                          ? { private_key: privateKey }
+                          : { password }),
                         remember,
                       });
                       setPassword("");
+                      setPrivateKey("");
                       await reload();
                     })
                   }

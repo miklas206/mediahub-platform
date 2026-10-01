@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import io
 import json
 import tempfile
 import threading
@@ -13,7 +14,7 @@ from uuid import uuid4
 import httpx
 import paramiko
 from cryptography.fernet import InvalidToken
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from sqlalchemy import select
 
 from mediahub.contracts import StrictModel
@@ -24,13 +25,35 @@ from mediahub.platform_source import GitHubSourceProvider, download_source, norm
 
 KEY = "seedbox.agent.update"
 SSH_KEY = "seedbox.agent.ssh.encrypted"
+SSH_KEY_V2 = "seedbox.agent.ssh.v2.encrypted"
 
 
 class SSHSetup(StrictModel):
-    password: SecretStr = Field(min_length=1, max_length=1024)
+    password: SecretStr | None = Field(default=None, min_length=1, max_length=1024)
+    private_key: SecretStr | None = Field(default=None, min_length=1, max_length=16384)
     fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
     port: int = Field(default=22, ge=1, le=65535)
     remember: bool = False
+
+    @model_validator(mode="after")
+    def one_credential(self):
+        if (self.password is None) == (self.private_key is None):
+            raise ValueError("Provide either an SSH password or a private key")
+        return self
+
+    def credentials(self):
+        return {
+            name: value.get_secret_value()
+            for name, value in (("password", self.password), ("private_key", self.private_key))
+            if value is not None
+        }
+
+    def log_line(self, line):
+        for value in self.credentials().values():
+            if value:
+                for part in value.splitlines():
+                    line = line.replace(part, "[redacted]")
+        return clean_line(line, "")
 
 
 class AgentUpdates:
@@ -66,7 +89,9 @@ class AgentUpdates:
 
     def saved_setup(self, identifier, address):
         with self.svc.sessions() as db:
-            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
+            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY_V2))
+            if row is None:
+                row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
             encrypted = row.value.get("encrypted") if row else None
         if not encrypted:
             return None
@@ -87,22 +112,27 @@ class AgentUpdates:
             "hostId": identifier,
             "host": address.host,
             "setup": {
-                **setup.model_dump(mode="json"),
-                "password": setup.password.get_secret_value(),
+                **setup.model_dump(mode="json", exclude_none=True),
+                **setup.credentials(),
             },
         }
         encrypted = self.svc.catalog.cipher.encrypt(json.dumps(payload).encode()).decode()
         with self.svc.sessions.begin() as db:
-            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
+            storage_key = SSH_KEY_V2 if setup.private_key else SSH_KEY
+            old = db.scalar(
+                select(Setting).where(Setting.key == (SSH_KEY if setup.private_key else SSH_KEY_V2))
+            )
+            if old:
+                db.delete(old)
+            row = db.scalar(select(Setting).where(Setting.key == storage_key))
             if row:
                 row.value = {"encrypted": encrypted}
             else:
-                db.add(Setting(key=SSH_KEY, value={"encrypted": encrypted}))
+                db.add(Setting(key=storage_key, value={"encrypted": encrypted}))
 
     def forget_setup(self):
         with self.lock, self.svc.sessions.begin() as db:
-            row = db.scalar(select(Setting).where(Setting.key == SSH_KEY))
-            if row:
+            for row in db.scalars(select(Setting).where(Setting.key.in_([SSH_KEY, SSH_KEY_V2]))):
                 db.delete(row)
             self.prepared = None
         return {"credentialsStored": False, "installReady": False}
@@ -159,11 +189,28 @@ class AgentUpdates:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(PinnedKey(setup.fingerprint))
         try:
+            pkey = None
+            if setup.private_key:
+                for key_type in (paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey):
+                    try:
+                        pkey = key_type.from_private_key(
+                            io.StringIO(setup.private_key.get_secret_value())
+                        )
+                        break
+                    except (paramiko.SSHException, ValueError):
+                        continue
+                if pkey is None:
+                    raise DomainError(
+                        "agent_ssh_key",
+                        "Use a valid unencrypted OpenSSH or PEM private key; MediaHub encrypts saved keys",
+                        409,
+                    )
             client.connect(
                 address.host,
                 port=setup.port,
                 username="root",
-                password=setup.password.get_secret_value(),
+                password=setup.password.get_secret_value() if setup.password else None,
+                pkey=pkey,
                 allow_agent=False,
                 look_for_keys=False,
                 timeout=10,
@@ -171,6 +218,17 @@ class AgentUpdates:
                 auth_timeout=15,
             )
             return client
+        except DomainError:
+            client.close()
+            raise
+        except paramiko.BadAuthenticationType as exc:
+            client.close()
+            message = (
+                "This server requires SSH key authentication. Select SSH private key instead of password."
+                if "publickey" in exc.allowed_types and "password" not in exc.allowed_types
+                else "This SSH authentication method is not accepted by the server"
+            )
+            raise DomainError("agent_ssh_auth_method", message, 409) from None
         except Exception:
             client.close()
             raise DomainError(
@@ -217,7 +275,7 @@ class AgentUpdates:
             "credentialsStored": setup.remember,
             "message": "SSH verified and saved encrypted on this MediaHub server"
             if setup.remember
-            else "SSH verified for one update within 15 minutes; password is held only in memory",
+            else "SSH verified for one update within 15 minutes; credentials are held only in memory",
         }
 
     def fingerprint(self, port):
@@ -341,7 +399,7 @@ class AgentUpdates:
                                 data = build.read(8192)
                                 build_offset += len(data)
                                 for line in data.decode("utf-8", errors="replace").splitlines():
-                                    safe = clean_line(line, setup.password.get_secret_value())
+                                    safe = setup.log_line(line)
                                     if safe:
                                         job["logs"] = (job["logs"] + [safe])[-200:]
                         except FileNotFoundError:
