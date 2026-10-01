@@ -1,3 +1,4 @@
+import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
@@ -46,7 +47,12 @@ type Locations = {
     countryEvidence: string;
     externalIp?: string;
   } | null;
-  operation: { state: string; step: string | null };
+  operation: {
+    state: string;
+    step: string | null;
+    progress?: number;
+    server?: string;
+  };
   automaticDescription: string;
   automation?: {
     enabled?: boolean;
@@ -315,10 +321,31 @@ export function SeedboxDaily({
           >
             Change VPN location
           </button>
-          {changing && (
-            <progress aria-label="VPN location switch in progress" />
+          {location?.operation && location.operation.state !== "idle" ? (
+            <OperationProgress
+              activeOnly
+              operation={{
+                title: "VPN switch and qBittorrent restart",
+                status: changing
+                  ? "running"
+                  : location.operation.state === "healthy"
+                    ? "success"
+                    : "error",
+                progress: location.operation.progress ?? 0,
+                message:
+                  locationError && changing
+                    ? "Reconnecting to VPN switch status. The server continues working."
+                    : location.operation.step || "Preparing VPN switch",
+                connectionLost: Boolean(locationError),
+                steps: [],
+                details: location.operation.server
+                  ? [`Server: ${location.operation.server}`]
+                  : [],
+              }}
+            />
+          ) : (
+            <p role="status">Ready</p>
           )}
-          <p role="status">{location?.operation.step || "Ready"}</p>
           <p className="muted">
             {location?.current?.countryEvidence}.{" "}
             {location?.automaticDescription}

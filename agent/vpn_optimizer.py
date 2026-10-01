@@ -23,6 +23,32 @@ class VPNOptimizer:
     def __init__(self, locations):
         self.locations = locations
         self.running = False
+        self.index = 0
+        self.total = 1
+        self.measuring = False
+
+    def operation(self, inner):
+        if not self.running:
+            return inner
+        fraction = (
+            0.95 if self.measuring else min(100, max(0, inner.get("progress", 0))) / 100 * 0.8
+        )
+        phase = (
+            "Measure download and upload"
+            if self.measuring
+            else inner.get("step") or "Prepare VPN switch"
+        )
+        label = (
+            f"Server {self.index + 1} of {self.total - 1}"
+            if self.index < self.total - 1
+            else "Restore selected server"
+        )
+        return {
+            "state": "running",
+            "progress": round((self.index + fraction) / self.total * 100),
+            "step": f"{label}: {phase}",
+            "server": inner.get("server"),
+        }
 
     def state(self):
         root, _, _ = self.locations.context()
@@ -43,16 +69,19 @@ class VPNOptimizer:
         candidates = ([baseline] if baseline else []) + secrets.SystemRandom().sample(
             others, min(2 if baseline else 3, len(others))
         )
+        self.index, self.total = 0, len(candidates) + 1
         self.running = True
         samples = {}
         active = None
         try:
-            for server in candidates:
+            for index, server in enumerate(candidates):
+                self.index, self.measuring = index, False
                 if not await location.apply(server):
                     active = None
                     continue
                 active = server["id"]
                 try:
+                    self.measuring = True
                     sample = await location.control.driver.measure_vpn_speed()
                     # Do not select a fast tunnel whose port cannot be renewed.
                     location.control.driver.forwarding.next_attempt = 0
@@ -63,6 +92,7 @@ class VPNOptimizer:
                     continue
             selected = winner(samples, current) if samples else current
             target = next((r for r in candidates if r["id"] == selected), baseline)
+            self.index, self.measuring = len(candidates), False
             restored = target is not None and await location.apply(target)
             state.update(
                 samples=samples,

@@ -138,12 +138,9 @@ class LocationService:
             "provider": spec.provider,
             "available": available,
             "current": current,
-            "operation": {
-                "state": "running",
-                "step": "Comparing VPN servers; torrent connections may pause",
-            }
-            if self.optimizer.running
-            else saved.get("operation", {"state": "idle", "step": None}),
+            "operation": self.optimizer.operation(
+                saved.get("operation", {"state": "idle", "step": None})
+            ),
             "countries": sorted({r["country"] for r in rows}),
             "servers": [{k: r[k] for k in ("id", "country", "name")} for r in rows],
             "automaticDescription": "Compares download and upload through up to 3 P2P servers. Keeps the current server unless the combined measured speed improves by 25%. Tests interrupt torrent connections and use up to 30 MiB. Measurements include current network load; torrent speeds may differ.",
@@ -219,7 +216,23 @@ class LocationService:
         }
 
         def progress(step, status="running"):
-            state["operation"] = {"state": status, "step": step}
+            phases = {
+                "Block qBittorrent": 5,
+                "Apply encrypted provider profile": 15,
+                "Restart and verify tunnel": 35,
+                "Verify external IP and country": 50,
+                "Restore port forwarding": 65,
+                "Start qBittorrent in verified VPN namespace": 80,
+                "Verify qBittorrent connection and port": 90,
+                "All safety checks passed": 100,
+            }
+            percent = phases.get(step, state.get("operation", {}).get("progress", 0))
+            state["operation"] = {
+                "state": status,
+                "step": step,
+                "progress": percent,
+                "server": server["id"],
+            }
             save_json(path, state)
             control.operation = {"state": status, "action": "vpn-location", "message": step}
 
@@ -272,6 +285,7 @@ class LocationService:
                 await driver.device_guard()
                 progress("Start qBittorrent in verified VPN namespace")
                 await driver.start_torrent()
+                progress("Verify qBittorrent connection and port")
                 await driver.verify_torrent(ip)
                 if (await driver.forwarding.apply_current())["status"] != "healthy":
                     raise ValueError("Forwarded port not verified")

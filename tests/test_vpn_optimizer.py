@@ -137,3 +137,30 @@ def test_scheduler_respects_persisted_mode_and_busy_controller(
         assert optimizer.run.await_count == expected
 
     asyncio.run(scenario())
+
+
+def test_progress_tracks_servers_measurement_and_final_restart():
+    optimizer = VPNOptimizer(None)
+    optimizer.running = True
+    optimizer.total = 4
+    values = []
+    for index in range(3):
+        optimizer.index = index
+        optimizer.measuring = False
+        values.append(optimizer.operation({"progress": 5, "step": "Block qBittorrent"})["progress"])
+        values.append(
+            optimizer.operation({"progress": 90, "step": "Verify qBittorrent"})["progress"]
+        )
+        optimizer.measuring = True
+        measurement = optimizer.operation({"progress": 100})
+        assert "Measure download and upload" in measurement["step"]
+        values.append(measurement["progress"])
+    optimizer.index, optimizer.measuring = 3, False
+    final = optimizer.operation({"progress": 90, "step": "Verify qBittorrent"})
+    assert "Restore selected server" in final["step"]
+    values.append(final["progress"])
+    assert values == sorted(values)
+    assert max(values) < 100
+    optimizer.running = False
+    assert optimizer.operation({"state": "healthy", "progress": 100})["progress"] == 100
+    assert optimizer.operation({"state": "failed", "progress": 65})["state"] == "failed"
