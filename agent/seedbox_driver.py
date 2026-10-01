@@ -237,6 +237,58 @@ class ScopedDriver:
                 "DELETE", f"/containers/{identifier}", params={"force": "true", "v": "false"}
             )
 
+    async def measure_vpn_speed(self):
+        identity = await self.port_forward_identity()
+        policy, _ = self.binding()
+        vpn = await self.container("vpn")
+        body = {
+            "Image": policy.paths.torrentImage,
+            "User": "0:0",
+            "Tty": True,
+            "Entrypoint": [
+                "python3",
+                "-c",
+                Path(__file__).with_name("vpn_speed_probe.py").read_text(),
+            ],
+            "HostConfig": {
+                "NetworkMode": "container:" + vpn["Id"],
+                "ReadonlyRootfs": True,
+                "CapDrop": ["ALL"],
+                "SecurityOpt": ["no-new-privileges:true"],
+                "Memory": 64 * 1024**2,
+                "PidsLimit": 16,
+                "LogConfig": {"Type": "json-file", "Config": {"max-size": "1m", "max-file": "1"}},
+            },
+        }
+        identifier = (await self.request("POST", "/containers/create", json=body)).json()["Id"]
+        try:
+            await self.request("POST", f"/containers/{identifier}/start")
+            status = (
+                await self.request("POST", f"/containers/{identifier}/wait", timeout=35)
+            ).json()
+            output = (
+                await self.request(
+                    "GET",
+                    f"/containers/{identifier}/logs",
+                    params={"stdout": "true", "stderr": "false"},
+                )
+            ).content
+            if status.get("StatusCode") != 0 or len(output) > 1024:
+                raise ValueError("Speed measurement unavailable")
+            result = json.loads(output)
+            if any(
+                type(result.get(k)) not in (int, float) or not 0 < result[k] < 1e6
+                for k in ("downloadMbps", "uploadMbps")
+            ):
+                raise ValueError("Invalid speed measurement")
+            if await self.port_forward_identity() != identity:
+                raise ValueError("VPN changed during measurement")
+            return result
+        finally:
+            await self.request(
+                "DELETE", f"/containers/{identifier}", params={"force": "true", "v": "false"}
+            )
+
     async def allow_forwarded_port(self, port, previous):
         _, spec = self.binding()
         if (

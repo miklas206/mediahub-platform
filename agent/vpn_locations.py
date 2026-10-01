@@ -18,6 +18,7 @@ from agent.install_files import read_json, save_json
 from agent.ram_secrets import RuntimeSecrets
 from agent.seedbox_provision import private_record
 from agent.seedbox_secret_store import SeedboxSecretStore
+from agent.vpn_optimizer import VPNOptimizer
 
 
 class LocationProvider(Protocol):
@@ -95,6 +96,7 @@ class ProtonLocations:
 class LocationService:
     def __init__(self, control):
         self.control = control
+        self.optimizer = VPNOptimizer(self)
         self.providers: dict[str, LocationProvider] = {"protonvpn": ProtonLocations()}
 
     def context(self):
@@ -136,10 +138,16 @@ class LocationService:
             "provider": spec.provider,
             "available": available,
             "current": current,
-            "operation": saved.get("operation", {"state": "idle", "step": None}),
+            "operation": {
+                "state": "running",
+                "step": "Comparing VPN servers; torrent connections may pause",
+            }
+            if self.optimizer.running
+            else saved.get("operation", {"state": "idle", "step": None}),
             "countries": sorted({r["country"] for r in rows}),
             "servers": [{k: r[k] for k in ("id", "country", "name")} for r in rows],
-            "automaticDescription": "Selects an available P2P server in the chosen country; not a speed benchmark.",
+            "automaticDescription": "Compares download and upload through up to 3 P2P servers. Keeps the current server unless the combined measured speed improves by 25%. Tests interrupt torrent connections and use up to 30 MiB. Measurements include current network load; torrent speeds may differ.",
+            "automation": self.optimizer.state(),
         }
 
     async def change(self, body):
@@ -178,8 +186,20 @@ class LocationService:
             ) from None
         if control.job and not control.job.done():
             raise DomainError("operation_busy", "Another operation is running", 409)
+        self.optimizer.save(
+            {
+                "enabled": body.server == "automatic",
+                "country": body.country,
+                "intervalHours": body.intervalHours,
+                "nextCheck": time.time() + body.intervalHours * 3600,
+            }
+        )
         control.operation = {"state": "running", "action": "vpn-location"}
-        control.job = asyncio.create_task(self.apply_candidates(candidates))
+        control.job = asyncio.create_task(
+            self.optimizer.run(matches)
+            if body.server == "automatic"
+            else self.apply_candidates(candidates)
+        )
         return {"state": "accepted"}
 
     async def apply_candidates(self, candidates):

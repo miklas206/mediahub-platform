@@ -235,6 +235,9 @@ def create_agent(config: AgentConfig | None = None):
         torrent_cleanup = (
             asyncio.create_task(torrents.retention.poll()) if config.seedbox_policy_file else None
         )
+        optimizer_task = (
+            asyncio.create_task(locations.optimizer.poll()) if config.seedbox_policy_file else None
+        )
         if config.seedbox_policy_file:
             control.monitor_task = asyncio.create_task(control.monitor())
         if config.plex_policy_file:
@@ -244,6 +247,10 @@ def create_agent(config: AgentConfig | None = None):
             torrent_cleanup.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await torrent_cleanup
+        if optimizer_task:
+            optimizer_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await optimizer_task
         await plex.close()
         await control.close()
         cleanup.cancel()

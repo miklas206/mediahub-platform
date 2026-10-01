@@ -50,3 +50,4 @@ class TorrentRetention(StrictModel):
 class VPNLocation(StrictModel):
     country: str = Field(min_length=1, max_length=80)
     server: str = Field(default="automatic", min_length=1, max_length=128)
+    intervalHours: Literal[0, 6, 24] = 6

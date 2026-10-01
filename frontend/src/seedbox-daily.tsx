@@ -48,6 +48,12 @@ type Locations = {
   } | null;
   operation: { state: string; step: string | null };
   automaticDescription: string;
+  automation?: {
+    enabled?: boolean;
+    intervalHours?: number;
+    message?: string;
+    samples?: Record<string, { downloadMbps: number; uploadMbps: number }>;
+  };
 };
 
 export function SeedboxDaily({
@@ -57,6 +63,7 @@ export function SeedboxDaily({
   externalIp?: string | null;
   forwarding?: string;
 }) {
+  const [intervalHours, setIntervalHours] = useState<number | null>(null);
   const [list, setList] = useState<Listing | null>(null),
     [location, setLocation] = useState<Locations | null>(null);
   const [retention, setRetention] = useState<RetentionRule>(defaultRetention);
@@ -203,7 +210,12 @@ export function SeedboxDaily({
     setBusy(true);
     setError("");
     try {
-      await api("/seedbox/locations", "POST", { country: selected, server });
+      await api("/seedbox/locations", "POST", {
+        country: selected,
+        server,
+        intervalHours:
+          intervalHours ?? location?.automation?.intervalHours ?? 6,
+      });
       reload();
     } catch (e) {
       setError((e as Error).message);
@@ -268,6 +280,34 @@ export function SeedboxDaily({
                 ))}
             </select>
           </label>
+          {server === "automatic" && (
+            <label>
+              Compare server speeds
+              <select
+                value={
+                  intervalHours ?? location?.automation?.intervalHours ?? 6
+                }
+                disabled={busy || changing}
+                onChange={(e) => setIntervalHours(Number(e.target.value))}
+              >
+                <option value={6}>
+                  Every 6 hours ? switch only for a clear improvement
+                </option>
+                <option value={24}>Once a day ? fewer interruptions</option>
+                <option value={0}>Only when I select automatic manually</option>
+              </select>
+            </label>
+          )}
+          {location?.automation?.message && (
+            <p role="status">{location.automation.message}</p>
+          )}
+          {location?.automation?.samples &&
+            Object.entries(location.automation.samples).map(([id, sample]) => (
+              <p className="muted" key={id}>
+                {id}: {sample.downloadMbps} Mbps down / {sample.uploadMbps} Mbps
+                up
+              </p>
+            ))}
           <button
             className="primary"
             disabled={busy || changing || !location?.available || !selected}
