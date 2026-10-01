@@ -21,6 +21,42 @@ RAW = "\n".join(
 )
 
 
+def test_empty_media_subdirectories_are_not_files(tmp_path):
+    scope = {}
+    exec(remote.MEDIA_CONTENT_PROBE, scope)
+    (tmp_path / "movies" / "uploads").mkdir(parents=True)
+    (tmp_path / "series").mkdir()
+    (tmp_path / ".uploads").mkdir()
+    assert scope["contains_files"](tmp_path) is False
+    (tmp_path / "movies" / "uploads" / "film.mkv").write_bytes(b"film")
+    assert scope["contains_files"](tmp_path) is True
+
+
+def test_even_hidden_empty_files_block_media_removal(tmp_path):
+    scope = {}
+    exec(remote.MEDIA_CONTENT_PROBE, scope)
+    (tmp_path / ".keep").touch()
+    assert scope["contains_files"](tmp_path) is True
+
+
+def test_media_scan_does_not_treat_symlinks_as_empty_directories(tmp_path, monkeypatch):
+    scope = {}
+    exec(remote.MEDIA_CONTENT_PROBE, scope)
+    entries = MagicMock()
+    link = SimpleNamespace(is_dir=lambda *, follow_symlinks: follow_symlinks)
+    entries.__enter__.return_value = [link]
+    monkeypatch.setattr(scope["os"], "scandir", lambda _: entries)
+    assert scope["contains_files"](tmp_path) is True
+
+
+def test_unreadable_media_directory_never_passes_as_empty(tmp_path, monkeypatch):
+    scope = {}
+    exec(remote.MEDIA_CONTENT_PROBE, scope)
+    monkeypatch.setattr(scope["os"], "scandir", MagicMock(side_effect=PermissionError))
+    with pytest.raises(PermissionError):
+        scope["contains_files"](tmp_path)
+
+
 def test_external_media_is_not_a_disk_to_delete():
     deleted, kept = remote.storage_plan(RAW, CFG)
     assert [d["slot"] for d in deleted] == ["rootfs", "mp0"]

@@ -12,7 +12,32 @@ import subprocess
 import sys
 from pathlib import Path
 
-GUEST_PROBE = r"""
+MEDIA_CONTENT_PROBE = r"""
+import os
+
+def contains_files(root):
+    # Empty directory scaffolding is not media. Do not follow nested symlinks,
+    # ignore unreadable paths or guess which file extensions matter.
+    pending = [root]
+    visited = 0
+    while pending:
+        directory = pending.pop()
+        visited += 1
+        if visited > 10000:
+            raise ValueError('Media directory inspection limit reached')
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if not entry.is_dir(follow_symlinks=False):
+                    return True
+                pending.append(entry.path)
+                if len(pending) + visited > 10000:
+                    raise ValueError('Media directory inspection limit reached')
+    return False
+"""
+
+GUEST_PROBE = (
+    MEDIA_CONTENT_PROBE
+    + r"""
 import json, pathlib, subprocess, sys
 cfg = json.loads(sys.argv[1])
 root = pathlib.Path(cfg['installPath'])
@@ -36,13 +61,14 @@ for item in items:
             source = pathlib.Path(mount['Source'])
             if not source.is_dir():
                 raise ValueError('Cannot verify a media source')
-            media.append({'path': str(source.resolve()), 'nonempty': any(source.iterdir())})
+            media.append({'path': str(source.resolve()), 'nonempty': contains_files(source)})
 default_media = pathlib.Path('/opt/fjordflix-data/media')
 if default_media.is_dir():
-    media.append({'path': str(default_media.resolve()), 'nonempty': any(default_media.iterdir())})
+    media.append({'path': str(default_media.resolve()), 'nonempty': contains_files(default_media)})
 print(json.dumps({'containers': sorted(item['Name'].lstrip('/') for item in items),
                   'media': media, 'account': env.get('PROXMOX_TOKEN_ID', '').split('!')[0]}))
 """
+)
 
 
 def run(args, timeout=60):
