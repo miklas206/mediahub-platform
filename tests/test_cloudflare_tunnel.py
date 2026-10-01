@@ -1,10 +1,11 @@
 import asyncio
 import json
+import time
 from types import SimpleNamespace
 
 import httpx
 import pytest
-from mediahub.apps.cloudflared import register_cloudflared_app
+from mediahub.apps.cloudflared import CloudflaredAppAdapter, register_cloudflared_app
 from mediahub.cloudflare_tunnel import CloudflareTunnelMonitor
 from mediahub.errors import DomainError
 
@@ -295,3 +296,64 @@ def test_release_http_failure_has_actionable_reason(monkeypatch, status, headers
         asyncio.run(CloudflareTunnelMonitor(config(probes=[]))._latest_release())
     assert failure.value.code == code
     assert "private upstream body" not in failure.value.message
+
+
+def test_app_checks_share_release_cache_for_fifteen_minutes(monkeypatch):
+    requests = []
+
+    async def handler(request):
+        if request.url.host == "api.github.com":
+            requests.append(request)
+            return httpx.Response(200, json={"tag_name": "2026.9.1"})
+        return httpx.Response(
+            200, json={"metricsReachable": True, "connections": 4, "version": "2026.9.0"}
+        )
+
+    mock_client(monkeypatch, handler)
+    monitor = CloudflareTunnelMonitor(config(probes=[]))
+    adapter = CloudflaredAppAdapter(monitor, None, "cloudflare")
+
+    async def check():
+        await adapter.updateCheck()
+        monitor.release_cached_at -= 899
+        await adapter.updateCheck()
+        assert len(requests) == 1
+        monitor.release_cached_at -= 2
+        await adapter.updateCheck()
+        assert len(requests) == 2
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(time.time()) + 3600)},
+        {"retry-after": "3600"},
+    ],
+)
+def test_rate_limit_pauses_even_forced_checks_until_retry_then_recovers(monkeypatch, headers):
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(429, headers=headers)
+        return httpx.Response(200, json={"tag_name": "2026.9.1"})
+
+    mock_client(monkeypatch, handler)
+    monitor = CloudflareTunnelMonitor(config(probes=[]))
+
+    async def check():
+        for force in (False, True, False):
+            with pytest.raises(DomainError) as failure:
+                await monitor._latest_release(force=force)
+            assert failure.value.code == "update_source_rate_limited"
+            assert "UTC" in failure.value.message
+        assert len(requests) == 1
+        assert monitor.release_retry_at - time.monotonic() > 3500
+        monitor.release_retry_at = time.monotonic() - 1
+        assert (await monitor._latest_release())["version"] == "2026.9.1"
+        assert len(requests) == 2
+
+    asyncio.run(check())

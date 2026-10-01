@@ -2,8 +2,10 @@
 
 import asyncio
 import json
+import math
 import re
 import time
+from datetime import datetime, timezone
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -16,7 +18,7 @@ LATEST_RELEASE_URL = "https://api.github.com/repos/cloudflare/cloudflared/releas
 
 
 class CloudflareTunnelMonitor:
-    def __init__(self, config, *, cache_seconds=10, release_cache_seconds=600):
+    def __init__(self, config, *, cache_seconds=10, release_cache_seconds=900):
         self.status_url = config.cloudflared_status_url
         self.probe_urls = config.cloudflared_probe_urls
         self.setup_mode = "existing-tunnel"
@@ -31,6 +33,8 @@ class CloudflareTunnelMonitor:
         self.release_lock = asyncio.Lock()
         self.release_cached = None
         self.release_cached_at = 0.0
+        self.release_retry_at = 0.0
+        self.release_limit_message = ""
 
     @staticmethod
     def _public_routes(value):
@@ -316,6 +320,8 @@ class CloudflareTunnelMonitor:
 
     async def _latest_release(self, *, force=False):
         async with self.release_lock:
+            if time.monotonic() < self.release_retry_at:
+                raise DomainError("update_source_rate_limited", self.release_limit_message, 503)
             if (
                 not force
                 and self.release_cached
@@ -351,9 +357,28 @@ class CloudflareTunnelMonitor:
                     error.response.status_code == 403
                     and error.response.headers.get("x-ratelimit-remaining") == "0"
                 )
+                if limited:
+                    now = time.time()
+                    delays = [900.0]
+                    for header, offset in (("retry-after", 0), ("x-ratelimit-reset", now)):
+                        try:
+                            delay = float(error.response.headers.get(header, "0")) - offset
+                            if math.isfinite(delay):
+                                delays.append(delay)
+                        except ValueError:
+                            pass
+                    delay = max(delays)
+                    self.release_retry_at = time.monotonic() + delay
+                    retry = datetime.fromtimestamp(now + delay, timezone.utc).strftime(
+                        "%Y-%m-%d %H:%M UTC"
+                    )
+                    self.release_limit_message = (
+                        f"GitHub rate limit reached for cloudflared. Next attempt no earlier than {retry}. "
+                        "Tunnel operation is unaffected by this update check."
+                    )
                 raise DomainError(
                     "update_source_rate_limited" if limited else "update_source_http_error",
-                    "GitHub rate limit reached for cloudflared; try again after the limit resets"
+                    self.release_limit_message
                     if limited
                     else f"GitHub cloudflared release lookup returned HTTP {error.response.status_code}",
                     503,

@@ -76,7 +76,7 @@ class CloudflaredAppAdapter:
         return Health(status=overall, summary=report["message"], checks=checks)
 
     async def updateCheck(self):
-        return await self.monitor.update_check(force=True)
+        return await self.monitor.update_check()
 
     async def logs(self):
         return {"entries": []}
