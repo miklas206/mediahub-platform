@@ -6,6 +6,16 @@ import time
 from agent.port_listener import ListeningPortError
 
 
+class PortLeaseError(ValueError):
+    MESSAGES = {
+        "natpmp_refused": "Proton refused the port request. Check NAT-PMP on the WireGuard profile and P2P server.",
+        "natpmp_timeout": "Proton did not answer the port request through the VPN tunnel.",
+    }
+
+    def __init__(self, reason):
+        super().__init__(self.MESSAGES.get(reason, "Proton port lease could not be verified"))
+
+
 class PortForwarding:
     def __init__(self, driver, clock=time.monotonic, wall=time.time):
         self.driver, self.clock, self.wall = driver, clock, wall
@@ -90,6 +100,8 @@ class PortForwarding:
                 self.state["lastError"] = (
                     "qBittorrent port is configured, but no listening socket was found"
                     if isinstance(error, ListeningPortError)
+                    else str(error)
+                    if isinstance(error, PortLeaseError)
                     else stage + " could not be verified"
                 )
                 self.failures += 1

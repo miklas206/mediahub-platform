@@ -12,12 +12,12 @@ def linux_constant_for_fake_socket(monkeypatch):
     monkeypatch.setattr(socket, "SO_BINDTODEVICE", 25, raising=False)
 
 
-def reply(opcode=1, port=45000, result=0, internal=1, lifetime=60):
+def reply(opcode=1, port=45000, result=0, internal=0, lifetime=60):
     return struct.pack("!BBHIHHI", 0, 128 + opcode, result, 10, internal, port, lifetime)
 
 
 def test_packet_and_response_contract():
-    assert request_packet(1) == struct.pack("!BBHHHI", 0, 1, 0, 1, 0, 60)
+    assert request_packet(1) == struct.pack("!BBHHHI", 0, 1, 0, 0, 1, 60)
     assert parse_response(reply(), 1) == {"port": 45000, "lifetime": 60, "epoch": 10}
 
 
@@ -82,7 +82,7 @@ def test_no_wan_fallback_if_interface_binding_fails():
 
 def test_retries_bounded_and_tcp_udp_mismatch_rejected():
     sock = Socket(timeout=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(TimeoutError):
         proton_lease(lambda *_: sock)
     assert sock.sends == 2
     with pytest.raises(ValueError):

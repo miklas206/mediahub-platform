@@ -1,7 +1,8 @@
 """Bounded NAT-PMP exchange, executed ONLY inside the verified VPN namespace.
 
 No router discovery, arbitrary gateway, credentials, persistence or log output.
-Proton mapping convention: internal port1, preferred external port0,60s lease.
+Proton symmetric mapping: internal port 0, external selector 1, 60s lease.
+Matches Proton's `natpmpc -a 1 0`: public port comes first in that CLI.
 """
 
 import json
@@ -9,13 +10,16 @@ import socket
 import struct
 import time
 
-PROTON_INTERNAL_PORT = 1
+PROTON_INTERNAL_PORT = 0
+PROTON_EXTERNAL_SELECTOR = 1
 
 
 def request_packet(opcode, lifetime=60):
     if opcode not in (1, 2) or not 30 <= lifetime <= 120:
         raise ValueError("Invalid mapping request")
-    return struct.pack("!BBHHHI", 0, opcode, 0, PROTON_INTERNAL_PORT, 0, lifetime)
+    return struct.pack(
+        "!BBHHHI", 0, opcode, 0, PROTON_INTERNAL_PORT, PROTON_EXTERNAL_SELECTOR, lifetime
+    )
 
 
 def parse_response(packet, opcode):
@@ -49,7 +53,7 @@ def proton_lease(socket_factory=socket.socket, clock=time.monotonic):
                 except TimeoutError:
                     continue
             if response is None:
-                raise ValueError("NAT-PMP exchange timed out")
+                raise TimeoutError("NAT-PMP exchange timed out")
             results.append(response)
     if results[0]["port"] != results[1]["port"]:
         raise ValueError("TCP/UDP allocation mismatch")
@@ -62,7 +66,14 @@ def proton_lease(socket_factory=socket.socket, clock=time.monotonic):
 if __name__ == "__main__":
     try:
         print(json.dumps(proton_lease()))
-    except Exception:
+    except Exception as error:
+        reason = (
+            "natpmp_refused"
+            if isinstance(error, ConnectionRefusedError)
+            else "natpmp_timeout"
+            if isinstance(error, TimeoutError)
+            else "natpmp_unavailable"
+        )
         # Fixed message only; never serialize command/environment/exception details.
-        print(json.dumps({"status": "degraded", "reason": "natpmp_unavailable"}))
+        print(json.dumps({"status": "degraded", "reason": reason}))
         raise SystemExit(1) from None

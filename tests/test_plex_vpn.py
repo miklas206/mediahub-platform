@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 import pytest
 from mediahub.errors import DomainError
 
-from agent.natpmp import PROTON_INTERNAL_PORT
 from agent.plex_vpn import (
     INPUT_COMMENT,
     PLEX_PORT,
@@ -91,10 +90,9 @@ def test_forwarded_port_is_redirected_and_allowed_only_on_vpn_interface():
 
     async def execute(_vpn, command):
         calls.append(command)
-        if command in (
-            ["iptables", "-t", "nat", "-S", "PREROUTING"],
-            ["iptables", "-S", "INPUT"],
-        ):
+        if command == ["iptables", "-t", "nat", "-S", "PREROUTING"]:
+            return f"-A PREROUTING -i tun0 -p tcp --dport 1 -m comment --comment {REDIRECT_COMMENT} -j REDIRECT --to-ports 32400"
+        if command == ["iptables", "-S", "INPUT"]:
             return ""
         if "-C" in command:
             raise ValueError("rule missing")
@@ -104,13 +102,15 @@ def test_forwarded_port_is_redirected_and_allowed_only_on_vpn_interface():
     asyncio.run(PlexVPN._apply_redirect(fake, {"Id": "vpn"}, 42264))
 
     redirect = next(command for command in calls if REDIRECT_COMMENT in command and "-I" in command)
-    assert redirect[redirect.index("--dport") + 1] == str(PROTON_INTERNAL_PORT)
+    assert redirect[redirect.index("--dport") + 1] == "42264"
     assert redirect[redirect.index("--to-ports") + 1] == str(PLEX_PORT)
 
     allowed = next(command for command in calls if INPUT_COMMENT in command and "-I" in command)
     assert allowed[allowed.index("-i") + 1] == "tun0"
     assert allowed[allowed.index("--dport") + 1] == str(PLEX_PORT)
     assert allowed[-1] == "ACCEPT"
+    removed = next(command for command in calls if REDIRECT_COMMENT in command and "-D" in command)
+    assert removed[removed.index("--dport") + 1] == "1"
 
 
 def test_public_probe_uses_isolated_secretless_bridge_helper():

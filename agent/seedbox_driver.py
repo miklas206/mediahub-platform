@@ -11,6 +11,7 @@ import httpx
 from mediahub.apps.seedbox import SeedboxInstallation, compose_plan
 
 from agent.forwarding_rules import owned_ports
+from agent.port_forwarding import PortLeaseError
 from agent.port_listener import ListeningPortError
 from agent.ram_secrets import RuntimeSecrets
 from agent.seedbox_install import policy_host_mounts_verified, policy_mounts_verified
@@ -218,8 +219,6 @@ class ScopedDriver:
         try:
             await self.request("POST", f"/containers/{identifier}/start")
             status = (await self.request("POST", f"/containers/{identifier}/wait")).json()
-            if status.get("StatusCode") != 0:
-                raise ValueError("Port allocation unavailable")
             output = (
                 await self.request(
                     "GET",
@@ -229,7 +228,10 @@ class ScopedDriver:
             ).content
             if len(output) > 1024:
                 raise ValueError("Invalid allocation result")
-            return json.loads(output)
+            result = json.loads(output)
+            if status.get("StatusCode") != 0:
+                raise PortLeaseError(result.get("reason"))
+            return result
         finally:
             await self.request(
                 "DELETE", f"/containers/{identifier}", params={"force": "true", "v": "false"}

@@ -26,7 +26,6 @@ from mediahub.errors import DomainError
 from mediahub.secret_store import SecretStore
 
 from agent.install_files import save_json
-from agent.natpmp import PROTON_INTERNAL_PORT
 
 PLEX_PORT = 32400
 REDIRECT_COMMENT = "mediahub-plex-pf"
@@ -484,10 +483,8 @@ class PlexVPN:
                 if not tokens or tokens[0] != "-A" or tokens[1] != "PREROUTING":
                     raise ValueError("Unexpected Plex redirect ownership")
                 owned.append(tokens)
-        # Proton translates the allocated public port to the private port sent
-        # in the NAT-PMP request. natpmp.py deliberately requests private port
-        # 1 so the provider can choose any public port. Packets therefore
-        # arrive on tun0 with destination port 1, not with the public port.
+        # Proton's symmetric mapping sends traffic to the allocated port.
+        # Internal selector 0 is a protocol convention, not a listening port.
         rule = [
             "PREROUTING",
             "-i",
@@ -495,7 +492,7 @@ class PlexVPN:
             "-p",
             "tcp",
             "--dport",
-            str(PROTON_INTERNAL_PORT),
+            str(port),
             "-m",
             "comment",
             "--comment",
@@ -510,9 +507,7 @@ class PlexVPN:
         except ValueError:
             await self._exec(vpn, ["iptables", "-t", "nat", "-I", *rule])
         for tokens in owned:
-            if "--dport" in tokens and tokens[tokens.index("--dport") + 1] == str(
-                PROTON_INTERNAL_PORT
-            ):
+            if "--dport" in tokens and tokens[tokens.index("--dport") + 1] == str(port):
                 continue
             tokens[0] = "-D"
             await self._exec(vpn, ["iptables", "-t", "nat", *tokens])

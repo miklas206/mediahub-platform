@@ -86,3 +86,22 @@ def test_missing_listener_does_not_claim_reachable_or_lose_configured_port():
         assert "private details" not in state["lastError"]
 
     asyncio.run(scenario())
+
+
+def test_provider_failure_is_actionable_and_unknown_details_are_hidden():
+    from agent.port_forwarding import PortLeaseError
+
+    async def scenario():
+        driver = Driver()
+
+        async def refused():
+            raise PortLeaseError("natpmp_refused")
+
+        driver.request_forwarded_port = refused
+        state = await PortForwarding(driver).renew()
+        assert state["status"] == "degraded"
+        assert "NAT-PMP" in state["lastError"]
+        assert not state["qBittorrentVerified"]
+        assert "secret" not in str(PortLeaseError("secret"))
+
+    asyncio.run(scenario())
