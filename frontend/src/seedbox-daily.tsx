@@ -3,7 +3,7 @@ import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
-import { bytes, uptime } from "./format";
+import { TorrentList, type Torrent } from "./torrent-list";
 import { SeedboxRSS } from "./seedbox-rss-feeds";
 import {
   TorrentRetention,
@@ -11,26 +11,6 @@ import {
   type RetentionRule,
 } from "./torrent-retention";
 
-type Torrent = {
-  hash: string;
-  name: string;
-  progress: number;
-  state: string;
-  dlspeed: number;
-  upspeed: number;
-  ratio: number;
-  uploaded?: number;
-  downloaded?: number;
-  eta: number;
-  size: number;
-  actionsAllowed: boolean;
-  num_seeds?: number;
-  num_leechs?: number;
-  category?: string;
-  seeding_time?: number;
-  retention?: RetentionRule | null;
-  retentionMessage?: string;
-};
 type DownloadLocation = { id: string; label: string; storageLabel?: string };
 type Listing = {
   items: Torrent[];
@@ -371,145 +351,20 @@ export function SeedboxDaily({
         <>
           <Panel title="Torrents">
             <ErrorBox error={listError} />
-            <div className="torrent-table-scroll">
-              <table className="torrent-table">
-                <thead>
-                  <tr>
-                    {[
-                      "Name",
-                      "Progress",
-                      "Status",
-                      "Download",
-                      "Upload",
-                      "Client ratio",
-                      "ETA",
-                      "Size",
-                      "Actions",
-                    ].map((h) => (
-                      <th key={h}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {list?.items.map((t) => (
-                    <tr key={t.hash}>
-                      <td className="torrent-name">
-                        {t.name}
-                        <small className="muted">
-                          {t.num_seeds ?? 0} seeds · {t.num_leechs ?? 0} peers
-                          {t.category ? ` · ${t.category}` : ""}
-                          {t.seeding_time
-                            ? ` · Seeded ${uptime(t.seeding_time)}`
-                            : ""}
-                        </small>
-                      </td>
-                      <td>
-                        <progress
-                          max={1}
-                          value={t.progress}
-                          aria-label={`${t.name} progress`}
-                        />
-                        <small>{(t.progress * 100).toFixed(1)}%</small>
-                      </td>
-                      <td>{t.state}</td>
-                      <td>{bytes(t.dlspeed)}/s</td>
-                      <td>{bytes(t.upspeed)}/s</td>
-                      <td title="qBittorrent upload/download history for this torrent. Tracker totals and credited traffic may differ.">
-                        {t.ratio.toFixed(2)}
-                        {typeof t.uploaded === "number" &&
-                          typeof t.downloaded === "number" && (
-                            <small
-                              className="muted"
-                              style={{ display: "block", whiteSpace: "nowrap" }}
-                            >
-                              {bytes(t.uploaded)} up / {bytes(t.downloaded)}{" "}
-                              down
-                            </small>
-                          )}
-                      </td>
-                      <td>
-                        {t.eta < 0 || t.eta >= 8640000 ? "—" : uptime(t.eta)}
-                      </td>
-                      <td>{bytes(t.size)}</td>
-                      <td>
-                        <div className="torrent-actions">
-                          <button
-                            disabled={
-                              busy ||
-                              changing ||
-                              !!listError ||
-                              !t.actionsAllowed
-                            }
-                            onClick={() => void action(t.hash, "pause")}
-                          >
-                            Pause
-                          </button>
-                          <button
-                            disabled={
-                              busy ||
-                              changing ||
-                              !!listError ||
-                              !t.actionsAllowed
-                            }
-                            onClick={() => void action(t.hash, "resume")}
-                          >
-                            Resume
-                          </button>
-                          <button
-                            disabled={
-                              busy ||
-                              changing ||
-                              !!listError ||
-                              !t.actionsAllowed
-                            }
-                            onClick={() => void action(t.hash, "recheck")}
-                          >
-                            Recheck
-                          </button>
-                          <button
-                            disabled={
-                              busy ||
-                              changing ||
-                              !!listError ||
-                              !t.actionsAllowed
-                            }
-                            onClick={() => void action(t.hash, "remove")}
-                          >
-                            Remove job
-                          </button>
-                          {list?.retentionSupported && (
-                            <button
-                              disabled={busy || changing || !t.actionsAllowed}
-                              onClick={() =>
-                                setCleanupEdit({
-                                  hash: t.hash,
-                                  name: t.name,
-                                  rule: t.retention || defaultRetention,
-                                })
-                              }
-                            >
-                              Cleanup
-                            </button>
-                          )}
-                          {t.retention && (
-                            <small>
-                              Cleanup: {t.retention.mode} ·{" "}
-                              {t.retention.action === "delete_files"
-                                ? "deletes files"
-                                : "keeps files"}
-                            </small>
-                          )}
-                          {t.retentionMessage && (
-                            <small role="status">{t.retentionMessage}</small>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {!list?.items.length && !listError && (
+            <TorrentList
+              items={list?.items ?? null}
+              disabled={busy || !!changing || !!listError}
+              retentionSupported={list?.retentionSupported}
+              onAction={(hash, command) => void action(hash, command)}
+              onCleanup={(torrent) =>
+                setCleanupEdit({
+                  hash: torrent.hash,
+                  name: torrent.name,
+                  rule: torrent.retention || defaultRetention,
+                })
+              }
+            />
+            {list && !list.items.length && !listError && (
               <p>No torrents yet. Add a magnet link or torrent file below.</p>
             )}
             <p className="muted">
