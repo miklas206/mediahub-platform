@@ -497,6 +497,12 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.install-command-block.fjordhub-install-console {
+  box-sizing: border-box;
+  height: 200px;
+  max-height: 35vh;
+  overflow: auto;
+}
 .store-success {
   display: flex;
   align-items: center;

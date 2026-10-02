@@ -414,7 +414,7 @@ export function FjordHubDeployment({
             <summary>Installation console</summary>
             <pre
               ref={consoleRef}
-              className="install-command-block"
+              className="install-command-block fjordhub-install-console"
               aria-label="FjordHub installation console"
             >
               {job.logs.join("\n") || "Waiting for SSH output…"}
