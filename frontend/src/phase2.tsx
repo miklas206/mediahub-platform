@@ -24,7 +24,7 @@ import {
 import { api, uploadMediaFile } from "./api";
 import { droppedMediaFiles, type MediaUploadFile } from "./media-drop";
 import { Link } from "react-router-dom";
-import { bytes } from "./format";
+import { bytes, fileFormat } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
 import type { Storage, AppInfo } from "./contracts";
 import type {
@@ -1063,6 +1063,7 @@ export function MediaFiles() {
               {listing?.items.map((item) => (
                 <button
                   className="media-file-row"
+                  title={item.name}
                   disabled={item.type === "file" || uploading}
                   key={item.path}
                   onClick={() =>
@@ -1079,7 +1080,7 @@ export function MediaFiles() {
                     <small>
                       {item.type === "folder"
                         ? `${item.sizeComplete ? "" : "At least "}${bytes(item.sizeBytes)} · Folder`
-                        : `${bytes(item.sizeBytes)} · ${new Date(
+                        : `${fileFormat(item.name)} · ${bytes(item.sizeBytes)} · ${new Date(
                             item.modifiedAt * 1000,
                           ).toLocaleDateString()}`}
                     </small>

@@ -12,3 +12,10 @@ export function uptime(seconds: number): string {
     ? `${Math.floor(hours / 24)}d ${hours % 24}h`
     : `${hours}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
+
+export function fileFormat(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1
+    ? name.slice(dot + 1).toUpperCase()
+    : "No extension";
+}
