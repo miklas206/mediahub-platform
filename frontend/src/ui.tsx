@@ -729,7 +729,10 @@ function Shell({
                 element={<SeedboxInstallPage />}
               />
               <Route path="/apps/:appId" element={<AppRuntimePage />} />
-              <Route path="/store/cloudflare" element={<CloudflareStorePage />} />
+              <Route
+                path="/store/cloudflare"
+                element={<CloudflareStorePage />}
+              />
               <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
               <Route
                 path="/store/fjordhub/uninstall"
@@ -756,8 +759,8 @@ function Shell({
                       <div>
                         <strong>Looking for another app?</strong>
                         <p>
-                          Browse guided installations without mixing them into the
-                          apps you already run.
+                          Browse guided installations without mixing them into
+                          the apps you already run.
                         </p>
                       </div>
                       <NavLink className="primary" to="/store">
@@ -1797,6 +1800,15 @@ function SeedboxDeviceMaintenance({ appId }: { appId: string }) {
 }
 
 function MaintenancePage() {
+  const cleanup = useData<{
+    state: string;
+    message: string;
+    reclaimedBytes?: number;
+  }>("/maintenance");
+  useEffect(() => {
+    const timer = window.setInterval(cleanup.reload, 5000);
+    return () => window.clearInterval(timer);
+  }, [cleanup.reload]);
   const core = useData<{ status: string; version: string }>("/health");
   const runtime = useData<AgentStatus>("/runtime");
   const storage = useData<Storage[]>("/storage/locations");
@@ -1844,6 +1856,7 @@ function MaintenancePage() {
       { label: "Check Agent runtime", state: "pending" },
       { label: "Validate registered storage", state: "pending" },
       { label: "Check installed apps", state: "pending" },
+      { label: "Clean unused system files", state: "pending" },
     ];
     const details: string[] = [];
     let activeStep = 0;
@@ -1853,7 +1866,7 @@ function MaintenancePage() {
       message: string,
     ) =>
       setOperation({
-        title: "Maintenance check",
+        title: "Maintenance",
         status,
         progress,
         message,
@@ -1911,6 +1924,39 @@ function MaintenancePage() {
         `GET /apps · ${appResult.length - unhealthyApps}/${appResult.length} healthy`,
       );
 
+      activeStep = 4;
+      steps[4].state = "running";
+      publish(90, "running", "Cleaning unused system files…");
+      const started = await api<{ operationId: string }>(
+        "/maintenance",
+        "POST",
+      );
+      let completed = false;
+      for (let attempt = 0; attempt < 360; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const result = await api<{
+          operationId?: string;
+          state: string;
+          message: string;
+          reclaimedBytes?: number;
+        }>("/maintenance");
+        if (result.operationId !== started.operationId) continue;
+        if (result.state === "failed") throw new Error(result.message);
+        if (result.state === "succeeded") {
+          details.push(result.message);
+          details.push(
+            `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toFixed(2)} GiB of system disk space.`,
+          );
+          steps[4].state = "complete";
+          completed = true;
+          break;
+        }
+      }
+      if (!completed)
+        throw new Error(
+          "Maintenance continues on the host. Reload this page to see its status.",
+        );
+
       const degraded =
         coreResult.status !== "healthy" ||
         !runtimeResult.connected ||
@@ -1922,20 +1968,27 @@ function MaintenancePage() {
         degraded ? "error" : "success",
         degraded
           ? "The check completed and found items that need attention."
-          : "All maintenance checks completed successfully.",
+          : "Maintenance and system cleanup completed successfully.",
       );
-    } catch {
+    } catch (error) {
       steps[activeStep].state = "error";
       details.push(
         "Request failed · see the warning above for the safe error message",
       );
-      publish(100, "error", "The maintenance check could not be completed.");
+      publish(
+        100,
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Maintenance could not be completed.",
+      );
     } finally {
       setChecking(false);
       core.reload();
       runtime.reload();
       storage.reload();
       apps.reload();
+      cleanup.reload();
     }
   };
 
@@ -1948,10 +2001,14 @@ function MaintenancePage() {
             className="maintenance-check"
             type="button"
             onClick={() => void runCheck()}
-            disabled={checking}
+            disabled={
+              checking ||
+              cleanup.data?.state === "queued" ||
+              cleanup.data?.state === "running"
+            }
           >
             <RefreshCw size={15} className={checking ? "spin" : ""} />
-            {checking ? "Checking…" : "Run maintenance check"}
+            {checking ? "Running…" : "Run maintenance"}
           </button>
         }
       >
@@ -1962,12 +2019,17 @@ function MaintenancePage() {
           <div>
             <h3>Keep MediaHub healthy</h3>
             <p>
-              Check the platform, apps and storage from one safe workspace.
-              Nothing is deleted or restarted by this check.
+              Check the platform, apps and storage, then remove old update
+              files, unused MediaHub images and build cache. Services keep
+              running.
             </p>
           </div>
         </div>
         {failure && <Notice>{failure}</Notice>}
+        {cleanup.error && <Notice>{cleanup.error}</Notice>}
+        {cleanup.data && cleanup.data.state !== "idle" && (
+          <Notice>{cleanup.data.message}</Notice>
+        )}
         {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">
           <MaintenanceCard
@@ -2059,10 +2121,10 @@ function MaintenancePage() {
           <div>
             <strong>Media stays protected</strong>
             <p>
-              Maintenance never removes movies, TV series, downloads or app data
-              automatically. Cleanup actions are limited to explicitly listed
-              disposable files and always ask for a clear confirmation before
-              anything is deleted.
+              Movies, TV series, downloads, app data, Docker volumes and
+              rollback backups are preserved. Run maintenance only cleans known
+              disposable update files and unused system build cache. Media
+              folders are never scanned.
             </p>
           </div>
         </div>

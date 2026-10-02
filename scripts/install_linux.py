@@ -429,7 +429,7 @@ def main():
     updater_name = "mediahub-platform-update"
     new_file(
         root / "updates/host-capabilities.json",
-        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true}\n',
+        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true, "maintenance": true}\n',
         0o644,
     )
     new_file(

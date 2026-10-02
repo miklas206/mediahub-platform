@@ -210,8 +210,38 @@ checks passed; `rolled_back` means restoration succeeded; `failed` requires
 review of the protected status file. Build output is bounded and redacted.
 The two newest successful configuration snapshots are retained. Failed-state
 directories remain for administrator recovery. Do not delete recovery state until
-the deployment is confirmed healthy. Docker build cache is not automatically
-pruned, because it may be shared with other applications.
+the deployment is confirmed healthy. Successful updates prune unused build cache
+older than 24 hours while keeping a 4 GB cache budget.
+
+## Manual maintenance
+
+Settings → Maintenance → **Run maintenance** performs health checks and requests
+host-side cleanup. It runs independently of the browser and reports recovered
+system disk space. Updates and maintenance cannot run concurrently.
+
+Cleanup removes only known update archive/manifest files in old staging folders,
+unused MediaHub source images that are not referenced by any container or rollback
+snapshot, and unused Docker build cache older than 24 hours. Manual maintenance
+does not retain the automatic update's 4 GB cache budget. Subsequent builds may
+need to rebuild cached layers, including those shared with other applications.
+It never prunes volumes or containers, scans media folders, or deletes app data,
+configuration, rollback backups or unknown files. Failed recovery directories
+remain available for investigation.
+
+Existing installations require a one-time refresh of the host helper from a
+checkout containing the maintenance implementation, as root on the MediaHub host:
+
+```sh
+sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository miklas206/mediahub-platform
+```
+
+Do this while no update or maintenance operation is active. Updating Core alone
+does not replace the root-owned host helper. The UI reports missing support until
+the helper advertises its maintenance capability. This refresh does not run cleanup
+or restart app containers. New installations include the capability automatically.
+
+The standard system disk allocation is 64 GiB, separate from media storage.
+Existing guests must be expanded in Proxmox; installing code does not resize them.
 
 This implementation has automated source/staging/transaction tests. Running those
 tests is not evidence of a real Docker build, deployment or rollback on a server;

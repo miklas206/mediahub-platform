@@ -927,6 +927,92 @@ class HostUpdater:
             self._append_log("Update succeeded; some optional cleanup could not be completed")
         self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
 
+    def _cleanup_staging(self):
+        """Unlink only known, old updater files; never recurse into directories."""
+        staging = self.updates / "staging"
+        self._directory(staging, owner=10001)
+        if staging.is_mount() or staging.resolve().parent != self.updates.resolve():
+            raise ValueError("Unsafe staging root")
+        allowed = {
+            "github-source.tar.gz",
+            "mediahub-source.tar.gz",
+            "mediahub-source-release.json",
+            "mediahub-release.json",
+            "mediahub-core-image.tar.gz",
+            "mediahub-agent-image.tar.gz",
+        }
+        cutoff = time.time() - 86400
+        removed = 0
+        for stage in staging.iterdir():
+            if not ID.fullmatch(stage.name) or stage.is_symlink() or not stage.is_dir():
+                continue
+            if stage.is_mount() or stage.stat().st_dev != staging.stat().st_dev:
+                continue
+            if stage.stat().st_mtime >= cutoff:
+                continue
+            for path in stage.iterdir():
+                info = path.lstat()
+                if (
+                    path.name in allowed
+                    and stat.S_ISREG(info.st_mode)
+                    and not path.is_symlink()
+                    and not path.is_mount()
+                    and info.st_dev == staging.stat().st_dev
+                    and info.st_mtime < cutoff
+                ):
+                    path.unlink()
+                    removed += 1
+            # Unknown files, subdirectories, symlinks and media are left alone.
+            if not any(stage.iterdir()):
+                stage.rmdir()
+        return removed
+
+    def _maintenance(self, request):
+        if (
+            set(request) != {"action", "operationId"}
+            or not isinstance(request["operationId"], str)
+            or not ID.fullmatch(request["operationId"])
+        ):
+            raise ValueError("Invalid maintenance request")
+        operation = request["operationId"]
+        path = self.updates / "maintenance-status.json"
+        running = self.updates / ("maintenance-running-" + operation + ".json")
+        os.replace(self.updates / "request.json", running)
+        before = shutil.disk_usage(self.root).free
+
+        def report(state, message):
+            self._atomic_json(
+                path,
+                {
+                    "operationId": operation,
+                    "state": state,
+                    "message": message,
+                    "freeBytes": shutil.disk_usage(self.root).free,
+                    "reclaimedBytes": max(0, shutil.disk_usage(self.root).free - before),
+                    "updatedAt": time.time(),
+                },
+                uid=10001,
+                gid=10001,
+            )
+
+        try:
+            report("running", "Cleaning unused system files; media and app data are protected.")
+            removed = self._cleanup_staging()
+            self._cleanup_update_images()
+            # Build cache only: never prune volumes, containers or arbitrary images.
+            self.command("docker", "builder", "prune", "--force", "--all", "--filter", "until=24h")
+            report(
+                "succeeded",
+                f"Maintenance completed. Removed {removed} old update files and unused build cache. Media, app data and rollback backups were preserved.",
+            )
+        except Exception:
+            report(
+                "failed",
+                "Maintenance stopped before completing all cleanup steps. Media and app data were preserved. Check the host updater and Docker access.",
+            )
+        finally:
+            running.unlink(missing_ok=True)
+
     def process(self):
         if fcntl is None or not hasattr(os, "geteuid") or os.geteuid() != 0:
             raise ValueError("Host updater must run as root")
@@ -939,6 +1025,11 @@ class HostUpdater:
         lock_path = self.updates / "host-updater.lock"
         with lock_path.open("a+") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            request_path = self.updates / "request.json"
+            request_data = self._read_json(request_path, 65536) if request_path.exists() else {}
+            if request_data.get("action") == "maintenance":
+                self._maintenance(request_data)
+                return
             request = manifest = stage = backup = None
             services_stopped = False
             try:

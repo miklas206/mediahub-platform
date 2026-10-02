@@ -75,7 +75,12 @@ def enable(root, repository):
         capabilities = updater.updates / "host-capabilities.json"
         updater._atomic_json(
             capabilities,
-            {"sourceBuild": True, "automaticFastUpdate": True, "mainBranchUpdates": True},
+            {
+                "sourceBuild": True,
+                "automaticFastUpdate": True,
+                "mainBranchUpdates": True,
+                "maintenance": True,
+            },
             uid=0,
             gid=0,
         )

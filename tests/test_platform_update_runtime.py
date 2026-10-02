@@ -16,6 +16,37 @@ def digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def test_maintenance_queues_once_and_blocks_updates(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    monkeypatch.setattr(updater, "_host_capability", lambda name: True)
+    status = updater.start_maintenance()
+    assert status["state"] == "queued"
+    request = json.loads((spool / "request.json").read_text())
+    assert request == {"action": "maintenance", "operationId": status["operationId"]}
+    with pytest.raises(DomainError):
+        updater.start_maintenance()
+    with pytest.raises(DomainError):
+        asyncio.run(updater.install({"updateAvailable": True}))
+    assert updater.maintenance_status()["operationId"] == status["operationId"]
+
+
+def test_maintenance_requires_capability_and_refuses_active_update(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    monkeypatch.setattr(updater, "_host_capability", lambda name: False)
+    with pytest.raises(DomainError):
+        updater.start_maintenance()
+    assert not (spool / "request.json").exists()
+    monkeypatch.setattr(updater, "_host_capability", lambda name: True)
+    monkeypatch.setattr(updater, "status", lambda: {"state": "building"})
+    with pytest.raises(DomainError):
+        updater.start_maintenance()
+
+
+def test_maintenance_routes_require_admin(client):
+    assert client.get("/api/v1/maintenance").status_code == 401
+    assert client.post("/api/v1/maintenance").status_code in (401, 403)
+
+
 def test_status_exposes_bounded_optional_build_console(tmp_path, monkeypatch):
     updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
     path = spool / "status.json"

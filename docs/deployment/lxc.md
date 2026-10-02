@@ -1,10 +1,12 @@
 # Unprivileged LXC deployment
 
 Create a new unprivileged Debian LXC with at least **6 vCPU cores and 16 GiB RAM
-(16384 MiB)**, 1 GiB swap and a 32 GiB root disk. This is the standard minimum
+(16384 MiB)**, 1 GiB swap and a **64 GiB root disk**. This is the standard minimum
 allocation for MediaHub with local apps, including Plex. Set these resources in
 Proxmox before installation; the installer does not create or resize the guest.
 Existing installations keep their current allocation until changed in Proxmox.
+The root disk needs room for Docker builds, installed images and rollback copies;
+keep at least 8 GiB free before starting an update. Media belongs on separate storage.
 Container memory limits are separate from the guest allocation; increasing the
 guest RAM does not automatically increase an existing Plex container's limit.
 Enable nesting/keyctl for the Docker workload. Do not switch

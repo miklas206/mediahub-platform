@@ -269,6 +269,16 @@ async def update_summary(request: Request, user=Depends(authenticated)):
     return result(services(request).updates.summary())
 
 
+@router.get("/maintenance")
+async def maintenance_status(request: Request, user=Depends(administrator)):
+    return result(services(request).platform_update.maintenance_status())
+
+
+@router.post("/maintenance", status_code=202)
+async def run_maintenance(request: Request, user=Depends(administrator)):
+    return result(services(request).platform_update.start_maintenance())
+
+
 @router.post("/updates/check")
 async def check_all_updates(request: Request, user=Depends(administrator)):
     return result(await services(request).updates.check_all())

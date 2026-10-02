@@ -17,6 +17,70 @@ CORE_REPOSITORY = "ghcr.io/example/mediahub-core"
 AGENT_REPOSITORY = "ghcr.io/example/mediahub-agent"
 
 
+def test_maintenance_staging_preserves_media_unknown_recent_and_nested_files(tmp_path, monkeypatch):
+    updater = HostUpdater(tmp_path)
+    staging = updater.updates / "staging"
+    old = staging / OPERATION
+    old.mkdir(parents=True)
+    disposable = old / "mediahub-source.tar.gz"
+    disposable.write_bytes(b"old source")
+    media = old / "movie.mkv"
+    media.write_bytes(b"media")
+    nested = old / "downloads"
+    nested.mkdir()
+    (nested / "mediahub-source.tar.gz").write_bytes(b"keep")
+    recent = staging / ("b" * 32)
+    recent.mkdir()
+    (recent / "mediahub-source.tar.gz").write_bytes(b"new source")
+    for path in (old, disposable, media):
+        os.utime(path, (1, 1))
+    monkeypatch.setattr(updater, "_directory", lambda path, **kwargs: path)
+    assert updater._cleanup_staging() == 1
+    assert media.read_bytes() == b"media"
+    assert (nested / "mediahub-source.tar.gz").read_bytes() == b"keep"
+    assert (recent / "mediahub-source.tar.gz").exists()
+
+
+def test_maintenance_limits_docker_cleanup_and_reports_failure(tmp_path, monkeypatch):
+    commands = []
+    updater = HostUpdater(tmp_path, runner=lambda args, **kwargs: commands.append(args) or "")
+    updater.updates.mkdir()
+    request = {"action": "maintenance", "operationId": OPERATION}
+    (updater.updates / "request.json").write_text(json.dumps(request))
+    monkeypatch.setattr(
+        updater, "_atomic_json", lambda path, value, **kwargs: path.write_text(json.dumps(value))
+    )
+    monkeypatch.setattr(updater, "_cleanup_staging", lambda: 3)
+    monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
+    updater._maintenance(request)
+    assert commands == [["docker", "builder", "prune", "--force", "--all", "--filter", "until=24h"]]
+    status = json.loads((updater.updates / "maintenance-status.json").read_text())
+    assert status["state"] == "succeeded"
+    assert not (updater.updates / "request.json").exists()
+    (updater.updates / "request.json").write_text(json.dumps(request))
+    monkeypatch.setattr(
+        updater, "_cleanup_update_images", lambda: (_ for _ in ()).throw(ValueError("private"))
+    )
+    updater._maintenance(request)
+    status = json.loads((updater.updates / "maintenance-status.json").read_text())
+    assert status["state"] == "failed"
+    assert "private" not in status["message"]
+
+
+def test_maintenance_skips_mounted_stage(tmp_path, monkeypatch):
+    updater = HostUpdater(tmp_path)
+    stage = updater.updates / "staging" / OPERATION
+    stage.mkdir(parents=True)
+    archive = stage / "mediahub-source.tar.gz"
+    archive.write_bytes(b"mounted data")
+    os.utime(archive, (1, 1))
+    os.utime(stage, (1, 1))
+    monkeypatch.setattr(updater, "_directory", lambda path, **kwargs: path)
+    monkeypatch.setattr(type(stage), "is_mount", lambda path: path == stage)
+    assert updater._cleanup_staging() == 0
+    assert archive.read_bytes() == b"mounted data"
+
+
 def test_build_console_streams_output_and_propagates_failed_exit(tmp_path):
     lines = []
     source = tmp_path / "source"

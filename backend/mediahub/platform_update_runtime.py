@@ -405,12 +405,69 @@ class PlatformUpdateRuntime:
             temporary.unlink(missing_ok=True)
             raise
 
+    def maintenance_status(self):
+        if not self._host_capability("maintenance"):
+            return {
+                "state": "unavailable",
+                "message": "Refresh the host updater to enable system cleanup.",
+            }
+        path = self.root / "maintenance-status.json"
+        if not path.exists():
+            return {"state": "idle", "message": "Ready for maintenance."}
+        try:
+            if path.is_symlink() or path.stat().st_size > 4096:
+                raise ValueError()
+            value = json.loads(path.read_text())
+            return {
+                "state": str(value["state"])[:32],
+                "message": str(value["message"])[:400],
+                "operationId": str(value.get("operationId", ""))[:32],
+                "freeBytes": max(0, int(value.get("freeBytes", 0))),
+                "reclaimedBytes": max(0, int(value.get("reclaimedBytes", 0))),
+            }
+        except (OSError, ValueError, KeyError, TypeError):
+            return {"state": "invalid", "message": "Maintenance status could not be read."}
+
+    def start_maintenance(self):
+        if not self._host_capability("maintenance"):
+            raise DomainError(
+                "maintenance_unavailable", "Refresh the host updater to enable system cleanup.", 409
+            )
+        if (
+            self.status()["state"] in RUNNING
+            or (self.task and not self.task.done())
+            or self.maintenance_status()["state"] in {"queued", "running"}
+            or (self.root / "request.json").exists()
+        ):
+            raise DomainError(
+                "maintenance_busy", "An update or maintenance operation is already running.", 409
+            )
+        operation = uuid.uuid4().hex
+        temporary = self.root / (".maintenance-" + operation)
+        temporary.write_text(json.dumps({"action": "maintenance", "operationId": operation}))
+        temporary.chmod(0o600)
+        status = {
+            "state": "queued",
+            "operationId": operation,
+            "message": "Waiting for the host to run maintenance.",
+        }
+        status_tmp = self.root / (".maintenance-status-" + operation)
+        status_tmp.write_text(json.dumps(status))
+        os.replace(status_tmp, self.root / "maintenance-status.json")
+        os.replace(temporary, self.root / "request.json")
+        return status
+
     async def install(self, release):
         root = self._available_root()
         if root is None:
             raise DomainError("platform_updater_unavailable", "Host updater is not installed", 409)
         current = self.status()
-        if current["state"] in RUNNING or (self.task and not self.task.done()):
+        if (
+            current["state"] in RUNNING
+            or (self.task and not self.task.done())
+            or self.maintenance_status()["state"] in {"queued", "running"}
+            or (root / "request.json").exists()
+        ):
             raise DomainError("platform_update_busy", "A platform update is already running", 409)
         if not release.get("updateAvailable"):
             raise DomainError("platform_update_not_needed", "MediaHub is already up to date", 409)
