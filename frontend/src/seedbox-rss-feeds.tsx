@@ -19,6 +19,13 @@ type Feed = {
   checkedAt: number | null;
   error: string;
   added: number;
+  automaticHistory?: {
+    id: string;
+    title: string;
+    addedAt: number;
+    alreadyPresent: boolean;
+  }[];
+  historyUnavailable?: number;
   pending: number;
   baselineCount: number;
   items: { id: string; title: string; published: string }[];
@@ -240,6 +247,7 @@ function FeedCard({
     feed.retention || defaultRetention,
   );
   const [filter, setFilter] = useState("");
+  const [historyFilter, setHistoryFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [start, setStart] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -291,6 +299,63 @@ function FeedCard({
       <ErrorBox error={feed.error} />
       <ErrorBox error={error} />
       {notice && <p role="status">{notice}</p>}
+      <details>
+        <summary>
+          Automatic download history ({feed.automaticHistory?.length || 0})
+        </summary>
+        <p className="muted">
+          Latest 200 automatic additions, newest first. These entries were sent
+          to the torrent client; this does not mean the files have finished
+          downloading.
+        </p>
+        {!!feed.historyUnavailable && (
+          <p className="muted">
+            {feed.historyUnavailable} earlier automatic additions have no
+            details available. History was not recorded by older versions, and
+            only the latest 200 records are kept.
+          </p>
+        )}
+        {!feed.automaticHistory?.length ? (
+          <p>No automatic downloads recorded yet.</p>
+        ) : (
+          <>
+            <label>
+              Search automatic download history
+              <input
+                value={historyFilter}
+                onChange={(event) => setHistoryFilter(event.target.value)}
+              />
+            </label>
+            <ul className="rss-download-history">
+              {feed.automaticHistory
+                .filter((item) =>
+                  item.title
+                    .toLowerCase()
+                    .includes(historyFilter.toLowerCase()),
+                )
+                .map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.title}</strong>
+                    <span className="muted">
+                      <time
+                        dateTime={new Date(item.addedAt * 1000).toISOString()}
+                      >
+                        {new Date(item.addedAt * 1000).toLocaleString()}
+                      </time>
+                      {" · "}
+                      {item.alreadyPresent
+                        ? "Already in torrent client"
+                        : "Added automatically"}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+            {!feed.automaticHistory.some((item) =>
+              item.title.toLowerCase().includes(historyFilter.toLowerCase()),
+            ) && <p>No matching downloads.</p>}
+          </>
+        )}
+      </details>
       <details>
         <summary>Feed settings</summary>
         <form

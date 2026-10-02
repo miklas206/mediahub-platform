@@ -25,6 +25,7 @@ from mediahub.seedbox_wizard_api import target
 
 KEY = "seedbox_rss_feeds"
 INTERVAL = 300
+HISTORY_LIMIT = 200
 SETTINGS_KEY = "seedbox_rss_settings"
 router = APIRouter(prefix="/seedbox/rss/feeds", dependencies=[Depends(administrator)])
 
@@ -144,6 +145,13 @@ class RSSFeeds:
                         )
                     },
                     "pending": len(f["pending"]),
+                    "automaticHistory": [
+                        {k: row[k] for k in ("id", "title", "addedAt", "alreadyPresent")}
+                        for row in f.get("automaticHistory", [])[:HISTORY_LIMIT]
+                    ],
+                    "historyUnavailable": max(
+                        0, f["added"] - len(f.get("automaticHistory", [])[:HISTORY_LIMIT])
+                    ),
                     "retention": f.get("retention", RetentionRule().model_dump()),
                     "baselineCount": len(f["seen"]),
                     "items": [
@@ -317,9 +325,18 @@ class RSSFeeds:
                     client = self.client()
                     # Per-feed work bounded per pass. Other feeds also get a turn.
                     for row in list(feed["pending"][:20]):
-                        await self.add_item(client, feed, row, True)
+                        outcome = await self.add_item(client, feed, row, True)
                         feed["pending"] = [r for r in feed["pending"] if r["id"] != row["id"]]
                         feed["added"] += 1
+                        feed["automaticHistory"] = [
+                            {
+                                "id": row["id"],
+                                "title": row["title"],
+                                "addedAt": time.time(),
+                                "alreadyPresent": outcome.get("state") == "already_present",
+                            },
+                            *feed.get("automaticHistory", []),
+                        ][:HISTORY_LIMIT]
                         self.save(feeds)
             except Exception:
                 feed["error"] = (

@@ -25,3 +25,17 @@
 .rss-feed-list .rss-feed-card h3 {
   margin-top: 0;
 }
+
+.rss-download-history {
+  list-style: none;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.rss-download-history li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--muted);
+}

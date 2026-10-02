@@ -351,3 +351,69 @@ def test_saved_pending_is_rechecked_against_activation_time(client):
         assert service.load()[0]["pending"] == []
 
     asyncio.run(run())
+
+
+def test_automatic_history_survives_restart_and_feed_entry_disappearance(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        service.fetch.return_value = [entry("b"), entry("a")]
+        checked = await service.check(identifier, force=True)
+        history = checked["feeds"][0]["automaticHistory"]
+        assert len(history) == 1
+        assert history[0]["id"] == "b"
+        assert history[0]["title"] == "b"
+        assert history[0]["alreadyPresent"] is False
+        assert history[0]["addedAt"] > 0
+        assert "url" not in history[0]
+        service.fetch.return_value = []
+        await service.check(identifier, force=True)
+        restarted = module.RSSFeeds(service.svc)
+        assert restarted.public(restarted.load())["feeds"][0]["automaticHistory"] == history
+        assert service.add_item.await_count == 1
+
+    asyncio.run(run())
+
+
+def test_history_records_successful_retry_and_existing_torrent_only_once(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        service.fetch.return_value = [entry("b")]
+        service.add_item.side_effect = ValueError("private")
+        failed = await service.check(identifier, force=True)
+        assert failed["feeds"][0]["automaticHistory"] == []
+        service.add_item.side_effect = None
+        service.add_item.return_value = {"state": "already_present"}
+        result = await service.check(identifier, force=True)
+        assert len(result["feeds"][0]["automaticHistory"]) == 1
+        assert result["feeds"][0]["automaticHistory"][0]["alreadyPresent"] is True
+        again = await service.check(identifier, force=True)
+        assert again["feeds"][0]["automaticHistory"] == result["feeds"][0]["automaticHistory"]
+
+    asyncio.run(run())
+
+
+def test_history_handles_legacy_counts_and_keeps_latest_200(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0]["added"] = 4
+        assert service.public(feeds)["feeds"][0]["historyUnavailable"] == 4
+        assert service.public(feeds)["feeds"][0]["automaticHistory"] == []
+        feeds[0]["automaticHistory"] = [
+            {"id": str(i), "title": str(i), "addedAt": i, "alreadyPresent": False}
+            for i in reversed(range(200))
+        ]
+        feeds[0]["added"] = 204
+        service.save(feeds)
+        service.fetch.return_value = [entry("b")]
+        result = (await service.check(identifier, force=True))["feeds"][0]
+        assert len(result["automaticHistory"]) == 200
+        assert result["automaticHistory"][0]["id"] == "b"
+        assert result["automaticHistory"][-1]["id"] == "1"
+        assert result["historyUnavailable"] == 5
+        assert len(service.load()[0]["automaticHistory"]) == 200
+
+    asyncio.run(run())
