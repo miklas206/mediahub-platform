@@ -308,16 +308,10 @@ function FeedCard({
           mean the files have finished downloading.
         </p>
         {!!feed.historyUnavailable && (
-          <div className="notice">
-            <strong>
-              Earlier automatic additions: {feed.historyUnavailable}
-            </strong>
-            <p>
-              Included in the history total. Titles and times are unavailable
-              because older versions did not record them, or the records are
-              outside the latest 200 detailed entries.
-            </p>
-          </div>
+          <p className="muted">
+            {feed.historyUnavailable} earlier additions included in total —
+            title and time unavailable.
+          </p>
         )}
         {!feed.automaticHistory?.length ? (
           <p>
