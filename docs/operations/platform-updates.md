@@ -213,6 +213,15 @@ directories remain for administrator recovery. Do not delete recovery state unti
 the deployment is confirmed healthy. Successful updates prune unused build cache
 older than 24 hours while keeping a 4 GB cache budget.
 
+## Faster shutdown during updates
+
+Core closes browser event streams before the HTTP server drains active requests
+during shutdown. Keeping the dashboard or update page open no longer leaves an
+indefinite event stream holding shutdown until Docker's stop timeout. Ordinary
+requests still drain normally; configuration snapshots and rollback are unchanged.
+This improvement applies once the running Core contains the fix: the update that
+first installs it still stops the previous version using its previous behavior.
+
 ## Manual maintenance
 
 Settings → Maintenance → **Run maintenance** performs health checks and requests

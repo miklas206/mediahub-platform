@@ -10,6 +10,12 @@ class EventBus:
     def __init__(self, sessions):
         self.sessions = sessions
         self.subscribers: set[asyncio.Queue] = set()
+        self.stopping = False
+
+    def close_streams(self):
+        """Wake idle SSE readers before the HTTP server drains its requests."""
+        self.stopping = True
+        self.publish("system.stopping", {})
 
     def publish(self, kind: str, data: dict):
         envelope = {"type": kind, "data": data}

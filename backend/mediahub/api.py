@@ -374,7 +374,7 @@ async def stream(request: Request, user=Depends(authenticated)):
                         },
                     }
                 )
-            while not await request.is_disconnected():
+            while not svc.events.stopping and not await request.is_disconnected():
                 try:
                     svc.auth.authenticate(token)
                 except DomainError:
@@ -382,6 +382,8 @@ async def stream(request: Request, user=Depends(authenticated)):
                     break
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=svc.config.sample_seconds)
+                    if svc.events.stopping:
+                        break
                     yield svc.events.encode(event)
                 except TimeoutError:
                     yield ": heartbeat\n\n"

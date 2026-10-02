@@ -7,6 +7,20 @@ import uvicorn
 from starlette.responses import JSONResponse
 
 
+class CoreServer(uvicorn.Server):
+    def __init__(self, config, app):
+        super().__init__(config)
+        self.core_app = app
+
+    async def shutdown(self, sockets=None):
+        # Lifespan shutdown happens AFTER Uvicorn waits for HTTP requests.
+        # SSE never ends on its own, so close it before that wait, not in lifespan.
+        services = getattr(self.core_app.state, "services", None)
+        if services is not None:
+            services.events.close_streams()
+        await super().shutdown(sockets=sockets)
+
+
 class InternalAPI:
     """No browser UI, cookies or proxy trust on the internal enrollment listener."""
 
@@ -51,13 +65,13 @@ def browser_server_config(app, config, host, port):
 
 
 async def serve(app, config, host, port):
-    primary = uvicorn.Server(browser_server_config(app, config, host, port))
+    primary = CoreServer(browser_server_config(app, config, host, port), app)
     # Invalid/missing key material must never silently fall back to plaintext.
     primary.config.load()
     if not config.internal_tls_cert:
         await primary.serve()
         return
-    internal = uvicorn.Server(
+    internal = CoreServer(
         uvicorn.Config(
             InternalAPI(app),
             host=config.internal_tls_host,
@@ -68,7 +82,8 @@ async def serve(app, config, host, port):
             workers=1,
             ssl_certfile=str(config.internal_tls_cert),
             ssl_keyfile=str(config.internal_tls_key),
-        )
+        ),
+        app,
     )
     # Validate certificate/key before starting any listener.
     internal.config.load()
