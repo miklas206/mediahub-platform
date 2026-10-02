@@ -300,23 +300,31 @@ function FeedCard({
       <ErrorBox error={error} />
       {notice && <p role="status">{notice}</p>}
       <details>
-        <summary>
-          Automatic download history ({feed.automaticHistory?.length || 0})
-        </summary>
+        <summary>Automatic download history ({feed.added})</summary>
         <p className="muted">
-          Latest 200 automatic additions, newest first. These entries were sent
-          to the torrent client; this does not mean the files have finished
-          downloading.
+          {feed.added} automatic additions in total, including earlier
+          additions. Available details are shown below, newest first (up to 200
+          entries). These entries were sent to the torrent client; this does not
+          mean the files have finished downloading.
         </p>
         {!!feed.historyUnavailable && (
-          <p className="muted">
-            {feed.historyUnavailable} earlier automatic additions have no
-            details available. History was not recorded by older versions, and
-            only the latest 200 records are kept.
-          </p>
+          <div className="notice">
+            <strong>
+              Earlier automatic additions: {feed.historyUnavailable}
+            </strong>
+            <p>
+              Included in the history total. Titles and times are unavailable
+              because older versions did not record them, or the records are
+              outside the latest 200 detailed entries.
+            </p>
+          </div>
         )}
         {!feed.automaticHistory?.length ? (
-          <p>No automatic downloads recorded yet.</p>
+          <p>
+            {feed.added > 0
+              ? "New automatic additions will appear here with title and time."
+              : "No automatic downloads yet."}
+          </p>
         ) : (
           <>
             <label>
