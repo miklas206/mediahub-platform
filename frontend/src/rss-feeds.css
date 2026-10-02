@@ -26,6 +26,11 @@
   margin-top: 0;
 }
 
+.rss-feed-card .rss-history-note {
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+
 .rss-download-history {
   list-style: none;
   padding: 0;
