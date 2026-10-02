@@ -229,6 +229,46 @@ def test_background_poll_processes_due_feed_without_browser(client, monkeypatch)
 def test_multifeed_routes_are_admin_only(client):
     assert client.get("/api/v1/seedbox/rss/feeds").status_code == 401
     assert client.post("/api/v1/seedbox/rss/feeds/example/refresh").status_code in (401, 403)
+    assert client.get("/api/v1/seedbox/rss/feeds/settings").status_code == 401
+    assert client.put(
+        "/api/v1/seedbox/rss/feeds/settings", json={"intervalSeconds": 60}
+    ).status_code in (401, 403)
+
+
+def test_settings_routes_validate_and_persist(logged_in, monkeypatch):
+    monkeypatch.setattr(module, "target", lambda request: None)
+    path = "/api/v1/seedbox/rss/feeds/settings"
+    assert logged_in.get(path).json()["data"] == {"intervalSeconds": 300}
+    for invalid in (0, 59, 86401, 60.5, True, "300"):
+        assert logged_in.put(path, json={"intervalSeconds": invalid}).status_code == 422
+    assert logged_in.put(path, json={"intervalSeconds": 900}).status_code == 200
+    restarted = module.RSSFeeds(logged_in.app.state.services)
+    assert restarted.settings().intervalSeconds == 900
+    assert logged_in.get(path).json()["data"]["intervalSeconds"] == 900
+
+
+def test_changed_interval_controls_due_checks_and_preserves_manual_refresh(client, monkeypatch):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        manual = (await service.create(body("Manual", automatic=False), agent))["feeds"][1]["id"]
+        checked = service.load()[0]["checkedAt"]
+        service.fetch.reset_mock()
+        monkeypatch.setattr(module.time, "time", lambda: checked + 600)
+        await service.configure_settings(module.FeedSettings(intervalSeconds=900))
+        await service.check(identifier)
+        service.fetch.assert_not_awaited()
+        await service.configure_settings(module.FeedSettings(intervalSeconds=60))
+        await service.check(identifier)
+        assert service.fetch.await_count == 1
+        await service.check(identifier)
+        await service.check(manual)
+        assert service.fetch.await_count == 1
+        await service.check(manual, force=True)
+        assert service.fetch.await_count == 2
+        assert service.public(service.load())["intervalSeconds"] == 60
+
+    asyncio.run(run())
 
 
 def test_cleanup_requires_capable_agent_and_is_forwarded_to_new_downloads(client):

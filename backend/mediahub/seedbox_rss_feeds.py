@@ -25,7 +25,12 @@ from mediahub.seedbox_wizard_api import target
 
 KEY = "seedbox_rss_feeds"
 INTERVAL = 300
+SETTINGS_KEY = "seedbox_rss_settings"
 router = APIRouter(prefix="/seedbox/rss/feeds", dependencies=[Depends(administrator)])
+
+
+class FeedSettings(StrictModel):
+    intervalSeconds: int = Field(default=INTERVAL, ge=60, le=86400, strict=True)
 
 
 def published_after(row, cutoff, now):
@@ -105,10 +110,24 @@ class RSSFeeds:
             else:
                 db.add(Setting(key=KEY, value={"sealed": sealed}))
 
-    @staticmethod
-    def public(feeds):
+    def settings(self):
+        with self.svc.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == SETTINGS_KEY))
+            return FeedSettings(**(row.value if row else {}))
+
+    async def configure_settings(self, body):
+        async with self.lock:
+            with self.svc.sessions.begin() as db:
+                row = db.scalar(select(Setting).where(Setting.key == SETTINGS_KEY))
+                if row:
+                    row.value = body.model_dump()
+                else:
+                    db.add(Setting(key=SETTINGS_KEY, value=body.model_dump()))
+            return body.model_dump()
+
+    def public(self, feeds):
         return {
-            "intervalSeconds": INTERVAL,
+            "intervalSeconds": self.settings().intervalSeconds,
             "feeds": [
                 {
                     **{
@@ -260,7 +279,8 @@ class RSSFeeds:
             feeds = self.load()
             feed = self.find(feeds, identifier)
             if not force and (
-                not feed["automatic"] or time.time() - (feed["checkedAt"] or 0) < INTERVAL
+                not feed["automatic"]
+                or time.time() - (feed["checkedAt"] or 0) < self.settings().intervalSeconds
             ):
                 return self.public(feeds)
             try:
@@ -303,7 +323,7 @@ class RSSFeeds:
                         self.save(feeds)
             except Exception:
                 feed["error"] = (
-                    "Feed check or download failed. Pending entries and history are kept; retry in five minutes. Check feed access, destination and Seedbox VPN."
+                    "Feed check or download failed. Pending entries and history are kept; automatic feeds retry at the configured interval. Check feed access, destination and Seedbox VPN."
                 )
                 feed["checkedAt"] = time.time()
             self.save(feeds)
@@ -335,6 +355,18 @@ async def listing(request: Request):
 @router.post("")
 async def create(body: NewFeed, request: Request):
     return result(await services(request).rss_feeds.create(body, target(request)))
+
+
+@router.get("/settings")
+async def settings(request: Request):
+    target(request)
+    return result(services(request).rss_feeds.settings().model_dump())
+
+
+@router.put("/settings")
+async def configure_settings(body: FeedSettings, request: Request):
+    target(request)
+    return result(await services(request).rss_feeds.configure_settings(body))
 
 
 @router.put("/{identifier}")

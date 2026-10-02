@@ -15,6 +15,7 @@ import { useLoad, Panel, ErrorBox } from "./phase2";
 import { bytes, uptime } from "./format";
 import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
+import { SeedboxRSSSettings } from "./seedbox-rss-settings";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 
 export type Runtime = {
@@ -485,6 +486,7 @@ function SeedboxPanel({
             </dl>
           </Panel>
         )}
+        {section === "settings" && <SeedboxRSSSettings />}
       </LayoutGroup>
     </div>
   );

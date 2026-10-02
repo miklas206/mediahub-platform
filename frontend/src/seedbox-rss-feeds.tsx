@@ -99,8 +99,9 @@ export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
       <Panel title="Your feeds">
         <ErrorBox error={error} />
         <p className="muted">
-          Automatic feeds are checked every five minutes, even when this page is
-          closed.
+          Automatic feeds are checked every {listing.intervalSeconds / 60}{" "}
+          minutes, even when this page is closed. Change the interval in Seedbox
+          Settings.
         </p>
         <div className="rss-feed-list">
           {" "}
