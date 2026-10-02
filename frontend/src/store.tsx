@@ -1,7 +1,7 @@
 import { LayoutGroup } from "./page-layout";
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Check,
@@ -99,6 +99,14 @@ const fjordHubSteps = ["Deployment", "Storage & ports", "Install", "Connect"];
 export function FjordHubStorePage() {
   const [fjordHubUrl, setFjordHubUrl] = useState("");
   const [step, setStep] = useState(0);
+  const stepStart = useRef<HTMLDivElement>(null);
+  const previousStep = useRef(step);
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    stepStart.current?.focus({ preventScroll: true });
+    stepStart.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [step]);
   const [deploying, setDeploying] = useState(false);
   const [mode, setMode] = useState<FjordHubMode>("new");
   const [config, setConfig] = useState<FjordHubConfig>({
@@ -110,6 +118,41 @@ export function FjordHubStorePage() {
     setConfig((current) => ({ ...current, [key]: value }));
   const errors = fjordHubErrors(config);
   const canContinue = !deploying && (step !== 1 || errors.length === 0);
+
+  const navigation = (
+    <div className="assisted-actions">
+      <button
+        type="button"
+        disabled={step === 0 || deploying}
+        onClick={() => setStep((value) => Math.max(0, value - 1))}
+      >
+        <ChevronLeft size={16} /> Back
+      </button>
+      <span>
+        Step {step + 1} of {fjordHubSteps.length}: {fjordHubSteps[step]}
+      </span>
+      {step < 3 ? (
+        <button
+          type="button"
+          className="primary"
+          disabled={!canContinue}
+          onClick={() =>
+            setStep((value) =>
+              value === 0 && mode === "existing" ? 3 : value + 1,
+            )
+          }
+        >
+          Continue to{" "}
+          {fjordHubSteps[step === 0 && mode === "existing" ? 3 : step + 1]}{" "}
+          <ChevronRight size={16} />
+        </button>
+      ) : (
+        <Link className="primary" to="/integrations">
+          Manage integrations →
+        </Link>
+      )}
+    </div>
+  );
 
   return (
     <div className="stack store-install-page">
@@ -136,6 +179,7 @@ export function FjordHubStorePage() {
               className={
                 index === step ? "current" : index < step ? "done" : ""
               }
+              aria-current={index === step ? "step" : undefined}
               key={label}
             >
               <span>{index < step ? <Check size={14} /> : index + 1}</span>
@@ -143,6 +187,16 @@ export function FjordHubStorePage() {
             </li>
           ))}
         </ol>
+
+        <div
+          ref={stepStart}
+          tabIndex={-1}
+          className="fjordhub-step-navigation"
+          role="group"
+          aria-label={`Step ${step + 1} of ${fjordHubSteps.length}: ${fjordHubSteps[step]}`}
+        >
+          {navigation}
+        </div>
 
         {step === 0 && (
           <div className="assisted-step">
@@ -353,36 +407,7 @@ export function FjordHubStorePage() {
           </div>
         )}
 
-        <div className="assisted-actions">
-          <button
-            type="button"
-            disabled={step === 0 || deploying}
-            onClick={() => setStep((value) => Math.max(0, value - 1))}
-          >
-            <ChevronLeft size={16} /> Back
-          </button>
-          <span>
-            {step + 1} of {fjordHubSteps.length}
-          </span>
-          {step < 3 ? (
-            <button
-              type="button"
-              className="primary"
-              disabled={!canContinue}
-              onClick={() =>
-                setStep((value) =>
-                  value === 0 && mode === "existing" ? 3 : value + 1,
-                )
-              }
-            >
-              Continue <ChevronRight size={16} />
-            </button>
-          ) : (
-            <Link className="primary" to="/integrations">
-              Manage integrations →
-            </Link>
-          )}
-        </div>
+        {navigation}
       </Panel>
       {step === 3 && (
         <IntegrationsPage onUrlChange={setFjordHubUrl} showTokenGuide={false} />

@@ -360,7 +360,7 @@ export function FjordHubDeployment({
           )}
         </section>
       )}
-      {job && (
+      {job && visible && (
         <section className="stack" aria-label="FjordHub deployment status">
           <strong>
             {job.state === "running"
@@ -407,7 +407,10 @@ export function FjordHubDeployment({
               running until installation finishes.
             </p>
           )}
-          <details open>
+          <details
+            key={`${job.id}-${job.state}`}
+            open={job.state === "running"}
+          >
             <summary>Installation console</summary>
             <pre
               ref={consoleRef}
