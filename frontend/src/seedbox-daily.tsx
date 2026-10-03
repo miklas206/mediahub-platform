@@ -373,6 +373,7 @@ export function SeedboxDaily({
         <>
           <SeedboxRSS
             storageId={list?.storageId}
+            torrents={listError ? null : (list?.items ?? null)}
             locations={list?.downloadLocations || []}
             onAdded={reload}
             retentionSupported={list?.retentionSupported}

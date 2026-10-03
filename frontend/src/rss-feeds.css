@@ -44,3 +44,37 @@
   overflow-wrap: anywhere;
   border-bottom: 1px solid var(--muted);
 }
+
+.rss-history-performance {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.rss-history-state {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.rss-history-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.rss-history-stats > div {
+  min-width: 0;
+}
+
+.rss-history-stats dt {
+  color: var(--muted);
+}
+
+.rss-history-stats dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}

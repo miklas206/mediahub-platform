@@ -471,5 +471,12 @@
   "Torrent progress, transfer speeds and time remaining": "Fremdrift, overf?rselshastigheder og resterende tid for torrents",
   "Storage mappings": "Lagertilknytninger",
   "Torrent overview": "Torrentoversigt",
-  "Original width": "Oprindelig bredde"
+  "Original width": "Oprindelig bredde",
+  "Downloaded": "Downloadet",
+  "Live torrent statistics · Share ratio 1.00 = one full copy uploaded.": "Aktuelle torrenttal · Delingsratio 1,00 = én hel kopi uploadet.",
+  "Seeds / peers": "Seeds / peers",
+  "Share ratio": "Delingsratio",
+  "Statistics unavailable · Torrent missing or cannot be matched uniquely.": "Statistik utilgængelig · Torrenten mangler eller kan ikke matches entydigt.",
+  "Uploaded": "Uploadet",
+  "Uploaded divided by content size. 1.00 means one full copy shared.": "Uploadet divideret med indholdets størrelse. 1,00 betyder én hel kopi delt."
 }

@@ -213,6 +213,219 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test("RSS download history shows current performance and adapts to card width", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.clock.install();
+  let uploaded = 3 * 1024 ** 3;
+  let unavailable = false;
+  const torrent = {
+    hash: "a".repeat(40),
+    name: "Renamed release",
+    progress: 1,
+    state: "uploading",
+    size: 2 * 1024 ** 3,
+    uploaded,
+    downloaded: 2 * 1024 ** 3,
+    dlspeed: 0,
+    upspeed: 2048,
+    ratio: 0,
+    seeding_time: 25 * 3600,
+    num_seeds: 2,
+    num_leechs: 3,
+    eta: 0,
+    actionsAllowed: true,
+  };
+  await page.route("**/api/v1/seedbox/torrents", (route) =>
+    route.fulfill(
+      unavailable
+        ? { status: 503, json: { error: { message: "Unavailable" } } }
+        : {
+            json: {
+              data: {
+                storageId: "downloads",
+                downloadLocations: [{ id: "root", label: "Top folder" }],
+                limit: 500,
+                items: [
+                  { ...torrent, uploaded },
+                  {
+                    ...torrent,
+                    hash: "b".repeat(40),
+                    name: "Legacy release",
+                    progress: 0.25,
+                    state: "downloading",
+                    uploaded: 0,
+                  },
+                  {
+                    ...torrent,
+                    hash: "d".repeat(40),
+                    name: "Duplicate release",
+                  },
+                  {
+                    ...torrent,
+                    hash: "e".repeat(40),
+                    name: "Duplicate release",
+                  },
+                ],
+              },
+            },
+          },
+    ),
+  );
+  await page.route("**/api/v1/seedbox/rss/feeds", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          intervalSeconds: 300,
+          feeds: [
+            {
+              id: "feed-qa",
+              name: "Dansk TV",
+              automatic: true,
+              storageId: "downloads",
+              downloadLocationId: "root",
+              checkedAt: 1700000000,
+              error: "",
+              added: 4,
+              pending: 0,
+              baselineCount: 0,
+              items: [],
+              automaticHistory: [
+                {
+                  id: "new",
+                  title:
+                    "Original.release.with.a.long.name.1080p.WEB-DL.x264-SHOWTIME",
+                  torrentHash: "a".repeat(40),
+                  addedAt: 1700000000,
+                  alreadyPresent: false,
+                },
+                {
+                  id: "legacy",
+                  title: "Legacy release",
+                  addedAt: 1700000000,
+                  alreadyPresent: false,
+                },
+                {
+                  id: "missing",
+                  title: "Renamed release",
+                  torrentHash: "c".repeat(40),
+                  addedAt: 1700000000,
+                  alreadyPresent: false,
+                },
+                {
+                  id: "ambiguous",
+                  title: "Duplicate release",
+                  addedAt: 1700000000,
+                  alreadyPresent: false,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.goto("/apps/seedbox?section=torrents");
+  const feed = page.getByRole("region", { name: "Dansk TV" });
+  await feed
+    .getByText("Automatic download history (4)", { exact: true })
+    .click();
+  const rows = feed.locator(".rss-download-history li");
+  const first = rows.nth(0);
+  await expect(first.locator(".rss-history-state")).toHaveText(
+    "Seeding · 100%",
+  );
+  await expect(
+    first
+      .locator(".rss-history-stats > div")
+      .filter({ has: page.locator("dt", { hasText: "Share ratio" }) })
+      .locator("dd"),
+  ).toHaveText("1.50");
+  await expect(first).toContainText("3.0 GiB");
+  await expect(first).toContainText("1d 1h");
+  await expect(first).toContainText("2.0 KiB/s");
+  await expect(first).toContainText("2 / 3");
+  await expect(rows.nth(1).locator(".rss-history-state")).toHaveText(
+    "Downloading · 25%",
+  );
+  await expect(rows.nth(2)).toContainText("Statistics unavailable");
+  await expect(rows.nth(3)).toContainText("Statistics unavailable");
+  uploaded = 4 * 1024 ** 3;
+  await page.clock.runFor(5500);
+  await expect(first).toContainText("4.0 GiB");
+  await expect(
+    first
+      .locator(".rss-history-stats > div")
+      .filter({ has: page.locator("dt", { hasText: "Share ratio" }) })
+      .locator("dd"),
+  ).toHaveText("2.00");
+
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await page
+    .locator(
+      '.layout-item[data-layout-title="Your feeds"] .layout-width select',
+    )
+    .selectOption("33");
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await expect(first.locator(".rss-history-stats")).toBeVisible();
+  expect(
+    await feed.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBe(true);
+  await feed.screenshot({
+    path: "../.qa/rss-history-stats.png",
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(first.locator(".rss-history-stats")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    await feed.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBe(true);
+  await feed.getByLabel("Search automatic download history").fill("Legacy");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().locator(".rss-history-state")).toHaveText(
+    "Downloading · 25%",
+  );
+  await feed.getByLabel("Search automatic download history").fill("");
+  await feed.screenshot({
+    path: "../.qa/rss-history-stats-mobile.png",
+    animations: "disabled",
+  });
+  unavailable = true;
+  await page.clock.runFor(5500);
+  await expect(feed.locator(".rss-history-stats")).toHaveCount(0);
+  await expect(rows.nth(0)).toContainText("Statistics unavailable");
+  unavailable = false;
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "layout-qa",
+          username: "qa",
+          role: "admin",
+          csrf: "qa",
+          language: "da",
+        },
+      },
+    }),
+  );
+  await page.reload();
+  await feed.locator("details").first().locator("summary").click();
+  await expect(first).toContainText("Uploadet");
+  await expect(first).toContainText("Delingsratio");
+  await expect(first).toContainText("2,00");
+  await expect(feed).toContainText("én hel kopi uploadet");
+  await expect(rows.nth(2)).toContainText("Statistik utilgængelig");
+  expect(errors).toEqual([]);
+});
+
 test("all layout cards resize without a column prerequisite and keep their content contained", async ({
   page,
 }) => {

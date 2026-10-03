@@ -358,6 +358,7 @@ def test_automatic_history_survives_restart_and_feed_entry_disappearance(client)
         service, agent = setup(client)
         identifier = (await service.create(body(), agent))["feeds"][0]["id"]
         service.fetch.return_value = [entry("b"), entry("a")]
+        service.add_item.return_value = {"state": "added", "hash": "B" * 40}
         checked = await service.check(identifier, force=True)
         history = checked["feeds"][0]["automaticHistory"]
         assert len(history) == 1
@@ -365,12 +366,29 @@ def test_automatic_history_survives_restart_and_feed_entry_disappearance(client)
         assert history[0]["title"] == "b"
         assert history[0]["alreadyPresent"] is False
         assert history[0]["addedAt"] > 0
+        assert history[0]["torrentHash"] == "b" * 40
         assert "url" not in history[0]
         service.fetch.return_value = []
         await service.check(identifier, force=True)
         restarted = module.RSSFeeds(service.svc)
         assert restarted.public(restarted.load())["feeds"][0]["automaticHistory"] == history
         assert service.add_item.await_count == 1
+
+    asyncio.run(run())
+
+
+def test_history_does_not_publish_invalid_hash_or_private_agent_payload(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        service.fetch.return_value = [entry("b")]
+        service.add_item.return_value = {
+            "state": "added",
+            "hash": "https://tracker.example/?key=private",
+        }
+        checked = await service.check(identifier, force=True)
+        assert checked["feeds"][0]["automaticHistory"][0]["torrentHash"] is None
+        assert "private" not in json.dumps(checked)
 
     asyncio.run(run())
 

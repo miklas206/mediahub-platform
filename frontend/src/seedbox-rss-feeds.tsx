@@ -3,6 +3,8 @@ import { LayoutGroup } from "./page-layout";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
+import { RSSHistoryStats, matchHistoryTorrent } from "./rss-history-stats";
+import type { Torrent } from "./torrent-list";
 import "./rss-feeds.css";
 import {
   TorrentRetention,
@@ -26,6 +28,7 @@ type Feed = {
     title: string;
     addedAt: number;
     alreadyPresent: boolean;
+    torrentHash?: string | null;
   }[];
   historyUnavailable?: number;
   pending: number;
@@ -35,6 +38,7 @@ type Feed = {
 type Listing = { feeds: Feed[]; intervalSeconds: number };
 type Props = {
   storageId?: string;
+  torrents: Torrent[] | null;
   locations: Location[];
   onAdded: () => void;
   retentionSupported?: boolean;
@@ -245,6 +249,7 @@ function FeedCard({
   onAdded,
   busy,
   retentionSupported,
+  torrents,
   change,
 }: Props & {
   feed: Feed;
@@ -332,6 +337,11 @@ function FeedCard({
           )
         ) : (
           <>
+            <p className="muted rss-history-note">
+              {t(
+                "Live torrent statistics · Share ratio 1.00 = one full copy uploaded.",
+              )}
+            </p>
             <label>
               {t("Search automatic download history")}
               <input
@@ -362,6 +372,9 @@ function FeedCard({
                         ? t("Already in torrent client")
                         : t("Added automatically")}
                     </span>
+                    <RSSHistoryStats
+                      torrent={matchHistoryTorrent(item, torrents ?? [])}
+                    />
                   </li>
                 ))}
             </ul>

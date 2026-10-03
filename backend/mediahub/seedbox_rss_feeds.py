@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -28,6 +29,13 @@ INTERVAL = 300
 HISTORY_LIMIT = 200
 SETTINGS_KEY = "seedbox_rss_settings"
 router = APIRouter(prefix="/seedbox/rss/feeds", dependencies=[Depends(administrator)])
+
+
+def history_hash(value):
+    """Only publish torrent identities, never arbitrary Agent response values."""
+    if isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", value):
+        return value.lower()
+    return None
 
 
 class FeedSettings(StrictModel):
@@ -146,7 +154,10 @@ class RSSFeeds:
                     },
                     "pending": len(f["pending"]),
                     "automaticHistory": [
-                        {k: row[k] for k in ("id", "title", "addedAt", "alreadyPresent")}
+                        {
+                            **{k: row[k] for k in ("id", "title", "addedAt", "alreadyPresent")},
+                            "torrentHash": history_hash(row.get("torrentHash")),
+                        }
                         for row in f.get("automaticHistory", [])[:HISTORY_LIMIT]
                     ],
                     "historyUnavailable": max(
@@ -334,6 +345,7 @@ class RSSFeeds:
                                 "title": row["title"],
                                 "addedAt": time.time(),
                                 "alreadyPresent": outcome.get("state") == "already_present",
+                                "torrentHash": history_hash(outcome.get("hash")),
                             },
                             *feed.get("automaticHistory", []),
                         ][:HISTORY_LIMIT]
