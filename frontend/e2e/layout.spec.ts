@@ -1587,3 +1587,49 @@ test("three RSS cards retain matching borders through edit mode with long feed c
   await aligned();
   expect(errors).toEqual([]);
 });
+
+test("Danish maintenance cards translate dynamic health messages", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "layout-qa",
+          username: "qa",
+          role: "admin",
+          csrf: "qa",
+          language: "da",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/health", (route) =>
+    route.fulfill({ json: { data: { status: "healthy", version: "0.4.29" } } }),
+  );
+  await page.route("**/api/v1/runtime", (route) =>
+    route.fulfill({
+      json: { data: { connected: true, hostname: "mediahub" } },
+    }),
+  );
+  await page.route("**/api/v1/storage/locations", (route) =>
+    route.fulfill({
+      json: { data: [{ id: "qa", name: "QA", exists: true, readable: true }] },
+    }),
+  );
+  await page.goto("/settings");
+  await page.getByRole("tab", { name: "Vedligeholdelse", exact: true }).click();
+  const cards = page.locator(".maintenance-card");
+  await expect(
+    cards.getByText("Version 0.4.29 svarer.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    cards.getByText("mediahub er tilsluttet.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    cards.getByText("1 af 1 placeringer er tilg?ngelige.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    cards.getByText("1 app er sund.", { exact: true }),
+  ).toBeVisible();
+});

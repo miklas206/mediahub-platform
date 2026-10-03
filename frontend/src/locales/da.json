@@ -2585,5 +2585,13 @@
   "PowerShell blocks the script or reports PSSecurityException": "PowerShell blokerer scriptet eller viser PSSecurityException",
   "Use the start command shown in the connection or diagnostics guide. It allows the reviewed script for that process only. Do not change CurrentUser or LocalMachine policy to run these helpers.": "Brug startkommandoen i vejledningen til forbindelse eller fejlsøgning. Den tillader kun det gennemgåede script i den pågældende proces. Du skal ikke ændre scriptpolitikken for CurrentUser eller LocalMachine for at køre disse værktøjer.",
   "If the script is still blocked, run Get-ExecutionPolicy -List. MachinePolicy and UserPolicy can be set by an administrator and take precedence. Use the File Explorer steps or contact that administrator instead of changing managed policies.": "Hvis scriptet stadig blokeres, skal du køre Get-ExecutionPolicy -List. MachinePolicy og UserPolicy kan være fastsat af en administrator og har forrang. Brug Stifinder-vejledningen, eller kontakt administratoren frem for at ændre administrerede politikker.",
-  "Card placed at column {column}, row {row}.": "Kort placeret i kolonne {column}, r?kke {row}."
+  "Card placed at column {column}, row {row}.": "Kort placeret i kolonne {column}, r?kke {row}.",
+  "Version {version} is responding.": "Version {version} svarer.",
+  "{hostname} is connected.": "{hostname} er tilsluttet.",
+  "{available} of {total} locations are available.": "{available} af {total} placeringer er tilg?ngelige.",
+  "{count} app needs attention.": "{count} app kr?ver opm?rksomhed.",
+  "{count} apps need attention.": "{count} apps kr?ver opm?rksomhed.",
+  "{count} app is healthy.": "{count} app er sund.",
+  "{count} apps are healthy.": "{count} apps er sunde.",
+  "Enter your SMB username and password in the PowerShell window. These belong to the share on your NAS or Samba server, not necessarily your Windows or MediaHub account. If you forgot the password, cancel and reset it on the file server. MediaHub cannot retrieve it.": "Indtast SMB-brugernavn og adgangskode i PowerShell-vinduet. De tilh?rer delingen p? din NAS eller Samba-server og er ikke n?dvendigvis dine Windows- eller MediaHub-loginoplysninger. Har du glemt adgangskoden, skal du annullere og ?ndre den p? filserveren. MediaHub kan ikke hente den."
 }

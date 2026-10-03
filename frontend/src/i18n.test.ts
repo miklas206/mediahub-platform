@@ -54,6 +54,26 @@ describe("account language", () => {
       "/media/Downloads/Release.S01E01.mkv",
     );
   });
+  it("translates dynamic maintenance messages without changing versions or hostnames", () => {
+    setLanguage("da");
+    expect(translateText("Version 0.4.29 is responding.")).toBe(
+      "Version 0.4.29 svarer.",
+    );
+    expect(translateText("mediahub is connected.")).toBe(
+      "mediahub er tilsluttet.",
+    );
+    expect(translateText("5 of 5 locations are available.")).toBe(
+      "5 af 5 placeringer er tilg?ngelige.",
+    );
+    expect(translateText("4 apps are healthy.")).toBe("4 apps er sunde.");
+    expect(translateText("1 app needs attention.")).toBe(
+      "1 app kr?ver opm?rksomhed.",
+    );
+    expect(translateText("2 apps need attention.")).toBe(
+      "2 apps kr?ver opm?rksomhed.",
+    );
+    expect(translateText("1 app is healthy.")).toBe("1 app er sund.");
+  });
   it("localizes countries without changing their wire value", () => {
     const wireValue = "Denmark";
     setLanguage("da");

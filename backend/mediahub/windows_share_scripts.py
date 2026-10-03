@@ -201,11 +201,18 @@ if (-not $PSCmdlet.ShouldProcess(($LocalPath + ' → ' + $SharePath), 'Opret ved
     return
 }
 $Credential = $null
+$Password = $null
 try {
-    $Prompt = @{ Message = 'Indtast din SMB-konto. Adgangskoden bruges lokalt af Windows og sendes ikke til MediaHub.' }
-    if ($SuggestedUsername) { $Prompt.UserName = $SuggestedUsername }
-    $Credential = Get-Credential @Prompt
-    if ($null -eq $Credential) { Write-Host 'Annulleret. Intet drev blev oprettet.'; return }
+    Write-Host 'Indtast kontoen til SMB-delingen på filserveren. Det er ikke nødvendigvis din Windows- eller MediaHub-konto.'
+    Write-Host 'Glemt adgangskode? Annuller med Ctrl+C, og få den ændret på din NAS eller Samba-server. MediaHub kan ikke hente den.'
+    $UsernamePrompt = 'SMB-brugernavn (tomt felt annullerer)'
+    if ($SuggestedUsername) { $UsernamePrompt = ('SMB-brugernavn [Enter bruger ' + $SuggestedUsername + ']') }
+    $Username = Read-Host -Prompt $UsernamePrompt
+    if ([string]::IsNullOrWhiteSpace($Username)) { $Username = $SuggestedUsername }
+    if ([string]::IsNullOrWhiteSpace($Username)) { Write-Host 'Annulleret. Intet drev blev oprettet.'; return }
+    $Password = Read-Host -Prompt 'SMB-adgangskode (skjult; tomt felt annullerer)' -AsSecureString
+    if ($null -eq $Password -or $Password.Length -eq 0) { Write-Host 'Annulleret. Intet drev blev oprettet.'; return }
+    $Credential = [System.Management.Automation.PSCredential]::new($Username, $Password)
     # Recheck after the interactive prompt. New-PSDrive also refuses an occupied name.
     $Recheck = Get-LocalInventory
     if (-not $Recheck.Ok -or @($Recheck.Value.Mappings).Count -gt 0 -or
@@ -225,6 +232,7 @@ try {
     Show-ErrorGuidance -Code $Code
 } finally {
     $Credential = $null
+    if ($null -ne $Password) { $Password.Dispose(); $Password = $null }
 }
 '''
 

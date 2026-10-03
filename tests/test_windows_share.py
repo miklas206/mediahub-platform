@@ -310,7 +310,9 @@ def test_downloads_are_generated_from_saved_connection_without_running_them(
         assert "$DriveName = 'Z'" in script
         assert "$SuggestedUsername = 'DOMAIN\\reader'" in script
         if endpoint == "connect.ps1":
-            assert "Get-Credential" in script
+            assert "Get-Credential" not in script
+            assert "Read-Host" in script
+            assert "-AsSecureString" in script
     probe.assert_not_awaited()
 
 

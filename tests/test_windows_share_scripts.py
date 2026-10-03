@@ -68,12 +68,25 @@ def test_connect_requires_confirmation_and_preserves_existing_mapping():
     script = generate_connect_script("192.168.1.148", "MediaHub", "M")
     assert "SupportsShouldProcess=$true, ConfirmImpact='High'" in script
     assert "$PSCmdlet.ShouldProcess" in script
-    assert script.index("$PSCmdlet.ShouldProcess") < script.index("$Credential = Get-Credential")
+    assert script.index("$PSCmdlet.ShouldProcess") < script.index("$Username = Read-Host")
     assert script.index("$Recheck = Get-LocalInventory") < script.index("New-PSDrive -Name")
     assert "-Credential $Credential -Persist -Scope Global" in script
     assert "$State.RememberedPath" in script
     assert "Drevbogstavet er optaget" in script
     assert "$Credential = $null" in script
+
+
+def test_connect_prompts_in_console_and_rejects_empty_credentials_before_mapping():
+    script = generate_connect_script("192.168.1.148", "MediaHub", "M", "share-user")
+    assert "Get-Credential" not in script
+    assert "$Username = Read-Host -Prompt $UsernamePrompt" in script
+    assert "-AsSecureString" in script
+    assert "$Password.Length -eq 0" in script
+    assert "[System.Management.Automation.PSCredential]::new($Username, $Password)" in script
+    assert script.index("$Password.Length -eq 0") < script.index("New-PSDrive -Name")
+    assert "$Password.Dispose()" in script
+    assert "filserveren" in script
+    assert "Ctrl+C" in script
 
 
 def test_diagnostics_bound_access_and_capacity_and_explain_failures():
@@ -106,6 +119,51 @@ def _powershell(command: str, timeout: int = 15) -> str:
     return result.stdout.decode("utf-8-sig").strip()
 
 
+@pytest.mark.skipif(not POWERSHELL, reason="Windows PowerShell host requires Windows")
+def test_console_credentials_accept_override_default_and_cancel_without_share_access():
+    # Evaluate only the credential-input fragment with synthetic Read-Host input.
+    # Inventory, network probes and New-PSDrive are excluded from this fragment.
+    script = generate_connect_script("192.168.1.148", "MediaHub", "M")
+    fragment = script.split("try {\n    Write-Host 'Indtast kontoen", 1)[1]
+    fragment = "Write-Host 'Indtast kontoen" + fragment.split("    # Recheck", 1)[0]
+    assert "New-PSDrive" not in fragment
+    literal = "'" + fragment.replace("'", "''") + "'"
+    command = """
+    function Read-Host {
+        param($Prompt, [switch]$AsSecureString)
+        $Value = $script:Inputs[$script:InputIndex]
+        $script:InputIndex++
+        if ($AsSecureString) {
+            if (-not $Value) { return [System.Security.SecureString]::new() }
+            return ConvertTo-SecureString $Value -AsPlainText -Force
+        }
+        return $Value
+    }
+    $Rows = @()
+    foreach ($Case in @(
+        @{ Suggested='saved'; User='override'; Password='synthetic' },
+        @{ Suggested='saved'; User=''; Password='synthetic' },
+        @{ Suggested=''; User=''; Password='synthetic' },
+        @{ Suggested='saved'; User=''; Password='' }
+    )) {
+        $SuggestedUsername = $Case.Suggested
+        $script:Inputs = @($Case.User,$Case.Password)
+        $script:InputIndex = 0
+        $Credential = $null
+        $Result = & ([scriptblock]::Create(FRAGMENT + '; $Credential')) 6>$null
+        $Rows += @{ User = if ($Result) { $Result.UserName } else { $null }; Prompts=$script:InputIndex }
+        if ($Result) { $Result.Password.Dispose() }
+    }
+    $Rows | ConvertTo-Json -Compress
+    """.replace("FRAGMENT", literal)
+    assert json.loads(_powershell(command)) == [
+        {"User": "override", "Prompts": 2},
+        {"User": "saved", "Prompts": 2},
+        {"User": None, "Prompts": 1},
+        {"User": None, "Prompts": 2},
+    ]
+
+
 def _parse_file(path: Path) -> str:
     literal = "'" + str(path).replace("'", "''") + "'"
     return (
@@ -131,7 +189,10 @@ def test_real_ps51_parser_accepts_scripts_and_mutation_surface_is_limited(genera
     assert "Remove-PSDrive" not in commands
     assert not any(command.startswith(("Set-", "Remove-", "Clear-", "Enable-", "Disable-")) for command in commands)
     assert ("New-PSDrive" in commands) == (generate is generate_connect_script)
-    assert ("Get-Credential" in commands) == (generate is generate_connect_script)
+    assert "Get-Credential" not in commands
+    assert ("Read-Host" in commands) == (generate is generate_connect_script)
+    if generate is generate_connect_script:
+        assert "-AsSecureString" in path.read_text(encoding="utf-8-sig")
 
 
 @pytest.mark.skipif(not POWERSHELL, reason="Windows PowerShell worker requires Windows")

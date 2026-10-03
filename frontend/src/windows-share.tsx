@@ -633,6 +633,11 @@ export function WindowsSharePage({
                       "Review the downloaded script before running it. This command allows it only in the new PowerShell process and does not change your permanent script policy. If you saved the file elsewhere, replace the path.",
                     )}
                   </p>
+                  <p className="muted">
+                    {t(
+                      "Enter your SMB username and password in the PowerShell window. These belong to the share on your NAS or Samba server, not necessarily your Windows or MediaHub account. If you forgot the password, cancel and reset it on the file server. MediaHub cannot retrieve it.",
+                    )}
+                  </p>
                   <p className="windows-share-hint">
                     <ShieldCheck size={15} />
                     {t(
