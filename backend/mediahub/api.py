@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from mediahub import __version__
 from mediahub.auth import COOKIE
-from mediahub.contracts import PlatformSettings, StorageInput, StrictModel
+from mediahub.contracts import PlatformSettings, StorageInput, StrictModel, UserPreferences
 from mediahub.errors import DomainError
 from mediahub.logging import recent_logs
 from mediahub.network import cookie_options
@@ -31,7 +31,7 @@ def authenticated(request: Request):
     user = svc.auth.authenticate(request.cookies.get(COOKIE))
     if user.get("totpRequired") and not user.get("totpEnabled"):
         path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
-        if not (path.startswith("/security") or path in {"/auth/me", "/auth/logout"}):
+        if not (path.startswith("/security") or path in {"/auth/me", "/auth/logout", "/auth/preferences"}):
             raise DomainError(
                 "enrollment_required", "Set up two-factor authentication to continue", 403
             )
@@ -92,12 +92,18 @@ async def login(body: Credentials, request: Request, response: Response):
         **cookies,
         max_age=svc.config.session_hours * 3600,
     )
-    return result(user)
+    return result({**user, **svc.settings.user_preferences(user["id"]).model_dump()})
 
 
 @router.get("/auth/me")
-async def me(user=Depends(authenticated)):
-    return result(user)
+async def me(request: Request, user=Depends(authenticated)):
+    return result({**user, **services(request).settings.user_preferences(user["id"]).model_dump()})
+
+
+@router.put("/auth/preferences")
+async def save_user_preferences(body: UserPreferences, request: Request, user=Depends(authenticated)):
+    saved = services(request).settings.save_user_preferences(user["id"], body)
+    return result(saved.model_dump())
 
 
 @router.post("/auth/logout")

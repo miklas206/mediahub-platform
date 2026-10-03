@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
@@ -31,13 +32,15 @@ export function SeedboxRSSSettings() {
     seconds >= 60 &&
     seconds <= 86400;
   return (
-    <Panel title="RSS feed settings">
+    <Panel title={t("RSS feed settings")}>
       <ErrorBox error={error} />
-      {saved === null && !error && <p role="status">Loading feed settings…</p>}
+      {saved === null && !error && (
+        <p role="status">{t("Loading feed settings…")}</p>
+      )}
       <p className="muted">
-        Choose how often MediaHub checks automatic feeds for new files, even
-        when this page is closed. This interval applies to all automatic feeds.
-        Manual feeds are checked using Check feed now.
+        {t(
+          "Choose how often MediaHub checks automatic feeds for new files, even when this page is closed. This interval applies to all automatic feeds. Manual feeds are checked using Check feed now.",
+        )}
       </p>
       <form
         onSubmit={(event) => {
@@ -50,14 +53,14 @@ export function SeedboxRSSSettings() {
             .then((settings) => {
               setSaved(settings.intervalSeconds);
               setMinutes(String(settings.intervalSeconds / 60));
-              setNotice("Feed settings saved. The new interval is active.");
+              setNotice(t("Feed settings saved. The new interval is active."));
             })
             .catch((e: Error) => setError(e.message))
             .finally(() => setBusy(false));
         }}
       >
         <label>
-          Check for new files every (minutes)
+          {t("Check for new files every (minutes)")}
           <input
             type="number"
             min={1}
@@ -73,15 +76,15 @@ export function SeedboxRSSSettings() {
           />
         </label>
         <p className="muted">
-          Between 1 minute and 24 hours. Default: 5 minutes. Checks are
-          scheduled from each feed's last check and may start up to 15 seconds
-          later.
+          {t(
+            "Between 1 minute and 24 hours. Default: 5 minutes. Checks are scheduled from each feed's last check and may start up to 15 seconds later.",
+          )}
         </p>
         <button
           className="primary"
           disabled={busy || saved === null || !valid || seconds === saved}
         >
-          {busy ? "Saving…" : "Save feed settings"}
+          {busy ? t("Saving…") : t("Save feed settings")}
         </button>
         {notice && <p role="status">{notice}</p>}
       </form>

@@ -1,3 +1,5 @@
+import { setLanguage, t, useLanguage } from "./i18n";
+import { LanguageSettings } from "./language-settings";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { appStatusLabel } from "./seedbox-status";
 import { seedboxSections, seedboxSection } from "./seedbox-sections";
@@ -155,14 +157,15 @@ function useData<T>(path: string) {
 function Notice({ children }: { children: ReactNode }) {
   return (
     <div role="alert" className="notice">
-      {children}
+      {typeof children === "string" ? t(children) : children}
     </div>
   );
 }
 function Loading() {
   return (
     <div role="status" className="loading">
-      <RefreshCw size={18} className="spin" /> Loading MediaHub…
+      <RefreshCw size={18} className="spin" />
+      {t(" Loading MediaHub…")}
     </div>
   );
 }
@@ -170,7 +173,7 @@ function Badge({ value }: { value: string }) {
   return (
     <span className={`badge ${value}`}>
       <span aria-hidden="true" />
-      {value}
+      {t(value)}
     </span>
   );
 }
@@ -178,7 +181,7 @@ function Empty({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="empty">
       <Box size={28} />
-      <h3>{title}</h3>
+      <h3>{t(title)}</h3>
       <p>{children}</p>
     </div>
   );
@@ -195,7 +198,7 @@ function Section({
   return (
     <section className="panel">
       <div className="panel-heading">
-        <h2>{title}</h2>
+        <h2>{t(title)}</h2>
         {aside}
       </div>
       {children}
@@ -204,6 +207,7 @@ function Section({
 }
 
 export function Application() {
+  useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -221,6 +225,7 @@ export function Application() {
         try {
           const me = await api<User>("/auth/me");
           setCsrf(me.csrf);
+          setLanguage(me.language || "en");
           setUser(me);
         } catch {
           setUser(null);
@@ -242,6 +247,7 @@ export function Application() {
     const expired = () => {
       setUser(null);
       setCsrf("");
+      setLanguage("en");
     };
     window.addEventListener("session-expired", expired);
     return () => window.removeEventListener("session-expired", expired);
@@ -254,6 +260,7 @@ export function Application() {
         hasAdmin={!needsSetup}
         onSignedIn={(value) => {
           setCsrf(value.csrf);
+          setLanguage(value.language || "en");
           setUser(value);
           setNeedsSetup(false);
         }}
@@ -268,6 +275,7 @@ export function Application() {
         retry={refresh}
         onLogin={(value) => {
           setCsrf(value.csrf);
+          setLanguage(value.language || "en");
           setUser(value);
         }}
       />
@@ -279,6 +287,7 @@ export function Application() {
         await api("/auth/logout", "POST");
         setUser(null);
         setCsrf("");
+        setLanguage("en");
       }}
     />
   );
@@ -504,13 +513,13 @@ function Shell({
       {open && (
         <button
           className="scrim"
-          aria-label="Close navigation"
+          aria-label={t("Close navigation")}
           onClick={() => setOpen(false)}
         />
       )}
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <Brand />
-        <p className="nav-label">WORKSPACE</p>
+        <p className="nav-label">{t("WORKSPACE")}</p>
         <nav>
           {navigation
             .filter(([path]) => visibleNavigation.includes(path))
@@ -521,7 +530,9 @@ function Shell({
                   <div className="nav-app-heading">
                     <NavLink to={path}>
                       <Icon size={19} />
-                      <span>{label}</span>
+                      <span>
+                        {typeof label === "string" ? t(label) : label}
+                      </span>
                     </NavLink>
                     <button
                       type="button"
@@ -597,7 +608,9 @@ function Shell({
                                           : undefined
                                       }
                                     >
-                                      {label}
+                                      {typeof label === "string"
+                                        ? t(label)
+                                        : label}
                                     </Link>
                                   ))}
                                 </div>
@@ -616,7 +629,7 @@ function Shell({
               ) : (
                 <NavLink end={path === "/"} key={path} to={path}>
                   <Icon size={19} />
-                  <span>{label}</span>
+                  <span>{typeof label === "string" ? t(label) : label}</span>
                   {path === "/" && <span className="nav-shortcut">01</span>}
                   {path === "/updates" && !!updateSummary?.count && (
                     <span
@@ -647,8 +660,8 @@ function Shell({
             </div>
             <button
               className="icon-button"
-              title="Sign out"
-              aria-label="Sign out"
+              title={t("Sign out")}
+              aria-label={t("Sign out")}
               onClick={() => {
                 onLogout().catch((e) => setError(e.message));
               }}
@@ -664,14 +677,14 @@ function Shell({
           <div className="breadcrumb">
             <button
               className="mobile-menu icon-button"
-              aria-label={open ? "Close navigation" : "Open navigation"}
+              aria-label={open ? t("Close navigation") : t("Open navigation")}
               onClick={() => setOpen(!open)}
             >
               {open ? <X /> : <Menu />}
             </button>
             <span>{displayName}</span>
             <ChevronRight size={15} />
-            <strong>{title}</strong>
+            <strong>{t(title)}</strong>
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
@@ -683,14 +696,14 @@ function Shell({
             <div className="page-heading">
               <div>
                 <span className="eyebrow">
-                  {title === "Dashboard" ? "CONTROL ROOM" : "WORKSPACE"}
+                  {title === "Dashboard" ? t("CONTROL ROOM") : t("WORKSPACE")}
                 </span>
                 <h1>
-                  {title === "Dashboard" ? "Everything, in view." : title}
+                  {title === "Dashboard" ? t("Everything, in view.") : title}
                 </h1>
                 <p>
                   {title === "Dashboard"
-                    ? "A live overview of your MediaHub environment."
+                    ? t("A live overview of your MediaHub environment.")
                     : pageDescription(title)}
                 </p>
               </div>
@@ -700,7 +713,7 @@ function Shell({
                   <span>
                     MediaHub Core
                     <small title={metrics.hostname}>
-                      Technical runtime details
+                      {t("Technical runtime details")}
                     </small>
                   </span>
                 </div>
@@ -710,8 +723,9 @@ function Shell({
           {error && <Notice>{error}</Notice>}
           {!live && location.pathname !== "/updates" && (
             <Notice>
-              Live connection interrupted. Reconnecting automatically; displayed
-              metrics may be stale.
+              {t(
+                "Live connection interrupted. Reconnecting automatically; displayed metrics may be stale.",
+              )}
             </Notice>
           )}
           <PageLayout
@@ -799,7 +813,12 @@ function Shell({
                 path="/settings"
                 element={
                   <SettingsExtensions
-                    general={<SettingsPage />}
+                    general={
+                      <>
+                        <LanguageSettings />
+                        <SettingsPage />
+                      </>
+                    }
                     maintenance={<MaintenancePage />}
                     security={<SecuritySettings />}
                     advanced={advancedMode}
@@ -864,7 +883,7 @@ function MetricCard({
     <div className="metric-card">
       <div className="metric-label">
         {icon}
-        <span>{label}</span>
+        <span>{typeof label === "string" ? t(label) : label}</span>
       </div>
       <div className="metric-value">{value}</div>
       <p>{detail}</p>
@@ -872,7 +891,7 @@ function MetricCard({
         <div
           className={`meter ${percent > 90 ? "warning" : ""}`}
           role="meter"
-          aria-label={label}
+          aria-label={typeof label === "string" ? t(label) : label}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(percent)}
@@ -942,7 +961,7 @@ function Dashboard({
             ].map(([label, n]) => (
               <div key={label}>
                 <strong>{n}</strong>
-                <span>{label}</span>
+                <span>{typeof label === "string" ? t(label) : label}</span>
               </div>
             ))}
           </div>
@@ -1001,7 +1020,7 @@ function Dashboard({
           <div className="network-card">
             <div>
               <ArrowDown size={19} />
-              <span>Download</span>
+              <span>{t("Download")}</span>
               <strong>
                 {bytes(m.network.downloadBytesPerSecond)}
                 <small>/s</small>
@@ -1009,7 +1028,7 @@ function Dashboard({
             </div>
             <div>
               <ArrowUp size={19} />
-              <span>Upload</span>
+              <span>{t("Upload")}</span>
               <strong>
                 {bytes(m.network.uploadBytesPerSecond)}
                 <small>/s</small>
@@ -1116,7 +1135,7 @@ function Dashboard({
   return (
     <>
       {error && <Notice>{error}</Notice>}
-      <LayoutGroup id="ui-Dashboard-1" className="dashboard-grid">
+      <LayoutGroup id="ui-Dashboard-1" className="dashboard-grid" resizable>
         {cards
           .filter(({ id }) => visible.has(id))
           .map(({ id, content }) => (
@@ -1132,7 +1151,7 @@ function Dashboard({
 function StatusLine({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span>{label}</span>
+      <span>{typeof label === "string" ? t(label) : label}</span>
       <strong>{value}</strong>
     </div>
   );
@@ -1200,7 +1219,7 @@ function Apps({ revision }: { revision: number }) {
           ))}
         </div>
       ) : data.length ? (
-        <LayoutGroup id="ui-Apps-1" className="apps-grid">
+        <LayoutGroup id="ui-Apps-1" className="apps-grid" resizable>
           {[...data]
             .sort((left, right) => left.name.localeCompare(right.name))
             .map((app) => (
@@ -1327,17 +1346,17 @@ export function LegacyStoragePage() {
       <Section title="Register existing location">
         <form className="storage-form" onSubmit={submit}>
           <label>
-            Name
+            {t("Name")}
             <input name="name" required maxLength={80} />
           </label>
           <label>
             Type
             <select name="kind">
               <option value="appdata">App data</option>
-              <option value="downloads">Downloads</option>
+              <option value="downloads">{t("Downloads")}</option>
               <option value="movies">Movies</option>
               <option value="tv">TV shows</option>
-              <option value="backups">Backups</option>
+              <option value="backups">{t("Backups")}</option>
               <option value="custom">Custom</option>
             </select>
           </label>
@@ -1354,7 +1373,7 @@ export function LegacyStoragePage() {
             are created.
           </p>
           <button disabled={busy} className="primary">
-            {busy ? "Checking…" : "Validate & register"}
+            {busy ? t("Checking…") : "Validate & register"}
           </button>
         </form>
       </Section>
@@ -1384,8 +1403,8 @@ function ActivityPage({ revision }: { revision: number }) {
               <tr>
                 <th>Time</th>
                 <th>Event / message</th>
-                <th>Source</th>
-                <th>Severity</th>
+                <th>{t("Source")}</th>
+                <th>{t("Severity")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1487,7 +1506,7 @@ function SettingsPage() {
     if (!draft) return;
     try {
       await api("/settings", "PUT", draft);
-      setMessage("Your view has been saved.");
+      setMessage(t("Your view has been saved."));
       window.dispatchEvent(new Event("settings-changed"));
     } catch (e) {
       setFailure((e as Error).message);
@@ -1496,7 +1515,7 @@ function SettingsPage() {
     }
   };
   return (
-    <Section title="Workspace preferences">
+    <Section title={t("Workspace preferences")}>
       {(error || failure) && <Notice>{error || failure}</Notice>}
       {message && (
         <div role="status" className="success">
@@ -1508,7 +1527,7 @@ function SettingsPage() {
       ) : (
         <form className="settings-form" onSubmit={submit}>
           <label>
-            Workspace name
+            {t("Workspace name")}
             <input
               name="display_name"
               value={draft.display_name}
@@ -1520,7 +1539,7 @@ function SettingsPage() {
             />
           </label>
           <label>
-            Appearance
+            {t("Appearance")}
             <select
               name="theme"
               value={draft.theme}
@@ -1531,13 +1550,13 @@ function SettingsPage() {
                 })
               }
             >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="system">System</option>
+              <option value="dark">{t("Dark")}</option>
+              <option value="light">{t("Light")}</option>
+              <option value="system">{t("System")}</option>
             </select>
           </label>
           <label>
-            Activity page size
+            {t("Activity page size")}
             <input
               name="activity_page_size"
               type="number"
@@ -1608,7 +1627,7 @@ function SettingsPage() {
                 setDraft({ ...draft, advanced_mode: event.target.checked })
               }
             />{" "}
-            Technical mode: show server, network and diagnostic settings
+            {t("Technical mode: show server, network and diagnostic settings")}
           </label>
           <div className="visibility-settings">
             <div className="visibility-heading">
@@ -1627,7 +1646,7 @@ function SettingsPage() {
                     })
                   }
                 >
-                  Simple view
+                  {t("Simple view")}
                 </button>
                 <button
                   type="button"
@@ -1663,7 +1682,9 @@ function SettingsPage() {
                     />
                     <Icon size={18} />
                     <span>
-                      <strong>{label}</strong>
+                      <strong>
+                        {typeof label === "string" ? t(label) : label}
+                      </strong>
                       <small>{navigationHelp[path]}</small>
                     </span>
                   </label>
@@ -1695,7 +1716,7 @@ function SettingsPage() {
                     })
                   }
                 >
-                  All cards
+                  {t("All cards")}
                 </button>
               </div>
             </div>
@@ -1719,19 +1740,22 @@ function SettingsPage() {
                     }}
                   />
                   <span>
-                    <strong>{label}</strong>
-                    <small>{help}</small>
+                    <strong>
+                      {typeof label === "string" ? t(label) : label}
+                    </strong>
+                    <small>{t(help)}</small>
                   </span>
                 </label>
               ))}
             </div>
           </div>
           <button className="primary" disabled={busy}>
-            {busy ? "Saving…" : "Save preferences"}
+            {busy ? t("Saving…") : t("Save preferences")}
           </button>
           <p className="muted">
-            Network, proxy trust and allowed storage roots are configured
-            server-side. Secrets are never returned here.
+            {t(
+              "Network, proxy trust and allowed storage roots are configured server-side. Secrets are never returned here.",
+            )}
           </p>
         </form>
       )}
@@ -1759,7 +1783,7 @@ function MaintenanceCard({
         <Badge value={state} />
       </div>
       <div>
-        <h3>{title}</h3>
+        <h3>{t(title)}</h3>
         <p>{detail}</p>
       </div>
     </article>
@@ -2066,7 +2090,7 @@ function MaintenancePage() {
           />
           <MaintenanceCard
             icon={<HardDrive size={19} />}
-            title="Storage"
+            title={t("Storage")}
             state={storageState}
             detail={
               storageData
@@ -2094,7 +2118,7 @@ function MaintenancePage() {
           <NavLink className="maintenance-action" to="/storage">
             <HardDrive size={20} />
             <span>
-              <strong>Storage</strong>
+              <strong>{t("Storage")}</strong>
               <small>Review capacity, folders and media files</small>
             </span>
             <ChevronRight size={17} />
@@ -2102,7 +2126,7 @@ function MaintenancePage() {
           <NavLink className="maintenance-action" to="/updates">
             <RefreshCw size={20} />
             <span>
-              <strong>Updates</strong>
+              <strong>{t("Updates")}</strong>
               <small>Check verified MediaHub and app releases</small>
             </span>
             <ChevronRight size={17} />

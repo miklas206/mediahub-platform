@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 export type RetentionRule = {
   mode: "disabled" | "time" | "ratio" | "both" | "either";
   seedHours: number;
@@ -32,9 +33,9 @@ export function TorrentRetention({
         margin: "16px 0",
       }}
     >
-      <legend>Automatic cleanup</legend>
+      <legend>{t("Automatic cleanup")}</legend>
       <label>
-        When to clean up
+        {t("When to clean up")}
         <select
           value={value.mode}
           disabled={!supported}
@@ -45,23 +46,29 @@ export function TorrentRetention({
             })
           }
         >
-          <option value="disabled">Never — keep torrent and files</option>
-          <option value="time">After seeding for a set time</option>
-          <option value="ratio">After uploading a set ratio</option>
-          <option value="both">After BOTH time and ratio are reached</option>
-          <option value="either">After EITHER time or ratio is reached</option>
+          <option value="disabled">
+            {t("Never — keep torrent and files")}
+          </option>
+          <option value="time">{t("After seeding for a set time")}</option>
+          <option value="ratio">{t("After uploading a set ratio")}</option>
+          <option value="both">
+            {t("After BOTH time and ratio are reached")}
+          </option>
+          <option value="either">
+            {t("After EITHER time or ratio is reached")}
+          </option>
         </select>
       </label>
       {!supported && (
         <p className="muted">
-          Update the Seedbox Agent to enable cleanup settings.
+          {t("Update the Seedbox Agent to enable cleanup settings.")}
         </p>
       )}
       {value.mode !== "disabled" && (
         <>
           {value.mode !== "ratio" && (
             <label>
-              Seeding time
+              {t("Seeding time")}
               <select
                 value={value.seedHours}
                 onChange={(e) =>
@@ -70,7 +77,10 @@ export function TorrentRetention({
               >
                 {[24, 48, 72, 168, 336, 720].map((h) => (
                   <option value={h} key={h}>
-                    {h / 24} day(s) / {h} hours
+                    {h / 24}
+                    {t(" day(s) / ")}
+                    {h}
+                    {t(" hours")}
                   </option>
                 ))}
               </select>
@@ -78,7 +88,7 @@ export function TorrentRetention({
           )}
           {value.mode !== "time" && (
             <label>
-              Upload ratio
+              {t("Upload ratio")}
               <select
                 value={value.uploadRatio}
                 onChange={(e) =>
@@ -87,14 +97,17 @@ export function TorrentRetention({
               >
                 {[1, 1.5, 2, 3, 5].map((r) => (
                   <option key={r} value={r}>
-                    {r.toFixed(1)} — upload {r}× the content size
+                    {r.toFixed(1)}
+                    {t(" — upload ")}
+                    {r}
+                    {t("× the content size")}
                   </option>
                 ))}
               </select>
             </label>
           )}
           <label>
-            Cleanup action
+            {t("Cleanup action")}
             <select
               value={value.action}
               onChange={(e) =>
@@ -105,27 +118,39 @@ export function TorrentRetention({
               }
             >
               <option value="remove_job">
-                Remove torrent job — KEEP files
+                {t("Remove torrent job — KEEP files")}
               </option>
               <option value="delete_files">
-                Remove torrent job AND DELETE files
+                {t("Remove torrent job AND DELETE files")}
               </option>
             </select>
           </label>
           <p className="muted">
-            Only completed downloads are eligible. Time means accumulated
-            seeding time. Ratio 2.0 means 200 MB uploaded for 100 MB of content.
-            Checked every minute.
+            {t(
+              "Only completed downloads are eligible. Time means accumulated seeding time. Ratio 2.0 means 200 MB uploaded for 100 MB of content. Checked every minute.",
+            )}
           </p>
           {value.action === "delete_files" && (
             <p role="note" className="notice">
-              The downloaded files will be permanently deleted from storage,
-              including files used by Plex. Shared files or unsafe paths block
-              deletion.
+              {t(
+                "The downloaded files will be permanently deleted from storage, including files used by Plex. Shared files or unsafe paths block deletion.",
+              )}
             </p>
           )}
         </>
       )}
     </fieldset>
+  );
+}
+
+export function retentionModeLabel(mode: RetentionRule["mode"]) {
+  return t(
+    {
+      disabled: "No automatic cleanup",
+      time: "After time",
+      ratio: "After ratio",
+      both: "After time and ratio",
+      either: "After time or ratio",
+    }[mode],
   );
 }

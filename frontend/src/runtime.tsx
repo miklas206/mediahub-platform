@@ -1,3 +1,4 @@
+import { getLocale, t } from "./i18n";
 import { LayoutGroup } from "./page-layout";
 import { runtimeIssues } from "./runtime-issues";
 import { seedboxStatus } from "./seedbox-status";
@@ -152,8 +153,8 @@ export type Runtime = {
   };
 };
 const stamp = (n?: number | null) =>
-  n ? new Date(n * 1000).toLocaleString() : "Not verified";
-const size = (n?: number | null) => (n == null ? "Unavailable" : bytes(n));
+  n ? new Date(n * 1000).toLocaleString(getLocale()) : t("Not verified");
+const size = (n?: number | null) => (n == null ? t("Unavailable") : bytes(n));
 const localPlexUrl = () => {
   if (typeof window === "undefined") return "";
   const hostname = window.location.hostname.toLowerCase();
@@ -171,8 +172,8 @@ const localPlexUrl = () => {
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="runtime-row">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dt>{typeof label === "string" ? t(label) : label}</dt>
+      <dd>{typeof value === "string" ? t(value) : value}</dd>
     </div>
   );
 }
@@ -182,10 +183,10 @@ function Verified({ value }: { value?: boolean | null }) {
       className={`runtime-verdict ${value === true ? "yes" : value === false ? "no" : "unknown"}`}
     >
       {value === true
-        ? "Verified"
+        ? t("Verified")
         : value === false
-          ? "Not ready"
-          : "Not checked"}
+          ? t("Not ready")
+          : t("Not checked")}
     </span>
   );
 }
@@ -206,17 +207,18 @@ export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
           ?.filter((d) => d.stableIdentity)
           .map((d, i) => (
             <article key={d.stableIdentity || i}>
-              <strong>{d.model || "Block device"}</strong>
+              <strong>{d.model || t("Block device")}</strong>
               <span>
-                {size(d.sizeBytes)} · {d.connected ? "Present" : "Missing"} ·{" "}
-                {d.mounted ? "Mounted" : "Unmounted"}
+                {size(d.sizeBytes)} ·{" "}
+                {d.connected ? t("Present") : t("Missing")} ·{" "}
+                {d.mounted ? t("Mounted") : t("Unmounted")}
               </span>
               <code>{d.stableIdentity}</code>
               <span>
                 {d.mounts
                   .map(
                     (m) =>
-                      `${m.path} (${m.readOnly ? "read-only" : "read/write mount"})`,
+                      `${m.path} (${m.readOnly ? "read-only" : t("read/write mount")})`,
                   )
                   .join(" · ")}
               </span>
@@ -224,11 +226,12 @@ export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
           ))}
       </div>
       {!r.deviceChecks?.length && !r.deviceInventory?.length && (
-        <p>No device diagnostics were reported by this Agent.</p>
+        <p>{t("No device diagnostics were reported by this Agent.")}</p>
       )}
       <p className="muted">
-        Device and mount flags are separate from the app’s actual write
-        permission.
+        {t(
+          "Device and mount flags are separate from the app’s actual write permission.",
+        )}
       </p>
     </div>
   );
@@ -250,61 +253,77 @@ function SeedboxPanel({
     <div className={`runtime-workspace seedbox-workspace section-${section}`}>
       <header className="runtime-summary">
         <div>
-          <p className="eyebrow">INSTALLED APP · SEEDBOX</p>
-          <h1>Seedbox</h1>
+          <p className="eyebrow">{t("INSTALLED APP · SEEDBOX")}</p>
+          <h1>{t("Seedbox")}</h1>
         </div>
         <div className={`runtime-health ${r.health}`}>
           <ShieldCheck size={22} />
-          {status.label}
+          {t(status.label)}
         </div>
       </header>
       <div className="runtime-observed">
-        <span>Last observation: {stamp(r.observedAt)}</span>
         <span>
-          {r.cached ? "Cached observation" : "Fresh observation"} · updates
-          every 10s
+          {t("Last observation: ")}
+          {stamp(r.observedAt)}
+        </span>
+        <span>
+          {r.cached ? t("Cached observation") : t("Fresh observation")}
+          {t(" · updates every 10s")}
         </span>
       </div>
       {status.message && (
         <div role="status" className="seedbox-status-notice">
-          <strong>{status.label}</strong>
-          <span>{status.message}</span>
+          <strong>{t(status.label)}</strong>
+          <span>{t(status.message)}</span>
           {r.available && (
             <Link to={{ search: "?section=settings" }}>
-              Open runtime controls
+              {t("Open runtime controls")}
             </Link>
           )}
         </div>
       )}
-      <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
+      <LayoutGroup
+        id="runtime-SeedboxPanel-1"
+        className="runtime-panels"
+        resizable
+      >
         {section === "vpn" && (
-          <Panel title="VPN protection">
+          <Panel title={t("VPN protection")}>
             <div className="runtime-panel-title">
               <ShieldCheck />
               <strong>
                 {vpn?.verified
-                  ? "Connected · verified"
-                  : "Disconnected / unverified"}
+                  ? t("Connected · verified")
+                  : t("Disconnected / unverified")}
               </strong>
             </div>
             <dl>
               <Row
-                label="External IP"
-                value={vpn?.externalIp || "Not verified"}
+                label={t("External IP")}
+                value={vpn?.externalIp || t("Not verified")}
               />
-              <Row label="Provider" value={vpn?.provider || "Unavailable"} />
-              <Row label="Protocol" value={vpn?.protocol || "Unavailable"} />
-              <Row label="Last verified" value={stamp(vpn?.lastVerified)} />
               <Row
-                label="Container started — not tunnel uptime"
+                label={t("Provider")}
+                value={vpn?.provider || t("Unavailable")}
+              />
+              <Row
+                label={t("Protocol")}
+                value={vpn?.protocol || t("Unavailable")}
+              />
+              <Row
+                label={t("Last verified")}
+                value={stamp(vpn?.lastVerified)}
+              />
+              <Row
+                label={t("Container started — not tunnel uptime")}
                 value={
                   vpn?.connectedSince
-                    ? new Date(vpn.connectedSince).toLocaleString()
-                    : "Unavailable"
+                    ? new Date(vpn.connectedSince).toLocaleString(getLocale())
+                    : t("Unavailable")
                 }
               />
             </dl>
-            <h3>Torrent port forwarding</h3>
+            <h3>{t("Torrent port forwarding")}</h3>
             {r.portForwarding?.lastError && (
               <p role="alert" className="notice">
                 {r.portForwarding.lastError}
@@ -312,35 +331,35 @@ function SeedboxPanel({
             )}
             <dl>
               <Row
-                label="Lease status"
-                value={r.portForwarding?.status || "Not checked"}
+                label={t("Lease status")}
+                value={r.portForwarding?.status || t("Not checked")}
               />
               <Row
-                label="Current port"
-                value={r.portForwarding?.currentPort ?? "Not assigned"}
+                label={t("Current port")}
+                value={r.portForwarding?.currentPort ?? t("Not assigned")}
               />
               <Row
-                label="Last renewed"
+                label={t("Last renewed")}
                 value={stamp(r.portForwarding?.lastRenewed)}
               />
               <Row
-                label="Lease expires"
+                label={t("Lease expires")}
                 value={stamp(r.portForwarding?.expiresAt)}
               />
               <div className="runtime-row">
-                <dt>qBittorrent port configured</dt>
+                <dt>{t("qBittorrent port configured")}</dt>
                 <dd>
                   <Verified value={r.portForwarding?.qBittorrentVerified} />
                 </dd>
               </div>
               <div className="runtime-row">
-                <dt>Listening socket on VPN port</dt>
+                <dt>{t("Listening socket on VPN port")}</dt>
                 <dd>
                   {r.portForwarding?.listenerVerified
-                    ? "Verified"
+                    ? t("Verified")
                     : r.portForwarding?.listenerCheckSupported
-                      ? "Not listening / not verified"
-                      : "Update Agent to check socket"}
+                      ? t("Not listening / not verified")
+                      : t("Update Agent to check socket")}
                 </dd>
               </div>
             </dl>
@@ -354,8 +373,9 @@ function SeedboxPanel({
               }
             />
             <p className="muted">
-              Torrent traffic through the VPN only. No router or WebUI port is
-              opened.
+              {t(
+                "Torrent traffic through the VPN only. No router or WebUI port is opened.",
+              )}
             </p>
           </Panel>
         )}
@@ -363,49 +383,52 @@ function SeedboxPanel({
           <div className="seedbox-client-summary">
             <div className="seedbox-client-metrics">
               <div>
-                <span>qBittorrent {q?.version}</span>
+                <span>
+                  {t("qBittorrent ")}
+                  {q?.version}
+                </span>
                 <strong>
-                  {q?.running ? "Running" : "Stopped / unavailable"}
+                  {q?.running ? t("Running") : t("Stopped / unavailable")}
                 </strong>
               </div>
               <div>
-                <span>Download</span>
+                <span>{t("Download")}</span>
                 <strong>{size(q?.downloadSpeed)}/s</strong>
               </div>
               <div>
-                <span>Upload</span>
+                <span>{t("Upload")}</span>
                 <strong>{size(q?.uploadSpeed)}/s</strong>
               </div>
               {[
-                ["Total", counts?.torrents],
-                ["Downloading", counts?.downloading],
-                ["Seeding", counts?.seeding],
-                ["Paused", counts?.paused],
-                ["Errors", counts?.errors],
+                [t("Total"), counts?.torrents],
+                [t("Downloading"), counts?.downloading],
+                [t("Seeding"), counts?.seeding],
+                [t("Paused"), counts?.paused],
+                [t("Errors"), counts?.errors],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <span>{label}</span>
+                  <span>{typeof label === "string" ? t(label) : label}</span>
                   <strong>{value ?? "\u2014"}</strong>
                 </div>
               ))}
             </div>
             <details>
-              <summary>Connection checks</summary>
+              <summary>{t("Connection checks")}</summary>
               <dl>
                 <div className="runtime-row">
-                  <dt>Authenticated API</dt>
+                  <dt>{t("Authenticated API")}</dt>
                   <dd>
                     <Verified value={q?.apiAuthenticated} />
                   </dd>
                 </div>
                 <div className="runtime-row">
-                  <dt>VPN interface binding</dt>
+                  <dt>{t("VPN interface binding")}</dt>
                   <dd>
                     <Verified value={q?.bindingVerified} />
                   </dd>
                 </div>
                 <div className="runtime-row">
-                  <dt>Shared VPN namespace</dt>
+                  <dt>{t("Shared VPN namespace")}</dt>
                   <dd>
                     <Verified value={q?.namespaceVerified} />
                   </dd>
@@ -415,33 +438,39 @@ function SeedboxPanel({
           </div>
         )}
         {section === "settings" && (
-          <Panel title="Downloads storage">
+          <Panel title={t("Downloads storage")}>
             <div className="runtime-panel-title">
               <HardDrive />
               <strong>
-                {disk?.mounted ? "Mounted" : "Storage unavailable"}
+                {disk?.mounted ? t("Mounted") : t("Storage unavailable")}
               </strong>
             </div>
             <dl>
               <Row
-                label="Filesystem"
-                value={disk?.filesystem || "Unavailable"}
+                label={t("Filesystem")}
+                value={disk?.filesystem || t("Unavailable")}
               />
-              <Row label="Source" value={disk?.source || "Unavailable"} />
+              <Row
+                label={t("Source")}
+                value={disk?.source || t("Unavailable")}
+              />
               <div className="runtime-row">
-                <dt>App UID write/read probe</dt>
+                <dt>{t("App UID write/read probe")}</dt>
                 <dd>
                   <Verified value={disk?.appWritable} />
                 </dd>
               </div>
-              <Row label="Mount observation" value={stamp(disk?.verifiedAt)} />
-              <Row label="Capacity" value={size(disk?.totalBytes)} />
-              <Row label="Used" value={size(disk?.usedBytes)} />
-              <Row label="Free" value={size(disk?.freeBytes)} />
+              <Row
+                label={t("Mount observation")}
+                value={stamp(disk?.verifiedAt)}
+              />
+              <Row label={t("Capacity")} value={size(disk?.totalBytes)} />
+              <Row label={t("Used")} value={size(disk?.usedBytes)} />
+              <Row label={t("Free")} value={size(disk?.freeBytes)} />
             </dl>
             {disk?.totalBytes != null && disk.usedBytes != null && (
               <progress
-                aria-label="Storage used"
+                aria-label={t("Storage used")}
                 max={disk.totalBytes}
                 value={disk.usedBytes}
               />
@@ -449,37 +478,37 @@ function SeedboxPanel({
           </Panel>
         )}
         {section === "settings" && (
-          <Panel title="Seedbox host">
+          <Panel title={t("Seedbox host")}>
             <div className="runtime-panel-title">
               <Server />
               <strong>
-                {r.agentOnline ? "Agent online" : "Agent offline"}
+                {r.agentOnline ? t("Agent online") : t("Agent offline")}
               </strong>
             </div>
             <dl>
               <Row
-                label="Docker"
-                value={r.dockerHealthy ? "Available" : "Unavailable"}
+                label={t("Docker")}
+                value={r.dockerHealthy ? t("Available") : t("Unavailable")}
               />
               <Row
-                label="CPU"
+                label={t("CPU")}
                 value={
                   host?.cpuPercent == null
-                    ? "Sampling / unavailable"
+                    ? t("Sampling / unavailable")
                     : `${host.cpuPercent.toFixed(1)}% · ${host.cpuCores} cores`
                 }
               />
-              <Row label="RAM used" value={size(host?.ramUsedBytes)} />
+              <Row label={t("RAM used")} value={size(host?.ramUsedBytes)} />
               <Row
-                label="RAM available"
+                label={t("RAM available")}
                 value={size(host?.ramAvailableBytes)}
               />
-              <Row label="RAM total" value={size(host?.ramTotalBytes)} />
+              <Row label={t("RAM total")} value={size(host?.ramTotalBytes)} />
               <Row
-                label="Host uptime"
+                label={t("Host uptime")}
                 value={
                   host?.uptimeSeconds == null
-                    ? "Unavailable"
+                    ? t("Unavailable")
                     : uptime(host.uptimeSeconds)
                 }
               />
@@ -504,8 +533,8 @@ function RuntimeIssues({
     <div role="status" className={`runtime-issues ${report.health}`}>
       <strong>
         {["critical", "unhealthy", "offline"].includes(report.health)
-          ? "Action required"
-          : "Warning"}
+          ? t("Action required")
+          : t("Warning")}
         : what needs attention
       </strong>
       <ul>
@@ -522,94 +551,101 @@ function PlexPanel({ report: r }: { report: Runtime }) {
     <LayoutGroup id="runtime-workspace-1" className="runtime-workspace">
       <header className="runtime-summary">
         <div>
-          <p className="eyebrow">INSTALLED APP · PLEX</p>
-          <h1>Your media library</h1>
-          <p>Managed by the local MediaHub Agent · read-only media</p>
+          <p className="eyebrow">{t("INSTALLED APP · PLEX")}</p>
+          <h1>{t("Your media library")}</h1>
+          <p>{t("Managed by the local MediaHub Agent · read-only media")}</p>
         </div>
         <div className={`runtime-health ${r.health}`}>{r.health}</div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
       <LayoutGroup id="runtime-extra-1" className="runtime-panels">
-        <Panel title="Plex server">
+        <Panel title={t("Plex server")}>
           <dl>
             <Row
-              label="State"
-              value={p?.running ? "Running" : "Stopped / unavailable"}
+              label={t("State")}
+              value={p?.running ? t("Running") : t("Stopped / unavailable")}
             />
-            <Row label="Version" value={p?.version || "Unavailable"} />
+            <Row label={t("Version")} value={p?.version || t("Unavailable")} />
             <Row
-              label="Started"
+              label={t("Started")}
               value={
                 p?.startedAt
-                  ? new Date(p.startedAt).toLocaleString()
-                  : "Unavailable"
+                  ? new Date(p.startedAt).toLocaleString(getLocale())
+                  : t("Unavailable")
               }
             />
             <Row
-              label="Active streams"
-              value={p?.activeStreams ?? "Unavailable"}
+              label={t("Active streams")}
+              value={p?.activeStreams ?? t("Unavailable")}
             />
             <Row
-              label="Direct playback"
-              value={p?.directStreams ?? "Unavailable"}
+              label={t("Direct playback")}
+              value={p?.directStreams ?? t("Unavailable")}
             />
             <Row
-              label="Transcoding"
-              value={p?.transcodingStreams ?? "Unavailable"}
+              label={t("Transcoding")}
+              value={p?.transcodingStreams ?? t("Unavailable")}
             />
-            <Row label="RAM" value={size(p?.memoryBytes)} />
+            <Row label={t("RAM")} value={size(p?.memoryBytes)} />
             <Row
-              label="CPU"
+              label={t("CPU")}
               value={
                 p?.cpuPercent == null
-                  ? "Sampling / unavailable"
+                  ? t("Sampling / unavailable")
                   : `${p.cpuPercent.toFixed(1)}%`
               }
             />
           </dl>
         </Panel>
-        <Panel title="Secure remote access">
+        <Panel title={t("Secure remote access")}>
           <div className="runtime-panel-title">
             <ShieldCheck />
             <strong>
-              {r.vpn?.verified ? "Protected by VPN" : "VPN unavailable"}
+              {r.vpn?.verified ? t("Protected by VPN") : t("VPN unavailable")}
             </strong>
           </div>
           <dl>
-            <Row label="Provider" value={r.vpn?.provider || "Unavailable"} />
-            <Row label="Country" value={r.vpn?.countryCode || "Not verified"} />
             <Row
-              label="External IP"
-              value={r.vpn?.externalIp || "Not verified"}
+              label={t("Provider")}
+              value={r.vpn?.provider || t("Unavailable")}
             />
             <Row
-              label="Public Plex port"
-              value={r.portForwarding?.currentPort ?? "Not assigned"}
+              label={t("Country")}
+              value={r.vpn?.countryCode || t("Not verified")}
             />
             <Row
-              label="Port lease"
-              value={r.portForwarding?.status || "Not checked"}
+              label={t("External IP")}
+              value={r.vpn?.externalIp || t("Not verified")}
             />
             <Row
-              label="Last renewed"
+              label={t("Public Plex port")}
+              value={r.portForwarding?.currentPort ?? t("Not assigned")}
+            />
+            <Row
+              label={t("Port lease")}
+              value={r.portForwarding?.status || t("Not checked")}
+            />
+            <Row
+              label={t("Last renewed")}
               value={stamp(r.portForwarding?.lastRenewed)}
             />
             <div className="runtime-row">
-              <dt>Public Plex port reachable</dt>
+              <dt>{t("Public Plex port reachable")}</dt>
               <dd>
                 <Verified value={r.portForwarding?.plexVerified} />
               </dd>
             </div>
           </dl>
           <p className="muted">
-            Internet traffic is fail-closed through the dedicated Plex VPN.
-            Local access remains available through the configured LAN address on
-            port 32400.
+            {t(
+              "Internet traffic is fail-closed through the dedicated Plex VPN. Local access remains available through the configured LAN address on port 32400.",
+            )}
           </p>
         </Panel>
-        <Panel title="Libraries and storage">
+        <Panel title={t("Libraries and storage")}>
           <p>
-            <Verified value={r.storage?.mounted} /> Required media mounts
+            <Verified value={r.storage?.mounted} />
+            {t(" Required media mounts")}
           </p>
           {p?.libraries.map((l) => (
             <div className="runtime-row" key={l.id}>
@@ -622,11 +658,12 @@ function PlexPanel({ report: r }: { report: Runtime }) {
             </div>
           ))}
           {!p?.libraries.length && (
-            <p>No verified library information available.</p>
+            <p>{t("No verified library information available.")}</p>
           )}
           <p className="muted">
-            Media files are read-only. Plex configuration and transcode data use
-            separate writable storage.
+            {t(
+              "Media files are read-only. Plex configuration and transcode data use separate writable storage.",
+            )}
           </p>
         </Panel>
       </LayoutGroup>
@@ -639,11 +676,12 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
     <LayoutGroup id="runtime-workspace-2" className="runtime-workspace">
       <header className="runtime-summary">
         <div>
-          <p className="eyebrow">INSTALLED APP · INFRASTRUCTURE</p>
-          <h1>Cloudflare Tunnel</h1>
+          <p className="eyebrow">{t("INSTALLED APP · INFRASTRUCTURE")}</p>
+          <h1>{t("Cloudflare Tunnel")}</h1>
           <p>
-            Optional domain access · read-only monitoring · no Cloudflare
-            account token
+            {t(
+              "Optional domain access · read-only monitoring · no Cloudflare account token",
+            )}
           </p>
         </div>
         <div className={`runtime-health ${r.health}`}>
@@ -652,67 +690,72 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
         </div>
       </header>
       <div className="runtime-observed">
-        <span>Last observation: {stamp(c?.checkedAt || r.observedAt)}</span>
         <span>
-          {c?.cached ? "Cached observation" : "Fresh observation"} · updates
-          every 10s
+          {t("Last observation: ")}
+          {stamp(c?.checkedAt || r.observedAt)}
+        </span>
+        <span>
+          {c?.cached ? t("Cached observation") : t("Fresh observation")}
+          {t(" · updates every 10s")}
         </span>
       </div>
       <RuntimeIssues report={r} kind="cloudflare" />
       <LayoutGroup id="runtime-CloudflaredPanel-1" className="runtime-panels">
-        <Panel title="Tunnel and connector">
+        <Panel title={t("Tunnel and connector")}>
           <div className="runtime-panel-title">
             <Cloud />
             <strong>
               {c?.connections
-                ? "Connector online"
+                ? t("Connector online")
                 : c?.routes.some((route) => route.reachable)
-                  ? "Route online · metrics unavailable"
-                  : "Disconnected / unavailable"}
+                  ? t("Route online · metrics unavailable")
+                  : t("Disconnected / unavailable")}
             </strong>
           </div>
           <dl>
             <Row
-              label="Monitored tunnels"
+              label={t("Monitored tunnels")}
               value={
-                c?.tunnels?.length || (c?.configured ? 1 : "Not configured")
+                c?.tunnels?.length || (c?.configured ? 1 : t("Not configured"))
               }
             />
             <Row
-              label="cloudflared version"
-              value={c?.version || "Not observed"}
+              label={t("cloudflared version")}
+              value={c?.version || t("Not observed")}
             />
             <Row
-              label="Redundant connector sessions"
-              value={c?.metricsReachable ? c.connections : "Not observed"}
+              label={t("Redundant connector sessions")}
+              value={c?.metricsReachable ? c.connections : t("Not observed")}
             />
             <Row
-              label="Published routes monitored"
+              label={t("Published routes monitored")}
               value={c?.routeCount ?? c?.routes.length ?? 0}
             />
             <Row
-              label="Metrics helper"
-              value={c?.metricsReachable ? "Reachable" : "Unavailable"}
+              label={t("Metrics helper")}
+              value={c?.metricsReachable ? t("Reachable") : t("Unavailable")}
             />
             <Row
-              label="Requests observed"
+              label={t("Requests observed")}
               value={
                 c?.metricsReachable
-                  ? (c.totalRequests?.toLocaleString() ?? "Unavailable")
-                  : "Unavailable"
+                  ? (c.totalRequests?.toLocaleString(getLocale()) ??
+                    t("Unavailable"))
+                  : t("Unavailable")
               }
             />
             <Row
-              label="Errors observed"
+              label={t("Errors observed")}
               value={
                 c?.metricsReachable
-                  ? (c.requestErrors?.toLocaleString() ?? "Unavailable")
-                  : "Unavailable"
+                  ? (c.requestErrors?.toLocaleString(getLocale()) ??
+                    t("Unavailable"))
+                  : t("Unavailable")
               }
             />
           </dl>
         </Panel>
-        <Panel title="Published routes">
+        <Panel title={t("Published routes")}>
           {c?.routes.length ? (
             <dl>
               {c.routes.map((route) => (
@@ -724,14 +767,15 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
                   <dd>
                     <Verified value={route.reachable} />
                     <small>
-                      {route.statusCode || "No response"} · {route.latencyMs} ms
+                      {route.statusCode || t("No response")} · {route.latencyMs}
+                      {t(" ms")}
                     </small>
                   </dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <p>No public route probes are configured.</p>
+            <p>{t("No public route probes are configured.")}</p>
           )}
           <p className="muted">
             A login response or redirect still proves that Cloudflare can reach
@@ -740,21 +784,20 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
           </p>
         </Panel>
       </LayoutGroup>
-      <Panel title="Security model">
+      <Panel title={t("Security model")}>
         <div className="runtime-panel-title">
           <ShieldCheck />
-          <strong>Least-privilege monitoring</strong>
+          <strong>{t("Least-privilege monitoring")}</strong>
         </div>
         <p>
-          MediaHub receives only a sanitized local status document. Tunnel
-          tokens, Cloudflare API keys, DNS changes and public route
-          configuration stay outside MediaHub.
+          {t(
+            "MediaHub receives only a sanitized local status document. Tunnel tokens, Cloudflare API keys, DNS changes and public route configuration stay outside MediaHub.",
+          )}
         </p>
         <p className="muted">
-          Release checks read only Cloudflare’s official public release
-          metadata. Updates remain manual because the correct procedure depends
-          on whether cloudflared was installed with Docker, a package manager or
-          a standalone binary.
+          {t(
+            "Release checks read only Cloudflare’s official public release metadata. Updates remain manual because the correct procedure depends on whether cloudflared was installed with Docker, a package manager or a standalone binary.",
+          )}
         </p>
       </Panel>
     </LayoutGroup>
@@ -785,11 +828,11 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
     ]),
   ];
   return (
-    <Panel title="Agent runtime diagnostics">
+    <Panel title={t("Agent runtime diagnostics")}>
       <ErrorBox error={error} />
       <div className="runtime-toolbar">
         <label>
-          Component{" "}
+          {t("Component")}{" "}
           <select
             value={component}
             onChange={(e) => setComponent(e.target.value)}
@@ -800,7 +843,7 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
           </select>
         </label>
         <label>
-          Severity{" "}
+          {t("Severity")}{" "}
           <select
             value={severity}
             onChange={(e) => setSeverity(e.target.value)}
@@ -810,11 +853,12 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
             ))}
           </select>
         </label>
-        <button onClick={reload}>Refresh logs</button>
+        <button onClick={reload}>{t("Refresh logs")}</button>
       </div>
       <p className="muted">
-        Structured diagnostics only. Raw process output, credentials and cookies
-        are not forwarded.
+        {t(
+          "Structured diagnostics only. Raw process output, credentials and cookies are not forwarded.",
+        )}
       </p>
       <div style={{ maxHeight: "32rem", overflow: "auto" }}>
         {data?.entries
@@ -871,7 +915,7 @@ export function AppRuntimePage() {
     if (
       action !== "test-vpn" &&
       !window.confirm(
-        `${action}: this can interrupt ${data?.view === "plex" ? "Plex playback" : "Seedbox transfers"}. Continue?`,
+        `${action}: this can interrupt ${data?.view === "plex" ? t("Plex playback") : t("Seedbox transfers")}. Continue?`,
       )
     )
       return;
@@ -925,8 +969,12 @@ export function AppRuntimePage() {
     if (
       !window.confirm(
         rollback
-          ? "Restore the previous Plex version and database? Media files are not changed."
-          : "Update Plex? Active playback will stop. A configuration rollback snapshot is saved first.",
+          ? t(
+              "Restore the previous Plex version and database? Media files are not changed.",
+            )
+          : t(
+              "Update Plex? Active playback will stop. A configuration rollback snapshot is saved first.",
+            ),
       )
     )
       return;
@@ -948,15 +996,15 @@ export function AppRuntimePage() {
   return (
     <LayoutGroup id="runtime-AppRuntimePage-1" className="stack">
       <div className="runtime-toolbar">
-        <Link to="/apps">← All apps</Link>
-        <button onClick={reload}>Refresh status</button>
+        <Link to="/apps">{t("← All apps")}</Link>
+        <button onClick={reload}>{t("Refresh status")}</button>
         {data?.view === "seedbox" && (
-          <Link to={`/apps/${appId}/install`}>Review installation</Link>
+          <Link to={`/apps/${appId}/install`}>{t("Review installation")}</Link>
         )}
       </div>
       <ErrorBox error={error} />
       {data?.view === "seedbox" && (
-        <nav className="seedbox-sections" aria-label="Seedbox sections">
+        <nav className="seedbox-sections" aria-label={t("Seedbox sections")}>
           {seedboxSections.map(([key, label]) => (
             <Link
               key={key}
@@ -970,7 +1018,7 @@ export function AppRuntimePage() {
               className={section === key ? "selected" : ""}
               aria-current={section === key ? "page" : undefined}
             >
-              {label}
+              {typeof label === "string" ? t(label) : label}
             </Link>
           ))}
         </nav>
@@ -1003,7 +1051,7 @@ export function AppRuntimePage() {
           }
         />
       ) : (
-        <p role="status">Loading app status…</p>
+        <p role="status">{t("Loading app status…")}</p>
       )}
       {data?.view === "cloudflare" && (
         <CloudflareSetupManager onSaved={reload} />
@@ -1016,54 +1064,57 @@ export function AppRuntimePage() {
         />
       )}
       {data?.view === "cloudflare" && (
-        <Panel title="Updates and safety">
+        <Panel title={t("Updates and safety")}>
           <p>
-            MediaHub can check Cloudflare’s official stable release without
-            receiving access to your Cloudflare account.
+            {t(
+              "MediaHub can check Cloudflare’s official stable release without receiving access to your Cloudflare account.",
+            )}
           </p>
           <div className="runtime-toolbar">
             <button disabled={busy} onClick={checkUpdate}>
-              {busy ? "Checking…" : "Check official release"}
+              {busy ? t("Checking…") : t("Check official release")}
             </button>
             {releaseUrl && (
               <a href={releaseUrl} target="_blank" rel="noreferrer">
-                View official release →
+                {t("View official release →")}
               </a>
             )}
           </div>
           <p role="status">
-            {updateResult || "No release check has been run in this session."}
+            {updateResult ||
+              t("No release check has been run in this session.")}
           </p>
           {actionError && <div role="alert">{actionError}</div>}
           <p className="muted">
-            No automatic update or restart is performed. That avoids choosing
-            the wrong installation method and unexpectedly interrupting the
-            tunnel.
+            {t(
+              "No automatic update or restart is performed. That avoids choosing the wrong installation method and unexpectedly interrupting the tunnel.",
+            )}
           </p>
         </Panel>
       )}
       {data &&
         data.view !== "cloudflare" &&
         (data.view !== "seedbox" || section === "settings") && (
-          <Panel title="Runtime controls">
+          <Panel title={t("Runtime controls")}>
             <p>
-              Actions use the paired Agent. Starting revalidates the required
-              storage and app safety checks.
+              {t(
+                "Actions use the paired Agent. Starting revalidates the required storage and app safety checks.",
+              )}
             </p>
             <div className="runtime-toolbar">
               {(data.view === "plex"
                 ? [
-                    ["start", "Start Plex"],
-                    ["stop", "Stop Plex"],
-                    ["restart", "Restart Plex"],
+                    ["start", t("Start Plex")],
+                    ["stop", t("Stop Plex")],
+                    ["restart", t("Restart Plex")],
                   ]
                 : [
-                    ["start", "Start Seedbox"],
-                    ["stop", "Stop Seedbox"],
-                    ["restart", "Restart Seedbox"],
-                    ["restart-vpn", "Restart VPN"],
-                    ["restart-qbittorrent", "Restart qBittorrent"],
-                    ["test-vpn", "Test VPN"],
+                    ["start", t("Start Seedbox")],
+                    ["stop", t("Stop Seedbox")],
+                    ["restart", t("Restart Seedbox")],
+                    ["restart-vpn", t("Restart VPN")],
+                    ["restart-qbittorrent", t("Restart qBittorrent")],
+                    ["test-vpn", t("Test VPN")],
                   ]
               ).map(([action, label]) => (
                 <button
@@ -1076,7 +1127,7 @@ export function AppRuntimePage() {
                   }
                   onClick={() => act(action)}
                 >
-                  {label}
+                  {typeof label === "string" ? t(label) : label}
                 </button>
               ))}
             </div>
@@ -1085,13 +1136,13 @@ export function AppRuntimePage() {
               <>
                 <div className="runtime-toolbar">
                   <a className="runtime-primary-link" href={operatorUrl}>
-                    Open Plex settings
+                    {t("Open Plex settings")}
                   </a>
                   <button
                     disabled={busy || !!error || !data.report.available}
                     onClick={checkUpdate}
                   >
-                    Check for updates
+                    {t("Check for updates")}
                   </button>
                   <button
                     disabled={
@@ -1102,11 +1153,11 @@ export function AppRuntimePage() {
                     }
                     onClick={() => plexUpdate()}
                   >
-                    Update Plex
+                    {t("Update Plex")}
                   </button>
                   {data.report.operation?.state === "failed" && (
                     <button disabled={busy} onClick={() => plexUpdate(true)}>
-                      Restore previous version
+                      {t("Restore previous version")}
                     </button>
                   )}
                 </div>
@@ -1116,23 +1167,25 @@ export function AppRuntimePage() {
               </>
             )}
             <p role="status">
-              {control?.operation.action || "No operation"}:{" "}
+              {control?.operation.action || t("No operation")}:{" "}
               {control?.operation.state || "idle"} {control?.operation.message}
             </p>
             {!!control?.manualIntervention.length && (
               <div role="alert">
-                Manual intervention required:{" "}
+                {t("Manual intervention required:")}{" "}
                 {control.manualIntervention.join(", ")}. Automatic retries are
                 stopped.
               </div>
             )}
             <button onClick={() => setShowLogs(!showLogs)}>
-              {showLogs ? "Hide logs" : "View logs"}
+              {showLogs ? t("Hide logs") : t("View logs")}
             </button>
             {operatorUrl && data.view !== "plex" && (
               <p>
                 <a href={operatorUrl} rel="noreferrer">
-                  {data.view === "plex" ? "Open Plex" : "Open qBittorrent"}
+                  {data.view === "plex"
+                    ? t("Open Plex")
+                    : t("Open qBittorrent")}
                 </a>
                 {data.view === "seedbox" &&
                   " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled."}
@@ -1144,7 +1197,7 @@ export function AppRuntimePage() {
             {showLogs && data.view === "seedbox" && (
               <>
                 <label>
-                  Component{" "}
+                  {t("Component")}{" "}
                   <select
                     value={component}
                     onChange={(e) => setComponent(e.target.value)}
@@ -1158,14 +1211,15 @@ export function AppRuntimePage() {
                       "recovery",
                     ].map((c) => (
                       <option key={c} value={c}>
-                        {c === "seedbox" ? "Seedbox Agent" : c}
+                        {c === "seedbox" ? t("Seedbox Agent") : c}
                       </option>
                     ))}
                   </select>
                 </label>
                 <p className="muted">
-                  Safe, structured Agent diagnostics. Raw container output and
-                  credentials are never forwarded.
+                  {t(
+                    "Safe, structured Agent diagnostics. Raw container output and credentials are never forwarded.",
+                  )}
                 </p>
                 {control?.events
                   .filter(

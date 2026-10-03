@@ -14,7 +14,13 @@ export type AppInfo = {
   detailPath?: string | null;
   health: Health;
 };
-export type User = { id: string; username: string; role: string; csrf: string };
+export type User = {
+  id: string;
+  username: string;
+  role: string;
+  csrf: string;
+  language?: "en" | "da";
+};
 export type Metrics = {
   hostname: string;
   version: string;

@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { LayoutGroup } from "./page-layout";
 import { AppUninstall } from "./app-uninstall";
 import {
@@ -82,7 +83,7 @@ export function Panel({
   return (
     <section className="panel">
       <div className="panel-heading">
-        <h2>{title}</h2>
+        <h2>{t(title)}</h2>
       </div>
       <div className="phase-content">{children}</div>
     </section>
@@ -91,7 +92,7 @@ export function Panel({
 export function ErrorBox({ error }: { error: string }) {
   return error ? (
     <div className="notice" role="alert">
-      {error}
+      {t(error)}
     </div>
   ) : null;
 }
@@ -1390,7 +1391,10 @@ export function CatalogPage({
                     </Link>
                   ) : null}
                   {app.id === "org.mediahub.fjordhub" && (
-                    <Link className="button-link" to="/store/fjordhub/uninstall">
+                    <Link
+                      className="button-link"
+                      to="/store/fjordhub/uninstall"
+                    >
                       Uninstall
                     </Link>
                   )}

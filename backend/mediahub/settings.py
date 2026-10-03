@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from mediahub.contracts import PlatformSettings
+from mediahub.contracts import PlatformSettings, UserPreferences
 from mediahub.db import Setting
 
 
@@ -44,3 +44,17 @@ class SettingsService:
             else:
                 db.add(Setting(key="platform", value=settings.model_dump()))
         return settings
+
+    def user_preferences(self, user_id: str) -> UserPreferences:
+        with self.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
+            return UserPreferences.model_validate(row.value) if row else UserPreferences()
+
+    def save_user_preferences(self, user_id: str, preferences: UserPreferences):
+        with self.sessions.begin() as db:
+            row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
+            if row:
+                row.value = preferences.model_dump()
+            else:
+                db.add(Setting(key=f"user.preferences:{user_id}", value=preferences.model_dump()))
+        return preferences

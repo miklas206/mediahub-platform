@@ -1,3 +1,5 @@
+import { getLocale, t } from "./i18n";
+import { LayoutGroup } from "./page-layout";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
@@ -38,7 +40,9 @@ type Props = {
   retentionSupported?: boolean;
 };
 
-export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
+export function SeedboxRSS(
+  props: Props & { addTorrent: ReactNode; torrentList: ReactNode },
+) {
   const [listing, setListing] = useState<Listing>({
     feeds: [],
     intervalSeconds: 300,
@@ -71,7 +75,9 @@ export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
       } catch {
         if (!controller.signal.aborted && version === generation.current)
           setError(
-            "RSS feed status is unavailable. Check the connection and Core version.",
+            t(
+              "RSS feed status is unavailable. Check the connection and Core version.",
+            ),
           );
       } finally {
         loading = false;
@@ -102,18 +108,26 @@ export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
     }
   }
   return (
-    <>
-      <Panel title="Your feeds">
+    <LayoutGroup
+      id="seedbox-torrent-panels"
+      className="torrent-panels"
+      resizable
+      wideFirst
+    >
+      {props.torrentList}
+      <Panel key="feeds" title={t("Your feeds")}>
         <ErrorBox error={error} />
         <p className="muted">
-          Automatic feeds are checked every {listing.intervalSeconds / 60}{" "}
-          minutes, even when this page is closed. Change the interval in Seedbox
-          Settings.
+          {t("Automatic feeds are checked every ")}
+          {listing.intervalSeconds / 60}{" "}
+          {t(
+            "minutes, even when this page is closed. Change the interval in Seedbox Settings.",
+          )}
         </p>
         <div className="rss-feed-list">
           {" "}
-          {busy && <p role="status">Saving or checking feed…</p>}
-          {!listing.feeds.length && <p>No feeds saved yet.</p>}
+          {busy && <p role="status">{t("Saving or checking feed…")}</p>}
+          {!listing.feeds.length && <p>{t("No feeds saved yet.")}</p>}
           {listing.feeds.map((feed) => (
             <FeedCard
               key={feed.id}
@@ -125,105 +139,103 @@ export function SeedboxRSS(props: Props & { addTorrent: ReactNode }) {
           ))}
         </div>
       </Panel>
-      <div className="torrent-input-grid">
-        {props.addTorrent}
-        <Panel title="Add feed">
-          <div className="notice">
-            Only future entries download automatically. Entries already present
-            when you add a feed or enable automatic downloads are recorded and
-            skipped. Older entries and entries without a valid publication date
-            require manual selection.
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void change("/seedbox/rss/feeds", "POST", {
-                name,
-                url,
-                automatic,
-                retention,
-                storageId: props.storageId,
-                downloadLocationId: destination,
-              }).then((ok) => {
-                if (ok) {
-                  setName("");
-                  setUrl("");
-                  setAutomatic(false);
-                  setRetention(defaultRetention);
-                }
-              });
-            }}
-          >
-            <label>
-              Feed name
-              <input
-                value={name}
-                maxLength={100}
-                required
-                onChange={(e) => setName(e.target.value)}
-                placeholder="For example: Nordic movies"
-              />
-            </label>
-            <label>
-              Private RSS address (including RSS key)
-              <input
-                type="password"
-                value={url}
-                required
-                maxLength={8192}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="Complete https:// RSS address"
-              />
-            </label>
-            <label>
-              Destination for this feed
-              <select
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-              >
-                {props.locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.storageLabel || "Downloads"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={automatic}
-                onChange={(e) => setAutomatic(e.target.checked)}
-              />
-              Automatically download new entries to this destination
-            </label>
-            <TorrentRetention
-              value={retention}
-              onChange={setRetention}
-              disabled={busy}
-              supported={!!props.retentionSupported}
-            />
-            <button
-              className="primary"
-              disabled={
-                busy ||
-                !props.storageId ||
-                !props.locations.some((l) => l.id === destination) ||
-                listing.feeds.length >= 20
+
+      {props.addTorrent}
+      <Panel key="add-feed" title={t("Add feed")}>
+        <div className="notice">
+          {t(
+            "Only future entries download automatically. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Older entries and entries without a valid publication date require manual selection.",
+          )}
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void change("/seedbox/rss/feeds", "POST", {
+              name,
+              url,
+              automatic,
+              retention,
+              storageId: props.storageId,
+              downloadLocationId: destination,
+            }).then((ok) => {
+              if (ok) {
+                setName("");
+                setUrl("");
+                setAutomatic(false);
+                setRetention(defaultRetention);
               }
+            });
+          }}
+        >
+          <label>
+            {t("Feed name")}
+            <input
+              value={name}
+              maxLength={100}
+              required
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("For example: Nordic movies")}
+            />
+          </label>
+          <label>
+            {t("Private RSS address (including RSS key)")}
+            <input
+              type="password"
+              value={url}
+              required
+              maxLength={8192}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={t("Complete https:// RSS address")}
+            />
+          </label>
+          <label>
+            {t("Destination for this feed")}
+            <select
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
             >
-              Add feed and skip existing entries
-            </button>
-          </form>
-          <p className="muted">
-            Up to 20 feeds. Private addresses are stored encrypted. Feed and
-            torrent-file requests use MediaHub's connection; torrent transfers
-            use the Seedbox VPN.
-          </p>
-        </Panel>
-      </div>
-    </>
+              {props.locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.storageLabel || t("Downloads")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={automatic}
+              onChange={(e) => setAutomatic(e.target.checked)}
+            />
+            {t("Automatically download new entries to this destination")}
+          </label>
+          <TorrentRetention
+            value={retention}
+            onChange={setRetention}
+            disabled={busy}
+            supported={!!props.retentionSupported}
+          />
+          <button
+            className="primary"
+            disabled={
+              busy ||
+              !props.storageId ||
+              !props.locations.some((l) => l.id === destination) ||
+              listing.feeds.length >= 20
+            }
+          >
+            {t("Add feed and skip existing entries")}
+          </button>
+        </form>
+        <p className="muted">
+          {t(
+            "Up to 20 feeds. Private addresses are stored encrypted. Feed and torrent-file requests use MediaHub's connection; torrent transfers use the Seedbox VPN.",
+          )}
+        </p>
+      </Panel>
+    </LayoutGroup>
   );
 }
 
@@ -267,7 +279,7 @@ function FeedCard({
       const failed = result.items.filter((i) => !i.ok);
       setSelected(failed.map((i) => i.id));
       setNotice(
-        `${result.items.length - failed.length} added or already present. ${failed.length} failed.${start ? "" : " New torrents are stopped; use Resume to start."}`,
+        `${result.items.length - failed.length} added or already present. ${failed.length} failed.${start ? "" : t(" New torrents are stopped; use Resume to start.")}`,
       );
       onAdded();
     } catch (e) {
@@ -282,40 +294,47 @@ function FeedCard({
       <p>
         <strong>
           {feed.automatic
-            ? "Automatic downloads enabled"
-            : "Manual downloads only"}
+            ? t("Automatic downloads enabled")
+            : t("Manual downloads only")}
         </strong>{" "}
         ·{" "}
         {locations.find((l) => l.id === feed.downloadLocationId)
-          ?.storageLabel || "Choose destination"}
+          ?.storageLabel || t("Choose destination")}
       </p>
       <p className="muted">
-        Last checked:{" "}
+        {t("Last checked:")}{" "}
         {feed.checkedAt
-          ? new Date(feed.checkedAt * 1000).toLocaleString()
-          : "Not checked"}{" "}
-        · Added automatically: {feed.added} · Pending: {feed.pending}
+          ? new Date(feed.checkedAt * 1000).toLocaleString(getLocale())
+          : t("Not checked")}{" "}
+        {t("· Added automatically: ")}
+        {feed.added}
+        {t(" · Pending: ")}
+        {feed.pending}
       </p>
       <ErrorBox error={feed.error} />
       <ErrorBox error={error} />
       {notice && <p role="status">{notice}</p>}
       <details>
-        <summary>Automatic download history ({feed.added})</summary>
+        <summary>
+          {t("Automatic download history (")}
+          {feed.added})
+        </summary>
         {!!feed.historyUnavailable && (
           <p className="muted rss-history-note">
-            {feed.historyUnavailable} earlier additions · No details saved.
+            {feed.historyUnavailable}
+            {t(" earlier additions · No details saved.")}
           </p>
         )}
         {!feed.automaticHistory?.length ? (
           feed.added === 0 && (
             <p className="muted rss-history-note">
-              No automatic downloads yet.
+              {t("No automatic downloads yet.")}
             </p>
           )
         ) : (
           <>
             <label>
-              Search automatic download history
+              {t("Search automatic download history")}
               <input
                 value={historyFilter}
                 onChange={(event) => setHistoryFilter(event.target.value)}
@@ -335,24 +354,26 @@ function FeedCard({
                       <time
                         dateTime={new Date(item.addedAt * 1000).toISOString()}
                       >
-                        {new Date(item.addedAt * 1000).toLocaleString()}
+                        {new Date(item.addedAt * 1000).toLocaleString(
+                          getLocale(),
+                        )}
                       </time>
                       {" · "}
                       {item.alreadyPresent
-                        ? "Already in torrent client"
-                        : "Added automatically"}
+                        ? t("Already in torrent client")
+                        : t("Added automatically")}
                     </span>
                   </li>
                 ))}
             </ul>
             {!feed.automaticHistory.some((item) =>
               item.title.toLowerCase().includes(historyFilter.toLowerCase()),
-            ) && <p>No matching downloads.</p>}
+            ) && <p>{t("No matching downloads.")}</p>}
           </>
         )}
       </details>
       <details>
-        <summary>Feed settings</summary>
+        <summary>{t("Feed settings")}</summary>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -366,7 +387,7 @@ function FeedCard({
           }}
         >
           <label>
-            Feed name
+            {t("Feed name")}
             <input
               required
               value={name}
@@ -375,14 +396,14 @@ function FeedCard({
             />
           </label>
           <label>
-            Download destination
+            {t("Download destination")}
             <select
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
             >
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.storageLabel || "Downloads"}
+                  {l.storageLabel || t("Downloads")}
                 </option>
               ))}
             </select>
@@ -393,12 +414,12 @@ function FeedCard({
               checked={automatic}
               onChange={(e) => setAutomatic(e.target.checked)}
             />
-            Automatically download future entries
+            {t("Automatically download future entries")}
           </label>
           <p className="muted">
-            Enabling automatic downloads skips everything currently in the feed.
-            Disabling clears pending automatic entries; torrents already added
-            keep running.
+            {t(
+              "Enabling automatic downloads skips everything currently in the feed. Disabling clears pending automatic entries; torrents already added keep running.",
+            )}
           </p>
           <TorrentRetention
             value={retention}
@@ -414,13 +435,12 @@ function FeedCard({
               !locations.some((l) => l.id === destination)
             }
           >
-            Save feed settings
+            {t("Save feed settings")}
           </button>
           <p className="muted">
-            Cleanup rules apply to future torrents from this feed, including
-            manual selections. Change existing torrents using their Cleanup
-            button. Removing or disabling a feed does not cancel rules already
-            assigned to torrents.
+            {t(
+              "Cleanup rules apply to future torrents from this feed, including manual selections. Change existing torrents using their Cleanup button. Removing or disabling a feed does not cancel rules already assigned to torrents.",
+            )}
           </p>
         </form>
       </details>
@@ -429,21 +449,22 @@ function FeedCard({
           disabled={busy || adding}
           onClick={() => void change(path + "/refresh", "POST")}
         >
-          Check feed now
+          {t("Check feed now")}
         </button>
         <button
           disabled={busy || adding}
           onClick={() => void change(path, "DELETE")}
         >
-          Remove feed
+          {t("Remove feed")}
         </button>
       </div>
       <details>
         <summary>
-          Browse and select entries manually ({feed.items.length})
+          {t("Browse and select entries manually (")}
+          {feed.items.length})
         </summary>
         <label>
-          Search this feed
+          {t("Search this feed")}
           <input value={filter} onChange={(e) => setFilter(e.target.value)} />
         </label>
         <div style={{ maxHeight: 360, overflowY: "auto" }}>
@@ -480,13 +501,14 @@ function FeedCard({
             checked={start}
             onChange={(e) => setStart(e.target.checked)}
           />
-          Start manually selected torrents immediately
+          {t("Start manually selected torrents immediately")}
         </label>
         <button
           disabled={busy || adding || !selected.length || !feed.storageId}
           onClick={() => void download()}
         >
-          Add selected ({selected.length}/20)
+          {t("Add selected (")}
+          {selected.length}/20)
         </button>
       </details>
     </section>

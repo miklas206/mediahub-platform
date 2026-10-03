@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { runtimeIssues } from "./runtime-issues";
 import type { Runtime } from "./runtime";
 
@@ -56,7 +57,10 @@ export function seedboxStatus(r: Runtime): { label: string; message?: string } {
   if (!r.qBittorrent?.healthy && r.qBittorrent?.oomKilled) {
     return {
       label: "Memory limit reached",
-      message: `Docker reports that qBittorrent was killed after exceeding its memory limit. Current limit: ${r.qBittorrent.memoryLimitMiB || "unknown"} MiB. Check memory allocation before retrying.`,
+      message: t(
+        "Docker reports that qBittorrent was killed after exceeding its memory limit. Current limit: {limit} MiB. Check memory allocation before retrying.",
+        { limit: r.qBittorrent.memoryLimitMiB || t("unknown") },
+      ),
     };
   }
   if (!r.qBittorrent?.healthy)

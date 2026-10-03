@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   Children,
   createContext,
@@ -7,6 +8,7 @@ import {
   useState,
   type ReactNode,
   type ReactElement,
+  type CSSProperties,
 } from "react";
 import {
   ArrowDown,
@@ -18,7 +20,32 @@ import {
 import "./page-layout.css";
 
 type Layouts = Record<string, string[]>;
+type Geometry = { columns: number; widths: Record<string, number> };
+export function readGeometry(raw: string | null): Geometry {
+  try {
+    const value = JSON.parse(raw || "{}");
+    const columns = [0, 1, 2, 3].includes(value?.columns) ? value.columns : 0;
+    const widths =
+      value?.widths &&
+      typeof value.widths === "object" &&
+      !Array.isArray(value.widths)
+        ? Object.fromEntries(
+            Object.entries(value.widths).filter(
+              ([key, width]) =>
+                key.length < 1000 &&
+                typeof width === "number" &&
+                [0, 1, 2, 3].includes(width),
+            ),
+          )
+        : {};
+    return { columns, widths: widths as Record<string, number> };
+  } catch {
+    return { columns: 0, widths: {} };
+  }
+}
 type LayoutContext = {
+  geometry: Geometry;
+  resize: (group: string, item: string, width: number) => void;
   editing: boolean;
   layouts: Layouts;
   save: (group: string, order: string[]) => void;
@@ -65,15 +92,38 @@ export function PageLayout({
       return {};
     }
   });
+  const geometryKey = `mediahub.layout.size.v1:${storageKey}`;
+  const [geometry, setGeometry] = useState<Geometry>(() => {
+    try {
+      return readGeometry(localStorage.getItem(geometryKey));
+    } catch {
+      return readGeometry(null);
+    }
+  });
+  function persistGeometry(next: Geometry) {
+    setGeometry(next);
+    try {
+      localStorage.setItem(geometryKey, JSON.stringify(next));
+      setMessage(t("Layout saved in this browser."));
+    } catch {
+      setMessage(
+        t(
+          "Layout changed, but this browser could not save it. It will reset when you reload.",
+        ),
+      );
+    }
+  }
   const [message, setMessage] = useState("");
   function persist(next: Layouts) {
     setLayouts(next);
     try {
       localStorage.setItem(key, JSON.stringify(next));
-      setMessage("Layout saved in this browser.");
+      setMessage(t("Layout saved in this browser."));
     } catch {
       setMessage(
-        "Layout changed, but this browser could not save it. It will reset when you reload.",
+        t(
+          "Layout changed, but this browser could not save it. It will reset when you reload.",
+        ),
       );
     }
   }
@@ -81,6 +131,12 @@ export function PageLayout({
     <Context.Provider
       value={{
         editing,
+        geometry,
+        resize: (group, item, width) =>
+          persistGeometry({
+            ...geometry,
+            widths: { ...geometry.widths, [`${group}:${item}`]: width },
+          }),
         layouts,
         save: (group, order) => persist({ ...layouts, [group]: order }),
       }}
@@ -92,16 +148,44 @@ export function PageLayout({
           onClick={() => setEditing(!editing)}
         >
           <LayoutGrid size={16} />{" "}
-          {editing ? "Done arranging" : "Customize layout"}
+          {editing ? t("Done arranging") : t("Customize layout")}
         </button>
         {editing && (
           <>
             <span>
-              Drag a box by its handle, or use the arrows. Saved per page in
-              this browser.
+              {t(
+                "Drag a box by its handle, or use the arrows. Saved per page in this browser.",
+              )}
             </span>
-            <button type="button" onClick={() => persist({})}>
-              <RotateCcw size={15} /> Reset this page
+            <label className="layout-columns">
+              {t("Columns")}
+              <select
+                aria-label={t("Columns")}
+                value={geometry.columns}
+                onChange={(event) =>
+                  persistGeometry({
+                    ...geometry,
+                    columns: Number(event.target.value),
+                  })
+                }
+              >
+                <option value={0}>{t("Original layout")}</option>
+                {[1, 2, 3].map((count) => (
+                  <option key={count} value={count}>
+                    {t("{count} columns", { count })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                persist({});
+                persistGeometry({ columns: 0, widths: {} });
+              }}
+            >
+              <RotateCcw size={15} />
+              {t(" Reset this page")}
             </button>
           </>
         )}
@@ -137,9 +221,13 @@ export function LayoutGroup({
   id,
   className = "stack",
   children,
+  resizable = false,
+  wideFirst = false,
 }: {
   id: string;
   className?: string;
+  resizable?: boolean;
+  wideFirst?: boolean;
   children: ReactNode;
 }) {
   const context = useContext(Context);
@@ -164,12 +252,21 @@ export function LayoutGroup({
       ...(context.layouts[id] || []).filter((item) => !ids.includes(item)),
     ]);
     setAnnouncement(
-      `Box moved to position ${next.indexOf(source) + 1} of ${ids.length}.`,
+      t("Box moved to position {position} of {count}.", {
+        position: next.indexOf(source) + 1,
+        count: ids.length,
+      }),
     );
   }
+  const columns = resizable ? context?.geometry.columns || 0 : 0;
   let cursor = 0;
   return (
-    <div className={`${className} layout-group`}>
+    <div
+      className={`${className} layout-group ${columns ? "layout-custom-grid" : ""}`}
+      style={
+        columns ? ({ "--layout-columns": columns } as CSSProperties) : undefined
+      }
+    >
       {nodes.map((node) => {
         if (!canMove(node)) return node;
         const itemId = ids[cursor++];
@@ -179,7 +276,17 @@ export function LayoutGroup({
           <LayoutItem
             key={itemId}
             item={item}
-            editing={!!context?.editing && ids.length > 1}
+            editing={!!context?.editing && (ids.length > 1 || resizable)}
+            columns={columns}
+            width={
+              context?.geometry.widths[`${id}:${itemId}`] ??
+              (wideFirst && itemId === String(movable[0]?.key) ? 0 : 1)
+            }
+            resize={
+              resizable && columns
+                ? (width) => context?.resize(id, itemId, width)
+                : undefined
+            }
             group={id}
             itemId={itemId}
             index={index}
@@ -205,6 +312,9 @@ function LayoutItem({
   count,
   moveBy,
   onDrop,
+  columns,
+  width,
+  resize,
 }: {
   item: ReactElement<Record<string, unknown>>;
   editing: boolean;
@@ -212,6 +322,9 @@ function LayoutItem({
   itemId: string;
   index: number;
   count: number;
+  columns: number;
+  width: number;
+  resize?: (width: number) => void;
   moveBy: (delta: number) => void;
   onDrop: (source: string) => void;
 }) {
@@ -221,11 +334,18 @@ function LayoutItem({
     typeof item.props.title === "string"
       ? item.props.title
       : ref.current?.querySelector("h2, h3, summary strong, strong")
-          ?.textContent || `Box ${index + 1}`;
+          ?.textContent || t("Box {count}", { count: index + 1 });
   return (
     <div
       ref={ref}
       className={`layout-item ${editing ? "is-arranging" : ""} ${over ? "is-drop-target" : ""}`}
+      style={
+        columns
+          ? ({
+              "--layout-span": width === 0 ? columns : Math.min(width, columns),
+            } as CSSProperties)
+          : undefined
+      }
       data-layout-item={itemId}
       onDragOver={(event) => {
         if (editing && event.dataTransfer.types.includes(dragType)) {
@@ -255,8 +375,8 @@ function LayoutItem({
             type="button"
             className="layout-drag-handle"
             draggable
-            aria-label={`Move ${title}`}
-            title="Drag to move, or use the arrow keys"
+            aria-label={t("Move {title}", { title: t(title) })}
+            title={t("Drag to move, or use the arrow keys")}
             onDragStart={(event) => {
               event.stopPropagation();
               event.dataTransfer.effectAllowed = "move";
@@ -278,11 +398,28 @@ function LayoutItem({
             }}
           >
             <GripVertical size={17} />
-            <span>{title}</span>
+            <span>{t(title)}</span>
           </button>
+          {resize && (
+            <label className="layout-width">
+              {t("Width")}
+              <select
+                aria-label={t("Width of {title}", { title })}
+                value={width}
+                onChange={(event) => resize(Number(event.target.value))}
+              >
+                <option value={0}>{t("Full row")}</option>
+                {[1, 2, 3].map((span) => (
+                  <option key={span} value={span}>
+                    {t("{count} columns", { count: span })}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
-            aria-label={`Move ${title} earlier`}
+            aria-label={t("Move {title} earlier", { title: t(title) })}
             disabled={index === 0}
             onClick={() => moveBy(-1)}
           >
@@ -290,7 +427,7 @@ function LayoutItem({
           </button>
           <button
             type="button"
-            aria-label={`Move ${title} later`}
+            aria-label={t("Move {title} later", { title: t(title) })}
             disabled={index === count - 1}
             onClick={() => moveBy(1)}
           >

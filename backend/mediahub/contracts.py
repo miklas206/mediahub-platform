@@ -30,6 +30,10 @@ class Health(StrictModel):
     lastChecked: str = Field(default_factory=now)
 
 
+class UserPreferences(StrictModel):
+    language: Literal["en", "da"] = "en"
+
+
 class PlatformSettings(StrictModel):
     display_name: str = Field(default="MediaHub", min_length=1, max_length=60)
     theme: Literal["dark", "light", "system"] = "dark"

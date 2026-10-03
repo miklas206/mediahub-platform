@@ -1,8 +1,10 @@
+import { t } from "./i18n";
 import { Fragment, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Brush,
+  ArrowUpDown,
   ChevronDown,
   ChevronUp,
   Pause,
@@ -11,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { bytes, uptime } from "./format";
-import type { RetentionRule } from "./torrent-retention";
+import { retentionModeLabel, type RetentionRule } from "./torrent-retention";
 
 export type Torrent = {
   hash: string;
@@ -121,23 +123,43 @@ export function TorrentList({
   const [sort, setSort] = useState<TorrentSort>("name");
   const [descending, setDescending] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  function selectSort(key: TorrentSort) {
+    if (sort === key) setDescending(!descending);
+    else {
+      setSort(key);
+      setDescending(false);
+    }
+  }
+  const columns: { label: string; key?: TorrentSort }[] = [
+    { label: t("Name"), key: "name" },
+    { label: t("Progress"), key: "progress" },
+    { label: t("Status"), key: "state" },
+    { label: t("Transfer"), key: "dlspeed" },
+    { label: t("Ratio"), key: "ratio" },
+    { label: t("ETA"), key: "eta" },
+    { label: t("Size"), key: "size" },
+    { label: t("Actions") },
+  ];
   const sorted = sortTorrents(items || [], sort, descending);
   return (
     <>
       <div className="torrent-toolbar">
         <span className="muted" role="status">
-          {items ? `${items.length} torrents` : "Loading torrents…"}
+          {items
+            ? t("{count} torrents", { count: items.length })
+            : t("Loading torrents…")}
         </span>
         <div className="torrent-sort-controls">
           <label className="torrent-sort-label">
-            Sort by
+            {t("Sort by")}
             <select
+              aria-label={t("Sort by")}
               value={sort}
               onChange={(event) => setSort(event.target.value as TorrentSort)}
             >
               {sortOptions.map(([key, label]) => (
                 <option value={key} key={key}>
-                  {label}
+                  {t(label)}
                 </option>
               ))}
             </select>
@@ -145,11 +167,11 @@ export function TorrentList({
           <button
             type="button"
             className="torrent-icon-button"
-            title={descending ? "Descending order" : "Ascending order"}
+            title={descending ? t("Descending order") : t("Ascending order")}
             aria-label={
               descending
-                ? "Descending order; switch to ascending"
-                : "Ascending order; switch to descending"
+                ? t("Descending order; switch to ascending")
+                : t("Ascending order; switch to descending")
             }
             onClick={() => setDescending(!descending)}
           >
@@ -165,23 +187,78 @@ export function TorrentList({
         className="torrent-table-scroll"
         tabIndex={0}
         role="region"
-        aria-label="Torrent list"
+        aria-label={t("Torrent list")}
       >
         <table className="torrent-table">
           <thead>
             <tr>
-              {[
-                "Name",
-                "Progress",
-                "Status",
-                "Transfer",
-                "Ratio",
-                "ETA",
-                "Size",
-                "Actions",
-              ].map((label) => (
-                <th scope="col" key={label}>
-                  {label}
+              {columns.map(({ label, key }) => (
+                <th
+                  scope="col"
+                  key={key || "actions"}
+                  aria-sort={
+                    key === sort || (key === "dlspeed" && sort === "upspeed")
+                      ? descending
+                        ? "descending"
+                        : "ascending"
+                      : undefined
+                  }
+                >
+                  {key === "dlspeed" ? (
+                    <div className="torrent-transfer-sorts">
+                      <button
+                        type="button"
+                        className="torrent-column-sort"
+                        title={t("Sort by download speed")}
+                        aria-label={t("Sort by download speed")}
+                        onClick={() => selectSort("dlspeed")}
+                      >
+                        <ArrowDown size={12} aria-hidden="true" />
+                        {t(" Download ")}
+                        {sort === "dlspeed" &&
+                          (descending ? (
+                            <ArrowDown size={12} aria-hidden="true" />
+                          ) : (
+                            <ArrowUp size={12} aria-hidden="true" />
+                          ))}
+                      </button>
+                      <button
+                        type="button"
+                        className="torrent-column-sort"
+                        title={t("Sort by upload speed")}
+                        aria-label={t("Sort by upload speed")}
+                        onClick={() => selectSort("upspeed")}
+                      >
+                        <ArrowUp size={12} aria-hidden="true" />
+                        {t(" Upload ")}
+                        {sort === "upspeed" &&
+                          (descending ? (
+                            <ArrowDown size={12} aria-hidden="true" />
+                          ) : (
+                            <ArrowUp size={12} aria-hidden="true" />
+                          ))}
+                      </button>
+                    </div>
+                  ) : key ? (
+                    <button
+                      type="button"
+                      className="torrent-column-sort"
+                      onClick={() => selectSort(key)}
+                    >
+                      {t(label)}
+                      {key === sort ? (
+                        descending ? (
+                          <ArrowDown size={12} aria-hidden="true" />
+                        ) : (
+                          <ArrowUp size={12} aria-hidden="true" />
+                        )
+                      ) : (
+                        <ArrowUpDown size={12} aria-hidden="true" />
+                      )}
+                    </button>
+                  ) : (
+                    label
+                  )}
                 </th>
               ))}
             </tr>
@@ -192,8 +269,14 @@ export function TorrentList({
               const showDetails = expanded === torrent.hash;
               const blocked = disabled || !torrent.actionsAllowed;
               const cleanup = torrent.retention
-                ? `Cleanup: ${torrent.retention.mode} · ${torrent.retention.action === "delete_files" ? "deletes files" : "keeps files"}`
-                : "Cleanup settings";
+                ? t("Cleanup: {mode} · {action}", {
+                    mode: retentionModeLabel(torrent.retention.mode),
+                    action:
+                      torrent.retention.action === "delete_files"
+                        ? t("deletes files")
+                        : t("keeps files"),
+                  })
+                : t("Cleanup settings");
               return (
                 <Fragment key={torrent.hash}>
                   <tr>
@@ -206,32 +289,38 @@ export function TorrentList({
                       <progress
                         max={1}
                         value={torrent.progress}
-                        aria-label={`${torrent.name} progress`}
+                        aria-label={t("{name} progress", {
+                          name: torrent.name,
+                        })}
                       />
                       <small>{(torrent.progress * 100).toFixed(1)}%</small>
                     </td>
                     <td>
                       <span className="torrent-state" title={torrent.state}>
                         {paused
-                          ? "Paused"
-                          : stateLabels[torrent.state] || torrent.state}
+                          ? t("Paused")
+                          : t(stateLabels[torrent.state] || torrent.state)}
                       </span>
                     </td>
                     <td>
                       <div className="torrent-transfer">
-                        <span title="Download speed">
+                        <span title={t("Download speed")}>
                           <ArrowDown size={12} aria-hidden="true" />
-                          <span className="sr-only">Download: </span>
+                          <span className="sr-only">{t("Download: ")}</span>
                           {bytes(torrent.dlspeed)}/s
                         </span>
-                        <span title="Upload speed">
+                        <span title={t("Upload speed")}>
                           <ArrowUp size={12} aria-hidden="true" />
-                          <span className="sr-only">Upload: </span>
+                          <span className="sr-only">{t("Upload: ")}</span>
                           {bytes(torrent.upspeed)}/s
                         </span>
                       </div>
                     </td>
-                    <td title="qBittorrent upload/download history. Tracker totals may differ.">
+                    <td
+                      title={t(
+                        "qBittorrent upload/download history. Tracker totals may differ.",
+                      )}
+                    >
                       {torrent.ratio.toFixed(2)}
                     </td>
                     <td>{hasEta(torrent) ? uptime(torrent.eta) : "—"}</td>
@@ -242,8 +331,8 @@ export function TorrentList({
                           type="button"
                           className="torrent-icon-button"
                           disabled={blocked}
-                          title={paused ? "Resume" : "Pause"}
-                          aria-label={`${paused ? "Resume" : "Pause"} ${torrent.name}`}
+                          title={paused ? t("Resume") : t("Pause")}
+                          aria-label={`${paused ? t("Resume") : t("Pause")} ${torrent.name}`}
                           onClick={() =>
                             onAction(torrent.hash, paused ? "resume" : "pause")
                           }
@@ -258,8 +347,10 @@ export function TorrentList({
                           type="button"
                           className="torrent-icon-button"
                           disabled={blocked}
-                          title="Recheck downloaded files"
-                          aria-label={`Recheck ${torrent.name}`}
+                          title={t("Recheck downloaded files")}
+                          aria-label={t("Recheck {name}", {
+                            name: torrent.name,
+                          })}
                           onClick={() => onAction(torrent.hash, "recheck")}
                         >
                           <RotateCw size={16} aria-hidden="true" />
@@ -270,7 +361,9 @@ export function TorrentList({
                             className="torrent-icon-button"
                             disabled={blocked}
                             title={cleanup}
-                            aria-label={`Cleanup settings for ${torrent.name}`}
+                            aria-label={t("Cleanup settings for {name}", {
+                              name: torrent.name,
+                            })}
                             onClick={() => onCleanup(torrent)}
                           >
                             <Brush size={16} aria-hidden="true" />
@@ -280,8 +373,10 @@ export function TorrentList({
                           type="button"
                           className="torrent-icon-button torrent-remove"
                           disabled={blocked}
-                          title="Remove job · keep files"
-                          aria-label={`Remove job ${torrent.name}; keep files`}
+                          title={t("Remove job · keep files")}
+                          aria-label={t("Remove job {name}; keep files", {
+                            name: torrent.name,
+                          })}
                           onClick={() => onAction(torrent.hash, "remove")}
                         >
                           <Trash2 size={16} aria-hidden="true" />
@@ -289,8 +384,15 @@ export function TorrentList({
                         <button
                           type="button"
                           className="torrent-icon-button"
-                          title={showDetails ? "Hide details" : "Show details"}
-                          aria-label={`${showDetails ? "Hide" : "Show"} details for ${torrent.name}`}
+                          title={
+                            showDetails ? t("Hide details") : t("Show details")
+                          }
+                          aria-label={t(
+                            showDetails
+                              ? "Hide details for {name}"
+                              : "Show details for {name}",
+                            { name: torrent.name },
+                          )}
                           aria-expanded={showDetails}
                           aria-controls={`torrent-details-${torrent.hash}`}
                           onClick={() =>
@@ -317,20 +419,28 @@ export function TorrentList({
                         </strong>
                         <div className="torrent-details">
                           <span>
-                            {torrent.num_seeds ?? 0} seeds ·{" "}
-                            {torrent.num_leechs ?? 0} peers
+                            {torrent.num_seeds ?? 0}
+                            {t(" seeds ·")} {torrent.num_leechs ?? 0}
+                            {t(" peers")}
                           </span>
                           {torrent.category && (
-                            <span>Category: {torrent.category}</span>
+                            <span>
+                              {t("Category: ")}
+                              {torrent.category}
+                            </span>
                           )}
                           {!!torrent.seeding_time && (
-                            <span>Seeded {uptime(torrent.seeding_time)}</span>
+                            <span>
+                              {t("Seeded ")}
+                              {uptime(torrent.seeding_time)}
+                            </span>
                           )}
                           {typeof torrent.uploaded === "number" &&
                             typeof torrent.downloaded === "number" && (
                               <span>
-                                {bytes(torrent.uploaded)} uploaded /{" "}
-                                {bytes(torrent.downloaded)} downloaded
+                                {bytes(torrent.uploaded)}
+                                {t(" uploaded /")} {bytes(torrent.downloaded)}
+                                {t(" downloaded")}
                               </span>
                             )}
                           {torrent.retention && <span>{cleanup}</span>}
@@ -340,7 +450,7 @@ export function TorrentList({
                             role="status"
                             className="torrent-retention-message"
                           >
-                            {torrent.retentionMessage}
+                            {t(torrent.retentionMessage)}
                           </p>
                         )}
                       </td>

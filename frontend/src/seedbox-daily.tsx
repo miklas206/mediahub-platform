@@ -1,4 +1,4 @@
-import { LayoutGroup } from "./page-layout";
+import { t } from "./i18n";
 import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
@@ -84,7 +84,7 @@ export function SeedboxDaily({
         setDownloadLocationsSupported(Array.isArray(v.downloadLocations));
         const downloadLocations = v.downloadLocations?.length
           ? v.downloadLocations.filter((item) => item.label === "Top folder")
-          : [{ id: "root", label: "Top folder" }];
+          : [{ id: "root", label: t("Top folder") }];
         setList({ ...v, downloadLocations });
         setDownloadLocation((current) =>
           downloadLocations.some((item) => item.id === current)
@@ -95,7 +95,9 @@ export function SeedboxDaily({
       })
       .catch(() =>
         setListError(
-          "Torrent list unavailable during runtime changes or failed safety checks.",
+          t(
+            "Torrent list unavailable during runtime changes or failed safety checks.",
+          ),
         ),
       );
     void api<Locations>("/seedbox/locations")
@@ -103,7 +105,7 @@ export function SeedboxDaily({
         setLocation(v);
         setLocationError("");
       })
-      .catch(() => setLocationError("VPN location catalog unavailable."));
+      .catch(() => setLocationError(t("VPN location catalog unavailable.")));
   }, []);
   useEffect(() => {
     reload();
@@ -114,13 +116,17 @@ export function SeedboxDaily({
   async function action(hash: string, action: string) {
     if (
       action === "remove" &&
-      !window.confirm("Remove this torrent job? Downloaded files will be kept.")
+      !window.confirm(
+        t("Remove this torrent job? Downloaded files will be kept."),
+      )
     )
       return;
     if (
       action === "recheck" &&
       !window.confirm(
-        "Check the downloaded pieces on disk? This can take a while for large files. Files will not be deleted.",
+        t(
+          "Check the downloaded pieces on disk? This can take a while for large files. Files will not be deleted.",
+        ),
       )
     )
       return;
@@ -131,8 +137,8 @@ export function SeedboxDaily({
       await api("/seedbox/torrents/action", "POST", { hash, action });
       setNotice(
         action === "remove"
-          ? "Torrent job removed. Files were kept."
-          : "Torrent action accepted.",
+          ? t("Torrent job removed. Files were kept.")
+          : t("Torrent action accepted."),
       );
       reload();
     } catch (e) {
@@ -162,7 +168,7 @@ export function SeedboxDaily({
           !file.name.toLowerCase().endsWith(".torrent") ||
           file.size > 2 * 1024 * 1024
         )
-          throw Error("Choose a .torrent file up to 2 MiB.");
+          throw Error(t("Choose a .torrent file up to 2 MiB."));
         const data = new Uint8Array(await file.arrayBuffer());
         let binary = "";
         for (let i = 0; i < data.length; i += 8192)
@@ -179,8 +185,8 @@ export function SeedboxDaily({
       setRetention(defaultRetention);
       setNotice(
         result.state === "already_present"
-          ? "Torrent is already present; no settings changed."
-          : "Torrent added.",
+          ? t("Torrent is already present; no settings changed.")
+          : t("Torrent added."),
       );
       reload();
     } catch (e) {
@@ -194,7 +200,10 @@ export function SeedboxDaily({
     if (
       !selected ||
       !window.confirm(
-        `Switch VPN to ${selected}? qBittorrent will stop until all checks pass.`,
+        t(
+          "Switch VPN to {country}? qBittorrent will stop until all checks pass.",
+          { country: selected },
+        ),
       )
     )
       return;
@@ -216,7 +225,7 @@ export function SeedboxDaily({
   }
   const selected = country || location?.current?.country || "";
   return (
-    <LayoutGroup id="seedbox-daily-extra-1" className="stack seedbox-daily">
+    <div className="stack seedbox-daily">
       <ErrorBox error={error} />
       {notice && (
         <p role="status" className="notice">
@@ -229,22 +238,24 @@ export function SeedboxDaily({
         }
       >
         {section === "vpn" && (
-          <Panel title="VPN Location">
+          <Panel title={t("VPN Location")}>
             <ErrorBox error={locationError} />
             <div className="runtime-row">
-              <span>Current</span>
-              <strong>{location?.current?.country || "Not identified"}</strong>
+              <span>{t("Current")}</span>
+              <strong>
+                {location?.current?.country || t("Not identified")}
+              </strong>
             </div>
             <div className="runtime-row">
-              <span>External IP</span>
-              <strong>{externalIp || "Not verified"}</strong>
+              <span>{t("External IP")}</span>
+              <strong>{externalIp || t("Not verified")}</strong>
             </div>
             <div className="runtime-row">
-              <span>Port forwarding</span>
-              <strong>{forwarding || "Not verified"}</strong>
+              <span>{t("Port forwarding")}</span>
+              <strong>{forwarding || t("Not verified")}</strong>
             </div>
             <label>
-              Country
+              {t("Country")}
               <select
                 value={selected}
                 disabled={busy || changing}
@@ -253,20 +264,20 @@ export function SeedboxDaily({
                   setServer("automatic");
                 }}
               >
-                <option value="">Select country</option>
+                <option value="">{t("Select country")}</option>
                 {location?.countries.map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
             </label>
             <label>
-              Server
+              {t("Server")}
               <select
                 value={server}
                 disabled={busy || changing}
                 onChange={(e) => setServer(e.target.value)}
               >
-                <option value="automatic">Automatic · P2P server</option>
+                <option value="automatic">{t("Automatic · P2P server")}</option>
                 {location?.servers
                   .filter((s) => s.country === selected)
                   .map((s) => (
@@ -278,7 +289,7 @@ export function SeedboxDaily({
             </label>
             {server === "automatic" && (
               <label>
-                Compare server speeds
+                {t("Compare server speeds")}
                 <select
                   value={
                     intervalHours ?? location?.automation?.intervalHours ?? 6
@@ -287,11 +298,13 @@ export function SeedboxDaily({
                   onChange={(e) => setIntervalHours(Number(e.target.value))}
                 >
                   <option value={6}>
-                    Every 6 hours ? switch only for a clear improvement
+                    {t("Every 6 hours ? switch only for a clear improvement")}
                   </option>
-                  <option value={24}>Once a day ? fewer interruptions</option>
+                  <option value={24}>
+                    {t("Once a day ? fewer interruptions")}
+                  </option>
                   <option value={0}>
-                    Only when I select automatic manually
+                    {t("Only when I select automatic manually")}
                   </option>
                 </select>
               </label>
@@ -303,8 +316,9 @@ export function SeedboxDaily({
               Object.entries(location.automation.samples).map(
                 ([id, sample]) => (
                   <p className="muted" key={id}>
-                    {id}: {sample.downloadMbps} Mbps down / {sample.uploadMbps}{" "}
-                    Mbps up
+                    {id}: {sample.downloadMbps}
+                    {t(" Mbps down / ")}
+                    {sample.uploadMbps} {t("Mbps up")}
                   </p>
                 ),
               )}
@@ -313,13 +327,13 @@ export function SeedboxDaily({
               disabled={busy || changing || !location?.available || !selected}
               onClick={() => void change()}
             >
-              Change VPN location
+              {t("Change VPN location")}
             </button>
             {location?.operation && location.operation.state !== "idle" ? (
               <OperationProgress
                 activeOnly
                 operation={{
-                  title: "VPN switch and qBittorrent restart",
+                  title: t("VPN switch and qBittorrent restart"),
                   status: changing
                     ? "running"
                     : location.operation.state === "healthy"
@@ -328,17 +342,23 @@ export function SeedboxDaily({
                   progress: location.operation.progress ?? 0,
                   message:
                     locationError && changing
-                      ? "Reconnecting to VPN switch status. The server continues working."
-                      : location.operation.step || "Preparing VPN switch",
+                      ? t(
+                          "Reconnecting to VPN switch status. The server continues working.",
+                        )
+                      : location.operation.step || t("Preparing VPN switch"),
                   connectionLost: Boolean(locationError),
                   steps: [],
                   details: location.operation.server
-                    ? [`Server: ${location.operation.server}`]
+                    ? [
+                        t("Server: {server}", {
+                          server: location.operation.server,
+                        }),
+                      ]
                     : [],
                 }}
               />
             ) : (
-              <p role="status">Ready</p>
+              <p role="status">{t("Ready")}</p>
             )}
             <p className="muted">
               {location?.current?.countryEvidence}.{" "}
@@ -349,51 +369,57 @@ export function SeedboxDaily({
       </div>
       {section === "torrents" && (
         <>
-          <Panel title="Torrents">
-            <ErrorBox error={listError} />
-            <TorrentList
-              items={list?.items ?? null}
-              disabled={busy || !!changing || !!listError}
-              retentionSupported={list?.retentionSupported}
-              onAction={(hash, command) => void action(hash, command)}
-              onCleanup={(torrent) =>
-                setCleanupEdit({
-                  hash: torrent.hash,
-                  name: torrent.name,
-                  rule: torrent.retention || defaultRetention,
-                })
-              }
-            />
-            {list && !list.items.length && !listError && (
-              <p>No torrents yet. Add a magnet link or torrent file below.</p>
-            )}
-            <p className="muted">
-              Remove job always keeps files. Automatic cleanup can delete files
-              only when you explicitly select that action. Up to 500 torrents
-              shown.
-            </p>
-          </Panel>
           <SeedboxRSS
             storageId={list?.storageId}
             locations={list?.downloadLocations || []}
             onAdded={reload}
             retentionSupported={list?.retentionSupported}
+            torrentList={
+              <Panel key="torrents" title={t("Torrents")}>
+                <ErrorBox error={listError} />
+                <TorrentList
+                  items={list?.items ?? null}
+                  disabled={busy || !!changing || !!listError}
+                  retentionSupported={list?.retentionSupported}
+                  onAction={(hash, command) => void action(hash, command)}
+                  onCleanup={(torrent) =>
+                    setCleanupEdit({
+                      hash: torrent.hash,
+                      name: torrent.name,
+                      rule: torrent.retention || defaultRetention,
+                    })
+                  }
+                />
+                {list && !list.items.length && !listError && (
+                  <p>
+                    {t(
+                      "No torrents yet. Add a magnet link or torrent file below.",
+                    )}
+                  </p>
+                )}
+                <p className="muted">
+                  {t(
+                    "Remove job always keeps files. Automatic cleanup can delete files only when you explicitly select that action. Up to 500 torrents shown.",
+                  )}
+                </p>
+              </Panel>
+            }
             addTorrent={
-              <Panel title="Add Torrent">
+              <Panel key="add-torrent" title={t("Add Torrent")}>
                 <form onSubmit={(e) => void add(e)}>
                   <label>
-                    Input type
+                    {t("Input type")}
                     <select
                       value={mode}
                       onChange={(e) => setMode(e.target.value)}
                     >
-                      <option value="magnet">Magnet Link</option>
-                      <option value="file">Torrent File</option>
+                      <option value="magnet">{t("Magnet Link")}</option>
+                      <option value="file">{t("Torrent File")}</option>
                     </select>
                   </label>
                   {mode === "magnet" ? (
                     <label>
-                      Magnet link
+                      {t("Magnet link")}
                       <textarea
                         value={magnet}
                         onChange={(e) => setMagnet(e.target.value)}
@@ -405,7 +431,7 @@ export function SeedboxDaily({
                     </label>
                   ) : (
                     <label>
-                      Torrent file
+                      {t("Torrent file")}
                       <input
                         type="file"
                         accept=".torrent"
@@ -415,7 +441,7 @@ export function SeedboxDaily({
                     </label>
                   )}
                   <label>
-                    Download location
+                    {t("Download location")}
                     <select
                       value={downloadLocation}
                       disabled={
@@ -429,17 +455,16 @@ export function SeedboxDaily({
                     >
                       {list?.downloadLocations?.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.storageLabel || "Downloads"}
+                          {item.storageLabel || t("Downloads")}
                         </option>
                       ))}
                     </select>
                   </label>
                   {downloadLocationsSupported === false && (
                     <p className="muted">
-                      This Seedbox Agent still supports the Downloads top folder
-                      only. Install the matching Agent update and configure
-                      writable logical storage to enable Film, TV and Other
-                      choices.
+                      {t(
+                        "This Seedbox Agent still supports the Downloads top folder only. Install the matching Agent update and configure writable logical storage to enable Film, TV and Other choices.",
+                      )}
                     </p>
                   )}
                   <label>
@@ -448,7 +473,7 @@ export function SeedboxDaily({
                       checked={start}
                       onChange={(e) => setStart(e.target.checked)}
                     />{" "}
-                    Start immediately after safety checks
+                    {t("Start immediately after safety checks")}
                   </label>
                   <TorrentRetention
                     value={retention}
@@ -460,19 +485,19 @@ export function SeedboxDaily({
                     className="primary"
                     disabled={busy || changing || !list || !!listError}
                   >
-                    Add torrent
+                    {t("Add torrent")}
                   </button>
                   <p className="muted">
-                    Paused by default. Only approved media locations can be
-                    selected. Private tracker links are not included in MediaHub
-                    events.
+                    {t(
+                      "Paused by default. Only approved media locations can be selected. Private tracker links are not included in MediaHub events.",
+                    )}
                   </p>
                 </form>
               </Panel>
             }
           />
           {cleanupEdit && (
-            <Panel title="Torrent cleanup settings">
+            <Panel title={t("Torrent cleanup settings")}>
               <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
               <TorrentRetention
                 value={cleanupEdit.rule}
@@ -480,9 +505,9 @@ export function SeedboxDaily({
                 disabled={busy}
               />
               <p className="muted">
-                Applies to this torrent's existing seeding time and uploaded
-                bytes. If its thresholds are already reached, cleanup can run on
-                the next check.
+                {t(
+                  "Applies to this torrent's existing seeding time and uploaded bytes. If its thresholds are already reached, cleanup can run on the next check.",
+                )}
               </p>
               <div className="button-row">
                 <button
@@ -503,16 +528,16 @@ export function SeedboxDaily({
                       .finally(() => setBusy(false));
                   }}
                 >
-                  Save cleanup settings
+                  {t("Save cleanup settings")}
                 </button>
                 <button disabled={busy} onClick={() => setCleanupEdit(null)}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </Panel>
           )}
         </>
       )}
-    </LayoutGroup>
+    </div>
   );
 }
