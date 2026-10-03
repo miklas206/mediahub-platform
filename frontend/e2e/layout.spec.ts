@@ -1492,3 +1492,98 @@ test("positioned cards resize without overlapping their neighbours and keep pane
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
 });
+
+test("three RSS cards retain matching borders through edit mode with long feed content and saved sizes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.route("**/api/v1/seedbox/rss/feeds", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          intervalSeconds: 60,
+          feeds: Array.from({ length: 10 }, (_, i) => ({
+            id: `feed-${i}`,
+            name: `Test feed ${i}`,
+            automatic: true,
+            storageId: "downloads",
+            downloadLocationId: "root",
+            checkedAt: 1700000000,
+            error: "",
+            added: 10,
+            pending: 0,
+            baselineCount: 0,
+            items: [],
+            automaticHistory: [],
+          })),
+        },
+      },
+    }),
+  );
+  await page.goto("/apps/seedbox?section=torrents");
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const titles = ["Add Torrent", "Add feed", "Your feeds"];
+  for (const title of titles)
+    await page
+      .locator(
+        `.layout-item[data-layout-title="${title}"] .layout-width select`,
+      )
+      .selectOption("33");
+  // Match saved custom heights from older layout versions rather than starting only with auto height.
+  for (const title of titles) {
+    const card = page.locator(`.layout-item[data-layout-title="${title}"]`);
+    const handle = card.locator(".resize-bottom");
+    await handle.focus();
+    await handle.press("ArrowDown");
+  }
+  const group = page.locator(".torrent-panels");
+  const feed = page.locator('.layout-item[data-layout-title="Your feeds"]');
+  await expect(feed.locator(".rss-feed-card")).toHaveCount(10);
+  async function aligned() {
+    for (const title of titles) {
+      const card = page.locator(`.layout-item[data-layout-title="${title}"]`);
+      const dimensions = await card.evaluate((node) => {
+        const border = node
+          .querySelector(":scope > .layout-item-content > .panel")!
+          .getBoundingClientRect();
+        const outer = node.getBoundingClientRect();
+        return {
+          height: outer.height,
+          borderHeight: border.height,
+          width: outer.width,
+          borderWidth: border.width,
+        };
+      });
+      expect(dimensions.borderHeight, title).toBeCloseTo(dimensions.height, 0);
+      expect(dimensions.borderWidth, title).toBeCloseTo(dimensions.width, 0);
+    }
+  }
+  await aligned();
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await aligned();
+  await page.reload();
+  await aligned();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await aligned();
+  await group.screenshot({
+    path: "../.qa/rss-three-cards-checked.png",
+    animations: "disabled",
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page
+    .locator('.layout-item[data-layout-title="Add feed"] .layout-drag-surface')
+    .focus();
+  await page.keyboard.press("Alt+ArrowRight");
+  await aligned();
+  for (const title of titles) {
+    await page
+      .locator(`.layout-item[data-layout-title="${title}"]`)
+      .getByRole("button", { name: "Restore automatic height" })
+      .click();
+  }
+  await aligned();
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await aligned();
+  expect(errors).toEqual([]);
+});
