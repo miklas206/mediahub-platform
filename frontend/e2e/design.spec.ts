@@ -2090,6 +2090,32 @@ test("Windows folder app installs through the store, persists its saved path and
       exact: true,
     })
     .click();
+  await expect(
+    page.locator(".windows-share-command").filter({ hasText: "connect.ps1" }),
+  ).toHaveText(
+    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\connect.ps1"',
+  );
+  await page
+    .getByText(translated("How to run the Windows diagnostic helper"), {
+      exact: true,
+    })
+    .click();
+  await expect(
+    page
+      .locator(".windows-share-command")
+      .filter({ hasText: "diagnostics.ps1" }),
+  ).toHaveText(
+    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\diagnostics.ps1"',
+  );
+  await page
+    .getByText(
+      translated("PowerShell blocks the script or reports PSSecurityException"),
+      { exact: true },
+    )
+    .click();
+  await expect(
+    page.getByText("Get-ExecutionPolicy -List", { exact: true }),
+  ).toBeVisible();
   for (const [kind, label] of [
     ["connect", "Download Windows connection helper"],
     ["diagnostics", "Download Windows diagnostic helper"],

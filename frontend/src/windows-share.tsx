@@ -624,11 +624,13 @@ export function WindowsSharePage({
                     )}
                   </p>
                   <code className="windows-share-command">
-                    {'& "$env:USERPROFILE\\Downloads\\connect.ps1"'}
+                    {
+                      'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\connect.ps1"'
+                    }
                   </code>
                   <p>
                     {t(
-                      "If you saved the file elsewhere, use that file's full path instead. If PowerShell blocks the script, use the File Explorer steps above.",
+                      "Review the downloaded script before running it. This command allows it only in the new PowerShell process and does not change your permanent script policy. If you saved the file elsewhere, replace the path.",
                     )}
                   </p>
                   <p className="windows-share-hint">
@@ -781,11 +783,13 @@ export function WindowsSharePage({
                   )}
                 </p>
                 <code className="windows-share-command">
-                  {'& "$env:USERPROFILE\\Downloads\\diagnostics.ps1"'}
+                  {
+                    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\diagnostics.ps1"'
+                  }
                 </code>
                 <p>
                   {t(
-                    "If your PowerShell policy blocks the script, use the connection help below. No security policy changes are needed for the File Explorer steps.",
+                    "Run this in ordinary Windows PowerShell, not as administrator, so the check sees the same drives and credentials as File Explorer. The script policy applies only to the new process; your permanent settings are unchanged.",
                   )}
                 </p>
               </details>
@@ -805,6 +809,26 @@ export function WindowsSharePage({
             </h2>
           </header>
           <div className="windows-share-content windows-share-troubleshooting">
+            <details>
+              <summary>
+                {t(
+                  "PowerShell blocks the script or reports PSSecurityException",
+                )}
+              </summary>
+              <p>
+                {t(
+                  "Use the start command shown in the connection or diagnostics guide. It allows the reviewed script for that process only. Do not change CurrentUser or LocalMachine policy to run these helpers.",
+                )}
+              </p>
+              <p>
+                {t(
+                  "If the script is still blocked, run Get-ExecutionPolicy -List. MachinePolicy and UserPolicy can be set by an administrator and take precedence. Use the File Explorer steps or contact that administrator instead of changing managed policies.",
+                )}
+              </p>
+              <code className="windows-share-command">
+                Get-ExecutionPolicy -List
+              </code>
+            </details>
             <details>
               <summary>
                 {t("The drive is disconnected or Windows reports error 53")}
