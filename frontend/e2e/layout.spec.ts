@@ -976,7 +976,7 @@ test("all layout cards resize without a column prerequisite and keep their conte
       await page
         .getByRole("tab", { name: path.split("#")[1], exact: true })
         .click();
-    await expect(page.locator(".layout-item").first()).toBeVisible();
+    await expect(page.locator(".layout-item:visible").first()).toBeVisible();
     const customize = page.getByRole("button", { name: "Customize layout" });
     if (await customize.count()) await customize.click();
     await expect(
@@ -1203,14 +1203,23 @@ test("whole cards move, hide, restore and persist without extra heading rows", a
   expect(toolsBox.y).toBeGreaterThan(cardBox.y);
   expect(toolsBox.y + toolsBox.height).toBeLessThan(cardBox.y + cardBox.height);
   // Dropping on a nested service surface also reaches the enclosing Apps card.
-  await surface.dragTo(cards.first().locator(".layout-drag-surface").last(), {
-    sourcePosition: { x: 100, y: cardBox.height - 30 },
-    targetPosition: { x: 100, y: 80 },
-  });
+  const targetBox = (await cards
+    .first()
+    .locator(".layout-drag-surface")
+    .last()
+    .boundingBox())!;
+  await page.mouse.move(dragBox.x + 100, dragBox.y + cardBox.height - 30);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + 100, targetBox.y + 80, { steps: 8 });
+  await page.mouse.up();
   await expect(cards.first()).toHaveAttribute(
     "data-layout-title",
     "Ongoing torrents",
   );
+  const placedPosition = await torrents.evaluate((node) => ({
+    column: getComputedStyle(node).gridColumnStart,
+    row: getComputedStyle(node).gridRowStart,
+  }));
   await torrents.getByRole("button", { name: "Hide Ongoing torrents" }).click();
   await expect(torrents).toHaveCount(0);
   await page.getByText("Choose cards", { exact: true }).click();
@@ -1223,10 +1232,12 @@ test("whole cards move, hide, restore and persist without extra heading rows", a
   await page.getByText("Choose cards", { exact: true }).click();
   await page.getByRole("button", { name: "Done arranging" }).click();
   await page.reload();
-  await expect(cards.first()).toHaveAttribute(
-    "data-layout-title",
-    "Ongoing torrents",
-  );
+  expect(
+    await torrents.evaluate((node) => ({
+      column: getComputedStyle(node).gridColumnStart,
+      row: getComputedStyle(node).gridRowStart,
+    })),
+  ).toEqual(placedPosition);
   await expect(
     page.locator("h2").filter({ hasText: /^Recent activity$/ }),
   ).toBeVisible();
@@ -1331,4 +1342,153 @@ test("runtime headings stay above VPN cards and nested pages have no enclosing d
     await page.setViewportSize({ width: 1440, height: 1000 });
   }
   expect(errors).toEqual([]);
+});
+
+test("single cards occupy empty grid columns and retain placement after reload", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/settings#Agent");
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const card = page.locator(".layout-item").first();
+  await card.locator(".layout-width select").selectOption("33");
+  const group = card.locator("..");
+  async function placeAt(column: number) {
+    const box = (await card.boundingBox())!;
+    const grid = (await group.boundingBox())!;
+    await page.mouse.move(box.x + 80, box.y + 50);
+    await page.mouse.down();
+    await page.mouse.move(
+      grid.x + ((column - 1) * (grid.width + 16)) / 12 + 80,
+      box.y + 50,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        card.evaluate((node) => getComputedStyle(node).gridColumnStart),
+      )
+      .toBe(String(column));
+  }
+  await placeAt(5);
+  await placeAt(9);
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await page.reload();
+  await expect
+    .poll(() => card.evaluate((node) => getComputedStyle(node).gridColumnStart))
+    .toBe("9");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await placeAt(1);
+});
+
+test("held cards permit wheel scrolling, retain content and cancel without saving", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto("/apps/seedbox?section=torrents");
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const card = page.locator(".layout-item").first();
+  await card.scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => JSON.stringify(localStorage));
+  const box = (await card.boundingBox())!;
+  await page.mouse.move(box.x + 60, Math.max(120, box.y + 60));
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, 300, { steps: 8 });
+  await expect(card).toHaveClass(/is-pointer-dragging/);
+  const y = await page.evaluate(() => scrollY);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(y);
+  await expect(card.locator(".layout-item-content")).toBeVisible();
+  const wheelY = await page.evaluate(() => scrollY);
+  await page.mouse.move(box.x + 80, 695, { steps: 4 });
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(wheelY);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(card).not.toHaveClass(/is-pointer-dragging/);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).toBe(before);
+});
+
+test("positioned cards resize without overlapping their neighbours and keep panel borders aligned", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1400 });
+  await page.goto("/apps/seedbox?section=vpn");
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const card = page.locator('.layout-item[data-layout-title="VPN Location"]');
+  await card.locator(".layout-width select").selectOption("33");
+  const group = card.locator("..");
+  const box = (await card.boundingBox())!;
+  const grid = (await group.boundingBox())!;
+  await page.mouse.move(box.x + 80, box.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(grid.x + 80, grid.y + 50, { steps: 8 });
+  await page.mouse.up();
+  await card.locator(".layout-width select").selectOption("100");
+  await expect
+    .poll(() => card.evaluate((node) => getComputedStyle(node).gridColumnStart))
+    .toBe("1");
+  await expect
+    .poll(async () => {
+      const selected = (await card.boundingBox())!;
+      const others = await group
+        .locator(":scope > .layout-item")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => ({
+            title: (node as HTMLElement).dataset.layoutTitle,
+            top: node.getBoundingClientRect().top,
+            bottom: node.getBoundingClientRect().bottom,
+          })),
+        );
+      return others.every(
+        (other) =>
+          other.title === "VPN Location" ||
+          other.bottom <= selected.y ||
+          other.top >= selected.y + selected.height,
+      );
+    })
+    .toBe(true);
+  const handle = card.locator(".resize-bottom");
+  await handle.scrollIntoViewIfNeeded();
+  const edge = (await handle.boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    edge.x + edge.width / 2,
+    edge.y + edge.height / 2 - 120,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  const panel = (await card.locator(".panel").first().boundingBox())!;
+  expect(
+    Math.abs(panel.height - (await card.boundingBox())!.height),
+  ).toBeLessThan(2);
+  await page.screenshot({
+    path: "../.qa/free-grid-desktop.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await page.reload();
+  expect(
+    (await card.boundingBox())!.width / (await group.boundingBox())!.width,
+  ).toBeGreaterThan(0.98);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page
+        .locator("aside.sidebar")
+        .evaluate((node) => node.getBoundingClientRect().right),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: "../.qa/free-grid-mobile.png",
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
 });

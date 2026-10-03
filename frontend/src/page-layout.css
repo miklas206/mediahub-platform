@@ -26,6 +26,25 @@
   flex-direction: column;
   container: layout-card / inline-size;
 }
+.layout-section.layout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.layout-section > .layout-group {
+  min-width: 0;
+  width: 100%;
+}
+.layout-item.is-pointer-dragging {
+  transform: translate(var(--layout-drag-x, 0px), var(--layout-drag-y, 0px));
+  z-index: 30;
+  pointer-events: none;
+  box-shadow: 0 12px 36px #0005;
+}
+.layout-drag-surface {
+  touch-action: none;
+}
 .layout-item-content > .panel,
 .layout-item-content > .dashboard-card {
   flex: 1;
@@ -289,20 +308,29 @@
 .layout-group.layout-custom-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 16px;
+  column-gap: 16px;
+  row-gap: 0;
+  grid-auto-rows: 24px;
   align-items: start;
 }
 .layout-group.layout-custom-grid > .layout-item {
-  grid-column: span var(--layout-span, var(--layout-default-span));
+  align-self: start;
+  grid-column: var(--layout-column, auto) / span
+    var(--layout-span, var(--layout-default-span));
+  grid-row: var(--layout-row, auto) / span var(--layout-row-span, 1);
 }
 .layout-group.layout-custom-grid > :not(.layout-item) {
   grid-column: 1 / -1;
   min-width: 0;
 }
 .dashboard-grid.layout-auto-grid
-  > .layout-item.is-default-width:nth-last-child(2):nth-child(odd),
+  > .layout-item.is-default-width:not([data-layout-positioned]):nth-last-child(
+    2
+  ):nth-child(odd),
 .torrent-panels.layout-auto-grid
-  > .layout-item.is-default-width:nth-child(-n + 2) {
+  > .layout-item.is-default-width:not([data-layout-positioned]):nth-child(
+    -n + 2
+  ) {
   grid-column: 1 / -1;
 }
 /* The updates page has a more specific native list rule. Widths must override it. */
@@ -358,6 +386,7 @@
   }
   .layout-group.layout-custom-grid > .layout-item {
     grid-column: 1 / -1 !important;
+    grid-row: auto / span var(--layout-row-span, 1);
   }
   .updates-page .updates-grid.layout-custom-grid {
     grid-template-columns: minmax(0, 1fr);

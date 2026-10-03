@@ -9,6 +9,7 @@ import {
   useEffect,
   useState,
   useRef,
+  useLayoutEffect,
   type ReactNode,
   type ReactElement,
   type CSSProperties,
@@ -22,12 +23,20 @@ import {
   X,
 } from "lucide-react";
 import "./page-layout.css";
+import {
+  gridPosition,
+  placeGridCard,
+  type GridPosition,
+  type GridCard,
+} from "./layout-grid";
+import { useLayoutPointer } from "./layout-pointer";
 
 type Layouts = Record<string, string[]>;
 type Geometry = {
   columns: number;
   widths: Record<string, number>;
   heights: Record<string, number>;
+  positions?: Record<string, GridPosition>;
 };
 const widthPercentages = [25, 33, 42, 50, 58, 67, 75, 83, 92, 100];
 export function snapCardWidth(pixels: number, gridWidth: number, gap = 16) {
@@ -84,6 +93,27 @@ export function readGeometry(raw: string | null): Geometry {
       columns,
       widths: widths as Record<string, number>,
       heights: heights as Record<string, number>,
+      ...(value?.positions &&
+      typeof value.positions === "object" &&
+      !Array.isArray(value.positions)
+        ? {
+            positions: Object.fromEntries(
+              Object.entries(value.positions).filter(([key, position]) => {
+                const p = position as GridPosition | null;
+                return (
+                  key.length < 1000 &&
+                  p &&
+                  Number.isInteger(p.column) &&
+                  p.column >= 1 &&
+                  p.column <= 12 &&
+                  Number.isInteger(p.row) &&
+                  p.row >= 1 &&
+                  p.row <= 2000
+                );
+              }),
+            ) as Record<string, GridPosition>,
+          }
+        : {}),
     };
   } catch {
     return { columns: 0, widths: {}, heights: {} };
@@ -99,14 +129,15 @@ type LayoutContext = {
     group: string,
     item: string,
     size: { width?: number; height?: number },
+    aliasKey?: string,
   ) => void;
   editing: boolean;
   layouts: Layouts;
-  save: (group: string, order: string[]) => void;
+  save: (group: string, order: string[], keepPositions?: boolean) => void;
+  place: (group: string, cards: GridCard[]) => void;
 };
 type CardChoice = { id: string; title: string; defaultHidden: boolean };
 const Context = createContext<LayoutContext | null>(null);
-const dragType = "application/x-mediahub-layout";
 
 export function readLayouts(raw: string | null): Layouts {
   try {
@@ -265,17 +296,43 @@ export function PageLayout({
             widths,
           });
         },
-        resizeCard: (group, item, size) => {
+        resizeCard: (group, item, size, aliasKey) => {
           const key = `${group}:${item}`;
           const widths = { ...geometry.widths };
           const heights = { ...geometry.heights };
-          if (size.width !== undefined) widths[key] = size.width;
-          if (size.height === -1) delete heights[key];
-          else if (size.height !== undefined) heights[key] = size.height;
+          for (const address of new Set([key, aliasKey || key])) {
+            if (size.width === -1) delete widths[address];
+            else if (size.width !== undefined) widths[address] = size.width;
+            if (size.height === -1) delete heights[address];
+            else if (size.height !== undefined) heights[address] = size.height;
+          }
           persistGeometry({ ...geometry, widths, heights });
         },
         layouts,
-        save: (group, order) => persist({ ...layouts, [group]: order }),
+        save: (group, order, keepPositions) => {
+          const positions = Object.fromEntries(
+            Object.entries(geometry.positions || {}).filter(
+              ([key]) => !key.startsWith(`${group}:`),
+            ),
+          );
+          if (!keepPositions) persistGeometry({ ...geometry, positions });
+          persist({ ...layouts, [group]: order });
+        },
+        place: (group, cards) => {
+          const positions = { ...geometry.positions };
+          const widths = { ...geometry.widths };
+          for (const card of cards)
+            positions[`${group}:${card.id}`] = {
+              column: card.column,
+              row: card.row,
+            };
+          for (const card of cards)
+            widths[`${group}:${card.id}`] = Math.round(
+              (card.columns * 100) / 12,
+            );
+          persistGeometry({ ...geometry, positions, widths });
+          persist({ ...layouts, [group]: cards.map((card) => card.id) });
+        },
       }}
     >
       <div className="layout-toolbar">
@@ -539,6 +596,7 @@ export function LayoutGroup({
       .filter((c) => c.defaultHidden)
       .map((c) => c.id);
   const visibleIds = ids.filter((item) => !hidden.includes(item));
+  const gridElement = useRef<HTMLDivElement>(null);
   const [announcement, setAnnouncement] = useState("");
   function move(source: string, target: string) {
     if (
@@ -565,6 +623,74 @@ export function LayoutGroup({
       }),
     );
   }
+  function measureCards(): GridCard[] {
+    const grid = gridElement.current;
+    if (!grid) return [];
+    const bounds = grid.getBoundingClientRect();
+    return [
+      ...grid.querySelectorAll<HTMLDivElement>(":scope > .layout-item"),
+    ].map((node) => {
+      const card = node.getBoundingClientRect();
+      const columns = Math.max(
+        3,
+        Math.min(
+          12,
+          Math.round((card.width + 16) / ((bounds.width + 16) / 12)),
+        ),
+      );
+      return {
+        id: node.dataset.layoutItem!,
+        columns,
+        rows: Math.ceil((card.height + 16) / 24),
+        ...gridPosition(
+          card.left - bounds.left,
+          card.top - bounds.top,
+          bounds.width,
+          columns,
+        ),
+      };
+    });
+  }
+  function place(item: string, position: GridPosition) {
+    if (!context) return;
+    const cards = measureCards();
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      const order = placeGridCard(
+        cards.map((card) => ({ ...card, column: 1, columns: 12 })),
+        item,
+        { ...position, column: 1 },
+      );
+      context.save(
+        id,
+        order.map((card) => card.id),
+        true,
+      );
+    } else context.place(id, placeGridCard(cards, item, position));
+    setAnnouncement(t("Card placed at column {column}, row {row}.", position));
+  }
+  useEffect(() => {
+    const grid = gridElement.current;
+    if (!grid || !context || window.matchMedia("(max-width: 760px)").matches)
+      return;
+    function sizeChanged(event: Event) {
+      const item = (event as CustomEvent<string>).detail;
+      if (!context?.geometry.positions?.[`${id}:${item}`]) return;
+      if (grid!.querySelector(".is-resizing")) return;
+      const cards = measureCards();
+      const current = cards.find((card) => card.id === item);
+      if (!current) return;
+      const next = placeGridCard(cards, item, current);
+      if (
+        next.some((card) => {
+          const saved = context.geometry.positions?.[`${id}:${card.id}`];
+          return saved?.column !== card.column || saved?.row !== card.row;
+        })
+      )
+        context.place(id, next);
+    }
+    grid.addEventListener("mediahub-layout-size", sizeChanged);
+    return () => grid.removeEventListener("mediahub-layout-size", sizeChanged);
+  });
   const columns = context?.geometry.columns || 0;
   const customGrid =
     movable.length > 0 &&
@@ -575,69 +701,84 @@ export function LayoutGroup({
       ids.some(
         (item) =>
           context?.geometry.widths[`${id}:${item}`] !== undefined ||
-          context?.geometry.heights[`${id}:${item}`] !== undefined,
+          context?.geometry.heights[`${id}:${item}`] !== undefined ||
+          context?.geometry.positions?.[`${id}:${item}`] !== undefined,
       ));
   let cursor = 0;
   return (
-    <div
-      className={`${className} layout-group ${customGrid ? "layout-custom-grid" : ""} ${customGrid && !columns ? "layout-auto-grid" : ""}`}
-      style={
-        columns
-          ? ({ "--layout-default-span": 12 / columns } as CSSProperties)
-          : undefined
-      }
-    >
-      {nodes.map((node) => {
-        if (!canMove(node)) return node;
-        const itemId = ids[cursor++];
-        if (hidden.includes(itemId)) return null;
-        const item = byId.get(itemId)!;
-        const entry = metadata.get(itemId)!;
-        const previousKey = `${entry.sourceGroup}:${entry.sourceId}`;
-        const index = visibleIds.indexOf(itemId);
-        return (
-          <LayoutItem
-            key={itemId}
-            item={item}
-            editing={!!context?.editing}
-            title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
-            hide={() => context?.hide(id, [...hidden, itemId])}
-            columns={columns}
-            defaultSpan={columns ? undefined : entry.span}
-            defaultFullWidth={fullWidth.includes(itemId.replace(/^\.\$/, ""))}
-            width={
-              context?.geometry.widths[`${id}:${itemId}`] ??
-              context?.geometry.widths[previousKey] ??
-              (wideFirst && itemId === String(movable[0]?.key) ? 0 : -1)
-            }
-            height={
-              context?.geometry.heights[`${id}:${itemId}`] ??
-              context?.geometry.heights[previousKey]
-            }
-            resizeCard={
-              context
-                ? (size) =>
-                    context.resizeCard(entry.sourceGroup, entry.sourceId, size)
-                : undefined
-            }
-            resize={
-              context
-                ? (width) =>
-                    context?.resize(entry.sourceGroup, entry.sourceId, width)
-                : undefined
-            }
-            group={id}
-            itemId={itemId}
-            index={index}
-            count={visibleIds.length}
-            moveBy={(delta) => move(itemId, visibleIds[index + delta])}
-            onDrop={(source) => move(source, itemId)}
-          />
-        );
-      })}
-      <span className="layout-announcement" role="status">
-        {announcement}
-      </span>
+    <div className="layout-section">
+      {nodes.filter((node) => !canMove(node))}
+      <div
+        ref={gridElement}
+        data-layout-group={id}
+        className={`${className} layout-group ${customGrid ? "layout-custom-grid" : ""} ${customGrid && !columns ? "layout-auto-grid" : ""}`}
+        style={
+          columns
+            ? ({ "--layout-default-span": 12 / columns } as CSSProperties)
+            : undefined
+        }
+      >
+        {nodes.filter(canMove).map(() => {
+          const itemId = ids[cursor++];
+          if (hidden.includes(itemId)) return null;
+          const item = byId.get(itemId)!;
+          const entry = metadata.get(itemId)!;
+          const previousKey = `${entry.sourceGroup}:${entry.sourceId}`;
+          const index = visibleIds.indexOf(itemId);
+          return (
+            <LayoutItem
+              key={itemId}
+              item={item}
+              editing={!!context?.editing}
+              title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
+              hide={() => context?.hide(id, [...hidden, itemId])}
+              columns={columns}
+              defaultSpan={columns ? undefined : entry.span}
+              defaultFullWidth={fullWidth.includes(itemId.replace(/^\.\$/, ""))}
+              width={
+                context?.geometry.widths[`${id}:${itemId}`] ??
+                context?.geometry.widths[previousKey] ??
+                (wideFirst && itemId === String(movable[0]?.key) ? 0 : -1)
+              }
+              height={
+                context?.geometry.heights[`${id}:${itemId}`] ??
+                context?.geometry.heights[previousKey]
+              }
+              resizeCard={
+                context
+                  ? (size) =>
+                      context.resizeCard(
+                        entry.sourceGroup,
+                        entry.sourceId,
+                        size,
+                        `${id}:${itemId}`,
+                      )
+                  : undefined
+              }
+              resize={
+                context
+                  ? (width) =>
+                      context?.resizeCard(
+                        entry.sourceGroup,
+                        entry.sourceId,
+                        { width },
+                        `${id}:${itemId}`,
+                      )
+                  : undefined
+              }
+              itemId={itemId}
+              index={index}
+              count={visibleIds.length}
+              moveBy={(delta) => move(itemId, visibleIds[index + delta])}
+              position={context?.geometry.positions?.[`${id}:${itemId}`]}
+              place={(position) => place(itemId, position)}
+            />
+          );
+        })}
+        <span className="layout-announcement" role="status">
+          {announcement}
+        </span>
+      </div>
     </div>
   );
 }
@@ -645,12 +786,12 @@ export function LayoutGroup({
 function LayoutItem({
   item,
   editing,
-  group,
   itemId,
   index,
   count,
   moveBy,
-  onDrop,
+  position,
+  place,
   columns,
   width,
   resize,
@@ -663,7 +804,6 @@ function LayoutItem({
 }: {
   item: ReactElement<Record<string, unknown>>;
   editing: boolean;
-  group: string;
   itemId: string;
   index: number;
   count: number;
@@ -677,10 +817,28 @@ function LayoutItem({
   title: string;
   hide: () => void;
   moveBy: (delta: number) => void;
-  onDrop: (source: string) => void;
+  position?: GridPosition;
+  place: (position: GridPosition) => void;
 }) {
-  const [over, setOver] = useState(false);
   const element = useRef<HTMLDivElement>(null);
+  const pointer = useLayoutPointer(element, place);
+  const [rowSpan, setRowSpan] = useState(1);
+  useLayoutEffect(() => {
+    const node = element.current;
+    if (!node) return;
+    setRowSpan(Math.ceil((node.getBoundingClientRect().height + 16) / 24));
+    const observer = new ResizeObserver(() => {
+      setRowSpan(Math.ceil((node.getBoundingClientRect().height + 16) / 24));
+      node.dispatchEvent(
+        new CustomEvent("mediahub-layout-size", {
+          bubbles: true,
+          detail: itemId,
+        }),
+      );
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [itemId, editing, width, height, columns, defaultFullWidth, defaultSpan]);
   const [draft, setDraft] = useState<{
     width?: number;
     height?: number;
@@ -701,9 +859,27 @@ function LayoutItem({
   return (
     <div
       ref={element}
-      className={`layout-item ${displayWidth === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${draft ? "is-resizing" : ""} ${displayHeight ? "has-custom-height" : ""} ${over ? "is-drop-target" : ""}`}
+      className={`layout-item ${displayWidth === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${draft ? "is-resizing" : ""} ${displayHeight ? "has-custom-height" : ""} ${pointer.dragging ? "is-pointer-dragging" : ""}`}
       style={
         {
+          "--layout-row-span": rowSpan,
+          ...(position
+            ? {
+                "--layout-column": Math.min(
+                  position.column,
+                  13 -
+                    (displayWidth !== -1
+                      ? Math.round(
+                          (cardWidthPercentage(displayWidth, columns) * 12) /
+                            100,
+                        )
+                      : defaultFullWidth
+                        ? 12
+                        : defaultSpan || 6),
+                ),
+                "--layout-row": position.row,
+              }
+            : {}),
           ...(defaultFullWidth || defaultSpan
             ? { "--layout-default-span": defaultFullWidth ? 12 : defaultSpan }
             : {}),
@@ -719,55 +895,56 @@ function LayoutItem({
       }
       data-layout-item={itemId}
       data-layout-title={title}
-      onDragOver={(event) => {
-        if (editing && event.dataTransfer.types.includes(dragType)) {
-          event.preventDefault();
-          event.stopPropagation();
-          setOver(true);
-        }
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(event) => {
-        if (!editing || !event.dataTransfer.types.includes(dragType)) return;
-        setOver(false);
-        try {
-          const data = JSON.parse(event.dataTransfer.getData(dragType));
-          if (data.group === group && typeof data.id === "string") {
-            event.preventDefault();
-            event.stopPropagation();
-            onDrop(data.id);
-          }
-          // A drop for an enclosing group must reach that group's card.
-        } catch {
-          /* Ignore unrelated or malformed drags. */
-        }
-      }}
+      data-layout-positioned={position ? "true" : undefined}
     >
       {editing && (
         <>
           <button
             type="button"
             className="layout-drag-surface"
-            draggable
+            onPointerDown={pointer.start}
             aria-label={t("Move {title}", { title: t(title) })}
             title={t("Drag to move, or use the arrow keys")}
-            onDragStart={(event) => {
-              event.stopPropagation();
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData(
-                dragType,
-                JSON.stringify({ group, id: itemId }),
-              );
-              if (element.current) {
-                const bounds = element.current.getBoundingClientRect();
-                event.dataTransfer.setDragImage(
-                  element.current,
-                  event.clientX - bounds.left,
-                  event.clientY - bounds.top,
-                );
-              }
-            }}
             onKeyDown={(event) => {
+              if (
+                event.altKey &&
+                ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(
+                  event.key,
+                ) &&
+                element.current?.parentElement
+              ) {
+                event.preventDefault();
+                const bounds = element.current.getBoundingClientRect();
+                const grid =
+                  element.current.parentElement.getBoundingClientRect();
+                const columns = Math.max(
+                  3,
+                  Math.round((bounds.width + 16) / ((grid.width + 16) / 12)),
+                );
+                const current = gridPosition(
+                  bounds.left - grid.left,
+                  bounds.top - grid.top,
+                  grid.width,
+                  columns,
+                );
+                place({
+                  column:
+                    current.column +
+                    (event.key === "ArrowRight"
+                      ? 1
+                      : event.key === "ArrowLeft"
+                        ? -1
+                        : 0),
+                  row:
+                    current.row +
+                    (event.key === "ArrowDown"
+                      ? 1
+                      : event.key === "ArrowUp"
+                        ? -1
+                        : 0),
+                });
+                return;
+              }
               const delta = ["ArrowUp", "ArrowLeft"].includes(event.key)
                 ? -1
                 : ["ArrowDown", "ArrowRight"].includes(event.key)

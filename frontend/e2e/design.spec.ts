@@ -1276,22 +1276,30 @@ test("individual service cards resize reorder hide and restore persistently with
     .click();
   await expect(plex.getByRole("combobox")).toHaveValue("-1");
   await expect(cards.first()).toHaveAttribute("data-layout-title", "Plex");
-  // Native pointer drag starts in the body of the card, away from its heading.
+  // Pointer drag starts in the body of the card, away from its heading.
   const downloads = cards.filter({
     has: page.locator(".download-service-tile"),
   });
   await group.evaluate((node) => node.scrollIntoView({ block: "center" }));
   const sourceBody = (await plex.boundingBox())!;
   const targetBody = (await downloads.boundingBox())!;
-  await dragSurface.dragTo(downloads.locator(".layout-drag-surface"), {
-    sourcePosition: { x: sourceBody.width / 2, y: sourceBody.height * 0.55 },
-    targetPosition: { x: targetBody.width / 2, y: targetBody.height * 0.55 },
-  });
-  await expect(cards.first()).toHaveAttribute(
-    "data-layout-title",
-    "qBittorrent",
+  await page.mouse.move(
+    sourceBody.x + sourceBody.width / 2,
+    sourceBody.y + sourceBody.height * 0.55,
   );
-  await expect(cards.nth(1)).toHaveAttribute("data-layout-title", "Plex");
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBody.x + targetBody.width / 2,
+    targetBody.y + targetBody.height * 0.55,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(plex).toHaveAttribute("data-layout-positioned", "true");
+  const placedBox = (await plex.boundingBox())!;
+  expect(Math.abs(placedBox.x - targetBody.x)).toBeLessThan(20);
+  expect((await downloads.boundingBox())!.y).toBeGreaterThan(
+    placedBox.y + placedBox.height,
+  );
   expect(errors).toEqual([]);
 });
 
