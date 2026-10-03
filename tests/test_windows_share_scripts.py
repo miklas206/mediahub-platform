@@ -318,3 +318,36 @@ def test_password_reset_whatif_and_invalid_users_never_invoke_ssh(tmp_path):
     $Rejected | ConvertTo-Json -Compress
     """.replace("SCRIPT", "([scriptblock]::Create([System.IO.File]::ReadAllText(" + literal + ")))" )
     assert json.loads(_powershell(command).splitlines()[-1]) == [True, True, True, True]
+
+
+@pytest.mark.skipif(not POWERSHELL, reason="Windows PowerShell requires Windows")
+def test_password_reset_transports_key_path_and_explains_ssh_failure_without_reset(tmp_path):
+    key = tmp_path / "existing key with spaces"
+    key.write_text("not-a-real-key", encoding="utf-8")
+    script = generate_password_reset_script("192.168.1.148", "MediaHub", "M")
+    # Replace only the SSH boundary; no process or network is invoked.
+    script = script.replace("& $Ssh @SshArguments $ServerAddress $RemoteCommand", "Invoke-TestSsh @SshArguments $ServerAddress $RemoteCommand")
+    script = script.replace("if (-not (Test-Path -LiteralPath $Ssh -PathType Leaf))", "if ($false)")
+    source = "'" + script.replace("'", "''") + "'"
+    key_literal = "'" + str(key).replace("'", "''") + "'"
+    command = r"""
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $ErrorActionPreference = 'Stop'
+    $script:Captured = @()
+    function Invoke-TestSsh { $script:Captured = $args; $global:LASTEXITCODE = 255 }
+    $Block = [scriptblock]::Create(SOURCE)
+    try { & $Block -SmbUsername mediahub-upload -ServerAdmin mediahub -IdentityFile KEY -Confirm:$false 6>$null 3>$null }
+    catch { $Failure = $_.Exception.Message }
+    $First = @($script:Captured)
+    $script:Captured = @()
+    try { & $Block -SmbUsername mediahub-upload -ServerAdmin mediahub -IdentityFile (KEY + '.missing') -Confirm:$false 6>$null 3>$null }
+    catch { $Missing = $_.Exception.Message }
+    @{ Arguments=$First; Failure=$Failure; Missing=$Missing; MissingInvoked=($script:Captured.Count -gt 0) } | ConvertTo-Json -Depth 4 -Compress
+    """.replace("SOURCE", source).replace("KEY", key_literal)
+    data = json.loads(_powershell(command).splitlines()[-1])
+    args = data["Arguments"]
+    assert args[args.index("-i") + 1] == str(key)
+    assert "IdentitiesOnly=yes" in args and "StrictHostKeyChecking=ask" in args
+    assert args[-2] == "192.168.1.148" and "smbpasswd 'mediahub-upload'" in args[-1]
+    assert "SSH kunne ikke" in data["Failure"]
+    assert "findes ikke" in data["Missing"] and data["MissingInvoked"] is False

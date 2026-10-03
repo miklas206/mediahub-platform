@@ -3177,23 +3177,32 @@ test("SMB password reset tool is guided, translated and downloads without sendin
       exact: true,
     })
     .click();
-  const card = page
-    .locator(".windows-share-card")
-    .filter({
-      has: page.getByRole("heading", {
-        name: translated("Reset SMB password"),
-        exact: true,
-      }),
-    });
+  const card = page.locator(".windows-share-card").filter({
+    has: page.getByRole("heading", {
+      name: translated("Reset SMB password"),
+      exact: true,
+    }),
+  });
   await expect(card).toContainText(
     translated(
       "Forgot the share password? Set a new password for an existing local Samba account. You do not need the old SMB password.",
     ),
   );
-  await expect(card.locator(".windows-share-command")).toContainText(
+  await expect(card.locator(".windows-share-command").first()).toContainText(
     "reset-password.ps1",
   );
   await expect(card.locator('input[type="password"]')).toHaveCount(0);
+  await card
+    .getByText(translated("SSH reports Permission denied (publickey)"), {
+      exact: true,
+    })
+    .click();
+  await expect(
+    card.locator(".windows-share-command").filter({ hasText: "-IdentityFile" }),
+  ).toContainText("id_ed25519");
+  await expect(card).toContainText("sudo pdbedit -L");
+  await expect(card).toContainText("sudo smbpasswd SMB_USER");
+
   const download = page.waitForEvent("download");
   await button.click();
   expect((await download).suggestedFilename()).toBe("reset-password.ps1");

@@ -42,12 +42,13 @@ def generate_password_reset_script(host: str, share: str, drive: str, username: 
     The user supplies a separate server administrator account at run time.
     """
     return r'''[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
-param([string]$SmbUsername = '', [string]$ServerAdmin = '')
+param([string]$SmbUsername = '', [string]$ServerAdmin = '', [string]$IdentityFile = '')
 ''' + _configuration(host, share, drive, username) + r'''
 $ErrorActionPreference = 'Stop'
 Write-Host ('MediaHub - Nulstil SMB-adgangskode paa ' + $ServerAddress)
 Write-Host 'Dette er til en Linux/Samba-server med SSH og en eksisterende lokal SMB-konto.'
 Write-Host 'Du skal kende serverens administratorlogin. Den gamle SMB-kode er ikke noedvendig.'
+Write-Host 'Hvis serveren kun tillader SSH-noegler, skal du bruge en allerede godkendt noegle via -IdentityFile.'
 Write-Host 'NAS eller Windows-server: brug serverens egen kontoadministration i stedet.'
 Write-Host 'Adgangskoder indtastes skjult i denne terminal via SSH og sendes ikke til MediaHub.'
 Write-Host 'Andre pc-er skal bruge den nye SMB-kode ved naeste login. Ctrl+C afbryder.'
@@ -68,6 +69,14 @@ if (-not $PSCmdlet.ShouldProcess(($ServerAddress + ' / ' + $SmbUsername), 'Saet 
 $Ssh = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
 if (-not (Test-Path -LiteralPath $Ssh -PathType Leaf)) {
     throw 'Windows OpenSSH-klient mangler. Installer OpenSSH Client under Windows valgfrie funktioner, eller nulstil kontoen fra serverens terminal.'
+}
+$SshArguments = @('-t', '-o', 'StrictHostKeyChecking=ask', '-o', 'ConnectTimeout=10', '-l', $ServerAdmin)
+if (-not [string]::IsNullOrWhiteSpace($IdentityFile)) {
+    if (-not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)) {
+        throw 'Den valgte SSH-noegle findes ikke. Angiv stien til en eksisterende privat noegle, som serveren accepterer.'
+    }
+    $KeyPath = (Get-Item -LiteralPath $IdentityFile).FullName
+    $SshArguments += @('-o', 'IdentitiesOnly=yes', '-i', $KeyPath)
 }
 Write-Host 'Foerste forbindelse: sammenlign SSH-fingeraftrykket med serverens, foer du godkender det.'
 Write-Host 'SSH-login og evt. sudo-login bruger serverens administratorkode. New SMB password er den nye SMB-kode; indtast den to gange.'
@@ -91,7 +100,15 @@ $admin pdbedit -L | cut -d: -f1 | grep -Fxq '__SMB_USER__' || { echo 'Existing l
 $admin smbpasswd '__SMB_USER__'
 '@
 $RemoteCommand = $RemoteCommand.Replace('__SMB_USER__', $SmbUsername).Replace("`r", '')
-& $Ssh -t -o StrictHostKeyChecking=ask -o ConnectTimeout=10 -l $ServerAdmin $ServerAddress $RemoteCommand
+& $Ssh @SshArguments $ServerAddress $RemoteCommand
+if ($LASTEXITCODE -eq 255) {
+    Write-Warning 'SSH-forbindelsen mislykkedes. Ved Permission denied (publickey) tillader serveren kun en godkendt SSH-noegle; SMB-koden kan ikke bruges til dette login.'
+    Write-Host 'Koer igen med -IdentityFile og stien til din eksisterende SSH-noegle. Aendr ikke serverens loginregler for at faa dette vaerktoej til at virke.'
+    Write-Host 'Alternativ: aabn selve Samba-serverens konsol (fx VM-konsollen i Proxmox) og log ind som administrator.'
+    Write-Host 'Vis de eksisterende SMB-brugere med: sudo pdbedit -L'
+    Write-Host ('Nulstil den valgte SMB-bruger med: sudo smbpasswd ' + $SmbUsername)
+    throw 'SSH kunne ikke oprette forbindelse. Nulstillingen blev ikke bekraeftet. Se vejledningen ovenfor.'
+}
 if ($LASTEXITCODE -ne 0) {
     throw 'Nulstillingen blev ikke bekraeftet. Se serverens fejl ovenfor. Kontrollér SSH-login, sudo-adgang og den eksisterende Samba-konto.'
 }

@@ -1033,6 +1033,34 @@ export function WindowsSharePage({
                 )}
               </p>
             </details>
+            <details className="windows-share-help windows-share-script">
+              <summary>
+                {t("SSH reports Permission denied (publickey)")}
+              </summary>
+              <p>
+                {t(
+                  "The server requires an authorized SSH key. An SMB password or MediaHub login cannot replace that key. Run the helper with -IdentityFile and the path to your existing private SSH key; the key stays on your PC.",
+                )}
+              </p>
+              <code className="windows-share-command">
+                {
+                  'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\reset-password.ps1" -IdentityFile "$env:USERPROFILE\\.ssh\\id_ed25519"'
+                }
+              </code>
+              <p>
+                {t(
+                  "Use your actual key path. If you have no authorized key, open the Samba server's console, such as its VM console in Proxmox, and log in as a server administrator. In that server console, list the existing SMB users and reset the correct one:",
+                )}
+              </p>
+              <code className="windows-share-command">
+                {"sudo pdbedit -L\nsudo smbpasswd SMB_USER"}
+              </code>
+              <p>
+                {t(
+                  "Replace SMB_USER with an existing name from the list, not your Windows display name. A root session can omit sudo. Run these commands inside the Samba server, not on the Proxmox host. You do not need to enable SSH password authentication.",
+                )}
+              </p>
+            </details>
           </div>
         </section>
       </LayoutGroup>

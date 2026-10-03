@@ -109,3 +109,22 @@ Existing sessions are not forcibly disconnected by the reset tool.
 
 Downloads are restricted to MediaHub administrators. Generating or downloading
 the file does not contact the server or perform a password reset.
+
+
+### SSH accepts public keys only
+
+`Permission denied (publickey)` occurs before any Samba command runs. Use an
+existing private SSH key authorized for the server administrator account:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\reset-password.ps1" -IdentityFile "$env:USERPROFILE\.ssh\id_ed25519"
+```
+
+Replace the example key path with the real one. The private key stays on the PC;
+it is not uploaded to MediaHub. Do not enable password authentication to work
+around this error. If no authorized key is available, open the Samba server's
+console (for example its VM console in Proxmox) and log in as a server admin.
+Inside that server, run `sudo pdbedit -L` to identify the local SMB account and
+`sudo smbpasswd ACCOUNT` to reset that existing account. A root session can omit
+sudo. These commands belong inside the Samba server, not on the Proxmox host.
+The SMB account may differ from the Windows display name or SSH administrator.
