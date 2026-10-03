@@ -19,6 +19,31 @@ class SavedTrust(Port):
     fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
 
 
+@router.get("/generated-access")
+def generated_access(request: Request):
+    return result(services(request).agent_updates.generated_access())
+
+
+@router.post("/generated-access")
+def create_generated_access(request: Request):
+    if request.url.scheme != "https":
+        raise DomainError("tls_required", "Use HTTPS before entering SSH credentials", 403)
+    return result(services(request).agent_updates.generated_access(create=True))
+
+
+@router.post("/prepare-generated")
+async def prepare_generated(body: SavedTrust, request: Request):
+    if request.url.scheme != "https":
+        raise DomainError("tls_required", "Use HTTPS before entering SSH credentials", 403)
+    return result(
+        await asyncio.to_thread(
+            services(request).agent_updates.prepare_generated,
+            body.fingerprint,
+            body.port,
+        )
+    )
+
+
 @router.get("")
 async def check(request: Request):
     svc = services(request)

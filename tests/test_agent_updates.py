@@ -293,6 +293,104 @@ def test_saved_fingerprint_change_requires_https_and_valid_fingerprint(logged_in
     assert response.status_code == 422
 
 
+def test_generated_key_is_encrypted_resumable_host_bound_and_public_only(logged_in, monkeypatch):
+    from cryptography.hazmat.primitives import serialization
+    from mediahub.agent_updates import GENERATED_KEY
+    from mediahub.db import Setting
+
+    updater = logged_in.app.state.services.agent_updates
+    address = SimpleNamespace(host="192.168.50.99")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+    assert not updater.generated_access()["created"]
+    first = updater.generated_access(create=True)
+    assert updater.generated_access(create=True) == first
+    assert updater.generated_access() == first
+    assert first["host"] == address.host
+    assert "private" not in json.dumps(first)
+    assert first["publicKey"].startswith("ssh-ed25519 ")
+    assert " >> /root/.ssh/authorized_keys" in first["command"]
+    assert "grep -qxF" in first["command"]
+    pending = updater.generated_setup("seedbox", address)
+    key = serialization.load_ssh_private_key(pending["private_key"].encode(), password=None)
+    assert first["publicKey"].startswith(
+        key.public_key()
+        .public_bytes(
+            serialization.Encoding.OpenSSH,
+            serialization.PublicFormat.OpenSSH,
+        )
+        .decode()
+    )
+    with updater.svc.sessions() as db:
+        stored = db.scalar(
+            __import__("sqlalchemy").select(Setting).where(Setting.key == GENERATED_KEY)
+        ).value
+        assert "OPENSSH PRIVATE KEY" not in json.dumps(stored)
+        assert pending["private_key"] not in json.dumps(stored)
+    assert updater.saved_setup("seedbox", address) is None
+    monkeypatch.setattr(updater, "binding", lambda: ("another-host", None, address))
+    assert not updater.generated_access()["created"]
+    with pytest.raises(DomainError):
+        updater.prepare_generated("SHA256:" + "a" * 43, 22)
+
+
+@pytest.mark.parametrize("connection_fails", [False, True])
+def test_generated_key_promoted_only_after_pinned_authentication(
+    logged_in, monkeypatch, connection_fails
+):
+    updater = logged_in.app.state.services.agent_updates
+    address = SimpleNamespace(host="192.168.50.99")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+    updater.save_setup(
+        "seedbox",
+        address,
+        SSHSetup(
+            password="previous-access",
+            fingerprint="SHA256:" + "a" * 43,
+            remember=True,
+        ),
+    )
+    updater.generated_access(create=True)
+
+    def connect(address, setup):
+        assert setup.private_key is not None
+        assert setup.fingerprint == "SHA256:" + "b" * 43
+        if connection_fails:
+            raise DomainError("ssh_host_key_changed", "Rejected", 409)
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr(updater, "connect", connect)
+    if connection_fails:
+        with pytest.raises(DomainError):
+            updater.prepare_generated("SHA256:" + "b" * 43, 22)
+        assert (
+            updater.saved_setup("seedbox", address).password.get_secret_value() == "previous-access"
+        )
+        assert updater.generated_access()["created"]
+    else:
+        assert updater.prepare_generated("SHA256:" + "b" * 43, 22)["credentialsStored"]
+        assert updater.saved_setup("seedbox", address).private_key is not None
+        assert not updater.generated_access()["created"]
+
+
+def test_generated_access_api_requires_https_and_reuses_key(logged_in, monkeypatch):
+    updater = logged_in.app.state.services.agent_updates
+    monkeypatch.setattr(
+        updater, "binding", lambda: ("seedbox", None, SimpleNamespace(host="10.0.0.42"))
+    )
+    prefix = "/api/v1/updates/seedbox-agent"
+    assert logged_in.post(prefix + "/generated-access").status_code == 403
+    assert (
+        logged_in.post(
+            prefix + "/prepare-generated", json={"fingerprint": "SHA256:" + "a" * 43}
+        ).status_code
+        == 403
+    )
+    response = logged_in.post("https://127.0.0.1:18765" + prefix + "/generated-access")
+    assert response.status_code == 200
+    assert "private_key" not in response.text
+    assert logged_in.get(prefix + "/generated-access").json()["data"] == response.json()["data"]
+
+
 def test_check_all_includes_agent_update(logged_in, monkeypatch):
     svc = logged_in.app.state.services
     monkeypatch.setattr(

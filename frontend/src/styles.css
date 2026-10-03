@@ -2494,6 +2494,38 @@ td time {
   display: grid;
   gap: 10px;
 }
+.agent-access-guide {
+  min-width: 0;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 12px;
+}
+.agent-access-guide legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.agent-access-guide p {
+  margin: 0;
+}
+.agent-access-guide button {
+  justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+}
+.agent-access-guide summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.agent-access-guide pre {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  background: var(--bg);
+}
 .port-reachability {
   margin-top: 14px;
   border-top: 1px solid var(--line);

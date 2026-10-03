@@ -2,6 +2,7 @@ import { translateText, t } from "./i18n";
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { AgentAccessSetup } from "./agent-access-setup";
 import { Panel, ErrorBox } from "./phase2";
 import { OperationProgress, type OperationState } from "./operation-progress";
 
@@ -255,10 +256,15 @@ export function AgentUpdates({
           )}
         </p>
       )}
+      {check && !check.credentialsStored && (
+        <AgentAccessSetup disabled={disabled} onReady={reload} />
+      )}
       {check?.updateAvailable && (
         <details className="agent-update-setup">
           <summary>
-            {check.installReady ? t("SSH settings") : t("Prepare SSH access")}
+            {check.credentialsStored
+              ? t("SSH settings")
+              : t("Advanced: use existing SSH access")}
           </summary>
           <fieldset disabled={disabled}>
             <legend>{t("Prepare Agent update")}</legend>

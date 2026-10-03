@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import json
+import shlex
 import tempfile
 import threading
 import time
@@ -14,6 +15,8 @@ from uuid import uuid4
 import httpx
 import paramiko
 from cryptography.fernet import InvalidToken
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import Field, SecretStr, model_validator
 from sqlalchemy import select
 
@@ -26,6 +29,7 @@ from mediahub.platform_source import GitHubSourceProvider, download_source, norm
 KEY = "seedbox.agent.update"
 SSH_KEY = "seedbox.agent.ssh.encrypted"
 SSH_KEY_V2 = "seedbox.agent.ssh.v2.encrypted"
+GENERATED_KEY = "seedbox.agent.ssh.generated.encrypted"
 
 
 class SSHSetup(StrictModel):
@@ -132,10 +136,96 @@ class AgentUpdates:
 
     def forget_setup(self):
         with self.lock, self.svc.sessions.begin() as db:
-            for row in db.scalars(select(Setting).where(Setting.key.in_([SSH_KEY, SSH_KEY_V2]))):
+            for row in db.scalars(
+                select(Setting).where(Setting.key.in_([SSH_KEY, SSH_KEY_V2, GENERATED_KEY]))
+            ):
                 db.delete(row)
             self.prepared = None
         return {"credentialsStored": False, "installReady": False}
+
+    def generated_setup(self, identifier, address):
+        with self.svc.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == GENERATED_KEY))
+            encrypted = row.value.get("encrypted") if row else None
+        if not encrypted:
+            return None
+        try:
+            value = json.loads(self.svc.catalog.cipher.decrypt(encrypted.encode()))
+            if value["hostId"] != identifier or value["host"] != address.host:
+                return None
+            return value
+        except (InvalidToken, ValueError, KeyError, TypeError):
+            raise DomainError(
+                "agent_ssh_storage", "Generated SSH access cannot be decrypted", 409
+            ) from None
+
+    def generated_access(self, create=False):
+        identifier, _, address = self.binding()
+        with self.lock:
+            value = self.generated_setup(identifier, address)
+            if value is None and create:
+                key = Ed25519PrivateKey.generate()
+                value = {
+                    "hostId": identifier,
+                    "host": address.host,
+                    "private_key": key.private_bytes(
+                        serialization.Encoding.PEM,
+                        serialization.PrivateFormat.OpenSSH,
+                        serialization.NoEncryption(),
+                    ).decode(),
+                    "publicKey": key.public_key()
+                    .public_bytes(
+                        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
+                    )
+                    .decode()
+                    + " mediahub-agent-updates",
+                }
+                encrypted = self.svc.catalog.cipher.encrypt(json.dumps(value).encode()).decode()
+                with self.svc.sessions.begin() as db:
+                    row = db.scalar(select(Setting).where(Setting.key == GENERATED_KEY))
+                    if row:
+                        row.value = {"encrypted": encrypted}
+                    else:
+                        db.add(Setting(key=GENERATED_KEY, value={"encrypted": encrypted}))
+            if value is None:
+                return {"created": False, "host": address.host}
+            public = shlex.quote(value["publicKey"])
+            script = (
+                'test "$(id -u)" -eq 0 || { echo "Run this command as root" >&2; exit 1; }; '
+                "install -d -m 700 -o root -g root /root/.ssh && "
+                "touch /root/.ssh/authorized_keys && "
+                "chown root:root /root/.ssh/authorized_keys && "
+                "chmod 600 /root/.ssh/authorized_keys && "
+                f"(grep -qxF -- {public} /root/.ssh/authorized_keys || "
+                f"printf '\\n%s\\n' {public} >> /root/.ssh/authorized_keys) && "
+                "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub"
+            )
+            return {
+                "created": True,
+                "host": address.host,
+                "publicKey": value["publicKey"],
+                "command": "sh -c " + shlex.quote(script),
+            }
+
+    def prepare_generated(self, fingerprint, port):
+        identifier, _, address = self.binding()
+        with self.lock:
+            value = self.generated_setup(identifier, address)
+            if value is None:
+                raise DomainError("agent_ssh_required", "Create update access first", 409)
+            result = self.prepare(
+                SSHSetup(
+                    private_key=value["private_key"],
+                    fingerprint=fingerprint,
+                    port=port,
+                    remember=True,
+                )
+            )
+            with self.svc.sessions.begin() as db:
+                row = db.scalar(select(Setting).where(Setting.key == GENERATED_KEY))
+                if row:
+                    db.delete(row)
+            return result
 
     def prepare_saved(self, fingerprint=None, port=None):
         identifier, _, address = self.binding()
