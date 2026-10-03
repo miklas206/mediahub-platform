@@ -197,7 +197,7 @@ async function designFixtures(page: Page) {
     },
     {
       hash: "b".repeat(40),
-      name: "Blender Open Movies · 4K Collection",
+      name: "Blender Open Movies Â· 4K Collection",
       progress: 0.36,
       state: "downloading",
       dlspeed: 4 * mib,
@@ -322,7 +322,7 @@ async function designFixtures(page: Page) {
       source: "Seedbox",
       event: "torrent.completed",
       severity: "info",
-      message: "Debian 13.0.0 er færdighentet og seeder.",
+      message: "Debian 13.0.0 er fÃ¦rdighentet og seeder.",
       timestamp: new Date(now - 8 * 60000).toISOString(),
     },
     {
@@ -338,7 +338,7 @@ async function designFixtures(page: Page) {
       source: "MediaHub",
       event: "backup.created",
       severity: "info",
-      message: "Den automatiske sikkerhedskopi er fuldført.",
+      message: "Den automatiske sikkerhedskopi er fuldfÃ¸rt.",
       timestamp: new Date(now - 57 * 60000).toISOString(),
     },
   ];
@@ -786,7 +786,7 @@ test("complete desktop control center and consistent workspace examples", async 
     Number.isFinite(Date.parse((await date.getAttribute("datetime")) || "")),
   ).toBe(true);
   await expect(date).toContainText(
-    /mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag/,
+    /mandag|tirsdag|onsdag|torsdag|fredag|lÃ¸rdag|sÃ¸ndag/,
   );
   await expect(page.locator(".control-summary .summary-status")).toHaveCount(4);
   await expect(
@@ -882,7 +882,7 @@ test("mobile control center, navigation and narrow content remain usable", async
   });
   await page.screenshot({ path: `${examples}/dashboard-mobile-viewport.png` });
   await page
-    .getByRole("button", { name: "Åbn navigation", exact: true })
+    .getByRole("button", { name: "Ã…bn navigation", exact: true })
     .click();
   await expect(page.locator("aside.sidebar")).toBeVisible();
   await page
@@ -921,7 +921,7 @@ test("global search supports the keyboard, navigation and focus restoration", as
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
   const trigger = page.getByRole("button", {
-    name: "Søg efter sider og services",
+    name: "SÃ¸g efter sider og services",
     exact: true,
   });
   await trigger.focus();
@@ -1736,7 +1736,7 @@ test("empty and failed storage have readable mobile states", async ({
   );
   await page.goto("/storage");
   await expect(
-    page.getByText("Intet læsbart medielager konfigureret endnu."),
+    page.getByText("Intet lÃ¦sbart medielager konfigureret endnu."),
   ).toBeVisible();
   await contained(page);
   await expect(page.locator("html")).toHaveAttribute(
@@ -1949,7 +1949,7 @@ async function windowsShareReady(page: Page) {
   ).toBeEnabled();
   await expect(page.locator(".windows-share-card")).toHaveCount(4);
   await expect(page.locator(".windows-share-intro .badge")).not.toContainText(
-    translated("Loading connection…"),
+    translated("Loading connectionâ€¦"),
   );
 }
 
@@ -2007,14 +2007,14 @@ test("Windows folder app installs through the store, persists its saved path and
   await expect(storeCard.locator(".app-icon svg")).toBeVisible();
   await expect(
     storeCard.getByRole("link", {
-      name: translated("Set up Windows access →"),
+      name: translated("Set up Windows access â†’"),
       exact: true,
     }),
   ).toBeVisible();
   await captureWindowsShare(page, "windows-share-store-desktop.png");
   await storeCard
     .getByRole("link", {
-      name: translated("Set up Windows access →"),
+      name: translated("Set up Windows access â†’"),
       exact: true,
     })
     .click();
@@ -2150,7 +2150,7 @@ test("Windows folder app installs through the store, persists its saved path and
   });
   await expect(installed).toBeVisible();
   await expect(installed).toContainText(
-    translated("Installed · Windows setup and connection checks"),
+    translated("Installed Â· Windows setup and connection checks"),
   );
   await page.locator('.sidebar a[href="/apps/windows-share"]').click();
   await expect(page).toHaveURL(/\/apps\/windows-share$/);
@@ -2674,19 +2674,19 @@ test("per-torrent cleanup Never overrides just the selected torrent and remains 
   expect(state.items.slice(1)).toEqual(unchanged);
   await expect(trigger).toHaveAttribute(
     "title",
-    new RegExp(translated("Never — keep torrent and files")),
+    new RegExp(translated("Never â€” keep torrent and files")),
   );
   const row = page
     .locator(".torrent-table tbody > tr")
     .filter({ has: page.getByText(selected.name, { exact: true }) });
   await expect(row.locator(".torrent-cleanup-override")).toHaveText(
-    translated("Individual rule · Never"),
+    translated("Individual rule Â· Never"),
   );
   await expect(page.locator(".torrent-cleanup-override")).toHaveCount(1);
   await page.reload();
   await expect(trigger).toBeVisible();
   await expect(row.locator(".torrent-cleanup-override")).toHaveText(
-    translated("Individual rule · Never"),
+    translated("Individual rule Â· Never"),
   );
   await trigger.click();
   await expect(
@@ -2847,4 +2847,132 @@ test("per-torrent cleanup keeps failed saves open and supports keyboard cancel o
   await expect(dialog).toHaveCount(0);
   expect(state.writes).toHaveLength(1);
   expect(errors).toEqual([]);
+});
+
+test("FjordHub installed apps use their own mark and nested navigation on desktop and mobile", async ({
+  page,
+}) => {
+  await designFixtures(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const row = {
+    id: "external-hub",
+    name: "FjordHub",
+    baseUrl: "http://192.168.1.40:8888",
+    enabled: true,
+    tokenConfigured: true,
+    allowHttp: true,
+    lastSuccessfulSync: null,
+    nextSync: 0,
+    snapshot: {
+      status: "online",
+      capabilities: ["docker.resources.read"],
+      apps: [
+        {
+          id: "fjordflix",
+          name: "FjordFlix",
+          container_count: 1,
+          running_count: 1,
+        },
+        {
+          id: "uninstalled",
+          name: "Catalog only",
+          container_count: 0,
+          running_count: 0,
+        },
+      ],
+    },
+  };
+  await page.route("**/api/v1/integrations", (route) =>
+    route.fulfill({ json: { data: [row] } }),
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/apps");
+  const nav = page.locator(".fjordhub-app-navigation");
+  await expect(nav.getByRole("link", { name: "FjordFlix" })).toHaveAttribute(
+    "href",
+    "http://192.168.1.40:8888/#card-fjordflix",
+  );
+  await expect(
+    nav.locator('image[href="/assets/services/fjordhub.png"]'),
+  ).toHaveCount(1);
+  await expect(
+    page
+      .locator("main")
+      .getByRole("heading", { name: "FjordHub", exact: true }),
+  ).toBeVisible();
+  await expect(nav).not.toContainText("Catalog only");
+  await page
+    .getByRole("button", { name: translated("Customize layout"), exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".layout-item")
+      .filter({
+        has: page.getByRole("heading", { name: "FjordHub", exact: true }),
+      }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: translated("Done arranging"), exact: true })
+    .click();
+  await contained(page);
+  await page.screenshot({
+    path: "../.qa/fjordhub-apps-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.locator(".sidebar").evaluate(el => el.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
+  await contained(page);
+  await expect(
+    page
+      .locator("main")
+      .getByRole("heading", { name: "FjordHub", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../.qa/fjordhub-apps-mobile.png",
+    animations: "disabled",
+    fullPage: true,
+  });
+  expect(errors).toEqual([]);
+});
+
+test("existing FjordHub can be detected without entering an Access Token", async ({
+  page,
+}) => {
+  await designFixtures(page);
+  let detected = false;
+  const row = {
+    id: "detected-hub",
+    name: "FjordHub",
+    baseUrl: "https://192.168.1.40:8888",
+    enabled: true,
+    tokenConfigured: false,
+    allowHttp: false,
+    lastSuccessfulSync: null,
+    nextSync: 0,
+    snapshot: { status: "detected" },
+  };
+  await page.route("**/api/v1/integrations", (route) =>
+    route.fulfill({ json: { data: detected ? [row] : [] } }),
+  );
+  await page.route("**/api/v1/integrations/fjordhub/detect", async (route) => {
+    detected = true;
+    await route.fulfill({ json: { data: row } });
+  });
+  await page.goto("/integrations");
+  await page
+    .getByLabel(translated("FjordHub URL"), { exact: true })
+    .fill(row.baseUrl);
+  await page
+    .getByRole("button", {
+      name: translated("Detect existing FjordHub"),
+      exact: true,
+    })
+    .click();
+  await expect(page.locator(".fjordhub-app-navigation")).toContainText(
+    "FjordHub",
+  );
+  await expect(
+    page.locator(".fjordhub-app-navigation .app-subnav a"),
+  ).toHaveCount(0);
 });

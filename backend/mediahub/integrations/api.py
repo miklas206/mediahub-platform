@@ -25,6 +25,12 @@ class IntegrationInput(StrictModel):
         return value
 
 
+class DetectionInput(StrictModel):
+    name: str = Field(default="FjordHub", min_length=1, max_length=80)
+    baseUrl: str = Field(min_length=8, max_length=500)
+    allowHttp: bool = False
+
+
 def require_https(request):
     if request.url.scheme != "https" and not services(request).config.dev_mode:
         raise DomainError("https_required", "Credential submission requires HTTPS", 403)
@@ -74,6 +80,12 @@ async def test(body: IntegrationInput, request: Request, user=Depends(authentica
     require_admin(user)
     require_https(request)
     return result(await services(request).integrations.test(body))
+
+
+@router.post("/fjordhub/detect")
+async def detect(body: DetectionInput, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    return result(await services(request).integrations.detect(body))
 
 
 @router.post("/fjordhub")

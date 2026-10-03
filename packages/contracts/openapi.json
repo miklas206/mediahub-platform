@@ -3825,6 +3825,42 @@
           }
         }
       }
+    },
+    "/api/v1/integrations/fjordhub/detect": {
+      "post": {
+        "summary": "Detect",
+        "operationId": "detect_api_v1_integrations_fjordhub_detect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5477,6 +5513,34 @@
           "reviewedPlanDigest"
         ],
         "title": "WizardExecute"
+      },
+      "DetectionInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "default": "FjordHub"
+          },
+          "baseUrl": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 8,
+            "title": "Baseurl"
+          },
+          "allowHttp": {
+            "type": "boolean",
+            "title": "Allowhttp",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "baseUrl"
+        ],
+        "title": "DetectionInput"
       }
     }
   }

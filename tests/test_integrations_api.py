@@ -130,8 +130,9 @@ def test_multiple_and_real_auth_errors(logged_in):
     wire(logged_in, 401)
     result = logged_in.post("/api/v1/integrations/fjordhub/test", json=body()).json()["data"]
     assert result["status"] == "authentication_failed"
-    for _ in range(2):
-        assert logged_in.post("/api/v1/integrations/fjordhub", json=body()).status_code == 200
+    for port in (8443, 8444):
+        payload = {**body(), "baseUrl": f"https://192.168.50.20:{port}"}
+        assert logged_in.post("/api/v1/integrations/fjordhub", json=payload).status_code == 200
     assert len(logged_in.get("/api/v1/integrations").json()["data"]) == 2
     assert logged_in.get("/api/v1/health").status_code == 200
 
@@ -170,3 +171,52 @@ def test_offline_retains_last_success_and_marks_stale(logged_in):
     assert latest["snapshot"]["stale"] is True
     assert latest["snapshot"]["apps"] == first["snapshot"]["apps"]
     assert latest["lastSuccessfulSync"] == first["lastSuccessfulSync"]
+
+
+def test_tokenless_detection_is_bounded_and_recognizes_only_fjordhub(logged_in, monkeypatch):
+    real_client = httpx.AsyncClient
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        assert "authorization" not in request.headers
+        if request.url.path == "/api/health":
+            return httpx.Response(200, json={"status": "ok", "docker": True})
+        return httpx.Response(401, headers={"WWW-Authenticate": "Bearer"})
+
+    monkeypatch.setattr(
+        "mediahub.integrations.service.httpx.AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    payload = {"baseUrl": "https://192.168.1.42:8888"}
+    response = logged_in.post("/api/v1/integrations/fjordhub/detect", json=payload)
+    assert response.status_code == 200
+    assert not response.json()["data"]["tokenConfigured"]
+    assert calls == ["/api/health", "/api/integrations/v1/resources"]
+    assert (
+        logged_in.post("/api/v1/integrations/fjordhub/detect", json=payload).json()["data"]["id"]
+        == response.json()["data"]["id"]
+    )
+    assert len(logged_in.get("/api/v1/integrations").json()["data"]) == 1
+    assert (
+        logged_in.post(
+            "/api/v1/integrations/fjordhub/detect", json={"baseUrl": "http://8.8.8.8"}
+        ).status_code
+        == 422
+    )
+
+
+def test_detection_rejects_ordinary_health_page(logged_in, monkeypatch):
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        "mediahub.integrations.service.httpx.AsyncClient",
+        lambda **kwargs: real_client(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"status": "ok"})),
+            **kwargs,
+        ),
+    )
+    response = logged_in.post(
+        "/api/v1/integrations/fjordhub/detect", json={"baseUrl": "https://192.168.1.42"}
+    )
+    assert response.status_code == 422
+    assert logged_in.app.state.services.integrations.list() == []

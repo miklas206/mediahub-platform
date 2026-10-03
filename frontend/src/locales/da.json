@@ -1751,7 +1751,7 @@
   "SSH root login failed. Check the password and SSH login settings.": "SSH-root-login fejlede. Kontrollér adgangskode og SSH-loginindstillinger.",
   "SSH connection failed or timed out. Inspect the target before retrying; remote work may still be running.": "SSH-forbindelse fejlede eller fik timeout. Undersøg målet før genforsøg; fjernarbejde kan stadig køre.",
   "Installer exited with status {value0}. Inspect the target before retrying.": "Installationsprogram afsluttede med status {value0}. Undersøg målet før genforsøg.",
-  "FjordHub is installed and its health check passed. Complete administrator setup in FjordHub.": "FjordHub er installeret og bestod sundhedskontrol. Fuldfør administratoropsætning i FjordHub.",
+  "FjordHub is installed and its health check passed. Complete administrator setup in FjordHub.": "FjordHub er installeret, og sundhedskontrollen er bestået. Færdiggør administratoropsætningen i FjordHub.",
   "Another deployment operation is running": "En anden installationshandling kører",
   "Select the current completed deployment before checking it": "Vælg den aktuelle færdige installation før kontrol",
   "Confirm this exact FjordHub deployment": "Bekræft denne præcise FjordHub-installation",
@@ -2593,5 +2593,12 @@
   "{count} apps need attention.": "{count} apps kr?ver opm?rksomhed.",
   "{count} app is healthy.": "{count} app er sund.",
   "{count} apps are healthy.": "{count} apps er sunde.",
-  "Enter your SMB username and password in the PowerShell window. These belong to the share on your NAS or Samba server, not necessarily your Windows or MediaHub account. If you forgot the password, cancel and reset it on the file server. MediaHub cannot retrieve it.": "Indtast SMB-brugernavn og adgangskode i PowerShell-vinduet. De tilh?rer delingen p? din NAS eller Samba-server og er ikke n?dvendigvis dine Windows- eller MediaHub-loginoplysninger. Har du glemt adgangskoden, skal du annullere og ?ndre den p? filserveren. MediaHub kan ikke hente den."
+  "Enter your SMB username and password in the PowerShell window. These belong to the share on your NAS or Samba server, not necessarily your Windows or MediaHub account. If you forgot the password, cancel and reset it on the file server. MediaHub cannot retrieve it.": "Indtast SMB-brugernavn og adgangskode i PowerShell-vinduet. De tilh?rer delingen p? din NAS eller Samba-server og er ikke n?dvendigvis dine Windows- eller MediaHub-loginoplysninger. Har du glemt adgangskoden, skal du annullere og ?ndre den p? filserveren. MediaHub kan ikke hente den.",
+  "Installed · Access Token required": "Installeret · Adgangstoken påkrævet",
+  "Installed · Complete administrator setup in FjordHub": "Installeret · Færdiggør administratoropsætning i FjordHub",
+  "Installed · Read-only integration": "Installeret · Integration med læseadgang",
+  "Detect existing FjordHub": "Find eksisterende FjordHub",
+  "FjordHub detected. Add an Access Token to show its installed apps.": "FjordHub fundet. Tilføj et adgangstoken for at vise de installerede apps.",
+  "FjordHub could not be verified at this LAN address": "FjordHub kunne ikke bekræftes på denne lokalnetadresse",
+  "Automatic pairing unavailable; connect with an Access Token in Integrations.": "Automatisk tilknytning er ikke tilgængelig; forbind med et adgangstoken under Integrationer."
 }

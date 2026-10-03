@@ -1,3 +1,4 @@
+import { fjordHubLink } from "./fjordhub-token-guide";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
@@ -82,6 +83,7 @@ import {
   IntegrationsCard,
   IntegrationsPage,
   IntegrationAppLinks,
+  IntegrationAppCard,
   useIntegrations,
 } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
@@ -1360,6 +1362,10 @@ function Apps({
   extraCards?: ReactNode;
 }) {
   const { data, error, reload } = useData<AppInfo[]>("/apps");
+  const { items: integrations } = useIntegrations();
+  const externalApps = integrations.filter(
+    (row) => row.enabled && fjordHubLink(row.baseUrl),
+  );
   const [actionError, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(reload, [revision, reload]);
@@ -1394,8 +1400,15 @@ function Apps({
             </div>
           ))}
         </div>
-      ) : data.length ? (
+      ) : data.length || externalApps.length ? (
         <LayoutGroup id="ui-Apps-1" className="apps-grid">
+          {externalApps.map((row) => (
+            <IntegrationAppCard
+              key={`external-${row.id}`}
+              row={row}
+              title={row.name}
+            />
+          ))}
           {[...data]
             .sort((left, right) => left.name.localeCompare(right.name))
             .map((app) => (

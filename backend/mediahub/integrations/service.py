@@ -1,13 +1,15 @@
 """Optional read-only integrations, encrypted references and bounded async polling."""
 
 import asyncio
+import threading
 import time
 from dataclasses import asdict
 from uuid import uuid4
 
+import httpx
 from sqlalchemy import select
 
-from mediahub.db import ExternalIntegration, now
+from mediahub.db import ExternalIntegration, Setting, now
 from mediahub.errors import DomainError
 from mediahub.integrations.fjordhub import FjordHubIntegrationProvider, validate_url
 from mediahub.integrations.provider import IntegrationSnapshot
@@ -21,6 +23,8 @@ class IntegrationService:
         self.provider_factory = FjordHubIntegrationProvider
         self.lock = asyncio.Lock()
         self.test_lock = asyncio.Lock()
+        self.default_origin = config.fjordhub_url
+        self.persistence_lock = threading.RLock()
 
     @staticmethod
     def public(row):
@@ -69,27 +73,139 @@ class IntegrationService:
             raise DomainError(
                 "invalid_integration_metadata", "Token must only be in its private field", 422
             )
-        with self.sessions.begin() as db:
-            if len(db.scalars(select(ExternalIntegration.id)).all()) >= 20:
+        with self.persistence_lock, self.sessions.begin() as db:
+            row = db.scalar(
+                select(ExternalIntegration).where(
+                    ExternalIntegration.provider == "fjordhub",
+                    ExternalIntegration.base_url == origin,
+                )
+            )
+            if row is None and len(db.scalars(select(ExternalIntegration.id)).all()) >= 20:
                 raise DomainError(
                     "integration_limit", "Maximum configured integrations reached", 409
                 )
             reference = "external-" + uuid4().hex
             self.store.put(reference, token.encode())
-            row = ExternalIntegration(
-                provider="fjordhub",
-                name=body.name,
-                base_url=origin,
-                allow_http=body.allowHttp,
-                secret_reference=reference,
-                enabled=True,
-                snapshot={"status": "not_checked"},
-            )
+            old_reference = row.secret_reference if row else None
+            if row is None:
+                row = ExternalIntegration(
+                    provider="fjordhub",
+                    name=body.name,
+                    base_url=origin,
+                    allow_http=body.allowHttp,
+                    secret_reference=reference,
+                    enabled=True,
+                    snapshot={"status": "not_checked"},
+                )
+            else:
+                row.name, row.allow_http, row.secret_reference = (
+                    body.name,
+                    body.allowHttp,
+                    reference,
+                )
+                row.enabled, row.snapshot, row.next_sync = True, {"status": "not_checked"}, 0
             db.add(row)
             db.flush()
             output = self.public(row)
         self.events.record("integration.configured", "FjordHub", "Read-only integration configured")
+        if old_reference:
+            self.store.delete(old_reference)
         return output
+
+    def register_detected(self, origin, allow_http, name="FjordHub"):
+        with self.persistence_lock, self.sessions.begin() as db:
+            row = db.scalar(
+                select(ExternalIntegration).where(
+                    ExternalIntegration.provider == "fjordhub",
+                    ExternalIntegration.base_url == origin,
+                )
+            )
+            if row is None:
+                if len(db.scalars(select(ExternalIntegration.id)).all()) >= 20:
+                    raise DomainError(
+                        "integration_limit", "Maximum configured integrations reached", 409
+                    )
+                row = ExternalIntegration(
+                    provider="fjordhub",
+                    name=name,
+                    base_url=origin,
+                    allow_http=allow_http,
+                    enabled=True,
+                    snapshot={"status": "detected"},
+                )
+                db.add(row)
+                db.flush()
+            # Discovery must not undo an explicit disconnect or replace credentials.
+            return self.public(row)
+
+    async def detect(self, body):
+        origin = self.origin(body.baseUrl, body.allowHttp)
+        try:
+            async with (
+                asyncio.timeout(15),
+                httpx.AsyncClient(
+                    base_url=origin, timeout=5, trust_env=False, follow_redirects=False
+                ) as client,
+            ):
+                try:
+                    # This combination identifies FjordHub, rather than an arbitrary healthy HTTP service.
+                    async with client.stream("GET", "/api/health") as response:
+                        if response.status_code != 200:
+                            raise ValueError()
+                        data = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            data.extend(chunk)
+                            if len(data) > 4096:
+                                raise ValueError()
+                        import json
+
+                        health = json.loads(data)
+                        if health.get("status") != "ok" or type(health.get("docker")) is not bool:
+                            raise ValueError()
+                    async with client.stream("GET", "/api/integrations/v1/resources") as response:
+                        if (
+                            response.status_code != 401
+                            or response.headers.get("www-authenticate", "").lower() != "bearer"
+                        ):
+                            raise ValueError()
+                except (httpx.HTTPError, ValueError, AttributeError):
+                    raise DomainError(
+                        "fjordhub_not_detected",
+                        "FjordHub could not be verified at this LAN address",
+                        422,
+                    ) from None
+        except TimeoutError:
+            raise DomainError(
+                "fjordhub_not_detected", "FjordHub could not be verified at this LAN address", 422
+            ) from None
+        return self.register_detected(origin, body.allowHttp, getattr(body, "name", "FjordHub"))
+
+    async def discover_known(self):
+        origins = [self.default_origin] if self.default_origin else []
+        with self.sessions() as db:
+            job = db.scalar(
+                select(Setting)
+                .where(Setting.key.startswith("fjordhub.deployment."))
+                .order_by(Setting.created_at.desc())
+                .limit(1)
+            )
+            if job and job.value.get("uninstall", {}).get("state") != "removed":
+                origins += [
+                    line.split("=", 1)[1]
+                    for line in job.value.get("logs", [])
+                    if line.startswith("MEDIAHUB_FJORDHUB_URL=")
+                ][-1:]
+        known = {row["baseUrl"] for row in self.list()}
+        from types import SimpleNamespace
+
+        for origin in origins:
+            if origin not in known:
+                try:
+                    await self.detect(
+                        SimpleNamespace(baseUrl=origin, allowHttp=origin.startswith("http://"))
+                    )
+                except Exception:
+                    pass
 
     async def refresh(self, identifier, *, automatic=False):
         if self.lock.locked():
@@ -120,8 +236,17 @@ class IntegrationService:
                 # A disconnect during the network await must never re-enable access.
                 if not row.enabled or row.secret_reference != reference:
                     return self.public(row)
+                if (
+                    previous.get("pairingPending")
+                    and time.time() < previous.get("pairingDeadline", 0)
+                    and snapshot.status == "authentication_failed"
+                ):
+                    snapshot.status = "pending_setup"
                 success = snapshot.status in {"online", "degraded"}
                 row.snapshot = asdict(snapshot)
+                if snapshot.status == "pending_setup":
+                    row.snapshot["pairingPending"] = True
+                    row.snapshot["pairingDeadline"] = previous["pairingDeadline"]
                 if not success and row.last_success:
                     row.snapshot = {
                         **previous,
@@ -135,6 +260,8 @@ class IntegrationService:
                 delay = snapshot.retry_after or (
                     interval if success else min(3600, 30 * 2**row.failures)
                 )
+                if snapshot.status == "pending_setup":
+                    delay = 60
                 row.next_sync = int(time.time() + delay)
                 if success:
                     row.last_success = now()
@@ -178,10 +305,14 @@ class IntegrationService:
         return output
 
     async def poll(self):
+        discovery = 0
         while True:
             await asyncio.sleep(1)
+            if time.monotonic() >= discovery:
+                await self.discover_known()
+                discovery = time.monotonic() + 60
             for row in self.list():
-                if row["enabled"] and row["nextSync"] <= time.time():
+                if row["enabled"] and row["tokenConfigured"] and row["nextSync"] <= time.time():
                     try:
                         await self.refresh(row["id"], automatic=True)
                     except Exception:

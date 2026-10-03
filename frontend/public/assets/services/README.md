@@ -7,3 +7,5 @@ Their fills are set for use on MediaHub's dark backgrounds. Product names and
 marks identify the corresponding third-party integrations.
 
 The simple Plex chevron and MediaHub mark are rendered by MediaHub components.
+
+The FjordHub PNG mark is the official asset from [qlerup/fjordhub](https://github.com/qlerup/fjordhub/blob/main/static/logos/icons/fjordhub-mark-transparent-512.png), retrieved 2026-10-03. It identifies the FjordHub integration; it is not a MediaHub mark.

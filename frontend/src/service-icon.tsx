@@ -18,9 +18,11 @@ export function ServiceIcon({
         ? "cloudflare"
         : id.includes("docker")
           ? "docker"
-          : /fjordhub|mediahub.*core|^mediahub$|^core$/.test(id)
-            ? "mediahub"
-            : undefined;
+          : id.includes("fjordhub")
+            ? "fjordhub"
+            : /mediahub.*core|^mediahub$|^core$/.test(id)
+              ? "mediahub"
+              : undefined;
   if (!brand) return <Box size={size} className={className} {...props} />;
 
   return (
@@ -53,6 +55,8 @@ export function ServiceIcon({
             height="30"
           />
         </>
+      ) : brand === "fjordhub" ? (
+        <image href="/assets/services/fjordhub.png" width="32" height="32" />
       ) : brand === "mediahub" ? (
         <image href="/favicon.svg" width="32" height="32" />
       ) : (

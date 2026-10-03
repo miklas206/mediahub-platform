@@ -14,6 +14,7 @@ import { bytes } from "./format";
 import { ErrorBox, Panel } from "./phase2";
 import "./integrations.css";
 import { FjordHubTokenGuide, fjordHubLink } from "./fjordhub-token-guide";
+import { ServiceIcon } from "./service-icon";
 import { ArrowUpRight } from "lucide-react";
 
 type Row = Record<string, string | number>;
@@ -30,7 +31,7 @@ type Snapshot = {
   events?: Row[];
   warnings?: string[];
 };
-type Integration = {
+export type Integration = {
   id: string;
   name: string;
   baseUrl: string;
@@ -42,6 +43,8 @@ type Integration = {
   nextSync: number;
 };
 const statusLabels: Record<string, string> = {
+  detected: "Installed · Access Token required",
+  pending_setup: "Installed · Complete administrator setup in FjordHub",
   online: "Connected",
   degraded: "Degraded",
   offline: "FjordHub offline",
@@ -99,34 +102,119 @@ export function useIntegrations() {
   return { items, error, loading, reload };
 }
 
+export function installedFjordHubApps(row: Integration) {
+  if (
+    !row.enabled ||
+    !row.tokenConfigured ||
+    !row.snapshot.capabilities?.includes("docker.resources.read")
+  )
+    return [];
+  return (row.snapshot.apps || []).filter(
+    (app) =>
+      /^[a-zA-Z0-9_-]{1,100}$/.test(String(app.id)) &&
+      Number(app.container_count) > 0,
+  );
+}
+
+export function IntegrationAppCard({
+  row,
+  title,
+}: {
+  row: Integration;
+  title: string;
+}) {
+  const href = fjordHubLink(row.baseUrl);
+  if (!row.enabled || !href) return null;
+  return (
+    <section className="panel app-detail" aria-label={title}>
+      <div className="panel-heading">
+        <div className="app-icon">
+          <ServiceIcon packageId="org.mediahub.fjordhub" />
+        </div>
+        <span
+          className={`badge ${!row.snapshot.stale && row.snapshot.status === "online" ? "healthy" : row.snapshot.status === "degraded" ? "degraded" : "unknown"}`}
+        >
+          {label(row.snapshot.status)}
+        </span>
+      </div>
+      <h2>{row.name}</h2>
+      <p className="muted">
+        {row.tokenConfigured
+          ? t("Installed · Read-only integration")
+          : t("Installed · Access Token required")}
+      </p>
+      <a
+        className="text-link"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {t("Open ")}
+        {row.name} →
+      </a>
+      <div className="stack">
+        {installedFjordHubApps(row).map((app) => (
+          <a
+            key={String(app.id)}
+            className="text-link"
+            href={`${href}/#card-${encodeURIComponent(String(app.id))}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {String(app.name)} · {Number(app.running_count)}/
+            {Number(app.container_count)} {t("running")}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function IntegrationAppLinks({ items }: { items: Integration[] }) {
   return (
     <>
       {items
-        .filter((row) => row.enabled && row.tokenConfigured)
+        .filter((row) => row.enabled)
         .map((row) => {
           const href = fjordHubLink(row.baseUrl);
           if (!href) return null;
           const healthy =
-            ["online", "degraded"].includes(row.snapshot.status) &&
-            !row.snapshot.stale;
+            row.snapshot.status === "online" && !row.snapshot.stale;
           return (
-            <a
-              key={row.id}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={t("Open {value0} · {value1}", {
-                value0: row.name,
-                value1: href,
-              })}
-            >
-              <span
-                className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
-              />
-              <span>{row.name}</span>
-              <ArrowUpRight size={13} aria-hidden="true" />
-            </a>
+            <div key={row.id} className="fjordhub-app-navigation">
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t("Open {value0} · {value1}", {
+                  value0: row.name,
+                  value1: href,
+                })}
+              >
+                <ServiceIcon packageId="org.mediahub.fjordhub" size={18} />
+                <span
+                  className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
+                />
+                <span>{row.name}</span>
+                <ArrowUpRight size={13} aria-hidden="true" />
+              </a>
+              <div className="app-subnav">
+                {installedFjordHubApps(row).map((app) => (
+                  <a
+                    key={String(app.id)}
+                    href={`${href}/#card-${encodeURIComponent(String(app.id))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ServiceIcon packageId={String(app.id)} size={16} />
+                    <span>{String(app.name)}</span>
+                    <span
+                      className={`app-shortcut-dot ${!row.snapshot.stale && Number(app.running_count) > 0 ? "healthy" : "unknown"}`}
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
           );
         })}
     </>
@@ -224,6 +312,26 @@ export function IntegrationsPage({
       setBusy(false);
     }
   }
+  async function detect() {
+    setBusy(true);
+    setFailure("");
+    try {
+      await api("/integrations/fjordhub/detect", "POST", {
+        name,
+        baseUrl,
+        allowHttp,
+      });
+      setNotice(
+        "FjordHub detected. Add an Access Token to show its installed apps.",
+      );
+      await reload();
+      window.dispatchEvent(new Event("integrations-changed"));
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function manage(id: string, action: "refresh" | "disconnect") {
     setBusy(true);
     setFailure("");
@@ -312,6 +420,13 @@ export function IntegrationsPage({
             </p>
           )}
           <div className="button-row">
+            <button
+              type="button"
+              disabled={busy || !baseUrl}
+              onClick={() => void detect()}
+            >
+              {t("Detect existing FjordHub")}
+            </button>
             <button
               type="button"
               disabled={busy || token.length < 16 || !baseUrl}

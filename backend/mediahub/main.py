@@ -101,7 +101,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.agent_updates = AgentUpdates(svc)
         svc.seedbox_reachability = SeedboxReachability(svc)
         svc.rss_feeds = RSSFeeds(svc)
-        svc.fjordhub_deploy = FjordHubDeploy(sessions)
+        svc.fjordhub_deploy = FjordHubDeploy(sessions, svc.integrations)
         register_remote_apps(svc)
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):

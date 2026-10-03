@@ -74,3 +74,21 @@
     margin-bottom: 0.6rem;
   }
 }
+
+.fjordhub-app-navigation .app-subnav {
+  display: grid;
+  gap: 2px;
+  margin-left: 20px;
+}
+.fjordhub-app-navigation .app-subnav a {
+  padding-left: 24px;
+  color: var(--muted);
+}
+.fjordhub-app-navigation a span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.app-shortcuts .fjordhub-app-navigation > a {
+  padding-left: 18px;
+}
