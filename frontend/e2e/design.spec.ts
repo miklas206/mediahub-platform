@@ -2953,19 +2953,18 @@ test("existing FjordHub can be detected without entering an Access Token", async
     snapshot: { status: "detected" },
   };
   await page.route("**/api/v1/integrations", (route) =>
-    route.fulfill({ json: { data: detected ? [row] : [] } }),
+    route.fulfill({ json: { data: [{...row, enabled: detected, snapshot: {status: detected ? "detected" : "disconnected"}}] } }),
   );
   await page.route("**/api/v1/integrations/fjordhub/detect", async (route) => {
     detected = true;
     await route.fulfill({ json: { data: row } });
   });
   await page.goto("/integrations");
-  await page
-    .getByLabel(translated("FjordHub URL"), { exact: true })
-    .fill(row.baseUrl);
+  await expect(page.locator(".fjordhub-app-navigation")).toHaveCount(0);
+
   await page
     .getByRole("button", {
-      name: translated("Detect existing FjordHub"),
+      name: translated("Find and reconnect FjordHub"),
       exact: true,
     })
     .click();
@@ -2975,4 +2974,32 @@ test("existing FjordHub can be detected without entering an Access Token", async
   await expect(
     page.locator(".fjordhub-app-navigation .app-subnav a"),
   ).toHaveCount(0);
+});
+
+
+test("a successful FjordHub connection test clearly offers saving and then shows installed apps", async ({page}) => {
+  await designFixtures(page);
+  let saved=false;
+  const snapshot={status:"online",api_version:"1",capabilities:["docker.resources.read"],apps:[{id:"fjordflix",name:"FjordFlix",container_count:1,running_count:1}]};
+  const row={id:"reconnected-hub",name:"FjordHub",baseUrl:"https://192.168.1.40:8888",enabled:true,tokenConfigured:true,allowHttp:false,lastSuccessfulSync:null,nextSync:0,snapshot};
+  await page.route("**/api/v1/integrations", route=>route.fulfill({json:{data:[{...row,enabled:saved,tokenConfigured:saved,snapshot:saved?snapshot:{status:"disconnected"}}]}}));
+  await page.route("**/api/v1/integrations/fjordhub/test", route=>route.fulfill({json:{data:snapshot}}));
+  await page.route("**/api/v1/integrations/fjordhub", async route=>{saved=true;await route.fulfill({json:{data:row}});});
+  await page.goto("/integrations");
+  await page.getByLabel(translated("FjordHub URL"),{exact:true}).fill(row.baseUrl);
+  await page.getByLabel(translated("Access Token"),{exact:true}).fill("test-fixture-token-123456789");
+  await page.getByRole("button",{name:translated("Test Connection"),exact:true}).click();
+  await expect(page.locator(".integrations-page form [role=status]")).toContainText(translated("Connection test succeeded. Save and connect to show FjordHub and its apps under Apps."));
+  await expect(page.locator(".fjordhub-app-navigation")).toHaveCount(0);
+  await page.getByRole("button",{name:translated("Save and connect FjordHub"),exact:true}).click();
+  await expect(page.locator(".fjordhub-app-navigation")).toContainText("FjordFlix");
+  await expect(page.getByLabel(translated("Access Token"),{exact:true})).toHaveValue("");
+  await page.route("**/api/v1/catalog", route=>route.fulfill({json:{data:[{
+    id:"org.mediahub.fjordhub",name:"FjordHub",description:"FjordHub integration",category:"media-platform",version:"0.1.0",maintainer:{name:"FjordHub contributors"},availability:"available",requiredRuntime:"none",recommendedIsolation:"shared-host",hostCapabilities:[],images:{},services:{},storageRequirements:[],secrets:[],dependencies:[],healthChecks:[],capabilities:[],configFields:[],installGuide:[]
+  }]}}));
+  await page.goto("/store");
+  const storeCard=page.locator(".store-card").filter({has:page.getByRole("heading",{name:"FjordHub",exact:true})});
+  await expect(storeCard.locator(".badge")).toHaveText(translated("Installed"));
+  await page.goto("/apps");
+  await expect(page.locator("main").getByRole("heading",{name:"FjordHub",exact:true})).toBeVisible();
 });

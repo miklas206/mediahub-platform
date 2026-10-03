@@ -85,7 +85,7 @@ async def test(body: IntegrationInput, request: Request, user=Depends(authentica
 @router.post("/fjordhub/detect")
 async def detect(body: DetectionInput, request: Request, user=Depends(authenticated)):
     require_admin(user)
-    return result(await services(request).integrations.detect(body))
+    return result(await services(request).integrations.detect(body, reconnect=True))
 
 
 @router.post("/fjordhub")

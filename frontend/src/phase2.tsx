@@ -1410,7 +1410,7 @@ export function CatalogPage({
                     {installedApp
                       ? t("Installed")
                       : connected
-                        ? t("Connected")
+                        ? t("Installed")
                         : app.availability === "available"
                           ? t("Guided setup")
                           : t("Coming soon")}

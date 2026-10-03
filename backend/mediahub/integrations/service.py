@@ -112,7 +112,7 @@ class IntegrationService:
             self.store.delete(old_reference)
         return output
 
-    def register_detected(self, origin, allow_http, name="FjordHub"):
+    def register_detected(self, origin, allow_http, name="FjordHub", *, reconnect=False):
         with self.persistence_lock, self.sessions.begin() as db:
             row = db.scalar(
                 select(ExternalIntegration).where(
@@ -135,10 +135,13 @@ class IntegrationService:
                 )
                 db.add(row)
                 db.flush()
-            # Discovery must not undo an explicit disconnect or replace credentials.
+            elif reconnect and not row.enabled:
+                row.enabled, row.allow_http, row.name = True, allow_http, name
+                row.snapshot, row.next_sync = {"status": "detected"}, 0
+            # Background discovery must not undo an explicit disconnect or replace credentials.
             return self.public(row)
 
-    async def detect(self, body):
+    async def detect(self, body, *, reconnect=False):
         origin = self.origin(body.baseUrl, body.allowHttp)
         try:
             async with (
@@ -178,7 +181,9 @@ class IntegrationService:
             raise DomainError(
                 "fjordhub_not_detected", "FjordHub could not be verified at this LAN address", 422
             ) from None
-        return self.register_detected(origin, body.allowHttp, getattr(body, "name", "FjordHub"))
+        return self.register_detected(
+            origin, body.allowHttp, getattr(body, "name", "FjordHub"), reconnect=reconnect
+        )
 
     async def discover_known(self):
         origins = [self.default_origin] if self.default_origin else []

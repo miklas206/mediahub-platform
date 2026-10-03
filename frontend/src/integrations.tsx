@@ -312,15 +312,16 @@ export function IntegrationsPage({
       setBusy(false);
     }
   }
-  async function detect() {
+  async function detect(target = { name, baseUrl, allowHttp }) {
     setBusy(true);
     setFailure("");
     try {
-      await api("/integrations/fjordhub/detect", "POST", {
-        name,
-        baseUrl,
-        allowHttp,
-      });
+      await api("/integrations/fjordhub/detect", "POST", target);
+      if (target.baseUrl !== baseUrl) setToken("");
+      setTest(null);
+      setUrl(target.baseUrl);
+      setName(target.name);
+      setHttp(target.allowHttp);
       setNotice(
         "FjordHub detected. Add an Access Token to show its installed apps.",
       );
@@ -435,12 +436,19 @@ export function IntegrationsPage({
               {t("Test Connection")}
             </button>
             <button type="submit" disabled={busy || token.length < 16}>
-              {busy ? t("Working…") : t("Save")}
+              {busy ? t("Working…") : t("Save and connect FjordHub")}
             </button>
           </div>
           {test && (
             <div role="status">
               <strong>{label(test.status)}</strong>
+              {["online", "degraded"].includes(test.status) && (
+                <p>
+                  {t(
+                    "Connection test succeeded. Save and connect to show FjordHub and its apps under Apps.",
+                  )}
+                </p>
+              )}
               <p>
                 {t("FjordHub ")}
                 {test.version || t("version unavailable")}
@@ -511,8 +519,22 @@ export function IntegrationsPage({
               <dd>{row.snapshot.api_version || t("Unverified")}</dd>
             </dl>
             <div className="button-row">
+              {!row.enabled && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void detect({
+                      name: row.name,
+                      baseUrl: row.baseUrl,
+                      allowHttp: row.allowHttp,
+                    })
+                  }
+                >
+                  {t("Find and reconnect FjordHub")}
+                </button>
+              )}
               <button
-                disabled={busy || !row.enabled}
+                disabled={busy || !row.enabled || !row.tokenConfigured}
                 onClick={() => void manage(row.id, "refresh")}
               >
                 {t("Refresh")}

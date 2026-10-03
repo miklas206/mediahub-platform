@@ -16,7 +16,7 @@ test("FjordHub token submission, dynamic apps, disconnect and responsive layout"
   await page.getByLabel("Access Token",{exact:true}).fill("valid-fixture-token-123456");
   await page.getByRole("button",{name:"Test Connection",exact:true}).click();
   await expect(page.getByRole("status")).toContainText("Connected");
-  await page.getByRole("button",{name:"Save",exact:true}).click();
+  await page.getByRole("button",{name:"Save and connect FjordHub",exact:true}).click();
   await expect(page.getByLabel("Access Token",{exact:true})).toHaveValue("");
   await page.getByRole("button",{name:"Refresh",exact:true}).click();
   await expect(page.getByText("Dynamic future app",{exact:true})).toBeVisible();

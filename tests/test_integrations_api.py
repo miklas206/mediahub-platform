@@ -193,6 +193,16 @@ def test_tokenless_detection_is_bounded_and_recognizes_only_fjordhub(logged_in, 
     assert response.status_code == 200
     assert not response.json()["data"]["tokenConfigured"]
     assert calls == ["/api/health", "/api/integrations/v1/resources"]
+    svc = logged_in.app.state.services.integrations
+    identifier = response.json()["data"]["id"]
+    svc.disconnect(identifier)
+    assert not svc.register_detected(payload["baseUrl"], False)["enabled"]
+    reconnected = logged_in.post("/api/v1/integrations/fjordhub/detect", json=payload)
+    assert reconnected.status_code == 200
+    assert reconnected.json()["data"]["id"] == identifier
+    assert reconnected.json()["data"]["enabled"]
+    assert not reconnected.json()["data"]["tokenConfigured"]
+    assert reconnected.json()["data"]["snapshot"]["status"] == "detected"
     assert (
         logged_in.post("/api/v1/integrations/fjordhub/detect", json=payload).json()["data"]["id"]
         == response.json()["data"]["id"]

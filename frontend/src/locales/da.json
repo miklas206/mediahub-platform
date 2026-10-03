@@ -2600,5 +2600,8 @@
   "Detect existing FjordHub": "Find eksisterende FjordHub",
   "FjordHub detected. Add an Access Token to show its installed apps.": "FjordHub fundet. Tilføj et adgangstoken for at vise de installerede apps.",
   "FjordHub could not be verified at this LAN address": "FjordHub kunne ikke bekræftes på denne lokalnetadresse",
-  "Automatic pairing unavailable; connect with an Access Token in Integrations.": "Automatisk tilknytning er ikke tilgængelig; forbind med et adgangstoken under Integrationer."
+  "Automatic pairing unavailable; connect with an Access Token in Integrations.": "Automatisk tilknytning er ikke tilgængelig; forbind med et adgangstoken under Integrationer.",
+  "Save and connect FjordHub": "Gem og tilknyt FjordHub",
+  "Find and reconnect FjordHub": "Find og genaktivér FjordHub",
+  "Connection test succeeded. Save and connect to show FjordHub and its apps under Apps.": "Forbindelsestesten lykkedes. Tryk Gem og tilknyt FjordHub for at vise FjordHub og dets apps under Apps."
 }
