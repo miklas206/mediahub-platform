@@ -200,11 +200,18 @@ class AgentUpdates:
                 f"printf '\\n%s\\n' {public} >> /root/.ssh/authorized_keys) && "
                 "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub"
             )
+            quoted = shlex.quote(script)
+            command = (
+                'if [ "$(id -u)" -eq 0 ]; then set --; '
+                "elif command -v sudo >/dev/null 2>&1; then set -- sudo; "
+                'else echo "Administrator access is required. Ask your server administrator to run this command as root." >&2; exit 1; fi; '
+                '"$@" sh -c ' + quoted
+            )
             return {
                 "created": True,
                 "host": address.host,
                 "publicKey": value["publicKey"],
-                "command": "sh -c " + shlex.quote(script),
+                "command": command,
             }
 
     def prepare_generated(self, fingerprint, port):

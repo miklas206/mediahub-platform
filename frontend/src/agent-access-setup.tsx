@@ -89,8 +89,13 @@ export function AgentAccessSetup({
           </p>
           <p>
             {t(
-              "Open the console of the Seedbox server at {host} and log in as root. In Proxmox, select the Seedbox VM and open Console. Paste this command and press Enter.",
+              "Open the console of the Seedbox server at {host} and log in with your Linux account. In Proxmox, select the Seedbox VM and open Console. Paste this command at the command prompt and press Enter.",
               { host: access.host },
+            )}
+          </p>
+          <p className="muted">
+            {t(
+              "If asked for a password, enter your Linux login password, not your SMB or MediaHub password. Nothing appears while typing; press Enter when done. MediaHub never receives this password. If your account is not an administrator, ask your server administrator to approve access.",
             )}
           </p>
           <p className="muted">
@@ -197,7 +202,7 @@ export function AgentAccessSetup({
           )}
           <p className="muted">
             {t(
-              "Connection failed? Make sure the command ran as root on the correct server. Keep the existing tunnel key. Then try again.",
+              "Connection failed? Make sure the command ran on the correct server and that your Linux account has administrator access. Keep the existing tunnel key. Then try again.",
             )}
           </p>
         </>

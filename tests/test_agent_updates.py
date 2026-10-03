@@ -391,6 +391,52 @@ def test_generated_access_api_requires_https_and_reuses_key(logged_in, monkeypat
     assert logged_in.get(prefix + "/generated-access").json()["data"] == response.json()["data"]
 
 
+@pytest.mark.parametrize("mode", ["root", "sudo", "no-admin", "sudo-denied"])
+def test_generated_command_selects_administrator_access_without_running_payload(
+    logged_in, monkeypatch, mode
+):
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    shell = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
+    if not Path(shell).is_file():
+        pytest.skip("Shell parser unavailable")
+    updater = logged_in.app.state.services.agent_updates
+    monkeypatch.setattr(
+        updater, "binding", lambda: ("seedbox", None, SimpleNamespace(host="10.0.0.42"))
+    )
+    command = updater.generated_access(create=True)["command"]
+    # Intercept sh and sudo: this tests the real generated wrapper and quoting
+    # without touching authorized_keys or requiring administrator permissions.
+    functions = (
+        "id() { printf '%s\\n' " + ("0" if mode == "root" else "1000") + "; }; "
+        "sh() { printf 'PAYLOAD\\n'; printf '%s\\n' \"$@\"; }; "
+    )
+    if mode == "no-admin":
+        functions += "command() { return 1; }; "
+    elif mode == "sudo-denied":
+        functions += "sudo() { printf 'DENIED\\n' >&2; return 1; }; "
+    else:
+        functions += "sudo() { printf 'SUDO\\n'; \"$@\"; }; "
+    result = subprocess.run(
+        [shell, "-c", functions + command], capture_output=True, text=True, timeout=10
+    )
+    if mode in {"root", "sudo"}:
+        assert result.returncode == 0
+        assert result.stdout.startswith("SUDO\nPAYLOAD\n" if mode == "sudo" else "PAYLOAD\n")
+        assert "mediahub-agent-updates" in result.stdout
+        assert "printf '\\n%s\\n'" in result.stdout
+    else:
+        assert result.returncode != 0
+        assert "PAYLOAD" not in result.stdout
+        assert (
+            "Administrator access is required" in result.stderr
+            if mode == "no-admin"
+            else "DENIED" in result.stderr
+        )
+
+
 def test_check_all_includes_agent_update(logged_in, monkeypatch):
     svc = logged_in.app.state.services
     monkeypatch.setattr(

@@ -2643,5 +2643,8 @@
   "Connection failed? Make sure the command ran as root on the correct server. Keep the existing tunnel key. Then try again.": "Forbindelsen fejlede? Kontrollér, at kommandoen blev kørt som root på den rigtige server. Behold den eksisterende tunnelnøgle. Prøv derefter igen.",
   "Advanced: use existing SSH access": "Avanceret: brug eksisterende SSH-adgang",
   "Generated SSH access cannot be decrypted": "Den oprettede SSH-adgang kan ikke dekrypteres",
-  "Create update access first": "Opret først adgang til opdateringer"
+  "Create update access first": "Opret først adgang til opdateringer",
+  "Open the console of the Seedbox server at {host} and log in with your Linux account. In Proxmox, select the Seedbox VM and open Console. Paste this command at the command prompt and press Enter.": "Åbn konsollen til Seedbox-serveren på {host}, og log ind med din Linux-bruger. I Proxmox vælger du Seedbox-VM’en og åbner Console. Indsæt kommandoen ved kommandoprompten, og tryk Enter.",
+  "If asked for a password, enter your Linux login password, not your SMB or MediaHub password. Nothing appears while typing; press Enter when done. MediaHub never receives this password. If your account is not an administrator, ask your server administrator to approve access.": "Hvis du bliver spurgt om en adgangskode, skal du bruge din Linux-loginadgangskode, ikke din SMB- eller MediaHub-kode. Der vises ingen tegn, mens du skriver; tryk Enter, når du er færdig. Adgangskoden sendes aldrig til MediaHub. Er din bruger ikke administrator, skal serverens administrator godkende adgangen.",
+  "Connection failed? Make sure the command ran on the correct server and that your Linux account has administrator access. Keep the existing tunnel key. Then try again.": "Forbindelsen fejlede? Kontrollér, at kommandoen blev kørt på den rigtige server, og at din Linux-bruger har administratoradgang. Behold den eksisterende tunnelnøgle. Prøv derefter igen."
 }
