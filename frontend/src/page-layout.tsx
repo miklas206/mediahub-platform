@@ -414,6 +414,80 @@ function cardTitle(node: ReactNode): string {
   return "";
 }
 
+type LayoutEntry = {
+  node: ReactNode;
+  id: string;
+  sourceGroup: string;
+  sourceId: string;
+  span?: number;
+  defaultHidden?: boolean;
+};
+
+// Nested grids are presentation, not movement boundaries. Keep each card's
+// previous storage address so existing widths and hidden choices still work.
+function layoutEntries(
+  children: ReactNode,
+  group: string,
+  context: LayoutContext | null,
+  nested = false,
+  options: {
+    className?: string;
+    wideFirst?: boolean;
+    fullWidth?: string[];
+    defaultHidden?: string[];
+  } = {},
+): LayoutEntry[] {
+  const nodes = Children.toArray(children);
+  const movable = nodes.filter(canMove);
+  const byId = new Map(movable.map((node) => [String(node.key), node]));
+  const order = orderedIds([...byId.keys()], context?.layouts[group]);
+  let cursor = 0;
+  return nodes.flatMap((original) => {
+    const node = canMove(original) ? byId.get(order[cursor++])! : original;
+    if (isValidElement(node) && node.type === LayoutGroup) {
+      const props = node.props as {
+        id: string;
+        children: ReactNode;
+      } & typeof options;
+      return layoutEntries(props.children, props.id, context, true, props);
+    }
+    const sourceId = isValidElement(node) ? String(node.key) : "";
+    const plainId = sourceId.replace(/^\.\$/, "");
+    const full =
+      options.fullWidth?.includes(plainId) ||
+      (options.wideFirst && sourceId === String(movable[0]?.key));
+    const sourceHidden = context?.hidden[group];
+    return [
+      {
+        node,
+        id: nested ? `${group}/${sourceId}` : sourceId,
+        sourceId,
+        sourceGroup: group,
+        span: full
+          ? 12
+          : nested
+            ? /updates-grid/.test(options.className || "")
+              ? 12
+              : /apps-grid/.test(options.className || "")
+                ? 12 /
+                  Math.min(
+                    /store-grid/.test(options.className || "") ? 4 : 3,
+                    Math.max(1, movable.length),
+                  )
+                : /runtime-panels|security-grid|torrent-panels|windows-share-grid/.test(
+                      options.className || "",
+                    )
+                  ? 6
+                  : 12
+            : undefined,
+        defaultHidden: sourceHidden
+          ? sourceHidden.includes(sourceId)
+          : options.defaultHidden?.includes(plainId),
+      },
+    ];
+  });
+}
+
 export function LayoutGroup({
   id,
   className = "stack",
@@ -430,17 +504,31 @@ export function LayoutGroup({
   children: ReactNode;
 }) {
   const context = useContext(Context);
-  const nodes = Children.toArray(children);
+  const entries = layoutEntries(children, id, context, false, {
+    className,
+    wideFirst,
+    defaultHidden,
+    fullWidth,
+  });
+  const nodes = entries.map((entry) => entry.node);
   const movable = nodes.filter(canMove);
-  const byId = new Map(movable.map((node) => [String(node.key), node]));
+  const metadata = new Map(
+    entries
+      .filter((entry) => canMove(entry.node))
+      .map((entry) => [entry.id, entry]),
+  );
+  const byId = new Map(
+    [...metadata].map(([key, entry]) => [
+      key,
+      entry.node as ReactElement<Record<string, unknown>>,
+    ]),
+  );
   const ids = orderedIds([...byId.keys()], context?.layouts[id]);
   const choices = JSON.stringify(
-    movable.map((item, index) => ({
-      id: String(item.key),
-      title: cardTitle(item) || t("Box {count}", { count: index + 1 }),
-      defaultHidden: defaultHidden.includes(
-        String(item.key).replace(/^\.\$/, ""),
-      ),
+    [...metadata].map(([key, entry], index) => ({
+      id: key,
+      title: cardTitle(entry.node) || t("Box {count}", { count: index + 1 }),
+      defaultHidden: !!entry.defaultHidden,
     })),
   );
   const register = context?.register;
@@ -480,7 +568,8 @@ export function LayoutGroup({
   const columns = context?.geometry.columns || 0;
   const customGrid =
     movable.length > 0 &&
-    (fullWidth.length > 0 ||
+    (entries.some((entry) => entry.sourceGroup !== id) ||
+      fullWidth.length > 0 ||
       context?.editing ||
       columns > 0 ||
       ids.some(
@@ -503,6 +592,8 @@ export function LayoutGroup({
         const itemId = ids[cursor++];
         if (hidden.includes(itemId)) return null;
         const item = byId.get(itemId)!;
+        const entry = metadata.get(itemId)!;
+        const previousKey = `${entry.sourceGroup}:${entry.sourceId}`;
         const index = visibleIds.indexOf(itemId);
         return (
           <LayoutItem
@@ -512,20 +603,27 @@ export function LayoutGroup({
             title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
             hide={() => context?.hide(id, [...hidden, itemId])}
             columns={columns}
+            defaultSpan={columns ? undefined : entry.span}
             defaultFullWidth={fullWidth.includes(itemId.replace(/^\.\$/, ""))}
             width={
               context?.geometry.widths[`${id}:${itemId}`] ??
+              context?.geometry.widths[previousKey] ??
               (wideFirst && itemId === String(movable[0]?.key) ? 0 : -1)
             }
-            height={context?.geometry.heights[`${id}:${itemId}`]}
+            height={
+              context?.geometry.heights[`${id}:${itemId}`] ??
+              context?.geometry.heights[previousKey]
+            }
             resizeCard={
               context
-                ? (size) => context.resizeCard(id, itemId, size)
+                ? (size) =>
+                    context.resizeCard(entry.sourceGroup, entry.sourceId, size)
                 : undefined
             }
             resize={
               context
-                ? (width) => context?.resize(id, itemId, width)
+                ? (width) =>
+                    context?.resize(entry.sourceGroup, entry.sourceId, width)
                 : undefined
             }
             group={id}
@@ -561,6 +659,7 @@ function LayoutItem({
   height,
   resizeCard,
   defaultFullWidth,
+  defaultSpan,
 }: {
   item: ReactElement<Record<string, unknown>>;
   editing: boolean;
@@ -572,6 +671,7 @@ function LayoutItem({
   width: number;
   height?: number;
   defaultFullWidth?: boolean;
+  defaultSpan?: number;
   resizeCard?: (size: { width?: number; height?: number }) => void;
   resize?: (width: number) => void;
   title: string;
@@ -604,7 +704,9 @@ function LayoutItem({
       className={`layout-item ${displayWidth === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${draft ? "is-resizing" : ""} ${displayHeight ? "has-custom-height" : ""} ${over ? "is-drop-target" : ""}`}
       style={
         {
-          ...(defaultFullWidth ? { "--layout-default-span": 12 } : {}),
+          ...(defaultFullWidth || defaultSpan
+            ? { "--layout-default-span": defaultFullWidth ? 12 : defaultSpan }
+            : {}),
           ...(displayWidth !== -1
             ? {
                 "--layout-span": Math.round(

@@ -266,7 +266,7 @@ export function SeedboxDaily({
             : "torrent-empty-container"
         }
       >
-        {overviewCards}
+        {section === "vpn" && overviewCards}
         {section === "vpn" && (
           <Panel key="vpn-location" title={t("VPN Location")}>
             <ErrorBox error={locationError} />
@@ -411,6 +411,7 @@ export function SeedboxDaily({
       {section === "torrents" && (
         <>
           <SeedboxRSS
+            overviewCards={overviewCards}
             storageId={list?.storageId}
             torrents={listError ? null : (list?.items ?? null)}
             locations={list?.downloadLocations || []}

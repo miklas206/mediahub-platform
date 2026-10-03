@@ -905,22 +905,24 @@ function Shell({
               <Route
                 path="/apps"
                 element={
-                  <LayoutGroup id="ui-Shell-1" className="stack">
-                    <Apps revision={revision} />
-                    <section className="store-callout">
-                      <div>
-                        <strong>{t("Looking for another app?")}</strong>
-                        <p>
-                          {t(
-                            "Browse guided installations without mixing them into the apps you already run.",
-                          )}
-                        </p>
-                      </div>
-                      <NavLink className="primary" to="/store">
-                        {t("Open App Store →")}
-                      </NavLink>
-                    </section>
-                  </LayoutGroup>
+                  <Apps
+                    revision={revision}
+                    extraCards={
+                      <section className="store-callout">
+                        <div>
+                          <strong>{t("Looking for another app?")}</strong>
+                          <p>
+                            {t(
+                              "Browse guided installations without mixing them into the apps you already run.",
+                            )}
+                          </p>
+                        </div>
+                        <NavLink className="primary" to="/store">
+                          {t("Open App Store →")}
+                        </NavLink>
+                      </section>
+                    }
+                  />
                 }
               />
               <Route
@@ -983,7 +985,7 @@ function Shell({
                 element={
                   <SettingsExtensions
                     general={
-                      <>
+                      <LayoutGroup id="settings-general-layout">
                         <LayoutGroup
                           id="settings-appearance-cards"
                           className="settings-appearance-group stack"
@@ -1009,7 +1011,7 @@ function Shell({
                             <SettingsPage />
                           </div>
                         </LayoutGroup>
-                      </>
+                      </LayoutGroup>
                     }
                     maintenance={<MaintenancePage />}
                     security={<SecuritySettings />}
@@ -1350,7 +1352,13 @@ function ActivityList({ items }: { items: Activity[] }) {
   );
 }
 
-function Apps({ revision }: { revision: number }) {
+function Apps({
+  revision,
+  extraCards,
+}: {
+  revision: number;
+  extraCards?: ReactNode;
+}) {
   const { data, error, reload } = useData<AppInfo[]>("/apps");
   const [actionError, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1368,7 +1376,7 @@ function Apps({ revision }: { revision: number }) {
     }
   };
   return (
-    <>
+    <LayoutGroup id="ui-Shell-1" className="stack">
       {(error || actionError) && (
         <Notice>{translateText(error) || actionError}</Notice>
       )}
@@ -1453,7 +1461,8 @@ function Apps({ revision }: { revision: number }) {
           {t("The app registry is empty.")}
         </Empty>
       )}
-    </>
+      {extraCards}
+    </LayoutGroup>
   );
 }
 

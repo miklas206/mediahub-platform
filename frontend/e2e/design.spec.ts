@@ -2309,6 +2309,133 @@ test("Windows helper downloads reject a proxy error instead of saving HTML as Po
   ).toHaveValue("\\\\192.168.10.20\\MediaHub");
 });
 
+test("Windows cards follow resized borders and move by dragging their content", async ({
+  page,
+}) => {
+  await windowsShareFixtures(page, null);
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/apps/windows-share");
+  await windowsShareReady(page);
+  await page
+    .getByRole("button", { name: translated("Customize layout"), exact: true })
+    .click();
+  const group = page.locator(".windows-share-grid");
+  const cards = group.locator(":scope > .layout-item");
+  const card = cards.nth(1);
+  const before = await card.getAttribute("data-layout-item");
+  const handle = card.locator(":scope > .resize-bottom");
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 150, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  const outline = (await card.boundingBox())!;
+  const panel = (await card.locator(".windows-share-card").boundingBox())!;
+  expect(panel.height).toBeCloseTo(outline.height, 0);
+  await card
+    .locator(":scope > .layout-drag-surface")
+    .dragTo(cards.first().locator(":scope > .layout-drag-surface"), {
+      sourcePosition: { x: 100, y: 100 },
+      targetPosition: { x: 100, y: 100 },
+    });
+  await expect(cards.first()).toHaveAttribute("data-layout-item", before!);
+  for (const key of await cards.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute("data-layout-item")!),
+  )) {
+    const current = group.locator(
+      `:scope > .layout-item[data-layout-item="${key}"]`,
+    );
+    await current.locator(":scope > .resize-bottom").press("ArrowDown");
+    const bounds = (await current.boundingBox())!;
+    expect(
+      (await current.locator(".windows-share-card").boundingBox())!.height,
+    ).toBeCloseTo(bounds.height, 0);
+    await current.locator(":scope > .layout-drag-surface").press("ArrowUp");
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: "../.qa/windows-layout-fixed-desktop.png",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: translated("Done arranging"), exact: true })
+    .click();
+  await page.reload();
+  await windowsShareReady(page);
+  const resized = group.locator(
+    `:scope > .layout-item[data-layout-item="${before}"]`,
+  );
+  expect(
+    (await resized.locator(".windows-share-card").boundingBox())!.height,
+  ).toBeCloseTo((await resized.boundingBox())!.height, 0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await contained(page);
+  await captureWindowsShare(page, "windows-layout-fixed-mobile.png");
+});
+
+test("every runtime card can move above cards from formerly separate groups", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  for (const path of [
+    "/apps/plex",
+    "/apps/cloudflare",
+    "/apps/seedbox?section=torrents",
+    "/apps/seedbox?section=settings",
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("main .layout-item").first()).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: translated("Customize layout"),
+        exact: true,
+      })
+      .click();
+    const missing = await page
+      .locator("main .panel")
+      .evaluateAll((nodes) =>
+        nodes
+          .filter(
+            (node) =>
+              !node.closest(".layout-item") &&
+              node.getBoundingClientRect().height > 0,
+          )
+          .map((node) => node.querySelector("h2")?.textContent),
+      );
+    expect(missing, path).toEqual([]);
+    const groups = page
+      .locator("main .layout-group")
+      .filter({ has: page.locator(".layout-item") });
+    await expect(groups, path).toHaveCount(1);
+    const group = groups.first();
+    const cards = group.locator(":scope > .layout-item");
+    for (const key of await cards.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-layout-item")!),
+    )) {
+      const surface = group.locator(
+        `:scope > .layout-item[data-layout-item="${key}"] > .layout-drag-surface`,
+      );
+      const index = await cards.evaluateAll(
+        (nodes, key) =>
+          nodes.findIndex(
+            (node) => node.getAttribute("data-layout-item") === key,
+          ),
+        key,
+      );
+      for (let step = index; step > 0; step--) await surface.press("ArrowUp");
+      await expect(cards.first()).toHaveAttribute("data-layout-item", key);
+    }
+    await page
+      .getByRole("button", { name: translated("Done arranging"), exact: true })
+      .click();
+    await page.reload();
+    await expect(cards.first()).toBeVisible();
+    await contained(page);
+  }
+});
+
 test("Windows folder guidance adapts to narrow phones and individually resized cards", async ({
   page,
 }) => {

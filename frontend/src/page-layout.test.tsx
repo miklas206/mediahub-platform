@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   canMove,
   cardWidthPercentage,
   LayoutGroup,
+  PageLayout,
   orderedIds,
   readLayouts,
   readGeometry,
@@ -13,6 +15,44 @@ import {
 } from "./page-layout";
 
 describe("page layout preferences", () => {
+  it("unifies nested movement boundaries while retaining prior sizes, hidden cards and fixed headings", () => {
+    const saved: Record<string, string> = {
+      "mediahub.layout.v1:qa": JSON.stringify({ nested: [".$b", ".$a"] }),
+      "mediahub.layout.hidden.v1:qa": JSON.stringify({ nested: [".$b"] }),
+      "mediahub.layout.size.v1:qa": JSON.stringify({
+        columns: 0,
+        widths: { "nested:.$a": 25 },
+        heights: { "nested:.$a": 192 },
+      }),
+    };
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => saved[key] || null,
+    });
+    try {
+      const markup = renderToStaticMarkup(
+        <PageLayout storageKey="qa">
+          <LayoutGroup id="parent">
+            <header>Fixed heading</header>
+            <div className="panel" key="intro" data-layout-title="Intro" />
+            <LayoutGroup id="nested" className="runtime-panels">
+              <div className="panel" key="a" data-layout-title="A" />
+              <div className="panel" key="b" data-layout-title="B" />
+            </LayoutGroup>
+          </LayoutGroup>
+        </PageLayout>,
+      );
+      expect(markup).toContain('data-layout-item="nested/.$a"');
+      expect(markup).not.toContain('data-layout-title="B"');
+      expect(markup).toContain("--layout-span:3");
+      expect(markup).toContain("--layout-height:192px");
+      expect(markup.indexOf("Fixed heading")).toBeLessThan(
+        markup.indexOf('data-layout-title="Intro"'),
+      );
+      expect(markup.match(/class="[^"]*layout-group/g)).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("preserves VPN card sizes and visibility when combining their groups", () => {
     expect(
       migrateVPNLayouts({ "seedbox-daily-location": [".0"] })[

@@ -46,7 +46,11 @@ type Props = {
 };
 
 export function SeedboxRSS(
-  props: Props & { addTorrent: ReactNode; torrentList: ReactNode },
+  props: Props & {
+    addTorrent: ReactNode;
+    torrentList: ReactNode;
+    overviewCards?: ReactNode;
+  },
 ) {
   const [listing, setListing] = useState<Listing>({
     feeds: [],
@@ -118,6 +122,7 @@ export function SeedboxRSS(
       className="torrent-panels"
       wideFirst
     >
+      {props.overviewCards}
       {props.torrentList}
       <Panel key="feeds" title={t("Your feeds")}>
         <ErrorBox error={error} />

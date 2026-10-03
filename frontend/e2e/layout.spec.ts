@@ -98,7 +98,14 @@ test("card edges resize width and height on the grid with persistent, readable c
   expect(
     await card
       .locator(":scope > .layout-item-content")
-      .evaluate((node) => node.scrollHeight > node.clientHeight),
+      .evaluate((node) =>
+        [
+          node,
+          ...node.querySelectorAll<HTMLElement>(
+            ".panel, .dashboard-card, .layout-card",
+          ),
+        ].some((content) => content.scrollHeight > content.clientHeight),
+      ),
   ).toBe(true);
   await card
     .getByRole("button", {
@@ -976,6 +983,21 @@ test("all layout cards resize without a column prerequisite and keep their conte
       page.getByRole("button", { name: "Done arranging" }),
       path,
     ).toBeVisible();
+    const fixedPanels = await page
+      .locator("main .panel")
+      .evaluateAll((nodes) =>
+        nodes
+          .filter(
+            (node) =>
+              !node.closest(".layout-item") &&
+              node.getBoundingClientRect().height > 0 &&
+              !node.classList.contains("app-skeleton"),
+          )
+          .map(
+            (node) => node.querySelector("h2")?.textContent || node.className,
+          ),
+      );
+    expect.soft(fixedPanels, `${path}: cards outside layout`).toEqual([]);
     const technicalStorage = page.locator(
       "details.technical-disclosure > summary",
     );
@@ -1018,6 +1040,50 @@ test("all layout cards resize without a column prerequisite and keep their conte
           ),
       );
       expect(overflowing, path).toEqual([]);
+      const resizeHandle = card.locator(":scope > .resize-bottom");
+      await resizeHandle.focus();
+      await resizeHandle.press("ArrowDown");
+      const dimensions = await card.evaluate((node) => {
+        const content = node.querySelector<HTMLElement>(
+          ":scope > .layout-item-content > *",
+        )!;
+        return {
+          card: node.getBoundingClientRect().height,
+          content: content.getBoundingClientRect().height,
+        };
+      });
+      expect(
+        dimensions.content,
+        `${path}: resized border follows content`,
+      ).toBeCloseTo(dimensions.card, 0);
+      await card
+        .locator(":scope > .layout-item-tools button")
+        .filter({ has: page.locator("svg.lucide-rotate-ccw") })
+        .click();
+    }
+    for (const group of await page.locator(".layout-group").all()) {
+      const groupCards = group.locator(":scope > .layout-item");
+      if ((await groupCards.count()) < 2) continue;
+      const keys = await groupCards.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("data-layout-item")!),
+      );
+      for (const key of keys.reverse()) {
+        const move = group.locator(
+          `:scope > .layout-item[data-layout-item="${key}"] > .layout-drag-surface`,
+        );
+        const index = await groupCards.evaluateAll(
+          (nodes, key) =>
+            nodes.findIndex(
+              (node) => node.getAttribute("data-layout-item") === key,
+            ),
+          key,
+        );
+        for (let step = index; step > 0; step--) await move.press("ArrowUp");
+        await expect(
+          groupCards.first(),
+          `${path}: ${key} can reach the first position`,
+        ).toHaveAttribute("data-layout-item", key);
+      }
     }
     expect(
       await page.evaluate(
@@ -1233,9 +1299,14 @@ test("runtime headings stay above VPN cards and nested pages have no enclosing d
   await torrentCard
     .getByRole("button", { name: "Move Torrents later" })
     .click();
-  await expect(
-    page.locator(".torrent-panels > .layout-item").first(),
-  ).toHaveAttribute("data-layout-title", "Your feeds");
+  const torrentOrder = await page
+    .locator(".torrent-panels > .layout-item")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-layout-title")),
+    );
+  expect(torrentOrder.indexOf("Your feeds")).toBeLessThan(
+    torrentOrder.indexOf("Torrents"),
+  );
   await expect(
     page.getByRole("heading", { name: "Seedbox", exact: true }),
   ).toBeVisible();

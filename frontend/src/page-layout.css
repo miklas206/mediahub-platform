@@ -48,8 +48,18 @@
   overflow: auto;
 }
 .layout-item.has-custom-height > .layout-item-content > * {
-  flex: 0 0 auto;
-  min-height: 100%;
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+.layout-item.has-custom-height > .layout-item-content > .layout-card > .panel,
+.layout-item.has-custom-height
+  > .layout-item-content
+  > .dashboard-card
+  > .panel {
+  min-height: 0;
+  overflow: auto;
 }
 .layout-item.is-arranging {
   outline: 1px dashed var(--accent);

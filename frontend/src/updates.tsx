@@ -1077,7 +1077,12 @@ export function UpdatesPage({
         {apps?.some(
           (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
         ) && (
-          <AgentUpdates busy={!!busy} onChange={() => updateSummary.reload()} />
+          <div className="layout-card" data-layout-title="Seedbox Agent">
+            <AgentUpdates
+              busy={!!busy}
+              onChange={() => updateSummary.reload()}
+            />
+          </div>
         )}
         {apps
           ?.filter((app) => !app.isMock)

@@ -9,7 +9,7 @@ import {
   type SeedboxSection,
 } from "./seedbox-sections";
 import { PortReachability } from "./port-reachability";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Cloud, HardDrive, ShieldCheck, Server } from "lucide-react";
@@ -242,8 +242,10 @@ export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
 function SeedboxPanel({
   report: r,
   section,
+  extraCards,
 }: {
   report: Runtime;
+  extraCards?: ReactNode;
   section: SeedboxSection;
 }) {
   const vpn = r.vpn,
@@ -527,16 +529,28 @@ function SeedboxPanel({
           )}
         </div>
       )}
-      {section === "vpn" ? (
+      {section === "vpn" || section === "torrents" ? (
         <SeedboxDaily
-          section="vpn"
+          section={section}
           externalIp={vpn?.externalIp}
           forwarding={r.portForwarding?.status}
-          overviewCards={cards.props.children}
+          overviewCards={
+            section === "vpn" ? (
+              cards.props.children
+            ) : (
+              <LayoutGroup
+                id="runtime-SeedboxPanel-1"
+                className="runtime-panels"
+              >
+                {cards.props.children}
+              </LayoutGroup>
+            )
+          }
         />
       ) : (
         <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
           {cards.props.children}
+          {extraCards}
         </LayoutGroup>
       )}
     </div>
@@ -567,7 +581,15 @@ function RuntimeIssues({
     </div>
   );
 }
-function PlexPanel({ report: r, appId }: { report: Runtime; appId?: string }) {
+function PlexPanel({
+  report: r,
+  appId,
+  extraCards,
+}: {
+  report: Runtime;
+  appId?: string;
+  extraCards?: ReactNode;
+}) {
   const p = r.plex;
   return (
     <LayoutGroup id="runtime-workspace-1" className="runtime-workspace">
@@ -708,10 +730,17 @@ function PlexPanel({ report: r, appId }: { report: Runtime; appId?: string }) {
           </p>
         </Panel>
       </LayoutGroup>
+      {extraCards}
     </LayoutGroup>
   );
 }
-function CloudflaredPanel({ report: r }: { report: Runtime }) {
+function CloudflaredPanel({
+  report: r,
+  extraCards,
+}: {
+  report: Runtime;
+  extraCards?: ReactNode;
+}) {
   const c = r.cloudflare;
   return (
     <LayoutGroup id="runtime-workspace-2" className="runtime-workspace">
@@ -841,6 +870,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
           )}
         </p>
       </Panel>
+      {extraCards}
     </LayoutGroup>
   );
 }
@@ -1035,76 +1065,15 @@ export function AppRuntimePage() {
       setBusy(false);
     }
   };
-  return (
-    <LayoutGroup id="runtime-AppRuntimePage-1" className="stack">
-      <div className="runtime-toolbar">
-        <Link to="/apps">{t("← All apps")}</Link>
-        <button onClick={reload}>{t("Refresh status")}</button>
-        {data?.view === "seedbox" && (
-          <Link to={`/apps/${appId}/install`}>{t("Review installation")}</Link>
-        )}
-      </div>
-      <ErrorBox error={error} />
-      {data?.view === "seedbox" && (
-        <nav className="seedbox-sections" aria-label={t("Seedbox sections")}>
-          {seedboxSections.map(([key, label]) => (
-            <Link
-              key={key}
-              to={{
-                search: (() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.set("section", key);
-                  return next.toString();
-                })(),
-              }}
-              className={section === key ? "selected" : ""}
-              aria-current={section === key ? "page" : undefined}
-            >
-              {typeof label === "string" ? t(label) : translateText(label)}
-            </Link>
-          ))}
-        </nav>
-      )}
-      {data?.view === "seedbox" ? (
-        <SeedboxPanel
-          section={section}
-          report={
-            error
-              ? {
-                  health: "offline",
-                  available: false,
-                  agentOnline: false,
-                  cached: false,
-                }
-              : data.report
-          }
-        />
-      ) : View && data ? (
-        <View
-          appId={appId}
-          report={
-            error
-              ? {
-                  health: "offline",
-                  available: false,
-                  agentOnline: false,
-                  cached: false,
-                }
-              : data.report
-          }
-        />
-      ) : (
-        <p role="status">{t("Loading app status…")}</p>
-      )}
+  const extraCards = (
+    <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
       {data?.view === "cloudflare" && (
-        <CloudflareSetupManager onSaved={reload} />
-      )}
-      {data?.view === "seedbox" && section === "torrents" && (
-        <SeedboxDaily
-          section={section}
-          externalIp={data.report.vpn?.externalIp}
-          forwarding={data.report.portForwarding?.status}
-        />
+        <div
+          className="layout-card"
+          data-layout-title="Saved Cloudflare configuration"
+        >
+          <CloudflareSetupManager onSaved={reload} />
+        </div>
       )}
       {data?.view === "cloudflare" && (
         <Panel title={t("Updates and safety")}>
@@ -1288,5 +1257,71 @@ export function AppRuntimePage() {
           </Panel>
         )}
     </LayoutGroup>
+  );
+  return (
+    <div className="stack">
+      <div className="runtime-toolbar">
+        <Link to="/apps">{t("← All apps")}</Link>
+        <button onClick={reload}>{t("Refresh status")}</button>
+        {data?.view === "seedbox" && (
+          <Link to={`/apps/${appId}/install`}>{t("Review installation")}</Link>
+        )}
+      </div>
+      <ErrorBox error={error} />
+      {data?.view === "seedbox" && (
+        <nav className="seedbox-sections" aria-label={t("Seedbox sections")}>
+          {seedboxSections.map(([key, label]) => (
+            <Link
+              key={key}
+              to={{
+                search: (() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("section", key);
+                  return next.toString();
+                })(),
+              }}
+              className={section === key ? "selected" : ""}
+              aria-current={section === key ? "page" : undefined}
+            >
+              {typeof label === "string" ? t(label) : translateText(label)}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {data?.view === "seedbox" ? (
+        <SeedboxPanel
+          extraCards={extraCards}
+          section={section}
+          report={
+            error
+              ? {
+                  health: "offline",
+                  available: false,
+                  agentOnline: false,
+                  cached: false,
+                }
+              : data.report
+          }
+        />
+      ) : View && data ? (
+        <View
+          extraCards={extraCards}
+          appId={appId}
+          report={
+            error
+              ? {
+                  health: "offline",
+                  available: false,
+                  agentOnline: false,
+                  cached: false,
+                }
+              : data.report
+          }
+        />
+      ) : (
+        <p role="status">{t("Loading app status…")}</p>
+      )}
+      {!View && data?.view !== "seedbox" && extraCards}
+    </div>
   );
 }
