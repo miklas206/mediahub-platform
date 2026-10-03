@@ -380,7 +380,10 @@ function SeedboxPanel({
           </Panel>
         )}
         {section === "torrents" && (
-          <div className="seedbox-client-summary">
+          <div
+            className="seedbox-client-summary"
+            data-layout-title={t("Torrent overview")}
+          >
             <div className="seedbox-client-metrics">
               <div>
                 <span>
@@ -515,7 +518,11 @@ function SeedboxPanel({
             </dl>
           </Panel>
         )}
-        {section === "settings" && <SeedboxRSSSettings />}
+        {section === "settings" && (
+          <div className="layout-card" data-layout-title={t("RSS settings")}>
+            <SeedboxRSSSettings />
+          </div>
+        )}
       </LayoutGroup>
     </div>
   );

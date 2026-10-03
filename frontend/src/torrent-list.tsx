@@ -107,6 +107,10 @@ const stateLabels: Record<string, string> = {
   allocating: "Allocating",
 };
 
+export function torrentStateLabel(state: string) {
+  return isTorrentPaused(state) ? t("Paused") : t(stateLabels[state] || state);
+}
+
 export function TorrentList({
   items,
   disabled,

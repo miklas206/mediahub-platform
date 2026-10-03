@@ -1,7 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { orderedIds, readLayouts, readGeometry } from "./page-layout";
+import {
+  canMove,
+  LayoutGroup,
+  orderedIds,
+  readLayouts,
+  readGeometry,
+} from "./page-layout";
 
 describe("page layout preferences", () => {
+  it("keeps headings, status, navigation and nested page containers fixed", () => {
+    function Page() {
+      return (
+        <header>
+          <h1>Seedbox</h1>
+        </header>
+      );
+    }
+    for (const node of [
+      <header>
+        <h1>Seedbox</h1>
+      </header>,
+      <div className="runtime-observed">Observed now</div>,
+      <div>
+        <p>Page description</p>
+      </div>,
+      <nav>Tabs</nav>,
+      <Page />,
+      <LayoutGroup id="nested">
+        <section className="panel" />
+      </LayoutGroup>,
+      <div className="panel" role="alert">
+        Failure
+      </div>,
+    ]) {
+      expect(canMove(node)).toBe(false);
+    }
+    expect(canMove(<section className="panel" />)).toBe(true);
+    expect(canMove(<div className="dashboard-card" />)).toBe(true);
+  });
   it("validates column and card widths from saved browser data", () => {
     for (const value of [
       null,

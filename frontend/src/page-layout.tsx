@@ -4,7 +4,8 @@ import {
   createContext,
   isValidElement,
   useContext,
-  useRef,
+  useCallback,
+  useEffect,
   useState,
   type ReactNode,
   type ReactElement,
@@ -16,6 +17,7 @@ import {
   GripVertical,
   LayoutGrid,
   RotateCcw,
+  X,
 } from "lucide-react";
 import "./page-layout.css";
 
@@ -44,12 +46,16 @@ export function readGeometry(raw: string | null): Geometry {
   }
 }
 type LayoutContext = {
+  hidden: Layouts;
+  hide: (group: string, items: string[]) => void;
+  register: (group: string, cards: CardChoice[]) => () => void;
   geometry: Geometry;
   resize: (group: string, item: string, width: number) => void;
   editing: boolean;
   layouts: Layouts;
   save: (group: string, order: string[]) => void;
 };
+type CardChoice = { id: string; title: string; defaultHidden: boolean };
 const Context = createContext<LayoutContext | null>(null);
 const dragType = "application/x-mediahub-layout";
 
@@ -114,6 +120,37 @@ export function PageLayout({
     }
   }
   const [message, setMessage] = useState("");
+  const visibilityKey = `mediahub.layout.hidden.v1:${storageKey}`;
+  const [hidden, setHidden] = useState<Layouts>(() => {
+    try {
+      return readLayouts(localStorage.getItem(visibilityKey));
+    } catch {
+      return {};
+    }
+  });
+  const [groups, setGroups] = useState<Record<string, CardChoice[]>>({});
+  const register = useCallback((group: string, cards: CardChoice[]) => {
+    setGroups((current) => ({ ...current, [group]: cards }));
+    return () =>
+      setGroups((current) => {
+        const next = { ...current };
+        delete next[group];
+        return next;
+      });
+  }, []);
+  function persistHidden(next: Layouts) {
+    setHidden(next);
+    try {
+      localStorage.setItem(visibilityKey, JSON.stringify(next));
+      setMessage(t("Layout saved in this browser."));
+    } catch {
+      setMessage(
+        t(
+          "Layout changed, but this browser could not save it. It will reset when you reload.",
+        ),
+      );
+    }
+  }
   function persist(next: Layouts) {
     setLayouts(next);
     try {
@@ -130,6 +167,9 @@ export function PageLayout({
   return (
     <Context.Provider
       value={{
+        hidden,
+        hide: (group, items) => persistHidden({ ...hidden, [group]: items }),
+        register,
         editing,
         geometry,
         resize: (group, item, width) =>
@@ -154,7 +194,7 @@ export function PageLayout({
           <>
             <span>
               {t(
-                "Drag a box by its handle, or use the arrows. Saved per page in this browser.",
+                "Drag anywhere on a card, or use the arrows. Saved per page in this browser.",
               )}
             </span>
             <label className="layout-columns">
@@ -182,11 +222,48 @@ export function PageLayout({
               onClick={() => {
                 persist({});
                 persistGeometry({ columns: 0, widths: {} });
+                persistHidden({});
               }}
             >
               <RotateCcw size={15} />
               {t(" Reset this page")}
             </button>
+            <details className="layout-card-picker">
+              <summary>{t("Choose cards")}</summary>
+              <div>
+                {Object.entries(groups).flatMap(([group, cards]) =>
+                  cards.map((card) => (
+                    <label key={`${group}:${card.id}`}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          !(
+                            hidden[group] ||
+                            cards
+                              .filter((c) => c.defaultHidden)
+                              .map((c) => c.id)
+                          ).includes(card.id)
+                        }
+                        onChange={(event) => {
+                          const current =
+                            hidden[group] ||
+                            cards
+                              .filter((c) => c.defaultHidden)
+                              .map((c) => c.id);
+                          persistHidden({
+                            ...hidden,
+                            [group]: event.target.checked
+                              ? current.filter((id) => id !== card.id)
+                              : [...current, card.id],
+                          });
+                        }}
+                      />
+                      {t(card.title)}
+                    </label>
+                  )),
+                )}
+              </div>
+            </details>
           </>
         )}
         <span className="layout-save-status" role="status">
@@ -198,7 +275,7 @@ export function PageLayout({
   );
 }
 
-function canMove(
+export function canMove(
   node: ReactNode,
 ): node is ReactElement<Record<string, unknown>> {
   if (!isValidElement<Record<string, unknown>>(node)) return false;
@@ -208,13 +285,36 @@ function canMove(
     node.props.role === "status"
   )
     return false;
-  if (typeof node.type !== "string") return true;
+  if (node.props["data-layout-fixed"]) return false;
+  if (typeof node.type !== "string") {
+    // Page components and nested layout groups contain their own cards and fixed headings.
+    return typeof node.props.title === "string";
+  }
   return (
     ["div", "section", "article", "details", "form"].includes(node.type) &&
+    /panel|card|overview|store-callout|seedbox-client-summary/.test(
+      String(node.props.className || ""),
+    ) &&
     !/notice|success|skeleton|tabs|toolbar|button-row/.test(
       String(node.props.className || ""),
     )
   );
+}
+
+function cardTitle(node: ReactNode): string {
+  if (!isValidElement<Record<string, unknown>>(node)) return "";
+  if (typeof node.props["data-layout-title"] === "string")
+    return node.props["data-layout-title"];
+  if (typeof node.props.title === "string") return node.props.title;
+  if (typeof node.type === "string" && /^(h[123]|strong)$/.test(node.type))
+    return Children.toArray(node.props.children as ReactNode)
+      .filter((c) => typeof c === "string" || typeof c === "number")
+      .join("");
+  const nested = Children.toArray(node.props.children as ReactNode)
+    .map(cardTitle)
+    .find(Boolean);
+  if (nested) return nested;
+  return "";
 }
 
 export function LayoutGroup({
@@ -223,11 +323,13 @@ export function LayoutGroup({
   children,
   resizable = false,
   wideFirst = false,
+  defaultHidden = [],
 }: {
   id: string;
   className?: string;
   resizable?: boolean;
   wideFirst?: boolean;
+  defaultHidden?: string[];
   children: ReactNode;
 }) {
   const context = useContext(Context);
@@ -235,26 +337,46 @@ export function LayoutGroup({
   const movable = nodes.filter(canMove);
   const byId = new Map(movable.map((node) => [String(node.key), node]));
   const ids = orderedIds([...byId.keys()], context?.layouts[id]);
+  const choices = JSON.stringify(
+    movable.map((item, index) => ({
+      id: String(item.key),
+      title: cardTitle(item) || t("Box {count}", { count: index + 1 }),
+      defaultHidden: defaultHidden.includes(
+        String(item.key).replace(/^\.\$/, ""),
+      ),
+    })),
+  );
+  const register = context?.register;
+  useEffect(() => register?.(id, JSON.parse(choices)), [id, choices, register]);
+  const hidden =
+    context?.hidden[id] ||
+    (JSON.parse(choices) as CardChoice[])
+      .filter((c) => c.defaultHidden)
+      .map((c) => c.id);
+  const visibleIds = ids.filter((item) => !hidden.includes(item));
   const [announcement, setAnnouncement] = useState("");
   function move(source: string, target: string) {
     if (
       !context ||
       source === target ||
-      !ids.includes(source) ||
-      !ids.includes(target)
+      !visibleIds.includes(source) ||
+      !visibleIds.includes(target)
     )
       return;
-    const next = ids.filter((item) => item !== source);
-    next.splice(ids.indexOf(target), 0, source);
+    const next = visibleIds.filter((item) => item !== source);
+    next.splice(visibleIds.indexOf(target), 0, source);
     // Keep unavailable cards in the preference so a temporary loading state does not erase them.
     context.save(id, [
       ...next,
+      ...orderedIds(ids, context.layouts[id]).filter(
+        (item) => !next.includes(item),
+      ),
       ...(context.layouts[id] || []).filter((item) => !ids.includes(item)),
     ]);
     setAnnouncement(
       t("Box moved to position {position} of {count}.", {
         position: next.indexOf(source) + 1,
-        count: ids.length,
+        count: visibleIds.length,
       }),
     );
   }
@@ -270,13 +392,16 @@ export function LayoutGroup({
       {nodes.map((node) => {
         if (!canMove(node)) return node;
         const itemId = ids[cursor++];
+        if (hidden.includes(itemId)) return null;
         const item = byId.get(itemId)!;
-        const index = ids.indexOf(itemId);
+        const index = visibleIds.indexOf(itemId);
         return (
           <LayoutItem
             key={itemId}
             item={item}
-            editing={!!context?.editing && (ids.length > 1 || resizable)}
+            editing={!!context?.editing}
+            title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
+            hide={() => context?.hide(id, [...hidden, itemId])}
             columns={columns}
             width={
               context?.geometry.widths[`${id}:${itemId}`] ??
@@ -290,8 +415,8 @@ export function LayoutGroup({
             group={id}
             itemId={itemId}
             index={index}
-            count={ids.length}
-            moveBy={(delta) => move(itemId, ids[index + delta])}
+            count={visibleIds.length}
+            moveBy={(delta) => move(itemId, visibleIds[index + delta])}
             onDrop={(source) => move(source, itemId)}
           />
         );
@@ -315,6 +440,8 @@ function LayoutItem({
   columns,
   width,
   resize,
+  title,
+  hide,
 }: {
   item: ReactElement<Record<string, unknown>>;
   editing: boolean;
@@ -325,19 +452,14 @@ function LayoutItem({
   columns: number;
   width: number;
   resize?: (width: number) => void;
+  title: string;
+  hide: () => void;
   moveBy: (delta: number) => void;
   onDrop: (source: string) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState(false);
-  const title =
-    typeof item.props.title === "string"
-      ? item.props.title
-      : ref.current?.querySelector("h2, h3, summary strong, strong")
-          ?.textContent || t("Box {count}", { count: index + 1 });
   return (
     <div
-      ref={ref}
       className={`layout-item ${editing ? "is-arranging" : ""} ${over ? "is-drop-target" : ""}`}
       style={
         columns
@@ -347,6 +469,7 @@ function LayoutItem({
           : undefined
       }
       data-layout-item={itemId}
+      data-layout-title={title}
       onDragOver={(event) => {
         if (editing && event.dataTransfer.types.includes(dragType)) {
           event.preventDefault();
@@ -370,10 +493,10 @@ function LayoutItem({
       }}
     >
       {editing && (
-        <div className="layout-item-tools">
+        <>
           <button
             type="button"
-            className="layout-drag-handle"
+            className="layout-drag-surface"
             draggable
             aria-label={t("Move {title}", { title: t(title) })}
             title={t("Drag to move, or use the arrow keys")}
@@ -397,45 +520,56 @@ function LayoutItem({
               }
             }}
           >
-            <GripVertical size={17} />
-            <span>{t(title)}</span>
+            <GripVertical size={17} aria-hidden="true" />
           </button>
-          {resize && (
-            <label className="layout-width">
-              {t("Width")}
-              <select
-                aria-label={t("Width of {title}", { title })}
-                value={width}
-                onChange={(event) => resize(Number(event.target.value))}
-              >
-                <option value={0}>{t("Full row")}</option>
-                {[1, 2, 3].map((span) => (
-                  <option key={span} value={span}>
-                    {t("{count} columns", { count: span })}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <button
-            type="button"
-            aria-label={t("Move {title} earlier", { title: t(title) })}
-            disabled={index === 0}
-            onClick={() => moveBy(-1)}
-          >
-            <ArrowUp size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label={t("Move {title} later", { title: t(title) })}
-            disabled={index === count - 1}
-            onClick={() => moveBy(1)}
-          >
-            <ArrowDown size={16} />
-          </button>
-        </div>
+          <div className="layout-item-tools">
+            {resize && (
+              <label className="layout-width">
+                {t("Width")}
+                <select
+                  aria-label={t("Width of {title}", { title })}
+                  value={width}
+                  onChange={(event) => resize(Number(event.target.value))}
+                >
+                  <option value={0}>{t("Full row")}</option>
+                  {[1, 2, 3].map((span) => (
+                    <option key={span} value={span}>
+                      {t("{count} columns", { count: span })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              aria-label={t("Move {title} earlier", { title: t(title) })}
+              disabled={index === 0}
+              onClick={() => moveBy(-1)}
+            >
+              <ArrowUp size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label={t("Move {title} later", { title: t(title) })}
+              disabled={index === count - 1}
+              onClick={() => moveBy(1)}
+            >
+              <ArrowDown size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label={t("Hide {title}", { title: t(title) })}
+              title={t("Hide card")}
+              onClick={hide}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </>
       )}
-      {item}
+      <div className="layout-item-content" inert={editing}>
+        {item}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,42 @@
+.dashboard-torrents > p,
+.dashboard-torrents > .notice {
+  margin: 16px 20px;
+}
+.dashboard-torrent-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dashboard-torrent-totals span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dashboard-torrent {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.dashboard-torrent > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.dashboard-torrent-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0;
+}
+.dashboard-torrent progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  accent-color: var(--accent);
+  border: none;
+}

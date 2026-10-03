@@ -1,3 +1,4 @@
+import { LayoutGroup } from "./page-layout";
 import { t } from "./i18n";
 import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
@@ -232,7 +233,8 @@ export function SeedboxDaily({
           {notice}
         </p>
       )}
-      <div
+      <LayoutGroup
+        id="seedbox-daily-location"
         className={
           section === "vpn" ? "vpn-location-content" : "torrent-empty-container"
         }
@@ -366,7 +368,7 @@ export function SeedboxDaily({
             </p>
           </Panel>
         )}
-      </div>
+      </LayoutGroup>
       {section === "torrents" && (
         <>
           <SeedboxRSS

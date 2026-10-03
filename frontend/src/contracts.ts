@@ -97,6 +97,7 @@ export type NavigationPath =
   | "/integrations"
   | "/settings";
 export type DashboardSection =
+  | "torrents"
   | "system"
   | "storage"
   | "apps"

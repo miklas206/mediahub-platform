@@ -379,7 +379,7 @@ def test_settings_persist_and_reject_secrets(logged_in):
             "/backups",
             "/settings",
         ],
-        "dashboard_sections": ["storage", "apps", "system"],
+        "dashboard_sections": ["storage", "torrents", "apps", "system"],
     }
     assert logged_in.put("/api/settings", json={**values, "advanced_mode": True}).status_code == 200
     assert logged_in.get("/api/settings").json()["data"]["advanced_mode"] is True

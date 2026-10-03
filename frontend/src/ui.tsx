@@ -1,6 +1,7 @@
 import { setLanguage, t, useLanguage } from "./i18n";
 import { LanguageSettings } from "./language-settings";
 import { LayoutGroup, PageLayout } from "./page-layout";
+import { DashboardTorrents } from "./dashboard-torrents";
 import { appStatusLabel } from "./seedbox-status";
 import { seedboxSections, seedboxSection } from "./seedbox-sections";
 import {
@@ -118,7 +119,12 @@ const simpleNavigation: NavigationPath[] = [
   "/settings",
 ];
 const detailedNavigation: NavigationPath[] = navigation.map(([path]) => path);
-const simpleDashboard: DashboardSection[] = ["storage", "apps", "system"];
+const simpleDashboard: DashboardSection[] = [
+  "storage",
+  "torrents",
+  "apps",
+  "system",
+];
 const detailedDashboard: DashboardSection[] = [
   "system",
   "storage",
@@ -129,6 +135,7 @@ const detailedDashboard: DashboardSection[] = [
   "runtime",
   "integrations",
   "cloudflare",
+  "torrents",
 ];
 
 function useData<T>(path: string) {
@@ -788,13 +795,25 @@ function Shell({
                 path="/storage"
                 element={
                   <LayoutGroup id="ui-Shell-2" className="stack">
-                    <MediaFiles />
-                    <StorageSummary />
+                    <div
+                      className="layout-card"
+                      data-layout-title="Media files"
+                    >
+                      <MediaFiles />
+                    </div>
+                    <div className="layout-card" data-layout-title="Storage">
+                      <StorageSummary />
+                    </div>
                     {advancedMode && (
                       <details className="technical-disclosure">
                         <summary>Technical storage mappings</summary>
                         <LayoutGroup id="ui-Shell-3" className="stack">
-                          <LogicalStoragePanel />
+                          <div
+                            className="layout-card"
+                            data-layout-title="Storage mappings"
+                          >
+                            <LogicalStoragePanel />
+                          </div>
                           <StorageWorkspace />
                         </LayoutGroup>
                       </details>
@@ -806,18 +825,46 @@ function Shell({
               <Route path="/integrations" element={<IntegrationsPage />} />
               <Route
                 path="/activity"
-                element={<ActivityPage revision={revision} />}
+                element={
+                  <LayoutGroup id="activity-cards">
+                    <div
+                      className="dashboard-card"
+                      data-layout-title="Event timeline"
+                    >
+                      <ActivityPage revision={revision} />
+                    </div>
+                  </LayoutGroup>
+                }
               />
-              <Route path="/logs" element={<Logs />} />
+              <Route
+                path="/logs"
+                element={
+                  <LayoutGroup id="logs-cards">
+                    <div className="dashboard-card" data-layout-title="Logs">
+                      <Logs />
+                    </div>
+                  </LayoutGroup>
+                }
+              />
               <Route
                 path="/settings"
                 element={
                   <SettingsExtensions
                     general={
-                      <>
-                        <LanguageSettings />
-                        <SettingsPage />
-                      </>
+                      <LayoutGroup id="settings-general-cards">
+                        <div
+                          className="dashboard-card"
+                          data-layout-title="Language"
+                        >
+                          <LanguageSettings />
+                        </div>
+                        <div
+                          className="dashboard-card"
+                          data-layout-title="Workspace preferences"
+                        >
+                          <SettingsPage />
+                        </div>
+                      </LayoutGroup>
                     }
                     maintenance={<MaintenancePage />}
                     security={<SecuritySettings />}
@@ -930,6 +977,7 @@ function Dashboard({
   const visible = new Set(sections);
   const cards: { id: DashboardSection; content: ReactNode }[] = [
     { id: "storage", content: <StorageSummary /> },
+    { id: "torrents", content: <DashboardTorrents apps={apps} /> },
     {
       id: "apps",
       content: (
@@ -1135,14 +1183,26 @@ function Dashboard({
   return (
     <>
       {error && <Notice>{error}</Notice>}
-      <LayoutGroup id="ui-Dashboard-1" className="dashboard-grid" resizable>
-        {cards
-          .filter(({ id }) => visible.has(id))
-          .map(({ id, content }) => (
-            <div className="dashboard-card" key={id} data-section={id}>
-              {content}
-            </div>
-          ))}
+      <LayoutGroup
+        id="ui-Dashboard-1"
+        className="dashboard-grid"
+        resizable
+        defaultHidden={cards
+          .filter(({ id }) => !visible.has(id))
+          .map(({ id }) => id)}
+      >
+        {cards.map(({ id, content }) => (
+          <div
+            className="dashboard-card"
+            key={id}
+            data-section={id}
+            data-layout-title={
+              dashboardChoices.find((choice) => choice[0] === id)?.[1]
+            }
+          >
+            {content}
+          </div>
+        ))}
       </LayoutGroup>
     </>
   );
@@ -2173,6 +2233,11 @@ const navigationHelp: Record<NavigationPath, string> = {
 };
 
 const dashboardChoices: [DashboardSection, string, string][] = [
+  [
+    "torrents",
+    "Ongoing torrents",
+    "Torrent progress, transfer speeds and time remaining",
+  ],
   [
     "system",
     "System details",

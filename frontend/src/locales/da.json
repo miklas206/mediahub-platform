@@ -454,5 +454,21 @@
   "yes": "ja",
   "no": "nej",
   "enabled": "aktiveret",
-  "disabled": "deaktiveret"
+  "disabled": "deaktiveret",
+  "Drag anywhere on a card, or use the arrows. Saved per page in this browser.": "Tr?k hvor som helst p? et kort, eller brug pilene. Gemmes pr. side i denne browser.",
+  "Choose cards": "V?lg kort",
+  "Hide {title}": "Skjul {title}",
+  "Hide card": "Skjul kort",
+  "Ongoing torrents": "Igangv?rende torrents",
+  "View torrents": "Vis torrents",
+  "Loading torrents?": "Indl?ser torrents?",
+  "Install Seedbox to see ongoing torrents here.": "Installer Seedbox for at se igangv?rende torrents her.",
+  "Torrent information is unavailable.": "Torrentoplysninger er ikke tilg?ngelige.",
+  "{count} ongoing": "{count} igangv?rende",
+  "No ongoing torrents.": "Ingen igangv?rende torrents.",
+  "{count} more in Seedbox": "{count} flere i Seedbox",
+  "Progress of {title}": "Fremdrift for {title}",
+  "Torrent progress, transfer speeds and time remaining": "Fremdrift, overf?rselshastigheder og resterende tid for torrents",
+  "Storage mappings": "Lagertilknytninger",
+  "Torrent overview": "Torrentoversigt"
 }

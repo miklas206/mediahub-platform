@@ -58,6 +58,7 @@ class PlatformSettings(StrictModel):
     ] = ["/", "/apps", "/store", "/storage", "/updates", "/backups", "/settings"]
     dashboard_sections: list[
         Literal[
+            "torrents",
             "system",
             "storage",
             "apps",
@@ -68,7 +69,7 @@ class PlatformSettings(StrictModel):
             "integrations",
             "cloudflare",
         ]
-    ] = ["storage", "apps", "system"]
+    ] = ["storage", "torrents", "apps", "system"]
 
     @field_validator("visible_navigation")
     @classmethod
