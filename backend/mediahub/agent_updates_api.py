@@ -15,6 +15,10 @@ class Port(StrictModel):
     port: int = Field(default=22, ge=1, le=65535)
 
 
+class SavedTrust(Port):
+    fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
+
+
 @router.get("")
 async def check(request: Request):
     svc = services(request)
@@ -54,5 +58,12 @@ def forget_credentials(request: Request):
 
 
 @router.post("/prepare-saved")
-async def prepare_saved(request: Request):
-    return result(await asyncio.to_thread(services(request).agent_updates.prepare_saved))
+async def prepare_saved(request: Request, body: SavedTrust | None = None):
+    if body is not None and request.url.scheme != "https":
+        raise DomainError("tls_required", "Use HTTPS before entering SSH credentials", 403)
+    return result(
+        await asyncio.to_thread(
+            services(request).agent_updates.prepare_saved,
+            **({"fingerprint": body.fingerprint, "port": body.port} if body else {}),
+        )
+    )

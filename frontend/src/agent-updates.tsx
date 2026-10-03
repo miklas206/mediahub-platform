@@ -14,7 +14,12 @@ type Check = {
   credentialsStored?: boolean;
   message: string;
 };
-type Job = { state: string; message: string; logs: string[] };
+type Job = {
+  state: string;
+  message: string;
+  logs: string[];
+  errorCode?: string;
+};
 export function AgentUpdates({
   onChange,
   busy,
@@ -31,6 +36,8 @@ export function AgentUpdates({
   const [port, setPort] = useState(22);
   const [fingerprint, setFingerprint] = useState("");
   const [trusted, setTrusted] = useState(false);
+  const [fingerprintChanged, setFingerprintChanged] = useState(false);
+  const fingerprintVerified = useRef(false);
   const [working, setWorking] = useState(false);
   const [operation, setOperation] = useState<OperationState>();
   const startGeneration = useRef(0);
@@ -72,6 +79,10 @@ export function AgentUpdates({
         }
         if (!active || generation !== startGeneration.current) return;
         lastState = job.state;
+        setFingerprintChanged(
+          !fingerprintVerified.current &&
+            job.errorCode === "ssh_host_key_changed",
+        );
         const running = [
           "running",
           "building",
@@ -180,6 +191,7 @@ export function AgentUpdates({
             onClick={() =>
               void act(async () => {
                 starting.current = true;
+                fingerprintVerified.current = false;
                 startGeneration.current += 1;
                 try {
                   const job = await api<Job>(
@@ -236,6 +248,13 @@ export function AgentUpdates({
           </button>
         </div>
       )}
+      {fingerprintChanged && (
+        <p className="muted">
+          {t(
+            "The saved SSH fingerprint no longer matches. Open SSH settings, read the fingerprint, compare it on the Seedbox server, and verify saved access with the confirmed fingerprint.",
+          )}
+        </p>
+      )}
       {check?.updateAvailable && (
         <details className="agent-update-setup">
           <summary>
@@ -243,139 +262,162 @@ export function AgentUpdates({
           </summary>
           <fieldset disabled={disabled}>
             <legend>{t("Prepare Agent update")}</legend>
-            {!check.credentialsStored && (
-              <>
-                <p>
-                  {t("SSH server: ")}
-                  <strong>{check.host}</strong>
-                  {t(
-                    " (paired Seedbox host). Use a root password or an authorized SSH private key. Save access encrypted on MediaHub or use it for this update only.",
-                  )}
-                </p>
-                <label>
-                  {t("SSH port")}
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={port}
-                    onChange={(e) => {
-                      setPort(Number(e.target.value));
-                      setFingerprint("");
-                      setTrusted(false);
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={() =>
-                    void act(async () => {
-                      const data = await api<{ fingerprint: string }>(
-                        "/updates/seedbox-agent/fingerprint",
-                        "POST",
-                        { port },
-                      );
-                      setFingerprint(data.fingerprint);
-                      setTrusted(false);
-                    })
-                  }
-                >
-                  {t("Read SSH fingerprint")}
-                </button>
-                {fingerprint && (
-                  <>
-                    <p style={{ overflowWrap: "anywhere" }}>{fingerprint}</p>
-                    <p className="muted">
-                      {t(
-                        "Compare this with the SSH host fingerprint on the Seedbox server.",
-                      )}
-                    </p>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={trusted}
-                        onChange={(e) => setTrusted(e.target.checked)}
-                      />
-                      {t("I recognize and trust this server fingerprint")}
-                    </label>
-                  </>
+            <>
+              <p>
+                {t("SSH server: ")}
+                <strong>{check.host}</strong>
+                {t(
+                  " (paired Seedbox host). Use a root password or an authorized SSH private key. Save access encrypted on MediaHub or use it for this update only.",
                 )}
-                <label>
-                  {t("Authentication")}
-                  <select
-                    value={authMethod}
-                    onChange={(e) => {
-                      setAuthMethod(e.target.value);
-                      setPassword("");
-                      setPrivateKey("");
-                    }}
-                  >
-                    <option value="password">{t("Root password")}</option>
-                    <option value="key">{t("SSH private key")}</option>
-                  </select>
-                </label>
-                {authMethod === "key" ? (
-                  <label>
-                    {t("SSH private key")}
-                    <textarea
-                      rows={5}
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={privateKey}
-                      onChange={(e) => setPrivateKey(e.target.value)}
-                    />
-                    <span className="muted">
-                      {t(
-                        "The matching public key must be authorized for root on the Seedbox host. Paste an unencrypted OpenSSH or PEM key; saved access is encrypted by MediaHub.",
-                      )}
-                    </span>
-                  </label>
-                ) : (
-                  <label>
-                    {t("Root SSH password")}
+              </p>
+              <label>
+                {t("SSH port")}
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={port}
+                  onChange={(e) => {
+                    setPort(Number(e.target.value));
+                    setFingerprint("");
+                    setTrusted(false);
+                  }}
+                />
+              </label>
+              <button
+                onClick={() =>
+                  void act(async () => {
+                    const data = await api<{ fingerprint: string }>(
+                      "/updates/seedbox-agent/fingerprint",
+                      "POST",
+                      { port },
+                    );
+                    setFingerprint(data.fingerprint);
+                    setTrusted(false);
+                  })
+                }
+              >
+                {t("Read SSH fingerprint")}
+              </button>
+              {fingerprint && (
+                <>
+                  <p style={{ overflowWrap: "anywhere" }}>{fingerprint}</p>
+                  <p className="muted">
+                    {t(
+                      "Compare this with the SSH host fingerprint on the Seedbox server.",
+                    )}
+                  </p>
+                  <label className="checkbox-label">
                     <input
-                      type="password"
-                      autoComplete="off"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      type="checkbox"
+                      checked={trusted}
+                      onChange={(e) => setTrusted(e.target.checked)}
                     />
+                    {t("I recognize and trust this server fingerprint")}
                   </label>
-                )}
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                  />
-                  {t(
-                    "Remember SSH access for future Agent updates (encrypted)",
+                </>
+              )}
+              {!check.credentialsStored && (
+                <>
+                  <label>
+                    {t("Authentication")}
+                    <select
+                      value={authMethod}
+                      onChange={(e) => {
+                        setAuthMethod(e.target.value);
+                        setPassword("");
+                        setPrivateKey("");
+                      }}
+                    >
+                      <option value="password">{t("Root password")}</option>
+                      <option value="key">{t("SSH private key")}</option>
+                    </select>
+                  </label>
+                  {authMethod === "key" ? (
+                    <label>
+                      {t("SSH private key")}
+                      <textarea
+                        rows={5}
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={privateKey}
+                        onChange={(e) => setPrivateKey(e.target.value)}
+                      />
+                      <span className="muted">
+                        {t(
+                          "The matching public key must be authorized for root on the Seedbox host. Paste an unencrypted OpenSSH or PEM key; saved access is encrypted by MediaHub.",
+                        )}
+                      </span>
+                    </label>
+                  ) : (
+                    <label>
+                      {t("Root SSH password")}
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </label>
                   )}
-                </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                    />
+                    {t(
+                      "Remember SSH access for future Agent updates (encrypted)",
+                    )}
+                  </label>
+                  <button
+                    disabled={
+                      !trusted ||
+                      !(authMethod === "key" ? privateKey : password)
+                    }
+                    onClick={() =>
+                      void act(async () => {
+                        await api("/updates/seedbox-agent/prepare", "POST", {
+                          port,
+                          fingerprint,
+                          ...(authMethod === "key"
+                            ? { private_key: privateKey }
+                            : { password }),
+                          remember,
+                        });
+                        setPassword("");
+                        setPrivateKey("");
+                        await reload();
+                      })
+                    }
+                  >
+                    {remember
+                      ? t("Verify and save SSH access")
+                      : t("Prepare SSH for update")}
+                  </button>
+                </>
+              )}
+              {check.credentialsStored && (
                 <button
-                  disabled={
-                    !trusted || !(authMethod === "key" ? privateKey : password)
-                  }
+                  disabled={!trusted || !fingerprint}
                   onClick={() =>
                     void act(async () => {
-                      await api("/updates/seedbox-agent/prepare", "POST", {
-                        port,
-                        fingerprint,
-                        ...(authMethod === "key"
-                          ? { private_key: privateKey }
-                          : { password }),
-                        remember,
-                      });
-                      setPassword("");
-                      setPrivateKey("");
+                      await api(
+                        "/updates/seedbox-agent/prepare-saved",
+                        "POST",
+                        { port, fingerprint },
+                      );
+                      setTrusted(false);
+                      fingerprintVerified.current = true;
+                      setFingerprintChanged(false);
                       await reload();
                     })
                   }
                 >
-                  {remember
-                    ? t("Verify and save SSH access")
-                    : t("Prepare SSH for update")}
+                  {t("Verify and save new SSH fingerprint")}
                 </button>
-              </>
-            )}
+              )}
+            </>
             <p>
               {check.installReady
                 ? t("SSH is ready. Use Update Agent or Update all.")

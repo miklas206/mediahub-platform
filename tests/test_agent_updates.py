@@ -211,6 +211,88 @@ def test_prepared_credentials_are_host_bound_and_expire(logged_in, monkeypatch):
     assert "private" not in json.dumps(updater.operation())
 
 
+@pytest.mark.parametrize("connection_fails", [False, True])
+def test_saved_fingerprint_only_changes_after_verified_connection(
+    logged_in, monkeypatch, connection_fails
+):
+    updater = logged_in.app.state.services.agent_updates
+    address = SimpleNamespace(host="192.168.1.20")
+    monkeypatch.setattr(updater, "binding", lambda: ("seedbox", None, address))
+    updater.save_setup(
+        "seedbox",
+        address,
+        SSHSetup(
+            password="saved-private",
+            fingerprint="SHA256:" + "a" * 43,
+            remember=True,
+        ),
+    )
+
+    def connect(address, setup):
+        assert setup.password.get_secret_value() == "saved-private"
+        assert setup.fingerprint == "SHA256:" + "b" * 43
+        if connection_fails:
+            raise DomainError(
+                "ssh_host_key_changed", "SSH fingerprint differs; no commands ran", 409
+            )
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr(updater, "connect", connect)
+    if connection_fails:
+        with pytest.raises(DomainError):
+            updater.prepare_saved("SHA256:" + "b" * 43, 22)
+    else:
+        assert updater.prepare_saved("SHA256:" + "b" * 43, 22)["credentialsStored"]
+    assert (
+        updater.saved_setup("seedbox", address).fingerprint
+        == "SHA256:" + ("a" if connection_fails else "b") * 43
+    )
+
+
+@pytest.mark.parametrize("known_error", [False, True])
+def test_prelaunch_failure_reports_host_key_error_without_leaking_secrets(
+    logged_in, monkeypatch, known_error
+):
+    updater = logged_in.app.state.services.agent_updates
+    monkeypatch.setattr("mediahub.agent_updates.download_source", AsyncMock())
+    monkeypatch.setattr("mediahub.agent_updates.normalize_source", lambda *args: "digest")
+
+    def fail(*args):
+        if known_error:
+            raise DomainError("ssh_host_key_changed", "private-secret", 409)
+        raise RuntimeError("https://example.test/?token=private-secret")
+
+    monkeypatch.setattr(updater, "connect", fail)
+    job = {"state": "running", "message": "Downloading", "logs": [], "operationId": "test"}
+    updater.run(
+        job,
+        {"repository": "owner/repo", "latestCommit": "a" * 40},
+        None,
+        None,
+        SSHSetup(password="private-secret", fingerprint="SHA256:" + "a" * 43),
+    )
+    result = updater.operation()
+    assert result["state"] == "failed"
+    assert result["errorCode"] == ("ssh_host_key_changed" if known_error else "agent_update_failed")
+    if known_error:
+        assert result["message"] == "SSH fingerprint differs; no commands ran"
+        assert result["logs"] == [result["message"]]
+    assert "private-secret" not in json.dumps(result)
+    assert "example.test" not in json.dumps(result)
+
+
+def test_saved_fingerprint_change_requires_https_and_valid_fingerprint(logged_in):
+    response = logged_in.post(
+        "/api/v1/updates/seedbox-agent/prepare-saved",
+        json={"fingerprint": "SHA256:" + "a" * 43, "port": 22},
+    )
+    assert response.status_code == 403
+    response = logged_in.post(
+        "/api/v1/updates/seedbox-agent/prepare-saved", json={"fingerprint": "untrusted"}
+    )
+    assert response.status_code == 422
+
+
 def test_check_all_includes_agent_update(logged_in, monkeypatch):
     svc = logged_in.app.state.services
     monkeypatch.setattr(

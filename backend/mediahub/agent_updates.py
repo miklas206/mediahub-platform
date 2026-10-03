@@ -137,11 +137,15 @@ class AgentUpdates:
             self.prepared = None
         return {"credentialsStored": False, "installReady": False}
 
-    def prepare_saved(self):
+    def prepare_saved(self, fingerprint=None, port=None):
         identifier, _, address = self.binding()
         setup = self.saved_setup(identifier, address)
         if setup is None:
             raise DomainError("agent_ssh_required", "No saved SSH access for this host", 409)
+        if fingerprint is not None:
+            setup = SSHSetup(
+                **{**setup.model_dump(), "fingerprint": fingerprint, "port": port, "remember": True}
+            )
         return self.prepare(setup)
 
     async def check(self):
@@ -426,13 +430,28 @@ class AgentUpdates:
                             return
                         time.sleep(2)
                     raise TimeoutError()
-        except Exception:
+        except Exception as error:
+            # Only expose known, controlled SSH errors. Download and transport
+            # exceptions can contain credentials or signed source URLs.
+            code = error.code if isinstance(error, DomainError) else "agent_update_failed"
+            details = {
+                "ssh_host_key_changed": "SSH fingerprint differs; no commands ran",
+                "agent_ssh_failed": "SSH login or fingerprint verification failed",
+                "agent_ssh_auth_method": "This SSH authentication method is not accepted by the server",
+                "agent_ssh_key": "Use a valid unencrypted OpenSSH or PEM private key; MediaHub encrypts saved keys",
+            }
+            detail = details.get(code)
             job.update(
                 state="interrupted" if launched else "failed",
                 message="Agent update connection failed. Inspect the job on the Seedbox host; unverified installs roll back after two minutes."
                 if launched
                 else "Source download or SSH staging failed; the Agent was not changed.",
+                errorCode=code,
             )
+            if detail:
+                job["logs"] = (job["logs"] + [detail])[-200:]
+                if not launched:
+                    job["message"] = detail
             self.save(job)
         finally:
             if ssh:
