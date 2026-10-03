@@ -1,6 +1,135 @@
 import { expect, test } from "@playwright/test";
 import danish from "../src/locales/da.json" with { type: "json" };
 
+test("VPN card keeps its content on hover and can move above the other VPN cards", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1400 });
+  await page.goto("/apps/seedbox?section=vpn");
+  await expect(
+    page.getByRole("heading", { name: "VPN Location", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const group = page.locator(".vpn-location-content");
+  const card = group.locator('.layout-item[data-layout-title="VPN Location"]');
+  const surface = card.locator(":scope > .layout-drag-surface");
+  await surface.hover();
+  expect(
+    await surface.evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
+  await expect(
+    card.getByRole("heading", { name: "VPN Location", exact: true }),
+  ).toBeVisible();
+  await expect(card.getByText("Current", { exact: true })).toBeVisible();
+  while (
+    await card
+      .getByRole("button", { name: "Move VPN Location earlier", exact: true })
+      .isEnabled()
+  ) {
+    await card
+      .getByRole("button", { name: "Move VPN Location earlier", exact: true })
+      .click();
+  }
+  await expect(group.locator(":scope > .layout-item").first()).toHaveAttribute(
+    "data-layout-title",
+    "VPN Location",
+  );
+  const heading = (await page
+    .getByRole("heading", { name: "Seedbox", exact: true })
+    .boundingBox())!;
+  expect((await card.boundingBox())!.y).toBeGreaterThan(heading.y);
+  await page.reload();
+  await expect(group.locator(":scope > .layout-item").first()).toHaveAttribute(
+    "data-layout-title",
+    "VPN Location",
+  );
+});
+
+test("card edges resize width and height on the grid with persistent, readable content", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1600 });
+  await page.goto("/apps/seedbox?section=vpn");
+  await expect(
+    page.getByRole("heading", { name: "VPN Location", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const group = page.locator(".vpn-location-content");
+  const card = group.locator('.layout-item[data-layout-title="VPN Location"]');
+  async function pull(edge: string, dx: number, dy: number) {
+    const handle = card.locator(`:scope > .resize-${edge}`);
+    await handle.scrollIntoViewIfNeeded();
+    const box = (await handle.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      box.x + box.width / 2 + dx,
+      box.y + box.height / 2 + dy,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+  }
+  await pull("right", -300, 0);
+  const width = (await card.boundingBox())!.width;
+  expect(width / (await group.boundingBox())!.width).toBeLessThan(0.8);
+  expect(width / (await group.boundingBox())!.width).toBeGreaterThan(0.65);
+  await pull("bottom", 0, 96);
+  const height = (await card.boundingBox())!.height;
+  expect(height % 24).toBe(0);
+  await pull("top", 0, -48);
+  expect((await card.boundingBox())!.height).toBe(height + 48);
+  await pull("left", 100, 0);
+  expect((await card.boundingBox())!.width).toBeLessThan(width);
+  const savedWidth = (await card.boundingBox())!.width;
+  const savedHeight = (await card.boundingBox())!.height;
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await page.reload();
+  await expect(card).toHaveClass(/has-custom-height/);
+  expect((await card.boundingBox())!.width).toBeCloseTo(savedWidth, 0);
+  expect((await card.boundingBox())!.height).toBe(savedHeight);
+  await expect(
+    card.getByRole("combobox", { name: "Country", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await pull("bottom", 0, -1000);
+  expect((await card.boundingBox())!.height).toBe(144);
+  expect(
+    await card
+      .locator(":scope > .layout-item-content")
+      .evaluate((node) => node.scrollHeight > node.clientHeight),
+  ).toBe(true);
+  await card
+    .getByRole("button", {
+      name: "Restore automatic height for VPN Location",
+      exact: true,
+    })
+    .click();
+  await expect(card).not.toHaveClass(/has-custom-height/);
+  await page.screenshot({
+    path: "../.qa/grid-resize-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => {
+      const box = (await page.locator(".sidebar").boundingBox())!;
+      return box.x + box.width;
+    })
+    .toBeLessThanOrEqual(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "../.qa/grid-resize-mobile.png",
+    fullPage: true,
+  });
+  expect(errors).toEqual([]);
+});
+
 test.beforeEach(async ({ page }) => {
   const metrics = {
     hostname: "QA",
@@ -859,7 +988,9 @@ test("all layout cards resize without a column prerequisite and keep their conte
     );
     for (let index = 0; index < count; index++) {
       const card = cards.nth(index);
-      await card.locator(":scope > .layout-item-tools .layout-width select").selectOption("33");
+      await card
+        .locator(":scope > .layout-item-tools .layout-width select")
+        .selectOption("33");
       const ratio = await card.evaluate(
         (node) =>
           node.getBoundingClientRect().width /
@@ -881,7 +1012,10 @@ test("all layout cards resize without a column prerequisite and keep their conte
               content.clientWidth > 0 &&
               content.scrollWidth > content.clientWidth + 1,
           )
-          .map((content) => content.className),
+          .map(
+            (content) =>
+              `${node.getAttribute("data-layout-title")}: ${content.className}: ${content.clientWidth}/${content.scrollWidth}: ${[...content.children].map((child) => `${child.className}=${child.getBoundingClientRect().width}`).join(",")}`,
+          ),
       );
       expect(overflowing, path).toEqual([]);
     }

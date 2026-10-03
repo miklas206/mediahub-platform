@@ -3,7 +3,7 @@ import { LayoutGroup } from "./page-layout";
 import { CountryFlag, countryLabel } from "./country-flag";
 
 import { OperationProgress } from "./operation-progress";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { TorrentList, type Torrent } from "./torrent-list";
@@ -53,10 +53,12 @@ export function SeedboxDaily({
   section,
   externalIp,
   forwarding,
+  overviewCards,
 }: {
   section: "torrents" | "vpn";
   externalIp?: string | null;
   forwarding?: string;
+  overviewCards?: ReactNode;
 }) {
   const [intervalHours, setIntervalHours] = useState<number | null>(null);
   const [list, setList] = useState<Listing | null>(null),
@@ -256,13 +258,17 @@ export function SeedboxDaily({
         </p>
       )}
       <LayoutGroup
-        id="seedbox-daily-location"
+        id={section === "vpn" ? "seedbox-vpn-cards" : "seedbox-daily-location"}
+        fullWidth={["vpn-location"]}
         className={
-          section === "vpn" ? "vpn-location-content" : "torrent-empty-container"
+          section === "vpn"
+            ? "runtime-panels vpn-location-content"
+            : "torrent-empty-container"
         }
       >
+        {overviewCards}
         {section === "vpn" && (
-          <Panel title={t("VPN Location")}>
+          <Panel key="vpn-location" title={t("VPN Location")}>
             <ErrorBox error={locationError} />
             <div className="runtime-row">
               <span>{t("Current")}</span>

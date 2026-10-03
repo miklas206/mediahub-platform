@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
   type ReactElement,
   type CSSProperties,
@@ -23,8 +24,22 @@ import {
 import "./page-layout.css";
 
 type Layouts = Record<string, string[]>;
-type Geometry = { columns: number; widths: Record<string, number> };
-const widthPercentages = [25, 33, 50, 67, 75, 100];
+type Geometry = {
+  columns: number;
+  widths: Record<string, number>;
+  heights: Record<string, number>;
+};
+const widthPercentages = [25, 33, 42, 50, 58, 67, 75, 83, 92, 100];
+export function snapCardWidth(pixels: number, gridWidth: number, gap = 16) {
+  const span = Math.max(
+    3,
+    Math.min(12, Math.round((pixels + gap) / ((gridWidth + gap) / 12))),
+  );
+  return Math.round((span * 100) / 12);
+}
+export function snapCardHeight(pixels: number) {
+  return Math.max(144, Math.min(2400, Math.round(pixels / 24) * 24));
+}
 export function cardWidthPercentage(width: number, columns: number) {
   // Older preferences store a column span. Keep the same visual width on upgrade.
   if (width === 0) return 100;
@@ -49,9 +64,29 @@ export function readGeometry(raw: string | null): Geometry {
             ),
           )
         : {};
-    return { columns, widths: widths as Record<string, number> };
+    const heights =
+      value?.heights &&
+      typeof value.heights === "object" &&
+      !Array.isArray(value.heights)
+        ? Object.fromEntries(
+            Object.entries(value.heights).filter(
+              ([key, height]) =>
+                key.length < 1000 &&
+                typeof height === "number" &&
+                Number.isInteger(height) &&
+                height >= 144 &&
+                height <= 2400 &&
+                height % 24 === 0,
+            ),
+          )
+        : {};
+    return {
+      columns,
+      widths: widths as Record<string, number>,
+      heights: heights as Record<string, number>,
+    };
   } catch {
-    return { columns: 0, widths: {} };
+    return { columns: 0, widths: {}, heights: {} };
   }
 }
 type LayoutContext = {
@@ -60,6 +95,11 @@ type LayoutContext = {
   register: (group: string, cards: CardChoice[]) => () => void;
   geometry: Geometry;
   resize: (group: string, item: string, width: number) => void;
+  resizeCard: (
+    group: string,
+    item: string,
+    size: { width?: number; height?: number },
+  ) => void;
   editing: boolean;
   layouts: Layouts;
   save: (group: string, order: string[]) => void;
@@ -85,6 +125,37 @@ export function readLayouts(raw: string | null): Layouts {
   }
 }
 
+const vpnCardKeys = [
+  ["runtime-SeedboxPanel-1", ".0", ".0:0"],
+  ["seedbox-daily-location", ".0", ".$vpn-location"],
+];
+export function migrateVPNLayouts(layouts: Layouts): Layouts {
+  if (
+    layouts["seedbox-vpn-cards"] ||
+    !vpnCardKeys.some(([group]) => layouts[group])
+  )
+    return layouts;
+  return {
+    ...layouts,
+    "seedbox-vpn-cards": vpnCardKeys.flatMap(([group, oldId, newId]) =>
+      (layouts[group] || []).includes(oldId) ? [newId] : [],
+    ),
+  };
+}
+export function migrateVPNGeometry(geometry: Geometry): Geometry {
+  const widths = { ...geometry.widths };
+  const heights = { ...geometry.heights };
+  for (const [group, oldId, newId] of vpnCardKeys) {
+    const previous = `${group}:${oldId}`;
+    const next = `seedbox-vpn-cards:${newId}`;
+    if (widths[next] === undefined && widths[previous] !== undefined)
+      widths[next] = widths[previous];
+    if (heights[next] === undefined && heights[previous] !== undefined)
+      heights[next] = heights[previous];
+  }
+  return { ...geometry, widths, heights };
+}
+
 export function orderedIds(current: string[], saved: string[] = []) {
   return [
     ...new Set([...saved.filter((id) => current.includes(id)), ...current]),
@@ -102,7 +173,7 @@ export function PageLayout({
   const [editing, setEditing] = useState(false);
   const [layouts, setLayouts] = useState<Layouts>(() => {
     try {
-      return readLayouts(localStorage.getItem(key));
+      return migrateVPNLayouts(readLayouts(localStorage.getItem(key)));
     } catch {
       return {};
     }
@@ -110,7 +181,9 @@ export function PageLayout({
   const geometryKey = `mediahub.layout.size.v1:${storageKey}`;
   const [geometry, setGeometry] = useState<Geometry>(() => {
     try {
-      return readGeometry(localStorage.getItem(geometryKey));
+      return migrateVPNGeometry(
+        readGeometry(localStorage.getItem(geometryKey)),
+      );
     } catch {
       return readGeometry(null);
     }
@@ -132,7 +205,9 @@ export function PageLayout({
   const visibilityKey = `mediahub.layout.hidden.v1:${storageKey}`;
   const [hidden, setHidden] = useState<Layouts>(() => {
     try {
-      return readLayouts(localStorage.getItem(visibilityKey));
+      return migrateVPNLayouts(
+        readLayouts(localStorage.getItem(visibilityKey)),
+      );
     } catch {
       return {};
     }
@@ -190,6 +265,15 @@ export function PageLayout({
             widths,
           });
         },
+        resizeCard: (group, item, size) => {
+          const key = `${group}:${item}`;
+          const widths = { ...geometry.widths };
+          const heights = { ...geometry.heights };
+          if (size.width !== undefined) widths[key] = size.width;
+          if (size.height === -1) delete heights[key];
+          else if (size.height !== undefined) heights[key] = size.height;
+          persistGeometry({ ...geometry, widths, heights });
+        },
         layouts,
         save: (group, order) => persist({ ...layouts, [group]: order }),
       }}
@@ -207,7 +291,7 @@ export function PageLayout({
           <>
             <span>
               {t(
-                "Drag anywhere on a card, or use the arrows. Saved per page in this browser.",
+                "Drag cards to move them. Pull an edge or corner to resize on the grid.",
               )}
             </span>
             <label className="layout-columns">
@@ -234,7 +318,7 @@ export function PageLayout({
               type="button"
               onClick={() => {
                 persist({});
-                persistGeometry({ columns: 0, widths: {} });
+                persistGeometry({ columns: 0, widths: {}, heights: {} });
                 persistHidden({});
               }}
             >
@@ -336,11 +420,13 @@ export function LayoutGroup({
   children,
   wideFirst = false,
   defaultHidden = [],
+  fullWidth = [],
 }: {
   id: string;
   className?: string;
   wideFirst?: boolean;
   defaultHidden?: string[];
+  fullWidth?: string[];
   children: ReactNode;
 }) {
   const context = useContext(Context);
@@ -394,9 +480,13 @@ export function LayoutGroup({
   const columns = context?.geometry.columns || 0;
   const customGrid =
     movable.length > 0 &&
-    (columns > 0 ||
+    (fullWidth.length > 0 ||
+      context?.editing ||
+      columns > 0 ||
       ids.some(
-        (item) => context?.geometry.widths[`${id}:${item}`] !== undefined,
+        (item) =>
+          context?.geometry.widths[`${id}:${item}`] !== undefined ||
+          context?.geometry.heights[`${id}:${item}`] !== undefined,
       ));
   let cursor = 0;
   return (
@@ -422,9 +512,16 @@ export function LayoutGroup({
             title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
             hide={() => context?.hide(id, [...hidden, itemId])}
             columns={columns}
+            defaultFullWidth={fullWidth.includes(itemId.replace(/^\.\$/, ""))}
             width={
               context?.geometry.widths[`${id}:${itemId}`] ??
               (wideFirst && itemId === String(movable[0]?.key) ? 0 : -1)
+            }
+            height={context?.geometry.heights[`${id}:${itemId}`]}
+            resizeCard={
+              context
+                ? (size) => context.resizeCard(id, itemId, size)
+                : undefined
             }
             resize={
               context
@@ -461,6 +558,9 @@ function LayoutItem({
   resize,
   title,
   hide,
+  height,
+  resizeCard,
+  defaultFullWidth,
 }: {
   item: ReactElement<Record<string, unknown>>;
   editing: boolean;
@@ -470,6 +570,9 @@ function LayoutItem({
   count: number;
   columns: number;
   width: number;
+  height?: number;
+  defaultFullWidth?: boolean;
+  resizeCard?: (size: { width?: number; height?: number }) => void;
   resize?: (width: number) => void;
   title: string;
   hide: () => void;
@@ -477,17 +580,40 @@ function LayoutItem({
   onDrop: (source: string) => void;
 }) {
   const [over, setOver] = useState(false);
+  const element = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<{
+    width?: number;
+    height?: number;
+  } | null>(null);
+  const gesture = useRef<{
+    pointer: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    grid: number;
+    gap: number;
+    direction: string;
+    size: { width?: number; height?: number };
+  } | null>(null);
+  const displayWidth = draft?.width ?? width;
+  const displayHeight = draft?.height ?? height;
   return (
     <div
-      className={`layout-item ${width === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${over ? "is-drop-target" : ""}`}
+      ref={element}
+      className={`layout-item ${displayWidth === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${draft ? "is-resizing" : ""} ${displayHeight ? "has-custom-height" : ""} ${over ? "is-drop-target" : ""}`}
       style={
-        width !== -1
-          ? ({
-              "--layout-span": Math.round(
-                (cardWidthPercentage(width, columns) * 12) / 100,
-              ),
-            } as CSSProperties)
-          : undefined
+        {
+          ...(defaultFullWidth ? { "--layout-default-span": 12 } : {}),
+          ...(displayWidth !== -1
+            ? {
+                "--layout-span": Math.round(
+                  (cardWidthPercentage(displayWidth, columns) * 12) / 100,
+                ),
+              }
+            : {}),
+          ...(displayHeight ? { "--layout-height": `${displayHeight}px` } : {}),
+        } as CSSProperties
       }
       data-layout-item={itemId}
       data-layout-title={title}
@@ -530,6 +656,14 @@ function LayoutItem({
                 dragType,
                 JSON.stringify({ group, id: itemId }),
               );
+              if (element.current) {
+                const bounds = element.current.getBoundingClientRect();
+                event.dataTransfer.setDragImage(
+                  element.current,
+                  event.clientX - bounds.left,
+                  event.clientY - bounds.top,
+                );
+              }
             }}
             onKeyDown={(event) => {
               const delta = ["ArrowUp", "ArrowLeft"].includes(event.key)
@@ -546,6 +680,18 @@ function LayoutItem({
             <GripVertical size={17} aria-hidden="true" />
           </button>
           <div className="layout-item-tools">
+            {height && (
+              <button
+                type="button"
+                aria-label={t("Restore automatic height for {title}", {
+                  title,
+                })}
+                title={t("Automatic height")}
+                onClick={() => resizeCard?.({ height: -1 })}
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
             {resize && (
               <label className="layout-width">
                 <span>{t("Width")}</span>
@@ -590,6 +736,123 @@ function LayoutItem({
               <X size={16} />
             </button>
           </div>
+          {resizeCard &&
+            [
+              "left",
+              "right",
+              "top",
+              "bottom",
+              "top-left",
+              "top-right",
+              "bottom-left",
+              "bottom-right",
+            ].map((direction) => (
+              <button
+                key={direction}
+                type="button"
+                className={`layout-resize-handle resize-${direction}`}
+                aria-label={t("Resize {title}: {edge}", {
+                  title,
+                  edge: t(direction),
+                })}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 || !element.current?.parentElement)
+                    return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const bounds = element.current.getBoundingClientRect();
+                  const parent = element.current.parentElement;
+                  gesture.current = {
+                    pointer: event.pointerId,
+                    x: event.clientX,
+                    y: event.clientY,
+                    width: bounds.width,
+                    height: bounds.height,
+                    grid: parent.clientWidth,
+                    gap: parseFloat(getComputedStyle(parent).columnGap) || 16,
+                    direction,
+                    size: {},
+                  };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setDraft({});
+                }}
+                onPointerMove={(event) => {
+                  const active = gesture.current;
+                  if (!active || active.pointer !== event.pointerId) return;
+                  const size: { width?: number; height?: number } = {};
+                  if (direction.includes("left") || direction.includes("right"))
+                    size.width = snapCardWidth(
+                      active.width +
+                        (event.clientX - active.x) *
+                          (direction.includes("left") ? -1 : 1),
+                      active.grid,
+                      active.gap,
+                    );
+                  if (direction.includes("top") || direction.includes("bottom"))
+                    size.height = snapCardHeight(
+                      active.height +
+                        (event.clientY - active.y) *
+                          (direction.includes("top") ? -1 : 1),
+                    );
+                  active.size = size;
+                  setDraft(size);
+                }}
+                onPointerUp={(event) => {
+                  const active = gesture.current;
+                  if (!active || active.pointer !== event.pointerId) return;
+                  gesture.current = null;
+                  resizeCard(active.size);
+                  setDraft(null);
+                }}
+                onPointerCancel={() => {
+                  gesture.current = null;
+                  setDraft(null);
+                }}
+                onKeyDown={(event) => {
+                  if (!element.current) return;
+                  const delta = ["ArrowRight", "ArrowDown"].includes(event.key)
+                    ? 1
+                    : ["ArrowLeft", "ArrowUp"].includes(event.key)
+                      ? -1
+                      : 0;
+                  if (!delta) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const size: { width?: number; height?: number } = {};
+                  if (direction.includes("left") || direction.includes("right"))
+                    size.width = Math.round(
+                      (Math.max(
+                        3,
+                        Math.min(
+                          12,
+                          Math.round(
+                            (cardWidthPercentage(
+                              width === -1
+                                ? snapCardWidth(
+                                    element.current.clientWidth,
+                                    element.current.parentElement!.clientWidth,
+                                  )
+                                : width,
+                              columns,
+                            ) *
+                              12) /
+                              100,
+                          ) +
+                            delta * (direction.includes("left") ? -1 : 1),
+                        ),
+                      ) *
+                        100) /
+                        12,
+                    );
+                  if (direction.includes("top") || direction.includes("bottom"))
+                    size.height = snapCardHeight(
+                      element.current.clientHeight +
+                        delta * 24 * (direction.includes("top") ? -1 : 1),
+                    );
+                  resizeCard(size);
+                }}
+              />
+            ))}
         </>
       )}
       <div

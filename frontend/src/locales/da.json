@@ -2567,5 +2567,17 @@
   "Individual cleanup rule": "Individuel oprydningsregel",
   "Cleanup settings saved for this torrent.": "Oprydningsindstillingerne er gemt for denne torrent.",
   "Individual rule · Never": "Individuel regel · Behold altid",
-  "An individual rule replaces any cleanup settings copied from a feed.": "En individuel regel erstatter eventuelle oprydningsindstillinger fra et feed."
+  "An individual rule replaces any cleanup settings copied from a feed.": "En individuel regel erstatter eventuelle oprydningsindstillinger fra et feed.",
+  "Resize {title}: {edge}": "Tilpas størrelsen på {title}: {edge}",
+  "Restore automatic height for {title}": "Gendan automatisk højde for {title}",
+  "Automatic height": "Automatisk højde",
+  "left": "venstre side",
+  "right": "højre side",
+  "top": "toppen",
+  "bottom": "bunden",
+  "top-left": "øverste venstre hjørne",
+  "top-right": "øverste højre hjørne",
+  "bottom-left": "nederste venstre hjørne",
+  "bottom-right": "nederste højre hjørne",
+  "Drag cards to move them. Pull an edge or corner to resize on the grid.": "Træk kortene for at flytte dem. Træk i en kant eller et hjørne for at ændre størrelsen på griddet."
 }

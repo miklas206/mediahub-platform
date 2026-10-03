@@ -252,6 +252,248 @@ function SeedboxPanel({
     host = r.host;
   const counts = q?.apiAuthenticated ? q : undefined;
   const status = seedboxStatus(r);
+  const cards = (
+    <>
+      {section === "vpn" && (
+        <Panel title={t("VPN protection")}>
+          <div className="runtime-panel-title">
+            <ShieldCheck />
+            <strong>
+              {vpn?.verified
+                ? t("Connected · verified")
+                : t("Disconnected / unverified")}
+            </strong>
+          </div>
+          <dl>
+            <Row
+              label={t("External IP")}
+              value={vpn?.externalIp || t("Not verified")}
+            />
+            <Row
+              label={t("Provider")}
+              value={vpn?.provider || t("Unavailable")}
+            />
+            <Row
+              label={t("Protocol")}
+              value={vpn?.protocol || t("Unavailable")}
+            />
+            <Row label={t("Last verified")} value={stamp(vpn?.lastVerified)} />
+            <Row
+              label={t("Container started — not tunnel uptime")}
+              value={
+                vpn?.connectedSince
+                  ? new Date(vpn.connectedSince).toLocaleString(getLocale())
+                  : t("Unavailable")
+              }
+            />
+          </dl>
+          <h3>{t("Torrent port forwarding")}</h3>
+          {r.portForwarding?.lastError && (
+            <p role="alert" className="notice">
+              {translateText(r.portForwarding.lastError)}
+            </p>
+          )}
+          <dl>
+            <Row
+              label={t("Lease status")}
+              value={r.portForwarding?.status || t("Not checked")}
+            />
+            <Row
+              label={t("Current port")}
+              value={r.portForwarding?.currentPort ?? t("Not assigned")}
+            />
+            <Row
+              label={t("Last renewed")}
+              value={stamp(r.portForwarding?.lastRenewed)}
+            />
+            <Row
+              label={t("Lease expires")}
+              value={stamp(r.portForwarding?.expiresAt)}
+            />
+            <div className="runtime-row">
+              <dt>{t("qBittorrent port configured")}</dt>
+              <dd>
+                <Verified value={r.portForwarding?.qBittorrentVerified} />
+              </dd>
+            </div>
+            <div className="runtime-row">
+              <dt>{t("Listening socket on VPN port")}</dt>
+              <dd>
+                {r.portForwarding?.listenerVerified
+                  ? t("Verified")
+                  : r.portForwarding?.listenerCheckSupported
+                    ? t("Not listening / not verified")
+                    : t("Update Agent to check socket")}
+              </dd>
+            </div>
+          </dl>
+          <PortReachability
+            address={vpn?.externalIp}
+            port={r.portForwarding?.currentPort}
+            eligible={
+              !!vpn?.verified &&
+              r.portForwarding?.status === "healthy" &&
+              (r.portForwarding?.expiresAt || 0) > Date.now() / 1000
+            }
+          />
+          <p className="muted">
+            {t(
+              "Torrent traffic through the VPN only. No router or WebUI port is opened.",
+            )}
+          </p>
+        </Panel>
+      )}
+      {section === "torrents" && (
+        <div
+          className="seedbox-client-summary"
+          data-layout-title={t("Torrent overview")}
+        >
+          <div className="seedbox-client-metrics">
+            <div>
+              <span>
+                {t("qBittorrent ")}
+                {q?.version}
+              </span>
+              <strong>
+                {q?.running ? t("Running") : t("Stopped / unavailable")}
+              </strong>
+            </div>
+            <div>
+              <span>{t("Download")}</span>
+              <strong>
+                {size(q?.downloadSpeed)}
+                {t("/s")}
+              </strong>
+            </div>
+            <div>
+              <span>{t("Upload")}</span>
+              <strong>
+                {size(q?.uploadSpeed)}
+                {t("/s")}
+              </strong>
+            </div>
+            {[
+              [t("Total"), counts?.torrents],
+              [t("Downloading"), counts?.downloading],
+              [t("Seeding"), counts?.seeding],
+              [t("Paused"), counts?.paused],
+              [t("Errors"), counts?.errors],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <span>
+                  {typeof label === "string" ? t(label) : translateText(label)}
+                </span>
+                <strong>{value ?? "\u2014"}</strong>
+              </div>
+            ))}
+          </div>
+          <details>
+            <summary>{t("Connection checks")}</summary>
+            <dl>
+              <div className="runtime-row">
+                <dt>{t("Authenticated API")}</dt>
+                <dd>
+                  <Verified value={q?.apiAuthenticated} />
+                </dd>
+              </div>
+              <div className="runtime-row">
+                <dt>{t("VPN interface binding")}</dt>
+                <dd>
+                  <Verified value={q?.bindingVerified} />
+                </dd>
+              </div>
+              <div className="runtime-row">
+                <dt>{t("Shared VPN namespace")}</dt>
+                <dd>
+                  <Verified value={q?.namespaceVerified} />
+                </dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+      )}
+      {section === "settings" && (
+        <Panel title={t("Downloads storage")}>
+          <div className="runtime-panel-title">
+            <HardDrive />
+            <strong>
+              {disk?.mounted ? t("Mounted") : t("Storage unavailable")}
+            </strong>
+          </div>
+          <dl>
+            <Row
+              label={t("Filesystem")}
+              value={disk?.filesystem || t("Unavailable")}
+            />
+            <Row label={t("Source")} value={disk?.source || t("Unavailable")} />
+            <div className="runtime-row">
+              <dt>{t("App UID write/read probe")}</dt>
+              <dd>
+                <Verified value={disk?.appWritable} />
+              </dd>
+            </div>
+            <Row
+              label={t("Mount observation")}
+              value={stamp(disk?.verifiedAt)}
+            />
+            <Row label={t("Capacity")} value={size(disk?.totalBytes)} />
+            <Row label={t("Used")} value={size(disk?.usedBytes)} />
+            <Row label={t("Free")} value={size(disk?.freeBytes)} />
+          </dl>
+          {disk?.totalBytes != null && disk.usedBytes != null && (
+            <progress
+              aria-label={t("Storage used")}
+              max={disk.totalBytes}
+              value={disk.usedBytes}
+            />
+          )}
+        </Panel>
+      )}
+      {section === "settings" && (
+        <Panel title={t("Seedbox host")}>
+          <div className="runtime-panel-title">
+            <Server />
+            <strong>
+              {r.agentOnline ? t("Agent online") : t("Agent offline")}
+            </strong>
+          </div>
+          <dl>
+            <Row
+              label={t("Docker")}
+              value={r.dockerHealthy ? t("Available") : t("Unavailable")}
+            />
+            <Row
+              label={t("CPU")}
+              value={
+                host?.cpuPercent == null
+                  ? t("Sampling / unavailable")
+                  : `${host.cpuPercent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}% · ${host.cpuCores} cores`
+              }
+            />
+            <Row label={t("RAM used")} value={size(host?.ramUsedBytes)} />
+            <Row
+              label={t("RAM available")}
+              value={size(host?.ramAvailableBytes)}
+            />
+            <Row label={t("RAM total")} value={size(host?.ramTotalBytes)} />
+            <Row
+              label={t("Host uptime")}
+              value={
+                host?.uptimeSeconds == null
+                  ? t("Unavailable")
+                  : uptime(host.uptimeSeconds)
+              }
+            />
+          </dl>
+        </Panel>
+      )}
+      {section === "settings" && (
+        <div className="layout-card" data-layout-title={t("RSS settings")}>
+          <SeedboxRSSSettings />
+        </div>
+      )}
+    </>
+  );
   return (
     <div className={`runtime-workspace seedbox-workspace section-${section}`}>
       <header className="runtime-summary">
@@ -285,254 +527,18 @@ function SeedboxPanel({
           )}
         </div>
       )}
-      <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
-        {section === "vpn" && (
-          <Panel title={t("VPN protection")}>
-            <div className="runtime-panel-title">
-              <ShieldCheck />
-              <strong>
-                {vpn?.verified
-                  ? t("Connected · verified")
-                  : t("Disconnected / unverified")}
-              </strong>
-            </div>
-            <dl>
-              <Row
-                label={t("External IP")}
-                value={vpn?.externalIp || t("Not verified")}
-              />
-              <Row
-                label={t("Provider")}
-                value={vpn?.provider || t("Unavailable")}
-              />
-              <Row
-                label={t("Protocol")}
-                value={vpn?.protocol || t("Unavailable")}
-              />
-              <Row
-                label={t("Last verified")}
-                value={stamp(vpn?.lastVerified)}
-              />
-              <Row
-                label={t("Container started — not tunnel uptime")}
-                value={
-                  vpn?.connectedSince
-                    ? new Date(vpn.connectedSince).toLocaleString(getLocale())
-                    : t("Unavailable")
-                }
-              />
-            </dl>
-            <h3>{t("Torrent port forwarding")}</h3>
-            {r.portForwarding?.lastError && (
-              <p role="alert" className="notice">
-                {translateText(r.portForwarding.lastError)}
-              </p>
-            )}
-            <dl>
-              <Row
-                label={t("Lease status")}
-                value={r.portForwarding?.status || t("Not checked")}
-              />
-              <Row
-                label={t("Current port")}
-                value={r.portForwarding?.currentPort ?? t("Not assigned")}
-              />
-              <Row
-                label={t("Last renewed")}
-                value={stamp(r.portForwarding?.lastRenewed)}
-              />
-              <Row
-                label={t("Lease expires")}
-                value={stamp(r.portForwarding?.expiresAt)}
-              />
-              <div className="runtime-row">
-                <dt>{t("qBittorrent port configured")}</dt>
-                <dd>
-                  <Verified value={r.portForwarding?.qBittorrentVerified} />
-                </dd>
-              </div>
-              <div className="runtime-row">
-                <dt>{t("Listening socket on VPN port")}</dt>
-                <dd>
-                  {r.portForwarding?.listenerVerified
-                    ? t("Verified")
-                    : r.portForwarding?.listenerCheckSupported
-                      ? t("Not listening / not verified")
-                      : t("Update Agent to check socket")}
-                </dd>
-              </div>
-            </dl>
-            <PortReachability
-              address={vpn?.externalIp}
-              port={r.portForwarding?.currentPort}
-              eligible={
-                !!vpn?.verified &&
-                r.portForwarding?.status === "healthy" &&
-                (r.portForwarding?.expiresAt || 0) > Date.now() / 1000
-              }
-            />
-            <p className="muted">
-              {t(
-                "Torrent traffic through the VPN only. No router or WebUI port is opened.",
-              )}
-            </p>
-          </Panel>
-        )}
-        {section === "torrents" && (
-          <div
-            className="seedbox-client-summary"
-            data-layout-title={t("Torrent overview")}
-          >
-            <div className="seedbox-client-metrics">
-              <div>
-                <span>
-                  {t("qBittorrent ")}
-                  {q?.version}
-                </span>
-                <strong>
-                  {q?.running ? t("Running") : t("Stopped / unavailable")}
-                </strong>
-              </div>
-              <div>
-                <span>{t("Download")}</span>
-                <strong>
-                  {size(q?.downloadSpeed)}
-                  {t("/s")}
-                </strong>
-              </div>
-              <div>
-                <span>{t("Upload")}</span>
-                <strong>
-                  {size(q?.uploadSpeed)}
-                  {t("/s")}
-                </strong>
-              </div>
-              {[
-                [t("Total"), counts?.torrents],
-                [t("Downloading"), counts?.downloading],
-                [t("Seeding"), counts?.seeding],
-                [t("Paused"), counts?.paused],
-                [t("Errors"), counts?.errors],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <span>
-                    {typeof label === "string"
-                      ? t(label)
-                      : translateText(label)}
-                  </span>
-                  <strong>{value ?? "\u2014"}</strong>
-                </div>
-              ))}
-            </div>
-            <details>
-              <summary>{t("Connection checks")}</summary>
-              <dl>
-                <div className="runtime-row">
-                  <dt>{t("Authenticated API")}</dt>
-                  <dd>
-                    <Verified value={q?.apiAuthenticated} />
-                  </dd>
-                </div>
-                <div className="runtime-row">
-                  <dt>{t("VPN interface binding")}</dt>
-                  <dd>
-                    <Verified value={q?.bindingVerified} />
-                  </dd>
-                </div>
-                <div className="runtime-row">
-                  <dt>{t("Shared VPN namespace")}</dt>
-                  <dd>
-                    <Verified value={q?.namespaceVerified} />
-                  </dd>
-                </div>
-              </dl>
-            </details>
-          </div>
-        )}
-        {section === "settings" && (
-          <Panel title={t("Downloads storage")}>
-            <div className="runtime-panel-title">
-              <HardDrive />
-              <strong>
-                {disk?.mounted ? t("Mounted") : t("Storage unavailable")}
-              </strong>
-            </div>
-            <dl>
-              <Row
-                label={t("Filesystem")}
-                value={disk?.filesystem || t("Unavailable")}
-              />
-              <Row
-                label={t("Source")}
-                value={disk?.source || t("Unavailable")}
-              />
-              <div className="runtime-row">
-                <dt>{t("App UID write/read probe")}</dt>
-                <dd>
-                  <Verified value={disk?.appWritable} />
-                </dd>
-              </div>
-              <Row
-                label={t("Mount observation")}
-                value={stamp(disk?.verifiedAt)}
-              />
-              <Row label={t("Capacity")} value={size(disk?.totalBytes)} />
-              <Row label={t("Used")} value={size(disk?.usedBytes)} />
-              <Row label={t("Free")} value={size(disk?.freeBytes)} />
-            </dl>
-            {disk?.totalBytes != null && disk.usedBytes != null && (
-              <progress
-                aria-label={t("Storage used")}
-                max={disk.totalBytes}
-                value={disk.usedBytes}
-              />
-            )}
-          </Panel>
-        )}
-        {section === "settings" && (
-          <Panel title={t("Seedbox host")}>
-            <div className="runtime-panel-title">
-              <Server />
-              <strong>
-                {r.agentOnline ? t("Agent online") : t("Agent offline")}
-              </strong>
-            </div>
-            <dl>
-              <Row
-                label={t("Docker")}
-                value={r.dockerHealthy ? t("Available") : t("Unavailable")}
-              />
-              <Row
-                label={t("CPU")}
-                value={
-                  host?.cpuPercent == null
-                    ? t("Sampling / unavailable")
-                    : `${host.cpuPercent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}% · ${host.cpuCores} cores`
-                }
-              />
-              <Row label={t("RAM used")} value={size(host?.ramUsedBytes)} />
-              <Row
-                label={t("RAM available")}
-                value={size(host?.ramAvailableBytes)}
-              />
-              <Row label={t("RAM total")} value={size(host?.ramTotalBytes)} />
-              <Row
-                label={t("Host uptime")}
-                value={
-                  host?.uptimeSeconds == null
-                    ? t("Unavailable")
-                    : uptime(host.uptimeSeconds)
-                }
-              />
-            </dl>
-          </Panel>
-        )}
-        {section === "settings" && (
-          <div className="layout-card" data-layout-title={t("RSS settings")}>
-            <SeedboxRSSSettings />
-          </div>
-        )}
-      </LayoutGroup>
+      {section === "vpn" ? (
+        <SeedboxDaily
+          section="vpn"
+          externalIp={vpn?.externalIp}
+          forwarding={r.portForwarding?.status}
+          overviewCards={cards.props.children}
+        />
+      ) : (
+        <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
+          {cards.props.children}
+        </LayoutGroup>
+      )}
     </div>
   );
 }
@@ -1093,7 +1099,7 @@ export function AppRuntimePage() {
       {data?.view === "cloudflare" && (
         <CloudflareSetupManager onSaved={reload} />
       )}
-      {data?.view === "seedbox" && section !== "settings" && (
+      {data?.view === "seedbox" && section === "torrents" && (
         <SeedboxDaily
           section={section}
           externalIp={data.report.vpn?.externalIp}
