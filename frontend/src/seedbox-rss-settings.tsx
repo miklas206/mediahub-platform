@@ -1,4 +1,5 @@
-import { t } from "./i18n";
+import { translateText, t } from "./i18n";
+
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
@@ -86,7 +87,7 @@ export function SeedboxRSSSettings() {
         >
           {busy ? t("Saving…") : t("Save feed settings")}
         </button>
-        {notice && <p role="status">{notice}</p>}
+        {notice && <p role="status">{translateText(notice)}</p>}
       </form>
     </Panel>
   );

@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { Link } from "react-router-dom";
@@ -199,21 +201,27 @@ export function FjordHubDeployment({
   return (
     <>
       {visible && (
-        <section className="stack" aria-label="Automatic FjordHub installation">
-          <h3>Install directly from MediaHub</h3>
+        <section
+          className="stack"
+          aria-label={t("Automatic FjordHub installation")}
+        >
+          <h3>{t("Install directly from MediaHub")}</h3>
           <p>
-            Connect as root to{" "}
-            {config.target === "lxc" ? "your Proxmox node" : "the Debian host"}.
-            MediaHub installs FjordHub automatically after you press Install.
-            The SSH password is used for this job only and is not saved.
+            {t("Connect as root to")}{" "}
+            {config.target === "lxc"
+              ? t("your Proxmox node")
+              : t("the Debian host")}
+            {t(
+              ". MediaHub installs FjordHub automatically after you press Install. The SSH password is used for this job only and is not saved.",
+            )}
           </p>
           <fieldset disabled={busy} className="store-form-grid">
             <label>
-              SSH server IP
+              {t("SSH server IP")}
               <input
                 value={host}
                 placeholder={
-                  findingHost ? "Finding server IP…" : "Server LAN IP"
+                  findingHost ? t("Finding server IP…") : t("Server LAN IP")
                 }
                 onChange={(e) => {
                   hostEdited.current = true;
@@ -226,7 +234,7 @@ export function FjordHubDeployment({
               />
             </label>
             <label>
-              SSH port
+              {t("SSH port")}
               <input
                 inputMode="numeric"
                 value={port}
@@ -239,7 +247,7 @@ export function FjordHubDeployment({
               />
             </label>
             <label>
-              Root SSH password
+              {t("Root SSH password")}
               <input
                 type="password"
                 autoComplete="off"
@@ -250,13 +258,19 @@ export function FjordHubDeployment({
           </fieldset>
           <p role="status">
             {findingHost
-              ? "Finding the server address from your existing connections…"
+              ? t("Finding the server address from your existing connections…")
               : hostSource === "configured-storage"
-                ? "Address filled from your configured storage server. You can change it if Proxmox runs on another host."
+                ? t(
+                    "Address filled from your configured storage server. You can change it if Proxmox runs on another host.",
+                  )
                 : hostSource === "previous-installation"
-                  ? "Address filled from your previous successful installation."
+                  ? t(
+                      "Address filled from your previous successful installation.",
+                    )
                   : !host
-                    ? "No server address could be found automatically. Enter its LAN IP to continue."
+                    ? t(
+                        "No server address could be found automatically. Enter its LAN IP to continue.",
+                      )
                     : ""}
           </p>
           <div className="button-row">
@@ -265,19 +279,20 @@ export function FjordHubDeployment({
               disabled={busy || !host}
               onClick={() => void checkHost()}
             >
-              Check SSH connection
+              {t("Check SSH connection")}
             </button>
           </div>
           {fingerprint && (
             <div className="notice deployment-fingerprint">
-              <strong>Next step: confirm the server identity</strong>
+              <strong>{t("Next step: confirm the server identity")}</strong>
               <p>
-                Server fingerprint:{" "}
+                {t("Server fingerprint:")}{" "}
                 <code style={{ overflowWrap: "anywhere" }}>{fingerprint}</code>
               </p>
               <p>
-                Compare with the SSH host fingerprint shown on your server. In
-                its console:{" "}
+                {t(
+                  "Compare with the SSH host fingerprint shown on your server. In its console:",
+                )}{" "}
                 <code>
                   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
                 </code>
@@ -285,7 +300,9 @@ export function FjordHubDeployment({
               <label className="deployment-trust-confirmation">
                 <input
                   type="checkbox"
-                  aria-label="I recognize and trust this server fingerprint."
+                  aria-label={t(
+                    "I recognize and trust this server fingerprint.",
+                  )}
                   aria-describedby="deployment-trust-help"
                   checked={verified}
                   disabled={busy}
@@ -294,26 +311,38 @@ export function FjordHubDeployment({
                 <span>
                   <strong>
                     {verified
-                      ? "Server confirmed"
-                      : "Confirm server to continue"}
+                      ? t("Server confirmed")
+                      : t("Confirm server to continue")}
                   </strong>
-                  <span>I recognize and trust this server fingerprint.</span>
+                  <span>
+                    {t("I recognize and trust this server fingerprint.")}
+                  </span>
                 </span>
               </label>
               <p id="deployment-trust-help">
                 {verified
-                  ? "Confirmation complete. Enter the root password, then press the install button below."
-                  : "After checking the fingerprint, click the confirmation above to enable the next step."}
+                  ? t(
+                      "Confirmation complete. Enter the root password, then press the install button below.",
+                    )
+                  : t(
+                      "After checking the fingerprint, click the confirmation above to enable the next step.",
+                    )}
               </p>
             </div>
           )}
           <p>
             <strong>
               {config.target === "lxc"
-                ? `New LXC: ${config.cores} CPU cores, ${Number(config.memory) / 1024} GiB RAM. `
-                : "Existing Debian host. "}
+                ? t("New LXC: {value0} CPU cores, {value1} GiB RAM. ", {
+                    value0: config.cores,
+                    value1: Number(config.memory) / 1024,
+                  })
+                : t("Existing Debian host. ")}
             </strong>
-            Source: {config.installPath}. Data: {config.dataPath}.
+            {t("Source: ")}
+            {config.installPath}
+            {t(". Data: ")}
+            {config.dataPath}.
           </p>
           {needsInspection && (
             <label>
@@ -323,14 +352,16 @@ export function FjordHubDeployment({
                 disabled={busy}
                 onChange={(e) => setInspected(e.target.checked)}
               />{" "}
-              I have inspected the previous target, confirmed no installer is
-              still running and chosen a fresh target for this attempt.
+              {t(
+                "I have inspected the previous target, confirmed no installer is still running and chosen a fresh target for this attempt.",
+              )}
             </label>
           )}
           {!loaded && (
             <p role="status">
-              Reconnecting to deployment status. Installation is disabled until
-              the status is known.
+              {t(
+                "Reconnecting to deployment status. Installation is disabled until the status is known.",
+              )}
             </p>
           )}
           <button
@@ -346,78 +377,85 @@ export function FjordHubDeployment({
             onClick={() => void install()}
           >
             {pending
-              ? "Working..."
+              ? t("Working...")
               : busy
-                ? "Installation in progress…"
+                ? t("Installation in progress…")
                 : config.target === "lxc"
-                  ? "Create LXC and install FjordHub"
-                  : "Install FjordHub"}
+                  ? t("Create LXC and install FjordHub")
+                  : t("Install FjordHub")}
           </button>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {translateText(error)}
             </p>
           )}
         </section>
       )}
       {job && visible && (
-        <section className="stack" aria-label="FjordHub deployment status">
+        <section className="stack" aria-label={t("FjordHub deployment status")}>
           <strong>
             {job.state === "running"
-              ? "Installing FjordHub"
+              ? t("Installing FjordHub")
               : job.state === "succeeded"
-                ? "Previous installation completed"
-                : "Installation needs attention"}{" "}
+                ? t("Previous installation completed")
+                : t("Installation needs attention")}{" "}
             · {job.host}
           </strong>
           <p role="status">
             {job.state === "succeeded"
-              ? "This is the previous installation result, not proof that FjordHub is still installed."
-              : job.message}
+              ? t(
+                  "This is the previous installation result, not proof that FjordHub is still installed.",
+                )
+              : translateText(job.message)}
           </p>
           {job.verification && (
             <p role="status">
-              <strong>{job.verification.state}</strong>:{" "}
-              {job.verification.message} Last checked:{" "}
-              {new Date(job.verification.checkedAt * 1000).toLocaleString()}
+              <strong>{translateText(job.verification.state)}</strong>:{" "}
+              {translateText(job.verification.message)}
+              {t(" Last checked:")}{" "}
+              {new Date(job.verification.checkedAt * 1000).toLocaleString(
+                getLocale(),
+              )}
             </p>
           )}
           {job.state !== "running" && (
             <>
               <p>
-                Enter the SSH password and verify the host fingerprint above to
-                check the actual installation. No password is stored.
+                {t(
+                  "Enter the SSH password and verify the host fingerprint above to check the actual installation. No password is stored.",
+                )}
               </p>
               <div className="runtime-toolbar">
                 <button
                   disabled={busy || !verified || !password || host !== job.host}
                   onClick={() => void inspectInstallation()}
                 >
-                  Check actual installation
+                  {t("Check actual installation")}
                 </button>
                 <Link to="/store/fjordhub/uninstall">
-                  Uninstall FjordHub — preserve external media
+                  {t("Uninstall FjordHub — preserve external media")}
                 </Link>
               </div>
             </>
           )}
           {job.state === "running" && (
             <p>
-              You can leave this page and return to see progress. Keep MediaHub
-              running until installation finishes.
+              {t(
+                "You can leave this page and return to see progress. Keep MediaHub running until installation finishes.",
+              )}
             </p>
           )}
           <details
             key={`${job.id}-${job.state}`}
             open={job.state === "running"}
           >
-            <summary>Installation console</summary>
+            <summary>{t("Installation console")}</summary>
             <pre
               ref={consoleRef}
               className="install-command-block fjordhub-install-console"
-              aria-label="FjordHub installation console"
+              aria-label={t("FjordHub installation console")}
             >
-              {job.logs.join("\n") || "Waiting for SSH output…"}
+              {job.logs.join("\n") || t("Waiting for SSH output…")}
             </pre>
           </details>
         </section>

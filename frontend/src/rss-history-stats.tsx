@@ -1,5 +1,6 @@
+import { translateText, getLocale, t } from "./i18n";
 import { bytes, uptime } from "./format";
-import { getLocale, t } from "./i18n";
+
 import { torrentStateLabel, type Torrent } from "./torrent-list";
 
 type HistoryIdentity = { title: string; torrentHash?: string | null };
@@ -76,12 +77,14 @@ export function RSSHistoryStats({ torrent }: { torrent?: Torrent }) {
       <span className="rss-history-state">
         {torrentStateLabel(torrent.state)}
         {valid(torrent.progress) &&
-          ` · ${Math.round(Math.min(1, torrent.progress) * 100)}%`}
+          t(" · {value0}%", {
+            value0: Math.round(Math.min(1, torrent.progress) * 100),
+          })}
       </span>
       <dl className="rss-history-stats">
         {stats.map(([label, value, explanation]) => (
           <div key={label}>
-            <dt title={explanation}>{label}</dt>
+            <dt title={explanation}>{translateText(label)}</dt>
             <dd>{value}</dd>
           </div>
         ))}

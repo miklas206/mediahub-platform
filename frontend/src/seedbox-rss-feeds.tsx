@@ -1,4 +1,5 @@
 import { getLocale, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
@@ -267,13 +268,17 @@ function FeedCard({
   const [selected, setSelected] = useState<string[]>([]);
   const [start, setStart] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{
+    count: number;
+    failed: number;
+    stopped: boolean;
+  } | null>(null);
   const [error, setError] = useState("");
   const path = `/seedbox/rss/feeds/${encodeURIComponent(feed.id)}`;
   async function download() {
     setAdding(true);
     setError("");
-    setNotice("");
+    setNotice(null);
     try {
       const result = await api<{ items: { id: string; ok: boolean }[] }>(
         path + "/download",
@@ -282,9 +287,11 @@ function FeedCard({
       );
       const failed = result.items.filter((i) => !i.ok);
       setSelected(failed.map((i) => i.id));
-      setNotice(
-        `${result.items.length - failed.length} added or already present. ${failed.length} failed.${start ? "" : t(" New torrents are stopped; use Resume to start.")}`,
-      );
+      setNotice({
+        count: result.items.length - failed.length,
+        failed: failed.length,
+        stopped: !start,
+      });
       onAdded();
     } catch (e) {
       setError((e as Error).message);
@@ -317,7 +324,16 @@ function FeedCard({
       </p>
       <ErrorBox error={feed.error} />
       <ErrorBox error={error} />
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <p role="status">
+          {t("{count} added or already present. {failed} failed.", {
+            count: notice.count,
+            failed: notice.failed,
+          })}
+          {notice.stopped &&
+            t(" New torrents are stopped; use Resume to start.")}
+        </p>
+      )}
       <details>
         <summary>
           {t("Automatic download history (")}

@@ -1,4 +1,5 @@
-import { setLanguage, t, useLanguage } from "./i18n";
+import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
+
 import { LanguageSettings } from "./language-settings";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
@@ -336,30 +337,34 @@ function Login({
     <main className="login-screen">
       <div className="login-panel">
         <Brand />
-        <span className="eyebrow">YOUR LOCAL CONTROL ROOM</span>
-        <h1>{needsSetup ? "A fresh foundation." : "Welcome back."}</h1>
+        <span className="eyebrow">{t("YOUR LOCAL CONTROL ROOM")}</span>
+        <h1>{needsSetup ? t("A fresh foundation.") : t("Welcome back.")}</h1>
         <p className="muted">
           {needsSetup
-            ? "Create your administrator locally to unlock MediaHub."
-            : "Sign in to manage your MediaHub."}
+            ? t("Create your administrator locally to unlock MediaHub.")
+            : t("Sign in to manage your MediaHub.")}
         </p>
-        {(error || initialError) && <Notice>{error || initialError}</Notice>}
+        {(error || initialError) && (
+          <Notice>{translateText(error) || initialError}</Notice>
+        )}
         {needsSetup ? (
           <div className="setup-instructions">
-            <p>Run this in the new project’s terminal:</p>
+            <p>{t("Run this in the new project’s terminal:")}</p>
             <code>python -m mediahub.cli admin</code>
             <p>
-              Your password is entered privately. No default credentials are
-              configured.
+              {t(
+                "Your password is entered privately. No default credentials are configured.",
+              )}
             </p>
             <button onClick={retry}>
-              <RefreshCw size={16} /> Check again
+              <RefreshCw size={16} />
+              {t(" Check again")}
             </button>
           </div>
         ) : (
           <form onSubmit={submit}>
             <label>
-              Username
+              {t("Username")}
               <input
                 autoComplete="username"
                 name="username"
@@ -368,7 +373,7 @@ function Login({
               />
             </label>
             <label>
-              Password
+              {t("Password")}
               <input
                 autoComplete="current-password"
                 type="password"
@@ -378,24 +383,26 @@ function Login({
               />
             </label>
             <label>
-              Authenticator or recovery code
+              {t("Authenticator or recovery code")}
               <input
                 autoComplete="one-time-code"
                 name="secondFactor"
                 maxLength={32}
-                placeholder="If two-factor authentication is enabled"
+                placeholder={t("If two-factor authentication is enabled")}
               />
             </label>
             <button className="primary" disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? t("Signing in…") : t("Sign in")}
               <ArrowUpRight size={17} />
             </button>
           </form>
         )}
         <div className="login-foot">
-          <ShieldCheck size={16} /> Your private media workspace{" "}
+          <ShieldCheck size={16} />
+          {t(" Your private media workspace")}{" "}
           <span>
-            v<PlatformVersion />
+            {t("v")}
+            <PlatformVersion />
           </span>
         </div>
       </div>
@@ -408,7 +415,8 @@ function Brand() {
     <div className="brand">
       <img src="/favicon.svg" alt="" width="34" height="34" />
       <span>
-        Media<span>Hub</span>
+        {t("Media")}
+        <span>{t("Hub")}</span>
       </span>
     </div>
   );
@@ -538,7 +546,9 @@ function Shell({
                     <NavLink to={path}>
                       <Icon size={19} />
                       <span>
-                        {typeof label === "string" ? t(label) : label}
+                        {typeof label === "string"
+                          ? t(label)
+                          : translateText(label)}
                       </span>
                     </NavLink>
                     <button
@@ -546,8 +556,8 @@ function Shell({
                       className="nav-expand"
                       aria-label={
                         appsExpanded
-                          ? "Hide app shortcuts"
-                          : "Show app shortcuts"
+                          ? t("Hide app shortcuts")
+                          : t("Show app shortcuts")
                       }
                       aria-expanded={appsExpanded}
                       onClick={() => setAppsExpanded((value) => !value)}
@@ -568,7 +578,7 @@ function Shell({
                               to={app.detailPath || "/apps"}
                               title={
                                 navigationAppsError
-                                  ? "Status unavailable"
+                                  ? t("Status unavailable")
                                   : app.health.summary
                               }
                             >
@@ -617,7 +627,7 @@ function Shell({
                                     >
                                       {typeof label === "string"
                                         ? t(label)
-                                        : label}
+                                        : translateText(label)}
                                     </Link>
                                   ))}
                                 </div>
@@ -626,7 +636,7 @@ function Shell({
                         ))}
                       {!navigationApps && (
                         <span className="app-shortcuts-loading">
-                          Loading apps…
+                          {t("Loading apps…")}
                         </span>
                       )}
                       <IntegrationAppLinks items={navigationIntegrations} />
@@ -636,12 +646,18 @@ function Shell({
               ) : (
                 <NavLink end={path === "/"} key={path} to={path}>
                   <Icon size={19} />
-                  <span>{typeof label === "string" ? t(label) : label}</span>
+                  <span>
+                    {typeof label === "string"
+                      ? t(label)
+                      : translateText(label)}
+                  </span>
                   {path === "/" && <span className="nav-shortcut">01</span>}
                   {path === "/updates" && !!updateSummary?.count && (
                     <span
                       className="nav-update-count"
-                      aria-label={`${updateSummary.count} updates available`}
+                      aria-label={t("{value0} updates available", {
+                        value0: updateSummary.count,
+                      })}
                     >
                       {updateSummary.count > 99 ? "99+" : updateSummary.count}
                     </span>
@@ -654,7 +670,8 @@ function Shell({
           <div className="preview-label">
             <Box size={16} />
             <div>
-              Your media workspace<small>Apps · Storage · Protection</small>
+              {t("Your media workspace")}
+              <small>{t("Apps · Storage · Protection")}</small>
             </div>
           </div>
           <div className="profile">
@@ -663,7 +680,7 @@ function Shell({
             </span>
             <div>
               {user.username}
-              <small>Administrator</small>
+              <small>{t("Administrator")}</small>
             </div>
             <button
               className="icon-button"
@@ -695,7 +712,10 @@ function Shell({
           </div>
           <div className="topbar-right">
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">v{metrics?.version || "…"}</span>
+            <span className="version">
+              {t("v")}
+              {metrics?.version || "…"}
+            </span>
           </div>
         </header>
         <main className="main-content">
@@ -706,19 +726,21 @@ function Shell({
                   {title === "Dashboard" ? t("CONTROL ROOM") : t("WORKSPACE")}
                 </span>
                 <h1>
-                  {title === "Dashboard" ? t("Everything, in view.") : title}
+                  {title === "Dashboard"
+                    ? t("Everything, in view.")
+                    : translateText(title)}
                 </h1>
                 <p>
                   {title === "Dashboard"
                     ? t("A live overview of your MediaHub environment.")
-                    : pageDescription(title)}
+                    : translateText(pageDescription(title))}
                 </p>
               </div>
               {metrics && advancedMode && (
                 <div className="host-chip">
                   <Server size={17} />
                   <span>
-                    MediaHub Core
+                    {t("MediaHub Core")}
                     <small title={metrics.hostname}>
                       {t("Technical runtime details")}
                     </small>
@@ -727,7 +749,7 @@ function Shell({
               )}
             </div>
           )}
-          {error && <Notice>{error}</Notice>}
+          {error && <Notice>{translateText(error)}</Notice>}
           {!live && location.pathname !== "/updates" && (
             <Notice>
               {t(
@@ -778,14 +800,15 @@ function Shell({
                     <Apps revision={revision} />
                     <section className="store-callout">
                       <div>
-                        <strong>Looking for another app?</strong>
+                        <strong>{t("Looking for another app?")}</strong>
                         <p>
-                          Browse guided installations without mixing them into
-                          the apps you already run.
+                          {t(
+                            "Browse guided installations without mixing them into the apps you already run.",
+                          )}
                         </p>
                       </div>
                       <NavLink className="primary" to="/store">
-                        Open App Store →
+                        {t("Open App Store →")}
                       </NavLink>
                     </section>
                   </LayoutGroup>
@@ -806,7 +829,7 @@ function Shell({
                     </div>
                     {advancedMode && (
                       <details className="technical-disclosure">
-                        <summary>Technical storage mappings</summary>
+                        <summary>{t("Technical storage mappings")}</summary>
                         <LayoutGroup id="ui-Shell-3" className="stack">
                           <div
                             className="layout-card"
@@ -887,10 +910,10 @@ function Shell({
           </PageLayout>
           <footer className="footer">
             <span>
-              MediaHub Core <span className="muted">/</span>{" "}
-              {metrics?.version || "…"}
+              {t("MediaHub Core ")}
+              <span className="muted">/</span> {metrics?.version || "…"}
             </span>
-            <span>Self-hosted · Your media, your control</span>
+            <span>{t("Self-hosted · Your media, your control")}</span>
           </footer>
         </main>
       </div>
@@ -930,10 +953,12 @@ function MetricCard({
     <div className="metric-card">
       <div className="metric-label">
         {icon}
-        <span>{typeof label === "string" ? t(label) : label}</span>
+        <span>
+          {typeof label === "string" ? t(label) : translateText(label)}
+        </span>
       </div>
       <div className="metric-value">{value}</div>
-      <p>{detail}</p>
+      <p>{translateText(detail)}</p>
       {percent != null ? (
         <div
           className={`meter ${percent > 90 ? "warning" : ""}`}
@@ -982,10 +1007,11 @@ function Dashboard({
       id: "apps",
       content: (
         <Section
-          title="Your apps"
+          title={t("Your apps")}
           aside={
             <NavLink className="text-link" to="/apps">
-              View apps <ArrowUpRight size={15} />
+              {t("View apps ")}
+              <ArrowUpRight size={15} />
             </NavLink>
           }
         >
@@ -1009,7 +1035,9 @@ function Dashboard({
             ].map(([label, n]) => (
               <div key={label}>
                 <strong>{n}</strong>
-                <span>{typeof label === "string" ? t(label) : label}</span>
+                <span>
+                  {typeof label === "string" ? t(label) : translateText(label)}
+                </span>
               </div>
             ))}
           </div>
@@ -1021,24 +1049,28 @@ function Dashboard({
               <div className="app-row-name">
                 <strong>{app.name}</strong>
                 <small>
-                  {app.isMock ? "Mock adapter" : "Installed"} · v{app.version}
+                  {app.isMock ? t("Mock adapter") : t("Installed")}
+                  {t(" · v")}
+                  {translateText(app.version)}
                 </small>
               </div>
               <Badge value={app.health.status} />
             </div>
           ))}
           {!apps?.length && (
-            <Empty title="No apps installed">
-              Apps will appear here when registered.
+            <Empty title={t("No apps installed")}>
+              {t("Apps will appear here when registered.")}
             </Empty>
           )}
           <div className="panel-note">
             <ShieldCheck size={16} />{" "}
             {apps?.some((a) => a.isMock)
-              ? "Development mock only. No real services controlled."
+              ? t("Development mock only. No real services controlled.")
               : apps?.length
-                ? "Apps are monitored through paired Agents or restricted read-only integrations."
-                : "No apps installed."}
+                ? t(
+                    "Apps are monitored through paired Agents or restricted read-only integrations.",
+                  )
+                : t("No apps installed.")}
           </div>
         </Section>
       ),
@@ -1049,10 +1081,11 @@ function Dashboard({
       id: "activity",
       content: (
         <Section
-          title="Recent activity"
+          title={t("Recent activity")}
           aside={
             <NavLink className="text-link" to="/activity">
-              Full timeline <ArrowUpRight size={15} />
+              {t("Full timeline ")}
+              <ArrowUpRight size={15} />
             </NavLink>
           }
         >
@@ -1064,14 +1097,14 @@ function Dashboard({
     {
       id: "network",
       content: (
-        <Section title="Network throughput">
+        <Section title={t("Network throughput")}>
           <div className="network-card">
             <div>
               <ArrowDown size={19} />
               <span>{t("Download")}</span>
               <strong>
                 {bytes(m.network.downloadBytesPerSecond)}
-                <small>/s</small>
+                <small>{t("/s")}</small>
               </strong>
             </div>
             <div>
@@ -1079,12 +1112,12 @@ function Dashboard({
               <span>{t("Upload")}</span>
               <strong>
                 {bytes(m.network.uploadBytesPerSecond)}
-                <small>/s</small>
+                <small>{t("/s")}</small>
               </strong>
             </div>
           </div>
           <div className="panel-note">
-            Runtime network totals, not torrent speeds.
+            {t("Runtime network totals, not torrent speeds.")}
           </div>
         </Section>
       ),
@@ -1093,24 +1126,24 @@ function Dashboard({
       id: "core",
       content: (
         <Section
-          title="Core status"
+          title={t("Core status")}
           aside={<Badge value={live ? "healthy" : "unknown"} />}
         >
           <div className="status-rows">
             <StatusLine
-              label="Backend API"
+              label={t("Backend API")}
               value={live ? "Connected" : "Disconnected"}
             />
             <StatusLine
-              label="Realtime"
+              label={t("Realtime")}
               value={live ? "Streaming · SSE" : "Reconnecting"}
             />
             <StatusLine
-              label="Runtime control"
+              label={t("Runtime control")}
               value="Agent-verified actions"
             />
-            <StatusLine label="Public ingress" value="Not managed" />
-            <StatusLine label="Release" value={m.version} />
+            <StatusLine label={t("Public ingress")} value="Not managed" />
+            <StatusLine label={t("Release")} value={m.version} />
           </div>
         </Section>
       ),
@@ -1125,8 +1158,10 @@ function Dashboard({
               <Cpu size={18} />
             </span>
             <span>
-              <strong>System details</strong>
-              <small>Core resource use, uptime and app runtime status</small>
+              <strong>{t("System details")}</strong>
+              <small>
+                {t("Core resource use, uptime and app runtime status")}
+              </small>
             </span>
             <Badge value={live ? "healthy" : "unknown"} />
             <ChevronDown className="disclosure-chevron" size={18} />
@@ -1135,32 +1170,32 @@ function Dashboard({
             <div className="compact-metrics">
               <MetricCard
                 icon={<Cpu size={18} />}
-                label="Core CPU"
+                label={t("Core CPU")}
                 value={
                   m.cpu.percent == null
                     ? "Sampling…"
-                    : `${m.cpu.percent.toFixed(1)}%`
+                    : `${m.cpu.percent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}%`
                 }
                 detail={`${m.cpu.cores} allocated cores`}
                 percent={m.cpu.percent}
               />
               <MetricCard
                 icon={<Server size={18} />}
-                label="Core memory"
+                label={t("Core memory")}
                 value={bytes(m.ram.usedBytes)}
                 detail={`${bytes(m.ram.availableBytes)} available`}
                 percent={m.ram.percent}
               />
               <MetricCard
                 icon={<Clock3 size={18} />}
-                label="Core uptime"
+                label={t("Core uptime")}
                 value={uptime(m.coreUptimeSeconds)}
                 detail={`Guest uptime ${uptime(m.uptimeSeconds)}`}
               />
             </div>
             <div className="system-detail-lines">
               <StatusLine
-                label="Core system disk"
+                label={t("Core system disk")}
                 value={`${bytes(m.disk.freeBytes)} free of ${bytes(m.disk.totalBytes)}`}
               />
               {(apps || []).map((app) => (
@@ -1172,8 +1207,9 @@ function Dashboard({
               ))}
             </div>
             <p className="muted">
-              These numbers describe MediaHub Core, not the complete Proxmox
-              server. Open an app for its own verified runtime details.
+              {t(
+                "These numbers describe MediaHub Core, not the complete Proxmox server. Open an app for its own verified runtime details.",
+              )}
             </p>
           </div>
         </details>
@@ -1182,7 +1218,7 @@ function Dashboard({
   ];
   return (
     <>
-      {error && <Notice>{error}</Notice>}
+      {error && <Notice>{translateText(error)}</Notice>}
       <LayoutGroup
         id="ui-Dashboard-1"
         className="dashboard-grid"
@@ -1210,8 +1246,8 @@ function Dashboard({
 function StatusLine({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span>{typeof label === "string" ? t(label) : label}</span>
-      <strong>{value}</strong>
+      <span>{typeof label === "string" ? t(label) : translateText(label)}</span>
+      <strong>{translateText(value)}</strong>
     </div>
   );
 }
@@ -1224,13 +1260,13 @@ function ActivityList({ items }: { items: Activity[] }) {
             <Check size={15} />
           </div>
           <div>
-            <strong>{item.message}</strong>
+            <strong>{translateText(item.message)}</strong>
             <small>
-              {item.event} · {item.severity}
+              {item.event} · {translateText(item.severity)}
             </small>
           </div>
           <time dateTime={item.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString([], {
+            {new Date(item.timestamp).toLocaleTimeString(getLocale(), {
               hour: "2-digit",
               minute: "2-digit",
             })}
@@ -1239,7 +1275,9 @@ function ActivityList({ items }: { items: Activity[] }) {
       ))}
     </div>
   ) : (
-    <Empty title="No activity yet">New events will appear here.</Empty>
+    <Empty title={t("No activity yet")}>
+      {t("New events will appear here.")}
+    </Empty>
   );
 }
 
@@ -1262,12 +1300,14 @@ function Apps({ revision }: { revision: number }) {
   };
   return (
     <>
-      {(error || actionError) && <Notice>{error || actionError}</Notice>}
+      {(error || actionError) && (
+        <Notice>{translateText(error) || actionError}</Notice>
+      )}
       {!data ? (
         <div
           className="apps-grid app-skeleton-grid"
           aria-busy="true"
-          aria-label="Loading apps"
+          aria-label={t("Loading apps")}
         >
           {[0, 1].map((item) => (
             <div className="panel app-skeleton" key={item}>
@@ -1291,24 +1331,25 @@ function Apps({ revision }: { revision: number }) {
                 </div>
                 <h2>{app.name}</h2>
                 <p className="muted">
-                  {app.packageId} · {app.version}
+                  {app.packageId} · {translateText(app.version)}
                 </p>
-                <p>{app.health.summary}</p>
+                <p>{translateText(app.health.summary)}</p>
                 {app.isMock && (
                   <div className="mock-callout">
-                    TEST APP · No real container or media access
+                    {t("TEST APP · No real container or media access")}
                   </div>
                 )}
                 {!app.isMock && (
                   <p className="muted">
                     {app.packageId === "org.mediahub.cloudflared"
-                      ? "Installed · Read-only infrastructure monitor"
-                      : "Installed · Paired Agent runtime"}
+                      ? t("Installed · Read-only infrastructure monitor")
+                      : t("Installed · Paired Agent runtime")}
                   </p>
                 )}
                 {app.detailPath && (
                   <NavLink className="text-link" to={app.detailPath}>
-                    Open {app.name} →
+                    {t("Open ")}
+                    {app.name} →
                   </NavLink>
                 )}
                 {app.isMock && (
@@ -1317,19 +1358,19 @@ function Apps({ revision }: { revision: number }) {
                       disabled={busy || app.state === "running"}
                       onClick={() => act(app.id, "start")}
                     >
-                      Start
+                      {t("Start")}
                     </button>
                     <button
                       disabled={busy || app.state === "stopped"}
                       onClick={() => act(app.id, "stop")}
                     >
-                      Stop
+                      {t("Stop")}
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => act(app.id, "restart")}
                     >
-                      Restart
+                      {t("Restart")}
                     </button>
                   </div>
                 )}
@@ -1337,7 +1378,9 @@ function Apps({ revision }: { revision: number }) {
             ))}
         </LayoutGroup>
       ) : (
-        <Empty title="No apps installed">The app registry is empty.</Empty>
+        <Empty title={t("No apps installed")}>
+          {t("The app registry is empty.")}
+        </Empty>
       )}
     </>
   );
@@ -1370,19 +1413,20 @@ export function LegacyStoragePage() {
   };
   return (
     <div className="stack">
-      {(error || failure) && <Notice>{error || failure}</Notice>}
+      {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
         <div role="status" className="success">
-          {message}
+          {translateText(message)}
         </div>
       )}
-      <Section title="Storage locations">
+      <Section title={t("Storage locations")}>
         {!data ? (
           <Loading />
         ) : !data.length ? (
-          <Empty title="No locations registered">
-            Your existing media has not been imported. Register only paths
-            allowed by MEDIAHUB_STORAGE_ROOTS.
+          <Empty title={t("No locations registered")}>
+            {t(
+              "Your existing media has not been imported. Register only paths allowed by MEDIAHUB_STORAGE_ROOTS.",
+            )}
           </Empty>
         ) : (
           data.map((item) => (
@@ -1392,47 +1436,54 @@ export function LegacyStoragePage() {
                 <strong>{item.name}</strong>
                 <code>{item.path}</code>
                 <small>
-                  {item.kind} · Read: {item.readable ? "yes" : "no"} · Write
-                  permission: {item.writable ? "reported" : "no"}
+                  {translateText(item.kind)}
+                  {t(" · Read: ")}
+                  {item.readable ? t("yes") : t("no")}
+                  {t(" · Write permission: ")}
+                  {item.writable ? t("reported") : t("no")}
                 </small>
               </div>
-              <span>{bytes(item.freeBytes)} free</span>
+              <span>
+                {bytes(item.freeBytes)}
+                {t(" free")}
+              </span>
               <Badge value={item.exists ? "available" : "unavailable"} />
             </div>
           ))
         )}
       </Section>
-      <Section title="Register existing location">
+      <Section title={t("Register existing location")}>
         <form className="storage-form" onSubmit={submit}>
           <label>
             {t("Name")}
             <input name="name" required maxLength={80} />
           </label>
           <label>
-            Type
+            {t("Type")}
             <select name="kind">
-              <option value="appdata">App data</option>
+              <option value="appdata">{t("App data")}</option>
               <option value="downloads">{t("Downloads")}</option>
-              <option value="movies">Movies</option>
-              <option value="tv">TV shows</option>
+              <option value="movies">{t("Movies")}</option>
+              <option value="tv">{t("TV shows")}</option>
               <option value="backups">{t("Backups")}</option>
-              <option value="custom">Custom</option>
+              <option value="custom">{t("Custom")}</option>
             </select>
           </label>
           <label className="wide">
-            Absolute path
+            {t("Absolute path")}
             <input
               name="path"
               required
-              placeholder="An existing path inside an allowed storage root"
+              placeholder={t("An existing path inside an allowed storage root")}
             />
           </label>
           <p className="muted wide">
-            Read-only inspection. Write permission is advisory; no test files
-            are created.
+            {t(
+              "Read-only inspection. Write permission is advisory; no test files are created.",
+            )}
           </p>
           <button disabled={busy} className="primary">
-            {busy ? t("Checking…") : "Validate & register"}
+            {busy ? t("Checking…") : t("Validate & register")}
           </button>
         </form>
       </Section>
@@ -1445,14 +1496,15 @@ function ActivityPage({ revision }: { revision: number }) {
   useEffect(reload, [revision, reload]);
   return (
     <Section
-      title="Event timeline"
+      title={t("Event timeline")}
       aside={
         <button onClick={reload}>
-          <RefreshCw size={15} /> Refresh
+          <RefreshCw size={15} />
+          {t(" Refresh")}
         </button>
       }
     >
-      {error && <Notice>{error}</Notice>}
+      {error && <Notice>{translateText(error)}</Notice>}
       {!data ? (
         <Loading />
       ) : (
@@ -1460,8 +1512,8 @@ function ActivityPage({ revision }: { revision: number }) {
           <table>
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Event / message</th>
+                <th>{t("Time")}</th>
+                <th>{t("Event / message")}</th>
                 <th>{t("Source")}</th>
                 <th>{t("Severity")}</th>
               </tr>
@@ -1470,11 +1522,13 @@ function ActivityPage({ revision }: { revision: number }) {
               {data.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    <time>{new Date(item.timestamp).toLocaleString()}</time>
+                    <time>
+                      {new Date(item.timestamp).toLocaleString(getLocale())}
+                    </time>
                   </td>
                   <td>
                     <strong>{item.event}</strong>
-                    <small>{item.message}</small>
+                    <small>{translateText(item.message)}</small>
                   </td>
                   <td className="source-cell">{item.source}</td>
                   <td>
@@ -1485,7 +1539,9 @@ function ActivityPage({ revision }: { revision: number }) {
             </tbody>
           </table>
           {!data.length && (
-            <Empty title="No events yet">Activity will appear here.</Empty>
+            <Empty title={t("No events yet")}>
+              {t("Activity will appear here.")}
+            </Empty>
           )}
         </div>
       )}
@@ -1501,46 +1557,50 @@ function Logs() {
     return (
       <div className="stack">
         <button onClick={() => setSource("core")}>
-          ← Core logs / choose source
+          {t("← Core logs / choose source")}
         </button>
         <RemoteRuntimeLogs appId={source} />
       </div>
     );
   return (
     <Section
-      title="Core log buffer"
+      title={t("Core log buffer")}
       aside={
         <button onClick={reload}>
-          <RefreshCw size={15} /> Refresh
+          <RefreshCw size={15} />
+          {t(" Refresh")}
         </button>
       }
     >
       <label>
-        Log source{" "}
+        {t("Log source")}{" "}
         <select value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="core">MediaHub Core</option>
+          <option value="core">{t("MediaHub Core")}</option>
           {apps
             ?.filter((a) => a.detailPath)
             .map((a) => (
               <option value={a.id} key={a.id}>
-                {a.name} Agent / components
+                {a.name}
+                {t(" Agent / components")}
               </option>
             ))}
         </select>
       </label>
-      {error && <Notice>{error}</Notice>}
+      {error && <Notice>{translateText(error)}</Notice>}
       <div className="log-output">
         {data?.map((log, i) => (
           <div key={i}>
-            <time>{new Date(log.timestamp).toLocaleTimeString()}</time>
+            <time>
+              {new Date(log.timestamp).toLocaleTimeString(getLocale())}
+            </time>
             <span>{log.level}</span>
             <span>{log.component}</span>
-            <p>{log.message}</p>
+            <p>{translateText(log.message)}</p>
           </div>
         ))}
         {data?.length === 0 && (
-          <Empty title="No log entries">
-            Only this Core process is connected.
+          <Empty title={t("No log entries")}>
+            {t("Only this Core process is connected.")}
           </Empty>
         )}
       </div>
@@ -1575,10 +1635,10 @@ function SettingsPage() {
   };
   return (
     <Section title={t("Workspace preferences")}>
-      {(error || failure) && <Notice>{error || failure}</Notice>}
+      {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
         <div role="status" className="success">
-          {message}
+          {translateText(message)}
         </div>
       )}
       {!draft ? (
@@ -1632,7 +1692,7 @@ function SettingsPage() {
             />
           </label>
           <label>
-            GitHub source repository
+            {t("GitHub source repository")}
             <input
               name="release_repository"
               value={draft.release_repository || ""}
@@ -1642,16 +1702,17 @@ function SettingsPage() {
                   release_repository: event.target.value || null,
                 })
               }
-              placeholder="owner/mediahub"
+              placeholder={t("owner/mediahub")}
               pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}"
             />
             <small>
-              Public or private repository whose main branch is checked for code
-              changes. Configure encrypted private access on the Updates page.
+              {t(
+                "Public or private repository whose main branch is checked for code changes. Configure encrypted private access on the Updates page.",
+              )}
             </small>
           </label>
           <label>
-            Automatic update checks
+            {t("Automatic update checks")}
             <select
               name="update_check_interval_hours"
               value={draft.update_check_interval_hours}
@@ -1664,17 +1725,18 @@ function SettingsPage() {
                 })
               }
             >
-              <option value={0}>Off</option>
-              <option value={1}>Every hour</option>
-              <option value={6}>Every 6 hours</option>
-              <option value={12}>Every 12 hours</option>
-              <option value={24}>Every day</option>
-              <option value={72}>Every 3 days</option>
-              <option value={168}>Every week</option>
+              <option value={0}>{t("Off")}</option>
+              <option value={1}>{t("Every hour")}</option>
+              <option value={6}>{t("Every 6 hours")}</option>
+              <option value={12}>{t("Every 12 hours")}</option>
+              <option value={24}>{t("Every day")}</option>
+              <option value={72}>{t("Every 3 days")}</option>
+              <option value={168}>{t("Every week")}</option>
             </select>
             <small>
-              Checks main for MediaHub code changes and app update metadata.
-              Updates are installed only after explicit approval.
+              {t(
+                "Checks main for MediaHub code changes and app update metadata. Updates are installed only after explicit approval.",
+              )}
             </small>
           </label>
           <label className="check-label">
@@ -1691,8 +1753,8 @@ function SettingsPage() {
           <div className="visibility-settings">
             <div className="visibility-heading">
               <div>
-                <h3>Choose your menu</h3>
-                <p>Dashboard and Settings always stay available.</p>
+                <h3>{t("Choose your menu")}</h3>
+                <p>{t("Dashboard and Settings always stay available.")}</p>
               </div>
               <div className="button-row">
                 <button
@@ -1717,7 +1779,7 @@ function SettingsPage() {
                     })
                   }
                 >
-                  Show everything
+                  {t("Show everything")}
                 </button>
               </div>
             </div>
@@ -1742,7 +1804,9 @@ function SettingsPage() {
                     <Icon size={18} />
                     <span>
                       <strong>
-                        {typeof label === "string" ? t(label) : label}
+                        {typeof label === "string"
+                          ? t(label)
+                          : translateText(label)}
                       </strong>
                       <small>{navigationHelp[path]}</small>
                     </span>
@@ -1754,8 +1818,8 @@ function SettingsPage() {
           <div className="visibility-settings">
             <div className="visibility-heading">
               <div>
-                <h3>Choose your dashboard</h3>
-                <p>Only selected cards are shown on the front page.</p>
+                <h3>{t("Choose your dashboard")}</h3>
+                <p>{t("Only selected cards are shown on the front page.")}</p>
               </div>
               <div className="button-row">
                 <button
@@ -1764,7 +1828,7 @@ function SettingsPage() {
                     setDraft({ ...draft, dashboard_sections: simpleDashboard })
                   }
                 >
-                  Simple dashboard
+                  {t("Simple dashboard")}
                 </button>
                 <button
                   type="button"
@@ -1800,7 +1864,9 @@ function SettingsPage() {
                   />
                   <span>
                     <strong>
-                      {typeof label === "string" ? t(label) : label}
+                      {typeof label === "string"
+                        ? t(label)
+                        : translateText(label)}
                     </strong>
                     <small>{t(help)}</small>
                   </span>
@@ -1843,7 +1909,7 @@ function MaintenanceCard({
       </div>
       <div>
         <h3>{t(title)}</h3>
-        <p>{detail}</p>
+        <p>{translateText(detail)}</p>
       </div>
     </article>
   );
@@ -1858,9 +1924,9 @@ function SeedboxDeviceMaintenance({ appId }: { appId: string }) {
     <details className="maintenance-device-details">
       <summary>
         <span>
-          <strong>Seedbox device diagnostics</strong>
+          <strong>{t("Seedbox device diagnostics")}</strong>
           <small>
-            Disk identity and mount details for troubleshooting only
+            {t("Disk identity and mount details for troubleshooting only")}
           </small>
         </span>
         <ChevronDown size={17} />
@@ -1868,13 +1934,14 @@ function SeedboxDeviceMaintenance({ appId }: { appId: string }) {
       <div className="maintenance-device-content">
         <div className="runtime-toolbar">
           <p className="muted">
-            These technical details stay hidden during normal daily use.
+            {t("These technical details stay hidden during normal daily use.")}
           </p>
           <button type="button" onClick={reload}>
-            <RefreshCw size={15} /> Refresh devices
+            <RefreshCw size={15} />
+            {t(" Refresh devices")}
           </button>
         </div>
-        {error && <Notice>{error}</Notice>}
+        {error && <Notice>{translateText(error)}</Notice>}
         {!data && !error && <Loading />}
         {data?.view === "seedbox" && <DeviceDiagnostics report={data.report} />}
       </div>
@@ -2028,7 +2095,7 @@ function MaintenancePage() {
         if (result.state === "succeeded") {
           details.push(result.message);
           details.push(
-            `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toFixed(2)} GiB of system disk space.`,
+            `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })} GiB of system disk space.`,
           );
           steps[4].state = "complete";
           completed = true;
@@ -2078,7 +2145,7 @@ function MaintenancePage() {
   return (
     <LayoutGroup id="ui-MaintenancePage-1" className="stack">
       <Section
-        title="Maintenance"
+        title={t("Maintenance")}
         aside={
           <button
             className="maintenance-check"
@@ -2091,7 +2158,7 @@ function MaintenancePage() {
             }
           >
             <RefreshCw size={15} className={checking ? "spin" : ""} />
-            {checking ? "Running…" : "Run maintenance"}
+            {checking ? t("Running…") : t("Run maintenance")}
           </button>
         }
       >
@@ -2100,24 +2167,24 @@ function MaintenancePage() {
             <Wrench size={24} />
           </span>
           <div>
-            <h3>Keep MediaHub healthy</h3>
+            <h3>{t("Keep MediaHub healthy")}</h3>
             <p>
-              Check the platform, apps and storage, then remove old update
-              files, unused MediaHub images and build cache. Services keep
-              running.
+              {t(
+                "Check the platform, apps and storage, then remove old update files, unused MediaHub images and build cache. Services keep running.",
+              )}
             </p>
           </div>
         </div>
         {failure && <Notice>{failure}</Notice>}
-        {cleanup.error && <Notice>{cleanup.error}</Notice>}
+        {cleanup.error && <Notice>{translateText(cleanup.error)}</Notice>}
         {cleanup.data && cleanup.data.state !== "idle" && (
-          <Notice>{cleanup.data.message}</Notice>
+          <Notice>{translateText(cleanup.data.message)}</Notice>
         )}
         {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">
           <MaintenanceCard
             icon={<Server size={19} />}
-            title="MediaHub Core"
+            title={t("MediaHub Core")}
             state={
               !coreData
                 ? "unknown"
@@ -2133,7 +2200,7 @@ function MaintenancePage() {
           />
           <MaintenanceCard
             icon={<ActivityIcon size={19} />}
-            title="Agent runtime"
+            title={t("Agent runtime")}
             state={
               !runtimeData
                 ? "unknown"
@@ -2159,7 +2226,7 @@ function MaintenancePage() {
           />
           <MaintenanceCard
             icon={<Box size={19} />}
-            title="Installed apps"
+            title={t("Installed apps")}
             state={appsState}
             detail={
               appsData
@@ -2172,13 +2239,13 @@ function MaintenancePage() {
         </div>
       </Section>
 
-      <Section title="Maintenance tools">
+      <Section title={t("Maintenance tools")}>
         <div className="maintenance-actions">
           <NavLink className="maintenance-action" to="/storage">
             <HardDrive size={20} />
             <span>
               <strong>{t("Storage")}</strong>
-              <small>Review capacity, folders and media files</small>
+              <small>{t("Review capacity, folders and media files")}</small>
             </span>
             <ChevronRight size={17} />
           </NavLink>
@@ -2186,15 +2253,15 @@ function MaintenancePage() {
             <RefreshCw size={20} />
             <span>
               <strong>{t("Updates")}</strong>
-              <small>Check verified MediaHub and app releases</small>
+              <small>{t("Check verified MediaHub and app releases")}</small>
             </span>
             <ChevronRight size={17} />
           </NavLink>
           <NavLink className="maintenance-action" to="/backups">
             <Database size={20} />
             <span>
-              <strong>Configuration backups</strong>
-              <small>Protect settings without duplicating media</small>
+              <strong>{t("Configuration backups")}</strong>
+              <small>{t("Protect settings without duplicating media")}</small>
             </span>
             <ChevronRight size={17} />
           </NavLink>
@@ -2202,12 +2269,11 @@ function MaintenancePage() {
         <div className="maintenance-safety">
           <ShieldCheck size={21} />
           <div>
-            <strong>Media stays protected</strong>
+            <strong>{t("Media stays protected")}</strong>
             <p>
-              Movies, TV series, downloads, app data, Docker volumes and
-              rollback backups are preserved. Run maintenance only cleans known
-              disposable update files and unused system build cache. Media
-              folders are never scanned.
+              {t(
+                "Movies, TV series, downloads, app data, Docker volumes and rollback backups are preserved. Run maintenance only cleans known disposable update files and unused system build cache. Media folders are never scanned.",
+              )}
             </p>
           </div>
         </div>

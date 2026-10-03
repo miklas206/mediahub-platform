@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { ExternalLink } from "lucide-react";
 
 export function fjordHubLink(value: string): string | null {
@@ -29,41 +30,53 @@ export function FjordHubTokenGuide({ baseUrl }: { baseUrl: string }) {
         >
           <ExternalLink size={18} aria-hidden="true" />
           <span>
-            Open FjordHub <small>{link}</small>
+            {t("Open FjordHub ")}
+            <small>{link}</small>
           </span>
         </a>
       ) : (
         <p>
-          Enter FjordHub’s local IP address and port in the FjordHub URL field
-          below. An open button will appear here.
+          {t(
+            "Enter FjordHub’s local IP address and port in the FjordHub URL field below. An open button will appear here.",
+          )}
         </p>
       )}
       <ol className="fjordhub-token-steps">
         <li>
-          Open FjordHub using the button above and sign in as an administrator.
-          Complete administrator setup first if this is a new installation.
+          {t(
+            "Open FjordHub using the button above and sign in as an administrator. Complete administrator setup first if this is a new installation.",
+          )}
         </li>
         <li>
-          Click the gear icon in the left sidebar:{" "}
-          <strong>Settings (Indstillinger)</strong>.
+          {t("Click the gear icon in the left sidebar:")}{" "}
+          <strong>{t("Settings (Indstillinger)")}</strong>.
         </li>
         <li>
-          Select the <strong>Access Tokens (Adgangstokens)</strong> tab and
-          create a new token.
+          {t("Select the ")}
+          <strong>{t("Access Tokens (Adgangstokens)")}</strong>
+          {t(" tab and create a new token.")}
         </li>
         <li>
-          Click <strong>Copy token (Kopiér token)</strong> before leaving that
-          screen. The token is only shown once. Then click{" "}
-          <strong>Done (Færdig)</strong>.
+          {t("Click ")}
+          <strong>{t("Copy token (Kopiér token)")}</strong>
+          {t(
+            " before leaving that screen. The token is only shown once. Then click",
+          )}{" "}
+          <strong>{t("Done (Færdig)")}</strong>.
         </li>
         <li>
-          Return to MediaHub and paste it into <strong>Access Token</strong>.
-          For an <code>http://</code> LAN address, select{" "}
-          <strong>Allow HTTP to this LAN-only FjordHub API</strong>.
+          {t("Return to MediaHub and paste it into ")}
+          <strong>{t("Access Token")}</strong>
+          {t(". For an ")}
+          <code>http://</code>
+          {t(" LAN address, select")}{" "}
+          <strong>{t("Allow HTTP to this LAN-only FjordHub API")}</strong>.
         </li>
         <li>
-          Click <strong>Test Connection</strong>, then <strong>Save</strong>{" "}
-          once the connection succeeds.
+          {t("Click ")}
+          <strong>{t("Test Connection")}</strong>
+          {t(", then ")}
+          <strong>{t("Save")}</strong> {t("once the connection succeeds.")}
         </li>
       </ol>
     </div>

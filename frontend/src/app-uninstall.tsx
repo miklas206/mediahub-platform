@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import type { AppInfo } from "./contracts";
@@ -78,38 +80,40 @@ export function AppUninstall({
         }}
       >
         {app.packageId === "org.mediahub.cloudflared"
-          ? "Remove monitoring"
-          : "Uninstall"}
+          ? t("Remove monitoring")
+          : t("Uninstall")}
       </button>
       {open && (
         <div
           role="dialog"
-          aria-label={`Remove ${app.name}`}
+          aria-label={t("Remove {value0}", { value0: app.name })}
           className="app-removal-dialog"
         >
           <h3>
             {app.packageId === "org.mediahub.cloudflared"
-              ? "Remove monitoring"
-              : "Uninstall"}{" "}
+              ? t("Remove monitoring")
+              : t("Uninstall")}{" "}
             {app.name}
           </h3>
           <p>
-            {status?.message ||
-              "Checking installation identity and removal support..."}
+            {translateText(status?.message) ||
+              t("Checking installation identity and removal support...")}
           </p>
           <p>
-            Media files and app data will be kept. This does not free space used
-            by downloads or libraries.
+            {t(
+              "Media files and app data will be kept. This does not free space used by downloads or libraries.",
+            )}
           </p>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {translateText(error)}
             </p>
           )}
           {working && (
             <p role="status">
-              Removing runtime on the server... You can leave this page and
-              return.
+              {t(
+                "Removing runtime on the server... You can leave this page and return.",
+              )}
             </p>
           )}
           <div className="runtime-toolbar">
@@ -117,10 +121,10 @@ export function AppUninstall({
               disabled={working || !status?.installationId || !!error}
               onClick={() => void remove()}
             >
-              Confirm removal
+              {t("Confirm removal")}
             </button>
             <button onClick={() => setOpen(false)}>
-              {working ? "Close" : "Cancel"}
+              {working ? t("Close") : t("Cancel")}
             </button>
           </div>
         </div>

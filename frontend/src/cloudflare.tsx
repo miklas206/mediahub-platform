@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "./api";
@@ -54,55 +56,59 @@ export function CloudflareTunnelCard() {
   const state =
     data?.status === "critical" ? "unhealthy" : data?.status || "unknown";
   return (
-    <Panel title="Cloudflare Tunnel">
+    <Panel title={t("Cloudflare Tunnel")}>
       <div className="tunnel-heading">
         <div className={`tunnel-icon ${state}`}>
           <Cloud size={23} />
         </div>
         <div>
-          <strong>{data?.message || "Checking tunnel…"}</strong>
+          <strong>
+            {translateText(data?.message) || t("Checking tunnel…")}
+          </strong>
           <small>
             {data?.version
-              ? `cloudflared ${data.version}`
-              : "Read-only connection monitor"}
+              ? t("cloudflared {value0}", { value0: data.version })
+              : t("Read-only connection monitor")}
           </small>
         </div>
         <span
           className={`runtime-verdict ${data?.status === "healthy" ? "yes" : data?.status === "critical" ? "no" : "unknown"}`}
         >
           {data?.status === "healthy"
-            ? "Healthy"
+            ? t("Healthy")
             : data?.status === "degraded"
-              ? "Needs attention"
+              ? t("Needs attention")
               : data?.status === "critical"
-                ? "Offline"
-                : "Checking"}
+                ? t("Offline")
+                : t("Checking")}
         </span>
       </div>
       {error && (
         <div role="alert" className="notice">
-          {error}
+          {translateText(error)}
         </div>
       )}
       <div className="tunnel-stats">
         <div>
-          <span>Monitored tunnel</span>
+          <span>{t("Monitored tunnel")}</span>
           <strong>
             {data?.tunnelName ||
-              (data?.configured ? "1 configured" : "Not configured")}
+              (data?.configured ? t("1 configured") : t("Not configured"))}
           </strong>
         </div>
         <div>
-          <span>Connector sessions</span>
+          <span>{t("Connector sessions")}</span>
           <strong>{data?.metricsReachable ? data.connections : "—"}</strong>
         </div>
         <div>
-          <span>Published routes</span>
+          <span>{t("Published routes")}</span>
           <strong>{data?.routeCount ?? data?.routes.length ?? "—"}</strong>
         </div>
         <div>
-          <span>Requests</span>
-          <strong>{data?.totalRequests?.toLocaleString() ?? "—"}</strong>
+          <span>{t("Requests")}</span>
+          <strong>
+            {data?.totalRequests?.toLocaleString(getLocale()) ?? "—"}
+          </strong>
         </div>
       </div>
       {!!data?.routes.length && (
@@ -113,14 +119,15 @@ export function CloudflareTunnelCard() {
               <div>
                 <strong>{route.hostname}</strong>
                 <small>
-                  {route.message} · {route.statusCode || "no response"} ·{" "}
-                  {route.latencyMs} ms
+                  {translateText(route.message)} ·{" "}
+                  {route.statusCode || t("no response")} · {route.latencyMs}
+                  {t(" ms")}
                 </small>
               </div>
               <span
                 className={`runtime-verdict ${route.reachable ? "yes" : "no"}`}
               >
-                {route.reachable ? "Reachable" : "Unavailable"}
+                {route.reachable ? t("Reachable") : t("Unavailable")}
               </span>
             </div>
           ))}
@@ -129,8 +136,12 @@ export function CloudflareTunnelCard() {
       <div className="panel-note tunnel-note">
         <span>
           {data?.checkedAt
-            ? `Checked ${new Date(data.checkedAt * 1000).toLocaleTimeString()}`
-            : "Waiting for first check"}
+            ? t("Checked {value0}", {
+                value0: new Date(data.checkedAt * 1000).toLocaleTimeString(
+                  getLocale(),
+                ),
+              })
+            : t("Waiting for first check")}
         </span>
         <button
           disabled={busy}
@@ -140,7 +151,7 @@ export function CloudflareTunnelCard() {
           }}
         >
           <RefreshCw size={15} />
-          Refresh
+          {t("Refresh")}
         </button>
       </div>
     </Panel>

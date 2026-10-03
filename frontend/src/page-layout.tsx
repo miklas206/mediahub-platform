@@ -1,4 +1,5 @@
-import { t } from "./i18n";
+import { translateText, t } from "./i18n";
+
 import {
   Children,
   createContext,
@@ -279,7 +280,7 @@ export function PageLayout({
           </>
         )}
         <span className="layout-save-status" role="status">
-          {message}
+          {translateText(message)}
         </span>
       </div>
       {children}
@@ -554,7 +555,9 @@ function LayoutItem({
                   <option value={-1}>{t("Original width")}</option>
                   {widthPercentages.map((percent) => (
                     <option key={percent} value={percent}>
-                      {percent === 100 ? t("Full row") : `${percent}%`}
+                      {percent === 100
+                        ? t("Full row")
+                        : t("{value0}%", { value0: percent })}
                     </option>
                   ))}
                 </select>

@@ -1,5 +1,6 @@
+import { translateText, countryName, t } from "./i18n";
 import { LayoutGroup } from "./page-layout";
-import { t } from "./i18n";
+
 import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
@@ -230,7 +231,7 @@ export function SeedboxDaily({
       <ErrorBox error={error} />
       {notice && (
         <p role="status" className="notice">
-          {notice}
+          {translateText(notice)}
         </p>
       )}
       <LayoutGroup
@@ -245,7 +246,9 @@ export function SeedboxDaily({
             <div className="runtime-row">
               <span>{t("Current")}</span>
               <strong>
-                {location?.current?.country || t("Not identified")}
+                {location?.current?.country
+                  ? countryName(location.current.country)
+                  : t("Not identified")}
               </strong>
             </div>
             <div className="runtime-row">
@@ -254,7 +257,7 @@ export function SeedboxDaily({
             </div>
             <div className="runtime-row">
               <span>{t("Port forwarding")}</span>
-              <strong>{forwarding || t("Not verified")}</strong>
+              <strong>{translateText(forwarding) || t("Not verified")}</strong>
             </div>
             <label>
               {t("Country")}
@@ -268,7 +271,9 @@ export function SeedboxDaily({
               >
                 <option value="">{t("Select country")}</option>
                 {location?.countries.map((c) => (
-                  <option key={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {countryName(c)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -312,7 +317,7 @@ export function SeedboxDaily({
               </label>
             )}
             {location?.automation?.message && (
-              <p role="status">{location.automation.message}</p>
+              <p role="status">{translateText(location.automation.message)}</p>
             )}
             {location?.automation?.samples &&
               Object.entries(location.automation.samples).map(
@@ -363,8 +368,8 @@ export function SeedboxDaily({
               <p role="status">{t("Ready")}</p>
             )}
             <p className="muted">
-              {location?.current?.countryEvidence}.{" "}
-              {location?.automaticDescription}
+              {translateText(location?.current?.countryEvidence)}.{" "}
+              {translateText(location?.automaticDescription)}
             </p>
           </Panel>
         )}
@@ -428,7 +433,7 @@ export function SeedboxDaily({
                         onChange={(e) => setMagnet(e.target.value)}
                         maxLength={16384}
                         required
-                        placeholder="magnet:?xt=urn:btih:…"
+                        placeholder={t("magnet:?xt=urn:btih:…")}
                         autoComplete="off"
                       />
                     </label>

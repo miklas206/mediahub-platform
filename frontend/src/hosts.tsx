@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
 import { Server, HardDrive } from "lucide-react";
@@ -84,14 +86,15 @@ export function HostsPage() {
   }
   return (
     <LayoutGroup id="hosts-HostsPage-1" className="stack">
-      <Panel title="Hosts & agents">
+      <Panel title={t("Hosts & agents")}>
         <p className="muted">
-          Each host has its own runtime, permissions and storage paths. Status
-          refreshes every 15 seconds.
+          {t(
+            "Each host has its own runtime, permissions and storage paths. Status refreshes every 15 seconds.",
+          )}
         </p>
         <ErrorBox error={hosts.error || error} />
         <button disabled={busy} onClick={refresh}>
-          Refresh hosts
+          {t("Refresh hosts")}
         </button>
       </Panel>
       <LayoutGroup id="hosts-HostsPage-2" className="apps-grid">
@@ -99,42 +102,45 @@ export function HostsPage() {
           <Panel key={host.id} title={host.name}>
             <div className="button-row">
               <Server />
-              <span className="badge">{host.status}</span>
-              <span>{host.local ? "Default trusted host" : "Remote host"}</span>
+              <span className="badge">{translateText(host.status)}</span>
+              <span>
+                {host.local ? t("Default trusted host") : t("Remote host")}
+              </span>
             </div>
             <dl className="host-facts">
-              <dt>Hostname</dt>
-              <dd>{host.hostname || "Not reported"}</dd>
-              <dt>Address</dt>
+              <dt>{t("Hostname")}</dt>
+              <dd>{host.hostname || t("Not reported")}</dd>
+              <dt>{t("Address")}</dt>
               <dd>
                 <code>{host.address}</code>
               </dd>
-              <dt>System</dt>
+              <dt>{t("System")}</dt>
               <dd>
-                {host.os || "Not reported"} · {host.architecture || "—"}
+                {host.os || t("Not reported")} · {host.architecture || "—"}
               </dd>
-              <dt>CPU / RAM</dt>
+              <dt>{t("CPU / RAM")}</dt>
               <dd>
-                {host.cores ?? "—"} cores ·{" "}
-                {host.ramBytes ? bytes(host.ramBytes) : "Not reported"}
+                {host.cores ?? "—"}
+                {t(" cores ·")}{" "}
+                {host.ramBytes ? bytes(host.ramBytes) : t("Not reported")}
               </dd>
-              <dt>Docker</dt>
+              <dt>{t("Docker")}</dt>
               <dd>
                 {host.docker?.available
-                  ? host.docker.version || "Available"
-                  : "Unavailable"}
+                  ? host.docker.version || t("Available")
+                  : t("Unavailable")}
               </dd>
-              <dt>Agent</dt>
+              <dt>{t("Agent")}</dt>
               <dd>{host.version || "—"}</dd>
-              <dt>Last seen</dt>
+              <dt>{t("Last seen")}</dt>
               <dd>
                 {host.last_seen
-                  ? new Date(host.last_seen).toLocaleString()
-                  : "Never"}
+                  ? new Date(host.last_seen).toLocaleString(getLocale())
+                  : t("Never")}
               </dd>
             </dl>
             <p className="muted">
-              {host.capabilities?.join(" · ") || "No capabilities reported"}
+              {host.capabilities?.join(" · ") || t("No capabilities reported")}
             </p>
             {host.storage?.map((storage) => (
               <div className="storage-row" key={storage.path}>
@@ -142,30 +148,34 @@ export function HostsPage() {
                 <div>
                   <code>{storage.path}</code>
                   <small>
-                    {storage.error ||
-                      `${bytes(storage.freeBytes ?? 0)} free / ${bytes(storage.totalBytes ?? 0)} total`}
+                    {translateText(storage.error) ||
+                      t("{value0} free / {value1} total", {
+                        value0: bytes(storage.freeBytes ?? 0),
+                        value1: bytes(storage.totalBytes ?? 0),
+                      })}
                   </small>
                 </div>
               </div>
             ))}
             {host.status !== "online" && (
               <p className="notice">
-                Host unavailable. Last known metadata is retained; app
-                operations must not proceed.
+                {t(
+                  "Host unavailable. Last known metadata is retained; app operations must not proceed.",
+                )}
               </p>
             )}
           </Panel>
         ))}
       </LayoutGroup>
-      <Panel title="Pair a remote agent">
+      <Panel title={t("Pair a remote agent")}>
         <p className="muted">
-          HTTPS with a trusted certificate is required on Core and the remote
-          Agent. LAN HTTP cannot enroll remote hosts. No permanent token is
-          displayed here.
+          {t(
+            "HTTPS with a trusted certificate is required on Core and the remote Agent. LAN HTTP cannot enroll remote hosts. No permanent token is displayed here.",
+          )}
         </p>
         <form className="storage-form" onSubmit={invite}>
           <label>
-            Host name
+            {t("Host name")}
             <input
               required
               maxLength={80}
@@ -174,26 +184,31 @@ export function HostsPage() {
             />
           </label>
           <label>
-            Agent HTTPS address
+            {t("Agent HTTPS address")}
             <input
               required
-              placeholder="https://private-ip:18767"
+              placeholder={t("https://private-ip:18767")}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
           </label>
           <button disabled={busy || location.protocol !== "https:"}>
-            Generate single-use pairing code
+            {t("Generate single-use pairing code")}
           </button>
         </form>
         {pairing && (
           <div role="status">
             <p>
-              Expires {new Date(pairing.expires_at * 1000).toLocaleTimeString()}
-              . Enter this code only in the intended Agent.
+              {t("Expires ")}
+              {new Date(pairing.expires_at * 1000).toLocaleTimeString(
+                getLocale(),
+              )}
+              {t(". Enter this code only in the intended Agent.")}
             </p>
             <code>{pairing.token}</code>
-            <button onClick={() => setPairing(undefined)}>Hide code</button>
+            <button onClick={() => setPairing(undefined)}>
+              {t("Hide code")}
+            </button>
           </div>
         )}
       </Panel>
@@ -247,22 +262,26 @@ export function LogicalStoragePanel() {
     }
   }
   return (
-    <Panel title="Shared storage · logical mappings">
+    <Panel title={t("Shared storage · logical mappings")}>
       <p className="muted">
-        One logical dataset, independent paths per host. Registrations do not
-        create shares. Dataset identity is an administrator assertion, not
-        automatic verification.
+        {t(
+          "One logical dataset, independent paths per host. Registrations do not create shares. Dataset identity is an administrator assertion, not automatic verification.",
+        )}
       </p>
       <ErrorBox error={error || storage.error || hosts.error} />
-      {message && <p role="status">{message}</p>}
+      {message && <p role="status">{translateText(message)}</p>}
       {storage.data?.map((item) => (
         <div key={item.id} className="logical-dataset">
           <h3>
-            {item.name} <span className="muted">· {item.kind}</span>
+            {item.name}{" "}
+            <span className="muted">· {translateText(item.kind)}</span>
           </h3>
-          <small>Dataset reference: {item.dataset_ref}</small>
+          <small>
+            {t("Dataset reference: ")}
+            {item.dataset_ref}
+          </small>
           {!item.mappings.length && (
-            <p className="muted">No host mappings yet.</p>
+            <p className="muted">{t("No host mappings yet.")}</p>
           )}
           {item.mappings.map((mapping) => (
             <div className="storage-row" key={mapping.host_id}>
@@ -274,8 +293,8 @@ export function LogicalStoragePanel() {
                 </strong>
                 <code>{mapping.path}</code>
                 <small>
-                  {mapping.access === "ro" ? "Read only" : "Read / write"} ·
-                  Requires live validation
+                  {mapping.access === "ro" ? t("Read only") : t("Read / write")}
+                  {t(" · Requires live validation")}
                 </small>
               </div>
               <button
@@ -284,25 +303,25 @@ export function LogicalStoragePanel() {
                   validate(item.id, mapping.host_id, mapping.access)
                 }
               >
-                Validate access
+                {t("Validate access")}
               </button>
             </div>
           ))}
         </div>
       ))}
-      <h3>Register logical storage</h3>
+      <h3>{t("Register logical storage")}</h3>
       <form className="storage-form" onSubmit={(e) => submit(e, false)}>
         <label>
-          Logical name
+          {t("Logical name")}
           <input
             name="name"
-            placeholder="downloads"
+            placeholder={t("downloads")}
             required
             pattern="[a-zA-Z0-9_-]+"
           />
         </label>
         <label>
-          Kind
+          {t("Kind")}
           <select name="kind">
             {[
               "downloads",
@@ -318,21 +337,21 @@ export function LogicalStoragePanel() {
           </select>
         </label>
         <label>
-          Underlying dataset reference
+          {t("Underlying dataset reference")}
           <input
             name="dataset_ref"
             required
-            placeholder="storage-owner/dataset"
+            placeholder={t("storage-owner/dataset")}
           />
         </label>
-        <button disabled={busy}>Register dataset</button>
+        <button disabled={busy}>{t("Register dataset")}</button>
       </form>
-      <h3>Map an existing directory</h3>
+      <h3>{t("Map an existing directory")}</h3>
       <form className="storage-form" onSubmit={(e) => submit(e, true)}>
         <label>
-          Logical storage
+          {t("Logical storage")}
           <select name="logical_id" required>
-            <option value="">Choose dataset</option>
+            <option value="">{t("Choose dataset")}</option>
             {storage.data?.map((s) => (
               <option value={s.id} key={s.id}>
                 {s.name}
@@ -341,9 +360,9 @@ export function LogicalStoragePanel() {
           </select>
         </label>
         <label>
-          Host
+          {t("Host")}
           <select name="host_id" required>
-            <option value="">Choose host</option>
+            <option value="">{t("Choose host")}</option>
             {hosts.data?.map((h) => (
               <option value={h.id} key={h.id}>
                 {h.name}
@@ -352,17 +371,17 @@ export function LogicalStoragePanel() {
           </select>
         </label>
         <label>
-          Host-visible path
-          <input name="path" required placeholder="/media/downloads" />
+          {t("Host-visible path")}
+          <input name="path" required placeholder={t("/media/downloads")} />
         </label>
         <label>
-          Maximum app access
+          {t("Maximum app access")}
           <select name="access">
-            <option value="ro">Read only</option>
-            <option value="rw">Read / write</option>
+            <option value="ro">{t("Read only")}</option>
+            <option value="rw">{t("Read / write")}</option>
           </select>
         </label>
-        <button disabled={busy}>Save mapping only</button>
+        <button disabled={busy}>{t("Save mapping only")}</button>
       </form>
     </Panel>
   );

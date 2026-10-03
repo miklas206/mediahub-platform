@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useEffect, useState } from "react";
 import { Clock3 } from "lucide-react";
 
@@ -21,9 +22,9 @@ export function SidebarClock() {
   }, []);
 
   return (
-    <div className="sidebar-clock" title="Local time">
+    <div className="sidebar-clock" title={t("Local time")}>
       <Clock3 size={15} aria-hidden="true" />
-      <time dateTime={now.toISOString()} aria-label="Local time">
+      <time dateTime={now.toISOString()} aria-label={t("Local time")}>
         {clockFormat.format(now)}
       </time>
     </div>

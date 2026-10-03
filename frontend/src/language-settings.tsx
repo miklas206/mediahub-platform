@@ -34,8 +34,8 @@ export function LanguageSettings() {
           disabled={busy}
           onChange={(event) => void save(event.target.value as Language)}
         >
-          <option value="da">Dansk</option>
-          <option value="en">English</option>
+          <option value="da">{t("Dansk")}</option>
+          <option value="en">{t("English")}</option>
         </select>
       </label>
       <p className="muted">{t("Saved for your account on all devices.")}</p>

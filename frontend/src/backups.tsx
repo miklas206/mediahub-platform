@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { useState, type FormEvent } from "react";
 import { Archive, ShieldCheck } from "lucide-react";
@@ -53,15 +55,22 @@ export function BackupsPage() {
       <ErrorBox error={error || failure} />
       <LayoutGroup id="backups-BackupsPage-1" className="runtime-panels">
         <Panel
-          title={`${scope === "core" ? "MediaHub" : scope === "plex" ? "Plex" : "Seedbox"} configuration backup`}
+          title={t("{value0} configuration backup", {
+            value0:
+              scope === "core"
+                ? "MediaHub"
+                : scope === "plex"
+                  ? "Plex"
+                  : "Seedbox",
+          })}
         >
           <Archive />
           <p>
-            Export a portable, password-encrypted copy of the selected
-            configuration. The server verifies the archive before downloading
-            it.
+            {t(
+              "Export a portable, password-encrypted copy of the selected configuration. The server verifies the archive before downloading it.",
+            )}
           </p>
-          <h3>Included</h3>
+          <h3>{t("Included")}</h3>
           <ul>
             {(scope === "core"
               ? data?.includes || []
@@ -80,7 +89,7 @@ export function BackupsPage() {
               <li key={item}>{item}</li>
             ))}
           </ul>
-          <h3>Not included</h3>
+          <h3>{t("Not included")}</h3>
           <ul>
             {(scope === "core"
               ? data?.excludes || []
@@ -94,41 +103,41 @@ export function BackupsPage() {
             ))}
           </ul>
           <p className="muted">
-            This is not a full server backup. Keep separate backups of app data,
-            deployment certificates and irreplaceable media. Restore is an
-            offline maintenance operation.
+            {t(
+              "This is not a full server backup. Keep separate backups of app data, deployment certificates and irreplaceable media. Restore is an offline maintenance operation.",
+            )}
           </p>
         </Panel>
-        <Panel title="Create encrypted backup">
+        <Panel title={t("Create encrypted backup")}>
           <ShieldCheck />
           <form className="security-card" onSubmit={submit}>
             <label>
-              What to back up
+              {t("What to back up")}
               <select
                 value={scope}
                 disabled={busy}
                 onChange={(e) => setScope(e.target.value)}
               >
                 <option value="core">
-                  MediaHub · settings, accounts and storage mappings
+                  {t("MediaHub · settings, accounts and storage mappings")}
                 </option>
                 <option value="plex">
-                  Plex · library database and encrypted preferences
+                  {t("Plex · library database and encrypted preferences")}
                 </option>
                 <option value="seedbox">
-                  Seedbox · client configuration and encrypted secrets
+                  {t("Seedbox · client configuration and encrypted secrets")}
                 </option>
               </select>
             </label>
             {scope !== "core" && (
               <p className="notice">
-                The selected app pauses briefly for a consistent backup, then
-                resumes if it was running. Media, artwork caches and downloaded
-                files are excluded. Maximum configuration size: 48 MiB.
+                {t(
+                  "The selected app pauses briefly for a consistent backup, then resumes if it was running. Media, artwork caches and downloaded files are excluded. Maximum configuration size: 48 MiB.",
+                )}
               </p>
             )}
             <label>
-              Current MediaHub password
+              {t("Current MediaHub password")}
               <input
                 name="password"
                 type="password"
@@ -137,11 +146,11 @@ export function BackupsPage() {
               />
             </label>
             <label>
-              Authenticator or recovery code
+              {t("Authenticator or recovery code")}
               <input name="code" autoComplete="one-time-code" maxLength={32} />
             </label>
             <label>
-              Backup password
+              {t("Backup password")}
               <input
                 name="backupPassword"
                 type="password"
@@ -152,7 +161,7 @@ export function BackupsPage() {
               />
             </label>
             <label>
-              Confirm backup password
+              {t("Confirm backup password")}
               <input
                 name="confirmation"
                 type="password"
@@ -163,14 +172,17 @@ export function BackupsPage() {
               />
             </label>
             <p>
-              The backup password is not stored. Without it, the backup cannot
-              be recovered.
+              {t(
+                "The backup password is not stored. Without it, the backup cannot be recovered.",
+              )}
             </p>
             <button className="primary" disabled={busy || !data}>
-              {busy ? "Encrypting and verifying…" : "Download encrypted backup"}
+              {busy
+                ? t("Encrypting and verifying…")
+                : t("Download encrypted backup")}
             </button>
           </form>
-          <p role="status">{message}</p>
+          <p role="status">{translateText(message)}</p>
         </Panel>
       </LayoutGroup>
     </div>

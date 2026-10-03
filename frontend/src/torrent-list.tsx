@@ -1,4 +1,5 @@
-import { t } from "./i18n";
+import { getLocale, t } from "./i18n";
+
 import { Fragment, useState } from "react";
 import {
   ArrowDown,
@@ -297,7 +298,14 @@ export function TorrentList({
                           name: torrent.name,
                         })}
                       />
-                      <small>{(torrent.progress * 100).toFixed(1)}%</small>
+                      <small>
+                        {(torrent.progress * 100).toLocaleString(getLocale(), {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                          useGrouping: false,
+                        })}
+                        %
+                      </small>
                     </td>
                     <td data-label={t("Status")}>
                       <span className="torrent-state" title={torrent.state}>
@@ -311,12 +319,14 @@ export function TorrentList({
                         <span title={t("Download speed")}>
                           <ArrowDown size={12} aria-hidden="true" />
                           <span className="sr-only">{t("Download: ")}</span>
-                          {bytes(torrent.dlspeed)}/s
+                          {bytes(torrent.dlspeed)}
+                          {t("/s")}
                         </span>
                         <span title={t("Upload speed")}>
                           <ArrowUp size={12} aria-hidden="true" />
                           <span className="sr-only">{t("Upload: ")}</span>
-                          {bytes(torrent.upspeed)}/s
+                          {bytes(torrent.upspeed)}
+                          {t("/s")}
                         </span>
                       </div>
                     </td>
@@ -326,7 +336,11 @@ export function TorrentList({
                         "qBittorrent upload/download history. Tracker totals may differ.",
                       )}
                     >
-                      {torrent.ratio.toFixed(2)}
+                      {torrent.ratio.toLocaleString(getLocale(), {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                        useGrouping: false,
+                      })}
                     </td>
                     <td data-label={t("ETA")}>
                       {hasEta(torrent) ? uptime(torrent.eta) : "—"}
@@ -342,7 +356,10 @@ export function TorrentList({
                           className="torrent-icon-button"
                           disabled={blocked}
                           title={paused ? t("Resume") : t("Pause")}
-                          aria-label={`${paused ? t("Resume") : t("Pause")} ${torrent.name}`}
+                          aria-label={t("{value0} {value1}", {
+                            value0: paused ? t("Resume") : t("Pause"),
+                            value1: torrent.name,
+                          })}
                           onClick={() =>
                             onAction(torrent.hash, paused ? "resume" : "pause")
                           }

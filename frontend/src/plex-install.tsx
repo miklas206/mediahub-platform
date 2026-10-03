@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Film, ShieldCheck } from "lucide-react";
@@ -73,34 +75,40 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   };
   return (
     <div className="stack">
-      {!embedded && <Link to="/apps">← Apps</Link>}
+      {!embedded && <Link to="/apps">{t("← Apps")}</Link>}
       <header>
-        <p className="eyebrow">YOUR MEDIA, YOUR SERVER</p>
+        <p className="eyebrow">{t("YOUR MEDIA, YOUR SERVER")}</p>
         <h1>
-          <Film /> Install Plex
+          <Film />
+          {t(" Install Plex")}
         </h1>
         <p>
-          Choose your existing media folders. Plex reads the originals — nothing
-          is moved or duplicated.
+          {t(
+            "Choose your existing media folders. Plex reads the originals — nothing is moved or duplicated.",
+          )}
         </p>
       </header>
       <ErrorBox error={error || failure} />
       {done ? (
-        <Panel title="Plex is starting">
+        <Panel title={t("Plex is starting")}>
           <p>
-            Installation accepted. Plex is checking its account and libraries.
+            {t(
+              "Installation accepted. Plex is checking its account and libraries.",
+            )}
           </p>
-          <Link to="/apps">View installed apps</Link>
+          <Link to="/apps">{t("View installed apps")}</Link>
         </Panel>
       ) : (
         <>
-          <Panel title="1 · Choose your libraries">
+          <Panel title={t("1 · Choose your libraries")}>
             {!data && !error && (
-              <p role="status">Finding approved media storage…</p>
+              <p role="status">{t("Finding approved media storage…")}</p>
             )}
             {data && !data.storage.some((s) => s.kind !== "appdata") && (
               <p>
-                Register your existing media storage before installing Plex.
+                {t(
+                  "Register your existing media storage before installing Plex.",
+                )}
               </p>
             )}
             {data?.storage
@@ -123,15 +131,16 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                   {s.label}{" "}
                   <small>
                     {" "}
-                    · {s.kind === "tv" ? "TV shows" : s.kind} · read only
+                    · {s.kind === "tv" ? t("TV shows") : translateText(s.kind)}
+                    {t(" · read only")}
                   </small>
                 </label>
               ))}
           </Panel>
-          <Panel title="2 · Server settings">
+          <Panel title={t("2 · Server settings")}>
             <div className="dynamic-form">
               <label>
-                Server name
+                {t("Server name")}
                 <input
                   value={name}
                   maxLength={80}
@@ -143,7 +152,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                 />
               </label>
               <label>
-                App data storage
+                {t("App data storage")}
                 <select
                   value={appdata}
                   disabled={busy}
@@ -152,7 +161,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                     setDigest("");
                   }}
                 >
-                  <option value="">Choose dedicated app storage</option>
+                  <option value="">{t("Choose dedicated app storage")}</option>
                   {data?.storage
                     .filter((s) => s.kind === "appdata")
                     .map((s) => (
@@ -163,7 +172,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                 </select>
               </label>
               <label>
-                Plex claim token · optional
+                {t("Plex claim token · optional")}
                 <input
                   type="password"
                   autoComplete="off"
@@ -175,32 +184,34 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
               </label>
             </div>
             <p className="muted">
-              A short-lived claim token connects the server to your Plex
-              account. It is sent only over HTTPS, never included in logs, and
-              kept only in protected runtime memory.
+              {t(
+                "A short-lived claim token connects the server to your Plex account. It is sent only over HTTPS, never included in logs, and kept only in protected runtime memory.",
+              )}
             </p>
             <a
               href="https://www.plex.tv/claim/"
               target="_blank"
               rel="noreferrer"
             >
-              Get a claim token from Plex
+              {t("Get a claim token from Plex")}
             </a>
           </Panel>
-          <Panel title="3 · Review and install">
+          <Panel title={t("3 · Review and install")}>
             <p>
-              <ShieldCheck size={18} /> Media stays read-only. Account
-              preferences are encrypted at rest. No router ports or public
-              access are configured.
+              <ShieldCheck size={18} />
+              {t(
+                " Media stays read-only. Account preferences are encrypted at rest. No router ports or public access are configured.",
+              )}
             </p>
             {digest ? (
               <>
                 <p>
-                  Storage and installation plan validated. The server will
-                  re-check the disk before starting.
+                  {t(
+                    "Storage and installation plan validated. The server will re-check the disk before starting.",
+                  )}
                 </p>
                 <button className="primary" disabled={busy} onClick={install}>
-                  {busy ? "Installing Plex…" : "Install Plex"}
+                  {busy ? t("Installing Plex…") : t("Install Plex")}
                 </button>
               </>
             ) : (
@@ -208,7 +219,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                 disabled={busy || !selected.length || !appdata || !name.trim()}
                 onClick={review}
               >
-                {busy ? "Checking…" : "Review installation"}
+                {busy ? t("Checking…") : t("Review installation")}
               </button>
             )}
           </Panel>

@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
 import { ShieldCheck, KeyRound, Monitor, RefreshCw } from "lucide-react";
@@ -116,60 +118,66 @@ export function SecuritySettings() {
     <LayoutGroup id="security-extra-1" className="security-workspace">
       <header>
         <div>
-          <span className="eyebrow">ACCOUNT PROTECTION</span>
+          <span className="eyebrow">{t("ACCOUNT PROTECTION")}</span>
           <h2>
-            <ShieldCheck size={22} /> Security
+            <ShieldCheck size={22} />
+            {t(" Security")}
           </h2>
         </div>
-        <button onClick={reload} aria-label="Refresh security status">
+        <button onClick={reload} aria-label={t("Refresh security status")}>
           <RefreshCw size={16} />
         </button>
       </header>
       {error && (
         <div className="notice" role="alert">
-          {error}
+          {translateText(error)}
         </div>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p role="status">{translateText(notice)}</p>}
       {codes.length > 0 && (
         <div className="recovery-panel" role="status">
-          <h3>Save your recovery codes</h3>
+          <h3>{t("Save your recovery codes")}</h3>
           <p>
-            Shown only once. Store them somewhere private, outside MediaHub.
-            Each code works once with your password.
+            {t(
+              "Shown only once. Store them somewhere private, outside MediaHub. Each code works once with your password.",
+            )}
           </p>
           <div className="recovery-grid">
             {codes.map((c) => (
               <code key={c}>{c}</code>
             ))}
           </div>
-          <button onClick={() => setCodes([])}>I have saved these codes</button>
+          <button onClick={() => setCodes([])}>
+            {t("I have saved these codes")}
+          </button>
         </div>
       )}
       <LayoutGroup id="security-SecuritySettings-1" className="security-grid">
         <article className="security-card">
           <ShieldCheck />
-          <h3>Authenticator app</h3>
+          <h3>{t("Authenticator app")}</h3>
           <p>
-            Use Google Authenticator, Microsoft Authenticator, Bitwarden or
-            another TOTP app.
+            {t(
+              "Use Google Authenticator, Microsoft Authenticator, Bitwarden or another TOTP app.",
+            )}
           </p>
           {!status ? (
-            <p role="status">Checking account protection…</p>
+            <p role="status">{t("Checking account protection…")}</p>
           ) : qr ? (
             <>
               <img
                 className="totp-qr"
                 src={qr}
-                alt="Scan this private setup code with your authenticator"
+                alt={t("Scan this private setup code with your authenticator")}
               />
               <p>
-                Scan the code, then enter the six digits from your app. Setup
-                expires after ten minutes.
+                {t(
+                  "Scan the code, then enter the six digits from your app. Setup expires after ten minutes.",
+                )}
               </p>
               <form onSubmit={(e) => submit(e, "confirm")}>
                 <label>
-                  Authenticator code
+                  {t("Authenticator code")}
                   <input
                     name="code"
                     autoComplete="one-time-code"
@@ -180,23 +188,26 @@ export function SecuritySettings() {
                   />
                 </label>
                 <button className="primary" disabled={busy}>
-                  Verify and enable
+                  {t("Verify and enable")}
                 </button>
                 <button type="button" onClick={() => setQr("")}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </form>
             </>
           ) : status.totpEnabled ? (
             <>
-              <span className="badge healthy">Enabled</span>
-              <p>{status.recoveryCodesRemaining} recovery codes remain.</p>
+              <span className="badge healthy">{t("Enabled")}</span>
+              <p>
+                {status.recoveryCodesRemaining}
+                {t(" recovery codes remain.")}
+              </p>
               <details>
-                <summary>Generate new recovery codes</summary>
-                <p>This replaces all previous recovery codes.</p>
+                <summary>{t("Generate new recovery codes")}</summary>
+                <p>{t("This replaces all previous recovery codes.")}</p>
                 <form onSubmit={(e) => submit(e, "recovery")}>
                   <IdentityFields secondFactor />
-                  <button disabled={busy}>Replace recovery codes</button>
+                  <button disabled={busy}>{t("Replace recovery codes")}</button>
                 </form>
               </details>
             </>
@@ -204,21 +215,23 @@ export function SecuritySettings() {
             <form onSubmit={(e) => submit(e, "enroll")}>
               <IdentityFields />
               <button className="primary" disabled={busy}>
-                Set up two-factor authentication
+                {t("Set up two-factor authentication")}
               </button>
             </form>
           )}
         </article>
         <article className="security-card">
           <KeyRound />
-          <h3>Password</h3>
+          <h3>{t("Password")}</h3>
           <p>
-            Changing your password signs out every session, including this one.
+            {t(
+              "Changing your password signs out every session, including this one.",
+            )}
           </p>
           <form onSubmit={(e) => submit(e, "password")}>
             <IdentityFields secondFactor={status?.totpEnabled} />
             <label>
-              New password
+              {t("New password")}
               <input
                 type="password"
                 name="newPassword"
@@ -228,14 +241,14 @@ export function SecuritySettings() {
                 required
               />
             </label>
-            <button disabled={busy}>Change password</button>
+            <button disabled={busy}>{t("Change password")}</button>
           </form>
         </article>
       </LayoutGroup>
       {status?.totpEnabled && (
         <article className="security-card">
           <ShieldCheck />
-          <h3>Security policy</h3>
+          <h3>{t("Security policy")}</h3>
           <form onSubmit={(e) => submit(e, "policy")}>
             <label>
               <input
@@ -243,26 +256,27 @@ export function SecuritySettings() {
                 name="requireTotp"
                 defaultChecked={status.requireTotp}
               />{" "}
-              Require an authenticator for access to MediaHub
+              {t("Require an authenticator for access to MediaHub")}
             </label>
             <IdentityFields secondFactor />
-            <button disabled={busy}>Save security policy</button>
+            <button disabled={busy}>{t("Save security policy")}</button>
           </form>
           {!status.requireTotp && (
             <details>
-              <summary>Disable authenticator</summary>
+              <summary>{t("Disable authenticator")}</summary>
               <p>
-                This signs out all sessions. Sign in with your password to set
-                up a different authenticator.
+                {t(
+                  "This signs out all sessions. Sign in with your password to set up a different authenticator.",
+                )}
               </p>
               <form onSubmit={(e) => submit(e, "disable")}>
                 <IdentityFields secondFactor />
                 <label>
-                  <input type="checkbox" required /> I understand that
-                  password-only access will be enabled
+                  <input type="checkbox" required />
+                  {t(" I understand that password-only access will be enabled")}
                 </label>
                 <button disabled={busy}>
-                  Disable two-factor authentication
+                  {t("Disable two-factor authentication")}
                 </button>
               </form>
             </details>
@@ -271,14 +285,18 @@ export function SecuritySettings() {
       )}
       <article className="security-card">
         <Monitor />
-        <h3>Signed-in sessions</h3>
+        <h3>{t("Signed-in sessions")}</h3>
         {sessions.map((s) => (
           <div className="session-row" key={s.id}>
             <div>
-              <strong>{s.current ? "This session" : "Another session"}</strong>
+              <strong>
+                {s.current ? t("This session") : t("Another session")}
+              </strong>
               <p>
-                Signed in {new Date(s.createdAt).toLocaleString()} · Expires{" "}
-                {new Date(s.expiresAt * 1000).toLocaleString()}
+                {t("Signed in ")}
+                {new Date(s.createdAt).toLocaleString(getLocale())}
+                {t(" · Expires")}{" "}
+                {new Date(s.expiresAt * 1000).toLocaleString(getLocale())}
               </p>
             </div>
             <button
@@ -294,7 +312,7 @@ export function SecuritySettings() {
                 }
               }}
             >
-              Sign out
+              {t("Sign out")}
             </button>
           </div>
         ))}
@@ -307,7 +325,7 @@ function IdentityFields({ secondFactor = false }: { secondFactor?: boolean }) {
   return (
     <>
       <label>
-        Current password
+        {t("Current password")}
         <input
           name="password"
           type="password"
@@ -318,7 +336,7 @@ function IdentityFields({ secondFactor = false }: { secondFactor?: boolean }) {
       </label>
       {secondFactor && (
         <label>
-          Authenticator or recovery code
+          {t("Authenticator or recovery code")}
           <input
             name="code"
             autoComplete="one-time-code"

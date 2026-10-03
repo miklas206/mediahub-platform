@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -158,10 +160,11 @@ export function SetupWizard({
         <div className="brand">
           <img src="/favicon.svg" alt="" width={34} />
           <span>
-            Media<span>Hub</span>
+            {t("Media")}
+            <span>{t("Hub")}</span>
           </span>
         </div>
-        <p className="eyebrow">INSTALLATION</p>
+        <p className="eyebrow">{t("INSTALLATION")}</p>
         <ol>
           {steps.map((name, index) => (
             <li
@@ -177,19 +180,26 @@ export function SetupWizard({
               <span>
                 {draft.step > index ? <Check size={14} /> : index + 1}
               </span>
-              {name}
+              {t(name)}
             </li>
           ))}
         </ol>
         <div className="wizard-safety">
           <ShieldCheck size={20} />
-          <p>No existing services are changed. Your media stays where it is.</p>
+          <p>
+            {t(
+              "No existing services are changed. Your media stays where it is.",
+            )}
+          </p>
         </div>
       </aside>
       <div className="wizard-main">
         <header>
           <span>
-            SETUP · STEP {draft.step + 1} OF {steps.length}
+            {t("SETUP · STEP ")}
+            {draft.step + 1}
+            {t(" OF ")}
+            {steps.length}
           </span>
           <span>
             <PlatformVersion />
@@ -198,14 +208,18 @@ export function SetupWizard({
         <div className="wizard-body">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">YOUR SERVER, YOUR CHOICES</span>
+              <span className="eyebrow">{t("YOUR SERVER, YOUR CHOICES")}</span>
               <h1>
-                {draft.step === 0 ? "Welcome to MediaHub" : steps[draft.step]}
+                {draft.step === 0
+                  ? t("Welcome to MediaHub")
+                  : translateText(steps[draft.step])}
               </h1>
               <p>
                 {draft.step === 0
-                  ? "Self-hosted media management platform"
-                  : "Choose how your media server should work. Existing files stay in place."}
+                  ? t("Self-hosted media management platform")
+                  : t(
+                      "Choose how your media server should work. Existing files stay in place.",
+                    )}
               </p>
             </div>
           </div>
@@ -217,21 +231,21 @@ export function SetupWizard({
                   (label) => (
                     <div key={label}>
                       <HardDrive size={20} />
-                      {label}
+                      {translateText(label)}
                     </div>
                   ),
                 )}
               </div>
-              <Panel title="A clear home for your media services">
+              <Panel title={t("A clear home for your media services")}>
                 <p>
-                  Register your existing storage, protect your account and
-                  choose your apps. Plex works independently; protected
-                  downloads are optional. No disk is formatted and no media is
-                  moved by setup.
+                  {t(
+                    "Register your existing storage, protect your account and choose your apps. Plex works independently; protected downloads are optional. No disk is formatted and no media is moved by setup.",
+                  )}
                 </p>
                 <div className="button-row">
                   <button className="primary" onClick={() => move(1)}>
-                    Get Started <ArrowRight size={16} />
+                    {t("Get Started ")}
+                    <ArrowRight size={16} />
                   </button>
                   <button
                     onClick={() => {
@@ -242,14 +256,14 @@ export function SetupWizard({
                       });
                     }}
                   >
-                    Import Existing Setup
+                    {t("Import Existing Setup")}
                   </button>
                 </div>
               </Panel>
             </>
           )}
           {draft.step === 1 && (
-            <Panel title="Compatibility checks">
+            <Panel title={t("Compatibility checks")}>
               {checks ? (
                 [...checks.core, ...checks.runtime].map((check) => (
                   <div className="check-row" key={check.name}>
@@ -263,20 +277,21 @@ export function SetupWizard({
                             : "degraded")
                       }
                     >
-                      {check.state}
+                      {translateText(check.state)}
                     </span>
                     <div>
                       <strong>{check.name}</strong>
-                      <p>{check.message}</p>
+                      <p>{translateText(check.message)}</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <p>Checking the environment…</p>
+                <p>{t("Checking the environment…")}</p>
               )}
               <p className="muted">
-                Core can run without Docker. App installation will require a
-                connected runtime.
+                {t(
+                  "Core can run without Docker. App installation will require a connected runtime.",
+                )}
               </p>
             </Panel>
           )}
@@ -284,29 +299,31 @@ export function SetupWizard({
             <Panel
               title={
                 user
-                  ? "Administrator ready"
+                  ? t("Administrator ready")
                   : hasAdmin
-                    ? "Sign in to resume setup"
-                    : "Create your administrator"
+                    ? t("Sign in to resume setup")
+                    : t("Create your administrator")
               }
             >
               {user ? (
                 <p>
-                  Signed in as {user.username}. Your existing account will be
-                  kept.
+                  {t("Signed in as ")}
+                  {user.username}
+                  {t(". Your existing account will be kept.")}
                 </p>
               ) : (
                 <form className="admin-form" onSubmit={administrator}>
                   {!hasAdmin && (
                     <>
                       <p>
-                        Read your installation token locally with{" "}
-                        <code>python -m mediahub.cli bootstrap-token</code>.
-                        This prevents someone else from claiming an unconfigured
-                        server.
+                        {t("Read your installation token locally with")}{" "}
+                        <code>python -m mediahub.cli bootstrap-token</code>
+                        {t(
+                          ". This prevents someone else from claiming an unconfigured server.",
+                        )}
                       </p>
                       <label>
-                        Installation token
+                        {t("Installation token")}
                         <input
                           type="password"
                           name="token"
@@ -317,7 +334,7 @@ export function SetupWizard({
                     </>
                   )}
                   <label>
-                    Username
+                    {t("Username")}
                     <input
                       name="username"
                       required
@@ -326,7 +343,7 @@ export function SetupWizard({
                     />
                   </label>
                   <label>
-                    Password
+                    {t("Password")}
                     <input
                       name="password"
                       type="password"
@@ -339,7 +356,7 @@ export function SetupWizard({
                   </label>
                   {!hasAdmin && (
                     <label>
-                      Confirm password
+                      {t("Confirm password")}
                       <input
                         name="confirmation"
                         type="password"
@@ -350,17 +367,19 @@ export function SetupWizard({
                   )}
                   {hasAdmin && (
                     <label>
-                      Authenticator or recovery code
+                      {t("Authenticator or recovery code")}
                       <input
                         name="secondFactor"
                         autoComplete="one-time-code"
                         maxLength={32}
-                        placeholder="If enabled"
+                        placeholder={t("If enabled")}
                       />
                     </label>
                   )}
                   <button className="primary" disabled={busy}>
-                    {hasAdmin ? "Sign in & continue" : "Create administrator"}
+                    {hasAdmin
+                      ? t("Sign in & continue")
+                      : t("Create administrator")}
                   </button>
                 </form>
               )}
@@ -370,12 +389,14 @@ export function SetupWizard({
             <div className="stack">
               <SecuritySettings />
               <p className="muted">
-                Protect your account with an authenticator. Save the recovery
-                codes before continuing. You can also enable two-factor
-                authentication later in Settings → Security.
+                {t(
+                  "Protect your account with an authenticator. Save the recovery codes before continuing. You can also enable two-factor authentication later in Settings → Security.",
+                )}
               </p>
               <details>
-                <summary>Advanced: discover an existing installation</summary>
+                <summary>
+                  {t("Advanced: discover an existing installation")}
+                </summary>
                 <div className="installation-choices">
                   {[
                     [
@@ -401,8 +422,8 @@ export function SetupWizard({
                         })
                       }
                     >
-                      <strong>{label}</strong>
-                      <span>{description}</span>
+                      <strong>{translateText(label)}</strong>
+                      <span>{translateText(description)}</span>
                     </button>
                   ))}
                 </div>
@@ -419,7 +440,7 @@ export function SetupWizard({
           )}
           {draft.step === 4 && (
             <div className="stack">
-              <Panel title="Planned storage">
+              <Panel title={t("Planned storage")}>
                 {draft.storage.length ? (
                   draft.storage.map((item, index) => (
                     <div className="storage-row" key={item.path}>
@@ -428,10 +449,10 @@ export function SetupWizard({
                         <strong>{item.name}</strong>
                         <code>{item.path}</code>
                         <small>
-                          {item.kind} ·{" "}
+                          {translateText(item.kind)} ·{" "}
                           {item.action === "create"
-                            ? "Create on Apply"
-                            : "Use existing, no changes"}
+                            ? t("Create on Apply")
+                            : t("Use existing, no changes")}
                         </small>
                       </div>
                       <button
@@ -444,18 +465,19 @@ export function SetupWizard({
                           })
                         }
                       >
-                        Remove from plan
+                        {t("Remove from plan")}
                       </button>
                     </div>
                   ))
                 ) : (
                   <p className="muted">
-                    No storage selected. You may finish Core setup and configure
-                    media storage later.
+                    {t(
+                      "No storage selected. You may finish Core setup and configure media storage later.",
+                    )}
                   </p>
                 )}
               </Panel>
-              <Panel title="Choose storage">
+              <Panel title={t("Choose storage")}>
                 <StorageEditor
                   onAdd={async (item) => {
                     const inspected = await api<{ path: string }>(
@@ -477,7 +499,7 @@ export function SetupWizard({
             </div>
           )}
           {draft.step === 5 && (
-            <Panel title="Local access / bring your own proxy">
+            <Panel title={t("Local access / bring your own proxy")}>
               <NetworkForm
                 value={draft.network}
                 onChange={(network) => setDraft({ ...draft, network })}
@@ -486,7 +508,7 @@ export function SetupWizard({
           )}
           {draft.step === 6 && (
             <div className="stack">
-              <Panel title="Your first media app">
+              <Panel title={t("Your first media app")}>
                 <label className="check-label">
                   <input
                     type="checkbox"
@@ -507,18 +529,19 @@ export function SetupWizard({
                       })
                     }
                   />
-                  Install Plex now · optional
+                  {t("Install Plex now · optional")}
                 </label>
                 <p>
-                  Plex works on its own. You do not need a Seedbox or VPN to
-                  enjoy your own local media.
+                  {t(
+                    "Plex works on its own. You do not need a Seedbox or VPN to enjoy your own local media.",
+                  )}
                 </p>
               </Panel>
               {draft.selected_apps.includes("org.mediahub.plex") && (
                 <PlexInstallPage embedded />
               )}
               <details>
-                <summary>Optional apps and advanced catalog</summary>
+                <summary>{t("Optional apps and advanced catalog")}</summary>
                 <CatalogPage
                   selected={draft.selected_apps}
                   onSelect={(ids) => setDraft({ ...draft, selected_apps: ids })}
@@ -528,27 +551,30 @@ export function SetupWizard({
           )}
           {draft.step === 7 && (
             <div className="stack">
-              <Panel title="Review your configuration">
+              <Panel title={t("Review your configuration")}>
                 <dl className="review-grid">
-                  <dt>Administrator</dt>
+                  <dt>{t("Administrator")}</dt>
                   <dd>{user?.username}</dd>
-                  <dt>Installation type</dt>
+                  <dt>{t("Installation type")}</dt>
                   <dd>{draft.installation_type}</dd>
-                  <dt>Storage</dt>
-                  <dd>{draft.storage.length} locations</dd>
-                  <dt>Network (pending)</dt>
+                  <dt>{t("Storage")}</dt>
+                  <dd>
+                    {draft.storage.length}
+                    {t(" locations")}
+                  </dd>
+                  <dt>{t("Network (pending)")}</dt>
                   <dd>
                     {draft.network.listen_host}:{draft.network.port}
                   </dd>
-                  <dt>Selected apps</dt>
-                  <dd>{draft.selected_apps.join(", ") || "None"}</dd>
-                  <dt>Selected imports</dt>
+                  <dt>{t("Selected apps")}</dt>
+                  <dd>{draft.selected_apps.join(", ") || t("None")}</dd>
+                  <dt>{t("Selected imports")}</dt>
                   <dd>{draft.selected_imports.length}</dd>
                 </dl>
                 {draft.storage.map((item) => (
                   <p key={item.path}>
                     <strong>
-                      {item.action === "create" ? "Create" : "Reuse"}:
+                      {item.action === "create" ? t("Create") : t("Reuse")}:
                     </strong>{" "}
                     <code>{item.path}</code>
                   </p>
@@ -556,15 +582,15 @@ export function SetupWizard({
               </Panel>
               {review ? (
                 <>
-                  <Panel title="Actions on Apply">
+                  <Panel title={t("Actions on Apply")}>
                     {review.actions.map((action) => (
                       <p key={action}>✓ {action}</p>
                     ))}
                     <p>
                       <strong>
-                        Applying Core settings does not move media or change
-                        apps. Any app installed in the previous step is managed
-                        separately.
+                        {t(
+                          "Applying Core settings does not move media or change apps. Any app installed in the previous step is managed separately.",
+                        )}
                       </strong>
                     </p>
                   </Panel>
@@ -572,10 +598,10 @@ export function SetupWizard({
                     <ErrorBox key={message} error={message} />
                   ))}
                   {review.warnings.length > 0 && (
-                    <Panel title="Warnings">
+                    <Panel title={t("Warnings")}>
                       {review.warnings.map((message) => (
                         <p className="review-warning" key={message}>
-                          {message}
+                          {translateText(message)}
                         </p>
                       ))}
                     </Panel>
@@ -587,41 +613,44 @@ export function SetupWizard({
                     >
                       <p>
                         {plan.findings.join(" · ") ||
-                          "Plan only — not executable"}
+                          t("Plan only — not executable")}
                       </p>
                     </Panel>
                   ))}
                 </>
               ) : (
-                <p>Validating review…</p>
+                <p>{t("Validating review…")}</p>
               )}
             </div>
           )}
           {draft.step === 8 && (
-            <Panel title="Apply configuration">
+            <Panel title={t("Apply configuration")}>
               <p>
-                Save this Core configuration and create only the new directories
-                you explicitly confirmed. Existing services and media will not
-                be changed.
+                {t(
+                  "Save this Core configuration and create only the new directories you explicitly confirmed. Existing services and media will not be changed.",
+                )}
               </p>
               <button disabled={busy} className="primary" onClick={apply}>
-                {busy ? "Applying safely…" : "Apply configuration"}
+                {busy ? t("Applying safely…") : t("Apply configuration")}
               </button>
             </Panel>
           )}
           {draft.step === 9 && (
-            <Panel title="Your MediaHub is ready">
+            <Panel title={t("Your MediaHub is ready")}>
               <div className="success">
                 <Check />
-                Core setup complete. Your media remains in its existing folders.
+                {t(
+                  "Core setup complete. Your media remains in its existing folders.",
+                )}
               </div>
               <p>
-                Agent and storage status are available in your dashboard. Open
-                an available app to review its requirements and installation
-                guide.
+                {t(
+                  "Agent and storage status are available in your dashboard. Open an available app to review its requirements and installation guide.",
+                )}
               </p>
               <button className="primary" onClick={onComplete}>
-                Open dashboard <ArrowRight size={16} />
+                {t("Open dashboard ")}
+                <ArrowRight size={16} />
               </button>
             </Panel>
           )}
@@ -629,12 +658,12 @@ export function SetupWizard({
             <footer className="wizard-footer">
               <button disabled={busy} onClick={() => move(draft.step - 1)}>
                 <ArrowLeft size={16} />
-                Back
+                {t("Back")}
               </button>
               <span>
                 {user
-                  ? "Progress is saved when you continue."
-                  : "Administrator authentication unlocks saved progress."}
+                  ? t("Progress is saved when you continue.")
+                  : t("Administrator authentication unlocks saved progress.")}
               </span>
               {draft.step !== 8 && (draft.step !== 2 || user) && (
                 <button
@@ -642,7 +671,8 @@ export function SetupWizard({
                   disabled={busy || (draft.step === 7 && !review?.canApply)}
                   onClick={() => move(draft.step + 1)}
                 >
-                  Continue <ArrowRight size={16} />
+                  {t("Continue ")}
+                  <ArrowRight size={16} />
                 </button>
               )}
             </footer>

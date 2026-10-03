@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { Panel, ErrorBox } from "./phase2";
@@ -136,7 +138,7 @@ export function AgentUpdates({
   }
   const disabled = working || busy || operation?.status === "running";
   return (
-    <Panel title="Seedbox Agent">
+    <Panel title={t("Seedbox Agent")}>
       <ErrorBox error={error} />
       {error && !check?.credentialsStored && (
         <button
@@ -148,27 +150,28 @@ export function AgentUpdates({
             })
           }
         >
-          Forget saved SSH access
+          {t("Forget saved SSH access")}
         </button>
       )}
       <div className="runtime-row">
-        <span>Installed Agent code</span>
+        <span>{t("Installed Agent code")}</span>
         <strong>
-          {check?.installedVersion?.slice(0, 12) || "Not checked"}
+          {check?.installedVersion?.slice(0, 12) || t("Not checked")}
         </strong>
       </div>
       <div className="runtime-row">
-        <span>Latest on GitHub main</span>
-        <strong>{check?.latestCommit?.slice(0, 12) || "Not checked"}</strong>
+        <span>{t("Latest on GitHub main")}</span>
+        <strong>{check?.latestCommit?.slice(0, 12) || t("Not checked")}</strong>
       </div>
       {!check?.latestCommit && (
         <p className="muted">
-          {check?.message || "Checking the paired Seedbox Agent..."}
+          {translateText(check?.message) ||
+            t("Checking the paired Seedbox Agent...")}
         </p>
       )}
       <div className="button-row">
         <button disabled={disabled} onClick={() => void act(reload)}>
-          Check Agent update
+          {t("Check Agent update")}
         </button>
         {check?.updateAvailable && (
           <button
@@ -199,14 +202,14 @@ export function AgentUpdates({
               })
             }
           >
-            Update Agent
+            {t("Update Agent")}
           </button>
         )}
       </div>
       {check?.credentialsStored && (
         <div className="button-row">
           <span className="muted">
-            SSH access saved encrypted on this MediaHub server.
+            {t("SSH access saved encrypted on this MediaHub server.")}
           </span>
           <button
             disabled={disabled}
@@ -218,7 +221,7 @@ export function AgentUpdates({
               })
             }
           >
-            Forget saved SSH access
+            {t("Forget saved SSH access")}
           </button>
           <button
             disabled={disabled}
@@ -229,27 +232,28 @@ export function AgentUpdates({
               })
             }
           >
-            Verify saved SSH access
+            {t("Verify saved SSH access")}
           </button>
         </div>
       )}
       {check?.updateAvailable && (
         <details className="agent-update-setup">
           <summary>
-            {check.installReady ? "SSH settings" : "Prepare SSH access"}
+            {check.installReady ? t("SSH settings") : t("Prepare SSH access")}
           </summary>
           <fieldset disabled={disabled}>
-            <legend>Prepare Agent update</legend>
+            <legend>{t("Prepare Agent update")}</legend>
             {!check.credentialsStored && (
               <>
                 <p>
-                  SSH server: <strong>{check.host}</strong> (paired Seedbox
-                  host). Use a root password or an authorized SSH private key.
-                  Save access encrypted on MediaHub or use it for this update
-                  only.
+                  {t("SSH server: ")}
+                  <strong>{check.host}</strong>
+                  {t(
+                    " (paired Seedbox host). Use a root password or an authorized SSH private key. Save access encrypted on MediaHub or use it for this update only.",
+                  )}
                 </p>
                 <label>
-                  SSH port
+                  {t("SSH port")}
                   <input
                     type="number"
                     min={1}
@@ -275,14 +279,15 @@ export function AgentUpdates({
                     })
                   }
                 >
-                  Read SSH fingerprint
+                  {t("Read SSH fingerprint")}
                 </button>
                 {fingerprint && (
                   <>
                     <p style={{ overflowWrap: "anywhere" }}>{fingerprint}</p>
                     <p className="muted">
-                      Compare this with the SSH host fingerprint on the Seedbox
-                      server.
+                      {t(
+                        "Compare this with the SSH host fingerprint on the Seedbox server.",
+                      )}
                     </p>
                     <label className="checkbox-label">
                       <input
@@ -290,12 +295,12 @@ export function AgentUpdates({
                         checked={trusted}
                         onChange={(e) => setTrusted(e.target.checked)}
                       />
-                      I recognize and trust this server fingerprint
+                      {t("I recognize and trust this server fingerprint")}
                     </label>
                   </>
                 )}
                 <label>
-                  Authentication
+                  {t("Authentication")}
                   <select
                     value={authMethod}
                     onChange={(e) => {
@@ -304,13 +309,13 @@ export function AgentUpdates({
                       setPrivateKey("");
                     }}
                   >
-                    <option value="password">Root password</option>
-                    <option value="key">SSH private key</option>
+                    <option value="password">{t("Root password")}</option>
+                    <option value="key">{t("SSH private key")}</option>
                   </select>
                 </label>
                 {authMethod === "key" ? (
                   <label>
-                    SSH private key
+                    {t("SSH private key")}
                     <textarea
                       rows={5}
                       autoComplete="off"
@@ -319,14 +324,14 @@ export function AgentUpdates({
                       onChange={(e) => setPrivateKey(e.target.value)}
                     />
                     <span className="muted">
-                      The matching public key must be authorized for root on the
-                      Seedbox host. Paste an unencrypted OpenSSH or PEM key;
-                      saved access is encrypted by MediaHub.
+                      {t(
+                        "The matching public key must be authorized for root on the Seedbox host. Paste an unencrypted OpenSSH or PEM key; saved access is encrypted by MediaHub.",
+                      )}
                     </span>
                   </label>
                 ) : (
                   <label>
-                    Root SSH password
+                    {t("Root SSH password")}
                     <input
                       type="password"
                       autoComplete="off"
@@ -341,7 +346,9 @@ export function AgentUpdates({
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
                   />
-                  Remember SSH access for future Agent updates (encrypted)
+                  {t(
+                    "Remember SSH access for future Agent updates (encrypted)",
+                  )}
                 </label>
                 <button
                   disabled={
@@ -364,15 +371,15 @@ export function AgentUpdates({
                   }
                 >
                   {remember
-                    ? "Verify and save SSH access"
-                    : "Prepare SSH for update"}
+                    ? t("Verify and save SSH access")
+                    : t("Prepare SSH for update")}
                 </button>
               </>
             )}
             <p>
               {check.installReady
-                ? "SSH is ready. Use Update Agent or Update all."
-                : "Prepare SSH to enable installation."}
+                ? t("SSH is ready. Use Update Agent or Update all.")
+                : t("Prepare SSH to enable installation.")}
             </p>
           </fieldset>
         </details>

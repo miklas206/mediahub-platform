@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import danish from "../src/locales/da.json" with { type: "json" };
 
 test.beforeEach(async ({ page }) => {
   const metrics = {
@@ -211,6 +212,386 @@ test.beforeEach(async ({ page }) => {
       data = { feeds: [], intervalSeconds: 300 };
     await route.fulfill({ json: { data } });
   });
+});
+
+test("Danish covers every workspace page and switches back to English without reloading", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  let language = "da";
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "layout-qa",
+          username: "qa",
+          role: "admin",
+          csrf: "qa",
+          language,
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/auth/preferences", async (route) => {
+    language = route.request().postDataJSON().language;
+    await route.fulfill({ json: { data: { language } } });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const [path, expected] of [
+    ["/", "Dine apps"],
+    ["/apps", "Ét sted til dine apps, deres status og betjening."],
+    ["/store", "Tilføj kun det, du har brug for."],
+    ["/storage", "Mediefiler"],
+    ["/hosts", "Værter og agenter"],
+    ["/activity", "Hændelsestidslinje"],
+    ["/logs", "Core-logbuffer"],
+    ["/updates", "Opdateringsoversigt"],
+    ["/backups", "Opret krypteret backup"],
+    ["/integrations", "Forbind FjordHub"],
+    ["/settings", "Sprog"],
+    ["/apps/seedbox?section=torrents", "Dine feeds"],
+    ["/apps/seedbox?section=vpn", "VPN-placering"],
+    ["/apps/seedbox?section=settings", "Driftskontroller"],
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("html")).toHaveAttribute("lang", "da");
+    await expect(
+      page.getByText(expected, { exact: true }).first(),
+      path,
+    ).toBeVisible();
+    // Check complete UI sentences, excluding command output and identity/product names.
+    expect(errors, path).toEqual([]);
+    const text = await page.locator("body").innerText();
+    const leaks = Object.entries(danish).filter(
+      ([source, translated]) =>
+        source !== translated &&
+        source.length > 30 &&
+        !source.includes("{") &&
+        !source.includes("?") &&
+        text.includes(source),
+    );
+    expect(leaks, path).toEqual([]);
+  }
+  await page.goto("/settings");
+  for (const name of [
+    "Vedligeholdelse",
+    "Lager",
+    "Netværk",
+    "Agent",
+    "Sikkerhed",
+    "Avanceret",
+  ]) {
+    await page.getByRole("tab", { name, exact: true }).click();
+    await expect(page.getByRole("tab", { name, exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  }
+  await page.getByRole("tab", { name: "Generelt", exact: true }).click();
+  await page.getByLabel("Sprog", { exact: true }).selectOption("en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(
+    page.getByRole("heading", { name: "Language", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: "Network", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.getByLabel("Language", { exact: true }).selectOption("da");
+  await expect(
+    page.getByRole("heading", { name: "Sprog", exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/store");
+  await expect(
+    page.getByText("Tilføj kun det, du har brug for."),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "../.qa/danish-store-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(errors).toEqual([]);
+});
+
+test("Danish translates Cloudflare and VPN server messages and keeps country submission unchanged", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "layout-qa",
+          username: "qa",
+          role: "admin",
+          csrf: "qa",
+          language: "da",
+        },
+      },
+    }),
+  );
+  const country = "Denmark";
+  await page.route("**/api/v1/seedbox/locations", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          available: true,
+          countries: [country, "Sweden"],
+          servers: [],
+          current: {
+            country,
+            countryEvidence: "independent GeoIP and provider catalog",
+          },
+          automaticDescription:
+            "Compares download and upload through up to 3 P2P servers. Keeps the current server unless the combined measured speed improves by 25%. Tests interrupt torrent connections and use up to 30 MiB. Measurements include current network load; torrent speeds may differ.",
+          operation: {
+            state: "failed",
+            progress: 40,
+            step: "Location change blocked; qBittorrent remains stopped",
+          },
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/apps/seedbox/runtime", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          view: "seedbox",
+          report: {
+            health: "healthy",
+            available: true,
+            cached: false,
+            agentOnline: true,
+            qBittorrent: {
+              healthy: true,
+              running: true,
+              downloadSpeed: 0,
+              uploadSpeed: 0,
+            },
+            vpn: { verified: true, externalIp: "193.29.107.106" },
+            storage: { mounted: true, appWritable: true },
+            portForwarding: {
+              status: "healthy",
+              currentPort: 20000,
+              qBittorrentVerified: true,
+              expiresAt: Date.now() / 1000 + 300,
+            },
+          },
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/seedbox/port-reachability", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          status: "reachable",
+          address: "193.29.107.106",
+          port: 20000,
+          checkedAt: Date.now() / 1000,
+          message:
+            "TCP connection to the VPN torrent port succeeded from MediaHub Core",
+        },
+      },
+    }),
+  );
+  await page.goto("/apps/seedbox?section=vpn");
+  await expect(page.getByText("Indgående TCP-forbindelse")).toBeVisible();
+  await expect(
+    page.getByText(
+      "TCP-forbindelse til VPN-torrentport lykkedes fra MediaHub Core",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Land", exact: true }),
+  ).toHaveValue(country);
+  await expect(
+    page
+      .getByRole("combobox", { name: "Land", exact: true })
+      .getByRole("option", { name: "Danmark" }),
+  ).toHaveAttribute("value", country);
+  await expect(
+    page.getByText(
+      "Skift af placering blokeret; qBittorrent forbliver stoppet",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Sammenligner download og upload gennem op til 3/),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../.qa/danish-vpn.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.route("**/api/v1/apps/cloudflare/runtime", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          view: "cloudflare",
+          report: {
+            health: "healthy",
+            available: true,
+            cached: false,
+            agentOnline: true,
+            cloudflare: {
+              configured: true,
+              status: "healthy",
+              checkedAt: Date.now() / 1000,
+              metricsReachable: true,
+              connections: 4,
+              routeCount: 1,
+              message: "Tunnel and configured public routes are reachable",
+              routes: [
+                {
+                  url: "https://mediahub.example.com",
+                  hostname: "mediahub.example.com",
+                  reachable: true,
+                  statusCode: 200,
+                  latencyMs: 30,
+                  message: "Route reached Cloudflare/origin",
+                },
+              ],
+            },
+          },
+        },
+      },
+    }),
+  );
+  await page.route(
+    "**/api/v1/catalog/org.mediahub.cloudflared/configuration",
+    (route) =>
+      route.fulfill({
+        json: {
+          data: {
+            values: {
+              tunnel_name: "My tunnel",
+              public_hostnames: "mediahub.example.com",
+              origin_url: "https://192.168.1.50:18765",
+            },
+            secrets: {},
+          },
+        },
+      }),
+  );
+  await page.goto("/apps/cloudflare");
+  await expect(
+    page.getByText("Ruten nåede Cloudflare/oprindelsesserveren"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Gemt Cloudflare-konfiguration" }),
+  ).toBeVisible();
+  await expect(page.getByText("1 tunnelkonfiguration gemt")).toBeVisible();
+  await page.screenshot({
+    path: "../.qa/danish-cloudflare.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("Danish covers installation guides and App Store descriptions", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "layout-qa",
+          username: "qa",
+          role: "admin",
+          csrf: "qa",
+          language: "da",
+        },
+      },
+    }),
+  );
+  await page.route(
+    "**/api/v1/catalog/org.mediahub.cloudflared/configuration",
+    (route) => route.fulfill({ json: { data: { values: {}, secrets: {} } } }),
+  );
+  await page.route("**/api/v1/seedbox/wizard/targets", (route) =>
+    route.fulfill({ json: { data: { bound: false, hosts: [] } } }),
+  );
+  await page.route("**/api/v1/seedbox/wizard", (route) =>
+    route.fulfill({
+      status: 409,
+      json: {
+        error: {
+          code: "seedbox_missing",
+          message: "Seedbox is not configured",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/v1/plex/install-options", (route) =>
+    route.fulfill({ json: { data: { hostId: "qa", storage: [] } } }),
+  );
+  await page.route("**/api/v1/catalog", (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            id: "org.mediahub.plex",
+            name: "Plex",
+            version: "QA",
+            availability: "available",
+            description:
+              "Organize and stream your own media, with persistent configuration and read-only media access.",
+            maintainer: { name: "MediaHub contributors" },
+            category: "media",
+            configFields: [],
+            storageRequirements: [],
+            capabilities: [],
+          },
+          {
+            id: "org.mediahub.seedbox",
+            name: "Seedbox",
+            version: "QA",
+            availability: "available",
+            description:
+              "Protected downloads with Proton WireGuard, verified port forwarding and everyday torrent controls.",
+            maintainer: { name: "MediaHub contributors" },
+            category: "downloads",
+            configFields: [],
+            storageRequirements: [],
+            capabilities: [],
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/store");
+  await expect(
+    page.getByText(/Organiser og stream dine egne medier/),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Beskyttede downloads med Proton WireGuard/),
+  ).toBeVisible();
+  for (const [path, expected] of [
+    ["/store/cloudflare", "Hvad MediaHub kan klargøre"],
+    ["/store/fjordhub", "Guidet FjordHub-installation"],
+    [
+      "/apps/install/plex",
+      "Vælg dine eksisterende mediemapper. Plex læser originalerne — intet flyttes eller kopieres.",
+    ],
+    ["/apps/install/seedbox", "Vælg din dedikerede Seedbox-vært"],
+  ]) {
+    await page.goto(path);
+    await expect(
+      page.getByText(expected, { exact: true }).first(),
+      path,
+    ).toBeVisible();
+    expect(errors, path).toEqual([]);
+  }
 });
 
 test("RSS download history shows current performance and adapts to card width", async ({

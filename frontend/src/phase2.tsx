@@ -1,4 +1,5 @@
-import { t } from "./i18n";
+import { getLocale, translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { AppUninstall } from "./app-uninstall";
 import {
@@ -100,7 +101,7 @@ export function ErrorBox({ error }: { error: string }) {
 export function RuntimePanel() {
   const { data, error, reload } = useLoad<AgentStatus>("/runtime");
   return (
-    <Panel title="Agent & app runtime">
+    <Panel title={t("Agent & app runtime")}>
       <ErrorBox error={error} />
       {data ? (
         <>
@@ -108,34 +109,35 @@ export function RuntimePanel() {
             <div>
               <Server />
               <strong>
-                {data.connected ? "Agent connected" : "Agent unavailable"}
+                {data.connected ? t("Agent connected") : t("Agent unavailable")}
               </strong>
-              <span>{data.version || data.message}</span>
+              <span>{data.version || translateText(data.message)}</span>
             </div>
             <div>
               <Box />
               <strong>
                 {data.docker.available
-                  ? "Docker available"
-                  : "Docker not detected"}
+                  ? t("Docker available")
+                  : t("Docker not detected")}
               </strong>
               <span>
                 {data.docker.version ||
-                  "Core works without Docker. Real apps require it."}
+                  t("Core works without Docker. Real apps require it.")}
               </span>
             </div>
           </div>
           {data.fixtureMode && (
             <div className="notice">
-              Development discovery fixtures enabled — these are not your real
-              services.
+              {t(
+                "Development discovery fixtures enabled — these are not your real services.",
+              )}
             </div>
           )}
         </>
       ) : (
-        <p>Checking runtime…</p>
+        <p>{t("Checking runtime…")}</p>
       )}
-      <button onClick={reload}>Refresh runtime</button>
+      <button onClick={reload}>{t("Refresh runtime")}</button>
     </Panel>
   );
 }
@@ -195,20 +197,23 @@ export function StorageSummary() {
           <HardDrive size={20} />
           <span>
             <strong>
-              {legacy ? "Legacy media archive" : "MediaHub storage"}
+              {legacy ? t("Legacy media archive") : t("MediaHub storage")}
             </strong>
             <small>
               {group.writable
-                ? "Main read/write media drive"
-                : "Additional read-only archive"}
+                ? t("Main read/write media drive")
+                : t("Additional read-only archive")}
             </small>
           </span>
         </div>
         <div className="storage-volume-number">
           {group.writable
-            ? `${bytes(group.freeBytes)} free`
-            : `${bytes(used)} stored`}
-          <small>of {bytes(group.totalBytes)}</small>
+            ? t("{value0} free", { value0: bytes(group.freeBytes) })
+            : t("{value0} stored", { value0: bytes(used) })}
+          <small>
+            {t("of ")}
+            {bytes(group.totalBytes)}
+          </small>
         </div>
         <div className="meter" role="presentation">
           <span style={{ width: `${percent}%` }} />
@@ -217,17 +222,23 @@ export function StorageSummary() {
     );
   };
   return (
-    <Panel title="Media storage">
+    <Panel title={t("Media storage")}>
       <ErrorBox error={error} />
       {data && groups.size === 0 && (
-        <p className="muted">No readable media storage configured yet.</p>
+        <p className="muted">
+          {t("No readable media storage configured yet.")}
+        </p>
       )}
       <div className="storage-volume-grid">{primary.map(renderVolume)}</div>
       {secondary.length > 0 && (
         <details className="storage-secondary">
           <summary>
-            {secondary.length} additional mounted archive
-            {secondary.length === 1 ? "" : "s"}
+            {t(
+              secondary.length === 1
+                ? "{count} additional mounted archive"
+                : "{count} additional mounted archives",
+              { count: secondary.length },
+            )}
           </summary>
           <div className="storage-volume-grid">
             {secondary.map(renderVolume)}
@@ -235,8 +246,9 @@ export function StorageSummary() {
         </details>
       )}
       <p className="muted">
-        Folder mappings are hidden here. Open technical mode only when
-        troubleshooting mounts.
+        {t(
+          "Folder mappings are hidden here. Open technical mode only when troubleshooting mounts.",
+        )}
       </p>
     </Panel>
   );
@@ -264,22 +276,22 @@ export function FolderBrowser({
         className="folder-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Browse server folders"
+        aria-label={t("Browse server folders")}
       >
         <header>
           <div>
-            <h2>Server folders</h2>
-            <p>Agent filesystem · directories only</p>
+            <h2>{t("Server folders")}</h2>
+            <p>{t("Agent filesystem · directories only")}</p>
           </div>
-          <button aria-label="Close folder browser" onClick={onClose}>
+          <button aria-label={t("Close folder browser")} onClick={onClose}>
             <X size={18} />
           </button>
         </header>
         <ErrorBox error={error} />
-        <code>{path || "Approved storage roots"}</code>
+        <code>{path || t("Approved storage roots")}</code>
         {path && (
           <button onClick={() => setPath(data?.parent || null)}>
-            Parent folder
+            {t("Parent folder")}
           </button>
         )}
         <div className="folder-list">
@@ -290,15 +302,15 @@ export function FolderBrowser({
             </button>
           ))}
           {data && data.folders.length === 0 && (
-            <p className="muted">No subfolders.</p>
+            <p className="muted">{t("No subfolders.")}</p>
           )}
         </div>
         {data?.capacity && (
           <div className="folder-capacity">
-            {bytes(data.capacity.freeBytes)} free /{" "}
-            {bytes(data.capacity.totalBytes)} · Read:{" "}
-            {data.capacity.readable ? "yes" : "no"} · Write:{" "}
-            {data.capacity.writable ? "reported" : "no"}
+            {bytes(data.capacity.freeBytes)}
+            {t(" free /")} {bytes(data.capacity.totalBytes)}
+            {t(" · Read:")} {data.capacity.readable ? t("yes") : t("no")}
+            {t(" · Write:")} {data.capacity.writable ? t("reported") : t("no")}
           </div>
         )}
         {path && (
@@ -307,14 +319,14 @@ export function FolderBrowser({
               className="primary"
               onClick={() => onSelect(path, "existing")}
             >
-              Use this folder
+              {t("Use this folder")}
             </button>
             <label>
-              New folder name
+              {t("New folder name")}
               <input
                 value={folderName}
                 onChange={(e) => setFolderName(e.target.value)}
-                placeholder="movies"
+                placeholder={t("movies")}
               />
             </label>
             <code>{proposed}</code>
@@ -328,10 +340,10 @@ export function FolderBrowser({
               onClick={() => onSelect(proposed, "create")}
             >
               <FolderPlus size={16} />
-              Select new folder
+              {t("Select new folder")}
             </button>
             <small>
-              Nothing is created until you explicitly confirm and apply.
+              {t("Nothing is created until you explicitly confirm and apply.")}
             </small>
           </>
         )}
@@ -390,7 +402,7 @@ export function StorageEditor({
       <form className="storage-form" onSubmit={submit}>
         <ErrorBox error={error} />
         <label>
-          Name
+          {t("Name")}
           <input
             name="storage_name"
             value={name}
@@ -400,17 +412,17 @@ export function StorageEditor({
           />
         </label>
         <label>
-          Storage type
+          {t("Storage type")}
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             {storageTypes.map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {translateText(label)}
               </option>
             ))}
           </select>
         </label>
         <label className="wide">
-          Host path
+          {t("Host path")}
           <input
             name="storage_path"
             value={path}
@@ -424,18 +436,18 @@ export function StorageEditor({
         <div className="button-row wide">
           <button type="button" onClick={() => setBrowse(true)}>
             <Folder size={17} />
-            Browse server
+            {t("Browse server")}
           </button>
           <select
-            aria-label="Folder action"
+            aria-label={t("Folder action")}
             value={action}
             onChange={(e) => {
               setAction(e.target.value as "existing" | "create");
               setConfirmed(false);
             }}
           >
-            <option value="existing">Use Existing Folder</option>
-            <option value="create">Create New Folder</option>
+            <option value="existing">{t("Use Existing Folder")}</option>
+            <option value="create">{t("Create New Folder")}</option>
           </select>
         </div>
         {action === "create" && (
@@ -445,19 +457,20 @@ export function StorageEditor({
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
             />
-            I confirm creation of exactly:{" "}
-            <code>{path || "Choose a path first"}</code>
+            {t("I confirm creation of exactly:")}{" "}
+            <code>{path || t("Choose a path first")}</code>
           </label>
         )}
         <p className="muted wide">
-          Only approved agent roots are accessible. Existing files are never
-          moved.
+          {t(
+            "Only approved agent roots are accessible. Existing files are never moved.",
+          )}
         </p>
         <button
           className="primary"
           disabled={busy || (action === "create" && !confirmed)}
         >
-          {busy ? "Validating…" : "Add storage location"}
+          {busy ? t("Validating…") : t("Add storage location")}
         </button>
       </form>
       {browse && (
@@ -495,9 +508,9 @@ export function StorageWorkspace() {
   };
   return (
     <LayoutGroup id="phase2-StorageWorkspace-1" className="stack">
-      <Panel title="Storage locations">
+      <Panel title={t("Storage locations")}>
         <ErrorBox error={error} />
-        {message && <p className="success">{message}</p>}
+        {message && <p className="success">{translateText(message)}</p>}
         {data?.length ? (
           data.map((item) => (
             <div className="storage-row" key={item.id}>
@@ -506,32 +519,47 @@ export function StorageWorkspace() {
                 <strong>{item.name}</strong>
                 <code>{item.path}</code>
                 <small>
-                  {item.kind} · Read {String(item.readable)} / Write{" "}
-                  {String(item.writable)}
+                  {translateText(item.kind)}
+                  {t(" · Read ")}
+                  {t(String(item.readable))}
+                  {t(" / Write")} {t(String(item.writable))}
                 </small>
-                {item.error && <small>{item.error}</small>}
+                {item.error && <small>{translateText(item.error)}</small>}
                 <small>
-                  Owner: {item.owner ?? "Unavailable"} · UID/GID:{" "}
-                  {item.uid ?? "n/a"}/{item.gid ?? "n/a"}
+                  {t("Owner: ")}
+                  {item.owner ?? t("Unavailable")}
+                  {t(" · UID/GID:")} {item.uid ?? t("n/a")}/
+                  {item.gid ?? t("n/a")}
                 </small>
                 <small>
-                  Permissions: {item.permissions ?? "Unavailable"} ·{" "}
-                  {item.filesystem ?? "Unknown filesystem"} ·{" "}
-                  {bytes(item.totalBytes)} total
+                  {t("Permissions: ")}
+                  {item.permissions ?? t("Unavailable")} ·{" "}
+                  {item.filesystem ?? t("Unknown filesystem")} ·{" "}
+                  {bytes(item.totalBytes)}
+                  {t(" total")}
                 </small>
               </div>
-              <span>{bytes(item.freeBytes)} free</span>
-              <button onClick={() => setEditing(item)}>Change mapping</button>
+              <span>
+                {bytes(item.freeBytes)}
+                {t(" free")}
+              </span>
+              <button onClick={() => setEditing(item)}>
+                {t("Change mapping")}
+              </button>
             </div>
           ))
         ) : (
           <div className="empty">
-            <h3>No locations registered</h3>
-            <p>Choose existing storage or explicitly create a new directory.</p>
+            <h3>{t("No locations registered")}</h3>
+            <p>
+              {t(
+                "Choose existing storage or explicitly create a new directory.",
+              )}
+            </p>
           </div>
         )}
       </Panel>
-      <Panel title="Add storage">
+      <Panel title={t("Add storage")}>
         <StorageEditor onAdd={add} />
       </Panel>
       {editing && (
@@ -862,33 +890,35 @@ export function MediaFiles() {
       }}
       onDrop={drop}
     >
-      <Panel title="Media files">
+      <Panel title={t("Media files")}>
         <p className="muted">
-          Browse the folders Plex and Seedbox use, and securely upload files or
-          folders from this device. Existing files cannot be overwritten, moved
-          or deleted here.
+          {t(
+            "Browse the folders Plex and Seedbox use, and securely upload files or folders from this device. Existing files cannot be overwritten, moved or deleted here.",
+          )}
         </p>
         <p className="media-drop-hint" role="status">
           {readingDrop
-            ? "Reading files and folders…"
+            ? t("Reading files and folders…")
             : dragActive
-              ? "Drop here to upload to the current folder"
-              : "Drag files or folders anywhere into this panel to upload to the current folder."}
+              ? t("Drop here to upload to the current folder")
+              : t(
+                  "Drag files or folders anywhere into this panel to upload to the current folder.",
+                )}
         </p>
         <ErrorBox error={locations.error || error} />
         {!locations.data ? (
-          <p>Loading media locations…</p>
+          <p>{t("Loading media locations…")}</p>
         ) : available.length === 0 ? (
           <div className="empty">
             <Folder size={28} />
-            <h3>No media folders registered</h3>
-            <p>Add a Movies, TV or Downloads storage location first.</p>
+            <h3>{t("No media folders registered")}</h3>
+            <p>{t("Add a Movies, TV or Downloads storage location first.")}</p>
           </div>
         ) : (
           <>
             <div className="media-browser-toolbar">
               <label>
-                Media location
+                {t("Media location")}
                 <select
                   value={locationId}
                   disabled={uploading}
@@ -908,18 +938,19 @@ export function MediaFiles() {
                     listing?.parent && open(locationId, listing.parent)
                   }
                 >
-                  <ArrowLeft size={16} /> Parent folder
+                  <ArrowLeft size={16} />
+                  {t(" Parent folder")}
                 </button>
                 <button
-                  aria-label="Refresh media files"
+                  aria-label={t("Refresh media files")}
                   disabled={loading}
                   onClick={() => open(locationId, listing?.path)}
                 >
                   <RefreshCw className={loading ? "spin" : ""} size={16} />
-                  Refresh
+                  {t("Refresh")}
                 </button>
                 <input
-                  aria-label="Choose files to upload"
+                  aria-label={t("Choose files to upload")}
                   className="visually-hidden"
                   multiple
                   onChange={(event) =>
@@ -934,7 +965,7 @@ export function MediaFiles() {
                   type="file"
                 />
                 <input
-                  aria-label="Choose folder to upload"
+                  aria-label={t("Choose folder to upload")}
                   className="visually-hidden"
                   type="file"
                   multiple
@@ -970,14 +1001,15 @@ export function MediaFiles() {
                     }
                     onClick={() => setUploadChoicesOpen((open) => !open)}
                   >
-                    <Upload size={16} /> Upload
+                    <Upload size={16} />
+                    {t(" Upload")}
                   </button>
                   {uploadChoicesOpen && (
                     <div
                       className="media-upload-choices"
                       id="media-upload-choices"
                       role="group"
-                      aria-label="Upload options"
+                      aria-label={t("Upload options")}
                     >
                       <button
                         onClick={() => {
@@ -986,7 +1018,8 @@ export function MediaFiles() {
                           fileInput.current?.click();
                         }}
                       >
-                        <FileText size={16} /> Files
+                        <FileText size={16} />
+                        {t(" Files")}
                       </button>
                       <button
                         onClick={() => {
@@ -995,7 +1028,8 @@ export function MediaFiles() {
                           folderInput.current?.click();
                         }}
                       >
-                        <Folder size={16} /> Folder
+                        <Folder size={16} />
+                        {t(" Folder")}
                       </button>
                     </div>
                   )}
@@ -1007,15 +1041,20 @@ export function MediaFiles() {
                 <div className="media-upload-summary">
                   <span>
                     {uploads.filter((item) => item.state === "complete").length}{" "}
-                    of {uploads.length} files uploaded
+                    {t("of ")}
+                    {uploads.length}
+                    {t(" files uploaded")}
                   </span>
                   {uploading && (
-                    <button onClick={() => stopUpload()}>Stop all</button>
+                    <button onClick={() => stopUpload()}>
+                      {t("Stop all")}
+                    </button>
                   )}
                 </div>
                 <p className="muted">
-                  Folders keep their structure. Empty folders are not included.
-                  Keep this page open; stopping keeps completed files.
+                  {t(
+                    "Folders keep their structure. Empty folders are not included. Keep this page open; stopping keeps completed files.",
+                  )}
                 </p>
                 {uploads.map((item) => (
                   <div
@@ -1026,16 +1065,18 @@ export function MediaFiles() {
                       <strong>{item.name}</strong>
                       <small>
                         {item.state === "complete"
-                          ? "Upload complete"
+                          ? t("Upload complete")
                           : item.state === "error"
-                            ? item.message
+                            ? translateText(item.message)
                             : item.state === "queued"
-                              ? "Waiting"
+                              ? t("Waiting")
                               : item.state === "stopped"
-                                ? "Stopped"
+                                ? t("Stopped")
                                 : item.state === "stopping"
-                                  ? "Stopping and cleaning up..."
-                                  : `${item.progress}% uploaded`}
+                                  ? t("Stopping and cleaning up...")
+                                  : t("{value0}% uploaded", {
+                                      value0: item.progress,
+                                    })}
                       </small>
                     </div>
                     <div className="media-upload-progress">
@@ -1045,11 +1086,15 @@ export function MediaFiles() {
                       item.state,
                     ) && (
                       <button
-                        aria-label={`Stop upload ${item.name}`}
+                        aria-label={t("Stop upload {value0}", {
+                          value0: item.name,
+                        })}
                         disabled={item.state === "stopping"}
                         onClick={() => stopUpload(item.id)}
                       >
-                        {item.state === "stopping" ? "Stopping..." : "Stop"}
+                        {item.state === "stopping"
+                          ? t("Stopping...")
+                          : t("Stop")}
                       </button>
                     )}
                   </div>
@@ -1080,23 +1125,31 @@ export function MediaFiles() {
                     <strong>{item.name}</strong>
                     <small>
                       {item.type === "folder"
-                        ? `${item.sizeComplete ? "" : "At least "}${bytes(item.sizeBytes)} · Folder`
-                        : `${fileFormat(item.name)} · ${bytes(item.sizeBytes)} · ${new Date(
-                            item.modifiedAt * 1000,
-                          ).toLocaleDateString()}`}
+                        ? t("{value0}{value1} · Folder", {
+                            value0: item.sizeComplete ? "" : "At least ",
+                            value1: bytes(item.sizeBytes),
+                          })
+                        : t("{value0} · {value1} · {value2}", {
+                            value0: fileFormat(item.name),
+                            value1: bytes(item.sizeBytes),
+                            value2: new Date(
+                              item.modifiedAt * 1000,
+                            ).toLocaleDateString(getLocale()),
+                          })}
                     </small>
                   </span>
                 </button>
               ))}
               {!loading && listing?.items.length === 0 && (
-                <p className="muted">This folder is empty.</p>
+                <p className="muted">{t("This folder is empty.")}</p>
               )}
-              {loading && <p className="muted">Reading folder…</p>}
+              {loading && <p className="muted">{t("Reading folder…")}</p>}
             </div>
             {listing?.truncated && (
               <p className="muted">
-                Showing the first 500 entries. Open a subfolder to narrow the
-                list.
+                {t(
+                  "Showing the first 500 entries. Open a subfolder to narrow the list.",
+                )}
               </p>
             )}
           </>
@@ -1124,14 +1177,14 @@ export function NetworkForm({
   return (
     <div className="network-form">
       <label>
-        Listen host
+        {t("Listen host")}
         <input
           value={value.listen_host}
           onChange={(e) => update("listen_host", e.target.value)}
         />
       </label>
       <label>
-        HTTP port
+        {t("HTTP port")}
         <input
           type="number"
           min={1024}
@@ -1141,14 +1194,14 @@ export function NetworkForm({
         />
       </label>
       <label className="wide">
-        Base URL
+        {t("Base URL")}
         <input
           value={value.base_url}
           onChange={(e) => update("base_url", e.target.value)}
         />
       </label>
       <label className="wide">
-        Allowed origins (comma-separated)
+        {t("Allowed origins (comma-separated)")}
         <input
           value={originsText}
           onChange={(e) => {
@@ -1164,7 +1217,7 @@ export function NetworkForm({
         />
       </label>
       <label className="wide">
-        Trusted proxy IPs / CIDRs (optional)
+        {t("Trusted proxy IPs / CIDRs (optional)")}
         <input
           value={proxiesText}
           onChange={(e) => {
@@ -1181,14 +1234,15 @@ export function NetworkForm({
       </label>
       {!["127.0.0.1", "::1"].includes(value.listen_host) && (
         <div className="notice wide">
-          This exposes Core beyond localhost. Authentication does not encrypt
-          HTTP. No firewall, router or reverse proxy will be configured
-          automatically.
+          {t(
+            "This exposes Core beyond localhost. Authentication does not encrypt HTTP. No firewall, router or reverse proxy will be configured automatically.",
+          )}
         </div>
       )}
       <p className="muted wide">
-        Saved as pending. Network activation requires an explicit restart with
-        --saved-network.
+        {t(
+          "Saved as pending. Network activation requires an explicit restart with --saved-network.",
+        )}
       </p>
     </div>
   );
@@ -1221,7 +1275,7 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
       <ErrorBox error={error || loaded.error} />
       {app.configFields.map((field) => (
         <label key={field.name}>
-          {field.label}
+          {translateText(field.label)}
           {field.type === "select" ? (
             <select
               value={
@@ -1251,8 +1305,8 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
               placeholder={
                 field.secret
                   ? loaded.data?.secrets[field.name]?.configured
-                    ? "Configured — leave blank to keep"
-                    : "Not configured"
+                    ? t("Configured — leave blank to keep")
+                    : t("Not configured")
                   : field.placeholder || undefined
               }
               onChange={(e) =>
@@ -1263,22 +1317,24 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
           {field.secret && (
             <small>
               {loaded.data?.secrets[field.name]?.configured
-                ? "Configured: yes"
-                : "Configured: no"}
+                ? t("Configured: yes")
+                : t("Configured: no")}
             </small>
           )}
-          {field.description && <small>{field.description}</small>}
+          {field.description && (
+            <small>{translateText(field.description)}</small>
+          )}
           {field.helpUrl && (
             <a href={field.helpUrl} target="_blank" rel="noreferrer">
-              Open official guidance →
+              {t("Open official guidance →")}
             </a>
           )}
         </label>
       ))}
-      <button>Save app configuration</button>
+      <button>{t("Save app configuration")}</button>
       {message && (
         <p role="status" className="success">
-          {message}
+          {translateText(message)}
         </p>
       )}
     </form>
@@ -1325,7 +1381,7 @@ export function CatalogPage({
         <div
           className="apps-grid app-skeleton-grid"
           aria-busy="true"
-          aria-label="Loading App Store"
+          aria-label={t("Loading App Store")}
         >
           {[0, 1, 2, 3].map((item) => (
             <div className="panel app-skeleton" key={item}>
@@ -1351,43 +1407,46 @@ export function CatalogPage({
                   </div>
                   <span className="badge">
                     {installedApp
-                      ? "Installed"
+                      ? t("Installed")
                       : connected
-                        ? "Connected"
+                        ? t("Connected")
                         : app.availability === "available"
-                          ? "Guided setup"
-                          : "Coming soon"}
+                          ? t("Guided setup")
+                          : t("Coming soon")}
                   </span>
                 </div>
                 <h2>{app.name}</h2>
-                <p>{app.description}</p>
+                <p>{translateText(app.description)}</p>
                 <p className="muted">
-                  {app.category} · v{app.version} · {app.maintainer.name}
+                  {translateText(app.category)}
+                  {t(" · v")}
+                  {app.version} · {app.maintainer.name}
                 </p>
                 <div className="store-card-action">
                   {installedApp?.detailPath ? (
                     <Link className="primary" to={installedApp.detailPath}>
-                      Open {app.name} →
+                      {t("Open ")}
+                      {app.name} →
                     </Link>
                   ) : connected ? (
                     <Link className="primary" to="/integrations">
-                      Manage FjordHub →
+                      {t("Manage FjordHub →")}
                     </Link>
                   ) : app.id === "org.mediahub.plex" ? (
                     <Link className="primary" to="/apps/install/plex">
-                      Install Plex →
+                      {t("Install Plex →")}
                     </Link>
                   ) : app.id === "org.mediahub.seedbox" ? (
                     <Link className="primary" to="/apps/install/seedbox">
-                      Install Seedbox →
+                      {t("Install Seedbox →")}
                     </Link>
                   ) : app.id === "org.mediahub.cloudflared" ? (
                     <Link className="primary" to="/store/cloudflare">
-                      Set up Cloudflare →
+                      {t("Set up Cloudflare →")}
                     </Link>
                   ) : app.id === "org.mediahub.fjordhub" ? (
                     <Link className="primary" to="/store/fjordhub">
-                      Set up FjordHub →
+                      {t("Set up FjordHub →")}
                     </Link>
                   ) : null}
                   {app.id === "org.mediahub.fjordhub" && (
@@ -1395,7 +1454,7 @@ export function CatalogPage({
                       className="button-link"
                       to="/store/fjordhub/uninstall"
                     >
-                      Uninstall
+                      {t("Uninstall")}
                     </Link>
                   )}
                   {installedApp && showInstalled && (
@@ -1406,42 +1465,47 @@ export function CatalogPage({
                   )}
                   {app.repository && (
                     <a href={app.repository} target="_blank" rel="noreferrer">
-                      Source →
+                      {t("Source →")}
                     </a>
                   )}
                 </div>
                 <details>
-                  <summary>Advanced requirements and configuration</summary>
+                  <summary>
+                    {t("Advanced requirements and configuration")}
+                  </summary>
                   {!!app.installGuide?.length && (
                     <div className="install-guide">
-                      <h3>Guided setup</h3>
+                      <h3>{t("Guided setup")}</h3>
                       <ol>
                         {app.installGuide.map((step) => (
                           <li key={step.id}>
-                            <strong>{step.title}</strong>
-                            <p>{step.description}</p>
+                            <strong>{translateText(step.title)}</strong>
+                            <p>{translateText(step.description)}</p>
                             {step.helpUrl && (
                               <a
                                 href={step.helpUrl}
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                Official instructions →
+                                {t("Official instructions →")}
                               </a>
                             )}
                           </li>
                         ))}
                       </ol>
                       <p className="muted">
-                        The dedicated guided page explains every value the user
-                        must supply. Advanced previews below never change a host
-                        by themselves.
+                        {t(
+                          "The dedicated guided page explains every value the user must supply. Advanced previews below never change a host by themselves.",
+                        )}
                       </p>
                     </div>
                   )}
-                  <p>Runtime: {app.requiredRuntime}</p>
+                  <p>
+                    {t("Runtime: ")}
+                    {app.requiredRuntime}
+                  </p>
                   <label>
-                    Target host
+                    {t("Target host")}
                     <select
                       value={targets[app.id] || "local"}
                       onChange={(e) => {
@@ -1452,11 +1516,11 @@ export function CatalogPage({
                       {hosts.data?.map((host) => (
                         <option value={host.id} key={host.id}>
                           {host.name}
-                          {host.status !== "online" ? " · Offline" : ""}
+                          {host.status !== "online" ? t(" · Offline") : ""}
                           {(app.hostCapabilities || []).some(
                             (c) => !host.capabilities?.includes(c),
                           )
-                            ? " · Missing capabilities"
+                            ? t(" · Missing capabilities")
                             : ""}
                         </option>
                       ))}
@@ -1464,12 +1528,13 @@ export function CatalogPage({
                   </label>
                   {app.recommendedIsolation === "dedicated-host" && (
                     <p className="notice">
-                      Dedicated host recommended. This preview never installs
-                      the app; host compatibility is checked by the Agent.
+                      {t(
+                        "Dedicated host recommended. This preview never installs the app; host compatibility is checked by the Agent.",
+                      )}
                     </p>
                   )}
                   <p className="muted">
-                    Storage:{" "}
+                    {t("Storage:")}{" "}
                     {app.storageRequirements
                       .map((s) => `${s.type} (${s.access})`)
                       .join(", ")}
@@ -1488,7 +1553,7 @@ export function CatalogPage({
                           )
                         }
                       />
-                      Plan for later — do not install
+                      {t("Plan for later — do not install")}
                     </label>
                   )}
                   <div className="button-row">
@@ -1497,7 +1562,7 @@ export function CatalogPage({
                         setExpanded(expanded === app.id ? "" : app.id)
                       }
                     >
-                      Configure
+                      {t("Configure")}
                     </button>
                     <button
                       onClick={async () => {
@@ -1514,7 +1579,7 @@ export function CatalogPage({
                         }
                       }}
                     >
-                      Preview plan
+                      {t("Preview plan")}
                     </button>
                   </div>
                   {expanded === app.id && (
@@ -1522,13 +1587,14 @@ export function CatalogPage({
                       <ConfigurationForm app={app} />
                       <div className="dynamic-form">
                         <p className="muted">
-                          Storage preview mappings only. Nothing is created or
-                          mounted.
+                          {t(
+                            "Storage preview mappings only. Nothing is created or mounted.",
+                          )}
                         </p>
                         {app.storageRequirements.map((slot) => (
                           <label key={slot.id}>
                             {slot.id} · {slot.access}
-                            {slot.required ? " (required)" : ""}
+                            {slot.required ? t(" (required)") : ""}
                             <select
                               value={mappings[app.id]?.[slot.id] || ""}
                               onChange={(e) =>
@@ -1541,7 +1607,9 @@ export function CatalogPage({
                                 })
                               }
                             >
-                              <option value="">Choose logical storage</option>
+                              <option value="">
+                                {t("Choose logical storage")}
+                              </option>
                               {logical.data
                                 ?.filter((s) =>
                                   s.mappings.some(
@@ -1570,9 +1638,11 @@ export function CatalogPage({
         </LayoutGroup>
       )}
       {plan && (
-        <Panel title="Installation preview — not executable">
+        <Panel title={t("Installation preview — not executable")}>
           <pre className="plan-json">{JSON.stringify(plan, null, 2)}</pre>
-          <button onClick={() => setPlan(undefined)}>Close preview</button>
+          <button onClick={() => setPlan(undefined)}>
+            {t("Close preview")}
+          </button>
         </Panel>
       )}
     </div>
@@ -1590,11 +1660,12 @@ export function DiscoveryPanel({
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <Panel title="Existing installation discovery">
+    <Panel title={t("Existing installation discovery")}>
       <ErrorBox error={error || failure} />
       <p className="muted">
-        Read-only inspection through the agent. Environment values are never
-        displayed. No service is changed.
+        {t(
+          "Read-only inspection through the agent. Environment values are never displayed. No service is changed.",
+        )}
       </p>
       <button
         disabled={busy}
@@ -1611,9 +1682,11 @@ export function DiscoveryPanel({
           }
         }}
       >
-        {busy ? "Inspecting…" : "Scan existing services"}
+        {busy ? t("Inspecting…") : t("Scan existing services")}
       </button>
-      {data?.warning && <div className="notice">{data.warning}</div>}
+      {data?.warning && (
+        <div className="notice">{translateText(data.warning)}</div>
+      )}
       {data?.containers.map((container) => (
         <details className="discovery-item" key={container.id}>
           <summary>
@@ -1622,29 +1695,31 @@ export function DiscoveryPanel({
                 container.candidates.map((c) => c.app).join(", ") +
                 " installation"
               : container.name}
-            <span className="badge">{container.status}</span>
+            <span className="badge">{translateText(container.status)}</span>
           </summary>
           <code>
             {container.name} · {container.image}
           </code>
           <p>
-            Network: {container.networkMode} · {container.networks.join(", ")}
+            {t("Network: ")}
+            {container.networkMode} · {container.networks.join(", ")}
           </p>
           {container.mounts.map((m, i) => (
             <p key={i}>
               <code>
-                {m.source} → {m.target} ({m.writable ? "RW" : "RO"})
+                {m.source} → {m.target} ({m.writable ? t("RW") : t("RO")})
               </code>
             </p>
           ))}
           <p>
-            Ports:{" "}
+            {t("Ports:")}{" "}
             {container.ports
               .map((p) => p.hostPort + " → " + p.container)
-              .join(", ") || "None published"}
+              .join(", ") || t("None published")}
           </p>
           <p>
-            Environment names: {container.environmentNames.join(", ") || "None"}
+            {t("Environment names: ")}
+            {container.environmentNames.join(", ") || t("None")}
           </p>
           {container.candidates.length > 0 && (
             <label className="check-label">
@@ -1659,13 +1734,13 @@ export function DiscoveryPanel({
                   )
                 }
               />
-              Select for future import planning
+              {t("Select for future import planning")}
             </label>
           )}
         </details>
       ))}
       {data?.containers.length === 0 && (
-        <p className="muted">No discovery snapshot yet.</p>
+        <p className="muted">{t("No discovery snapshot yet.")}</p>
       )}
       {data?.relationships.map((relationship, i) => (
         <p className="muted" key={i}>
@@ -1680,22 +1755,22 @@ export function DiscoveryPanel({
 export function ImportSummary() {
   const { data, error } = useLoad<ImportPlan[]>("/imports");
   return (
-    <Panel title="Import plans">
+    <Panel title={t("Import plans")}>
       <ErrorBox error={error} />
       {data?.length ? (
         data.map((plan) => (
           <div className="import-row" key={plan.source_id}>
             <strong>{plan.detected_app}</strong>
-            <span className="badge">{plan.status}</span>
+            <span className="badge">{translateText(plan.status)}</span>
             <p>
               {plan.findings.join(" · ") ||
-                "Planning checks passed. Execution is not implemented."}
+                t("Planning checks passed. Execution is not implemented.")}
             </p>
           </div>
         ))
       ) : (
         <p className="muted">
-          No existing services selected. No migration has been performed.
+          {t("No existing services selected. No migration has been performed.")}
         </p>
       )}
     </Panel>
@@ -1735,15 +1810,15 @@ export function SettingsExtensions({
               "Advanced",
             ]
           : ["General", "Maintenance", "Security"]
-        ).map((t) => (
+        ).map((tabName) => (
           <button
             role="tab"
-            aria-selected={tab === t}
-            className={tab === t ? "active" : ""}
-            key={t}
-            onClick={() => setTab(t)}
+            aria-selected={tab === tabName}
+            className={tab === tabName ? "active" : ""}
+            key={tabName}
+            onClick={() => setTab(tabName)}
           >
-            {t}
+            {t(tabName)}
           </button>
         ))}
       </div>
@@ -1752,7 +1827,7 @@ export function SettingsExtensions({
       {tab === "Storage" && <StorageWorkspace />}
       {tab === "Network" && (
         <LayoutGroup id="settings-network-cards">
-          <Panel title="Network configuration">
+          <Panel title={t("Network configuration")}>
             <ErrorBox error={network.error} />
             {network.data && (
               <>
@@ -1776,9 +1851,9 @@ export function SettingsExtensions({
                     }
                   }}
                 >
-                  Save network settings
+                  {t("Save network settings")}
                 </button>
-                <p role="status">{message}</p>
+                <p role="status">{translateText(message)}</p>
               </>
             )}
           </Panel>
@@ -1794,11 +1869,11 @@ export function SettingsExtensions({
       {tab === "Security" && security}
       {tab === "Advanced" && (
         <LayoutGroup id="settings-advanced-cards">
-          <Panel title="Advanced settings">
+          <Panel title={t("Advanced settings")}>
             <p>
-              Storage roots, agent token files and developer fixtures are
-              server-side configuration only. No dangerous path override or raw
-              Docker command endpoint is exposed.
+              {t(
+                "Storage roots, agent token files and developer fixtures are server-side configuration only. No dangerous path override or raw Docker command endpoint is exposed.",
+              )}
             </p>
           </Panel>
         </LayoutGroup>

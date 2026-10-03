@@ -1,9 +1,11 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { api } from "./api";
 import { bytes, uptime } from "./format";
-import { t } from "./i18n";
+
 import {
   isTorrentPaused,
   torrentStateLabel,
@@ -90,7 +92,7 @@ export function DashboardTorrents({ apps }: { apps?: AppInfo[] }) {
         <>
           {error && (
             <p role="alert" className="notice">
-              {t("Torrent information is unavailable.")} {error}
+              {t("Torrent information is unavailable.")} {translateText(error)}
             </p>
           )}
           {items && (
@@ -98,11 +100,13 @@ export function DashboardTorrents({ apps }: { apps?: AppInfo[] }) {
               <span>{t("{count} ongoing", { count: active.length })}</span>
               <span>
                 <ArrowDown size={14} aria-hidden="true" />
-                {bytes(items.reduce((sum, item) => sum + item.dlspeed, 0))}/s
+                {bytes(items.reduce((sum, item) => sum + item.dlspeed, 0))}
+                {t("/s")}
               </span>
               <span>
                 <ArrowUp size={14} aria-hidden="true" />
-                {bytes(items.reduce((sum, item) => sum + item.upspeed, 0))}/s
+                {bytes(items.reduce((sum, item) => sum + item.upspeed, 0))}
+                {t("/s")}
               </span>
             </div>
           )}
@@ -118,11 +122,18 @@ export function DashboardTorrents({ apps }: { apps?: AppInfo[] }) {
               <div className="dashboard-torrent-detail">
                 <span>
                   {torrentStateLabel(item.state)} ·{" "}
-                  {(item.progress * 100).toFixed(1)}%
+                  {(item.progress * 100).toLocaleString(getLocale(), {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                    useGrouping: false,
+                  })}
+                  %
                 </span>
                 <span>
-                  {t("Download")}: {bytes(item.dlspeed)}/s · {t("Upload")}:{" "}
-                  {bytes(item.upspeed)}/s
+                  {t("Download")}: {bytes(item.dlspeed)}
+                  {t("/s · ")}
+                  {t("Upload")}: {bytes(item.upspeed)}
+                  {t("/s")}
                 </span>
                 {item.progress < 1 && (
                   <span>

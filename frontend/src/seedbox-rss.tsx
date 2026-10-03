@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
@@ -84,9 +86,9 @@ export function SeedboxRSS({
       item.title.toLowerCase().includes(filter.toLowerCase()),
     ) || [];
   return (
-    <Panel title="RSS torrents">
+    <Panel title={t("RSS torrents")}>
       <ErrorBox error={error} />
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p role="status">{translateText(notice)}</p>}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -94,7 +96,7 @@ export function SeedboxRSS({
         }}
       >
         <label>
-          Private RSS address (including your RSS key)
+          {t("Private RSS address (including your RSS key)")}
           <input
             type="password"
             value={url}
@@ -104,19 +106,20 @@ export function SeedboxRSS({
             spellCheck={false}
             placeholder={
               feed?.configured
-                ? "Feed saved — enter a new address to replace it"
-                : "https://tracker.example/rss?key=…"
+                ? t("Feed saved — enter a new address to replace it")
+                : t("https://tracker.example/rss?key=…")
             }
           />
         </label>
         <p className="muted">
-          Copy the complete RSS address from your tracker. MediaHub stores it
-          encrypted. Feed and torrent-file requests use MediaHub's connection;
-          torrent transfers use the Seedbox VPN. Downloads are selected
-          manually.
+          {t(
+            "Copy the complete RSS address from your tracker. MediaHub stores it encrypted. Feed and torrent-file requests use MediaHub's connection; torrent transfers use the Seedbox VPN. Downloads are selected manually.",
+          )}
         </p>
         <div className="button-row">
-          <button disabled={busy || !url.trim()}>Save and load feed</button>
+          <button disabled={busy || !url.trim()}>
+            {t("Save and load feed")}
+          </button>
           {feed?.configured && (
             <>
               <button
@@ -124,28 +127,28 @@ export function SeedboxRSS({
                 disabled={busy}
                 onClick={() => void update("POST", "/seedbox/rss/refresh")}
               >
-                Refresh feed
+                {t("Refresh feed")}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void update("DELETE", "/seedbox/rss")}
               >
-                Remove feed
+                {t("Remove feed")}
               </button>
             </>
           )}
         </div>
       </form>
-      {busy && <p role="status">Working…</p>}
+      {busy && <p role="status">{t("Working…")}</p>}
       {feed?.configured && (
         <>
           <label>
-            Search feed
+            {t("Search feed")}
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Search titles…"
+              placeholder={t("Search titles…")}
             />
           </label>
           <div style={{ maxHeight: 400, overflowY: "auto" }}>
@@ -176,13 +179,14 @@ export function SeedboxRSS({
             ))}
             {!visible.length && (
               <p>
-                No matching torrents in this feed. Up to 200 recent entries are
-                shown.
+                {t(
+                  "No matching torrents in this feed. Up to 200 recent entries are shown.",
+                )}
               </p>
             )}
           </div>
           <label>
-            Download location
+            {t("Download location")}
             <select
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
@@ -190,7 +194,7 @@ export function SeedboxRSS({
             >
               {locations.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.storageLabel || "Downloads"}
+                  {item.storageLabel || t("Downloads")}
                 </option>
               ))}
             </select>
@@ -202,7 +206,7 @@ export function SeedboxRSS({
               disabled={busy}
               onChange={(e) => setStart(e.target.checked)}
             />
-            Start selected torrents immediately after safety checks
+            {t("Start selected torrents immediately after safety checks")}
           </label>
           <button
             className="primary"
@@ -214,7 +218,8 @@ export function SeedboxRSS({
             }
             onClick={() => void download()}
           >
-            Add selected ({selected.length}/20)
+            {t("Add selected (")}
+            {selected.length}/20)
           </button>
         </>
       )}

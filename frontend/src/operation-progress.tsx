@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useRef } from "react";
 import {
   AlertTriangle,
@@ -66,14 +68,16 @@ export function OperationProgress({
     return (
       <div className="operation-result">
         <p role={operation.status === "error" ? "alert" : "status"}>
-          {operation.message}
+          {translateText(operation.message)}
         </p>
         {lines.length > 0 && (
           <details className="operation-details">
             <summary>
-              {operation.console ? "Console" : "Technical details"}
+              {operation.console ? t("Console") : t("Technical details")}
             </summary>
-            <pre aria-label={operation.console ? "Update console" : undefined}>
+            <pre
+              aria-label={operation.console ? t("Update console") : undefined}
+            >
               {lines.map(redactOperationDetail).join("\n")}
             </pre>
           </details>
@@ -86,14 +90,14 @@ export function OperationProgress({
     <section
       className={`operation-progress ${operation.status}`}
       role={operation.status === "error" ? "alert" : "status"}
-      aria-label={`${operation.title} progress`}
+      aria-label={t("{value0} progress", { value0: operation.title })}
       aria-live="polite"
     >
       <div className="operation-progress-heading">
         <div>
-          <span className="operation-kicker">Operation</span>
-          <h3>{operation.title}</h3>
-          <p>{operation.message}</p>
+          <span className="operation-kicker">{t("Operation")}</span>
+          <h3>{translateText(operation.title)}</h3>
+          <p>{translateText(operation.message)}</p>
         </div>
         <strong>{progress}%</strong>
       </div>
@@ -106,7 +110,9 @@ export function OperationProgress({
         aria-valuenow={operation.connectionLost ? undefined : progress}
         aria-valuetext={
           operation.connectionLost
-            ? `Last known progress: ${progress}%. Waiting for connection.`
+            ? t("Last known progress: {value0}%. Waiting for connection.", {
+                value0: progress,
+              })
             : undefined
         }
       >
@@ -115,16 +121,17 @@ export function OperationProgress({
       {operation.connectionLost && (
         <p className="muted">
           <LoaderCircle className="spin" size={14} aria-hidden="true" />{" "}
-          Reconnecting ? {progress}% and the steps below are the last received
-          status.
+          {t("Reconnecting ? ")}
+          {progress}
+          {t("% and the steps below are the last received status.")}
         </p>
       )}
       <ol
         className="operation-steps"
         aria-label={
           operation.connectionLost
-            ? "Last received update steps"
-            : "Update steps"
+            ? t("Last received update steps")
+            : t("Update steps")
         }
       >
         {operation.steps.map((step, index) => (
@@ -143,7 +150,7 @@ export function OperationProgress({
                   : step.state
               }
             />
-            <span>{step.label}</span>
+            <span>{translateText(step.label)}</span>
           </li>
         ))}
       </ol>
@@ -161,7 +168,9 @@ export function OperationProgress({
           }}
         >
           <summary>
-            <span>{operation.console ? "Console" : "Technical details"}</span>
+            <span>
+              {operation.console ? t("Console") : t("Technical details")}
+            </span>
             <ChevronDown size={16} />
           </summary>
           <pre
@@ -171,7 +180,7 @@ export function OperationProgress({
               followConsole.current =
                 view.scrollHeight - view.clientHeight - view.scrollTop < 24;
             }}
-            aria-label={operation.console ? "Update console" : undefined}
+            aria-label={operation.console ? t("Update console") : undefined}
           >
             {[...operation.details, ...(operation.console || [])]
               .map(redactOperationDetail)

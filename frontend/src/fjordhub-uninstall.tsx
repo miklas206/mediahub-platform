@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
@@ -114,59 +116,63 @@ export function FjordHubUninstallPage() {
     plan?.preserveMounts.filter((mount) => mount.kind === "gpu") || [];
   return (
     <div className="stack">
-      <Link to="/store">← Back to App Store</Link>
-      <h2>Uninstall FjordHub</h2>
+      <Link to="/store">{t("← Back to App Store")}</Link>
+      <h2>{t("Uninstall FjordHub")}</h2>
       <p>
-        Remove the dedicated FjordHub LXC, its apps (including FjordFlix),
-        Docker data and settings. External media on shared storage are
-        preserved.
+        {t(
+          "Remove the dedicated FjordHub LXC, its apps (including FjordFlix), Docker data and settings. External media on shared storage are preserved.",
+        )}
       </p>
       {error && (!job || removed || !supported) && (
         <p className="error" role="alert">
-          {error}
+          {translateText(error)}
         </p>
       )}
       {!loaded && !error && (
-        <p role="status">Loading the recorded installation…</p>
+        <p role="status">{t("Loading the recorded installation…")}</p>
       )}
       {loaded && !job && (
         <p className="notice">
-          No MediaHub deployment is recorded. Automatic removal is unavailable
-          because ownership cannot be verified.
+          {t(
+            "No MediaHub deployment is recorded. Automatic removal is unavailable because ownership cannot be verified.",
+          )}
         </p>
       )}
       {removed && (
         <p className="notice" role="status">
-          {job.uninstall?.message}
+          {translateText(job.uninstall?.message)}
         </p>
       )}
       {job && !removed && (
-        <Panel title="Review this installation before removal">
+        <Panel title={t("Review this installation before removal")}>
           <div className="stack">
             <p>
-              Recorded Proxmox server: <strong>{job.host}</strong>
+              {t("Recorded Proxmox server: ")}
+              <strong>{job.host}</strong>
             </p>
             {!supported ? (
               <p className="notice">
-                Wait for an active installation to finish. Full automatic
-                removal is only supported for a dedicated LXC created through
-                MediaHub; shared Debian hosts require manual cleanup.
+                {t(
+                  "Wait for an active installation to finish. Full automatic removal is only supported for a dedicated LXC created through MediaHub; shared Debian hosts require manual cleanup.",
+                )}
               </p>
             ) : (
               <>
                 {job.uninstall?.state === "removing" && (
                   <p className="notice">
-                    A removal was started. If it is still running, a new check
-                    will be refused. If interrupted, inspect again to determine
-                    the actual state.
+                    {t(
+                      "A removal was started. If it is still running, a new check will be refused. If interrupted, inspect again to determine the actual state.",
+                    )}
                   </p>
                 )}
                 {job.uninstall?.state === "incomplete" && (
-                  <p className="notice">{job.uninstall.message}</p>
+                  <p className="notice">
+                    {translateText(job.uninstall.message)}
+                  </p>
                 )}
                 <fieldset disabled={pending} className="store-form-grid">
                   <label>
-                    SSH port
+                    {t("SSH port")}
                     <input
                       inputMode="numeric"
                       value={port}
@@ -179,7 +185,7 @@ export function FjordHubUninstallPage() {
                     />
                   </label>
                   <label>
-                    Root SSH password
+                    {t("Root SSH password")}
                     <input
                       type="password"
                       autoComplete="off"
@@ -189,16 +195,17 @@ export function FjordHubUninstallPage() {
                   </label>
                 </fieldset>
                 <p>
-                  The password is used for this operation only and is not saved.
-                  Keep MediaHub running until removal finishes.
+                  {t(
+                    "The password is used for this operation only and is not saved. Keep MediaHub running until removal finishes.",
+                  )}
                 </p>
                 <button disabled={pending} onClick={() => void checkHost()}>
-                  Check SSH connection
+                  {t("Check SSH connection")}
                 </button>
                 {fingerprint && (
                   <div className="notice stack">
                     <p>
-                      Compare this fingerprint with your Proxmox server:{" "}
+                      {t("Compare this fingerprint with your Proxmox server:")}{" "}
                       <code style={{ overflowWrap: "anywhere" }}>
                         {fingerprint}
                       </code>
@@ -210,7 +217,7 @@ export function FjordHubUninstallPage() {
                         checked={trusted}
                         onChange={(e) => setTrusted(e.target.checked)}
                       />{" "}
-                      I recognize and trust this server fingerprint.
+                      {t("I recognize and trust this server fingerprint.")}
                     </label>
                   </div>
                 )}
@@ -218,7 +225,7 @@ export function FjordHubUninstallPage() {
                   disabled={pending || !trusted || !password}
                   onClick={() => void inspectOrRemove(false)}
                 >
-                  {pending ? "Working…" : "Preview uninstall"}
+                  {pending ? t("Working…") : t("Preview uninstall")}
                 </button>
                 {error && (
                   <div
@@ -227,14 +234,22 @@ export function FjordHubUninstallPage() {
                     tabIndex={-1}
                     ref={feedback}
                   >
-                    <strong>The uninstall check could not complete</strong>
-                    <p>{error}</p>
+                    <strong>
+                      {t("The uninstall check could not complete")}
+                    </strong>
+                    <p>{translateText(error)}</p>
                   </div>
                 )}
                 {plan?.state === "ready" && (
-                  <section className="stack" aria-label="Uninstall plan">
-                    <h3>Remove LXC {plan.ctid} permanently</h3>
-                    <p>These system and app-data disks will be deleted:</p>
+                  <section className="stack" aria-label={t("Uninstall plan")}>
+                    <h3>
+                      {t("Remove LXC ")}
+                      {plan.ctid}
+                      {t(" permanently")}
+                    </h3>
+                    <p>
+                      {t("These system and app-data disks will be deleted:")}
+                    </p>
                     <ul>
                       {plan.deleteDisks.map((disk) => (
                         <li key={disk.slot}>
@@ -243,14 +258,14 @@ export function FjordHubUninstallPage() {
                       ))}
                     </ul>
                     <p>
-                      Apps and containers:{" "}
-                      {plan.containers.join(", ") || "None found"}.
+                      {t("Apps and containers:")}{" "}
+                      {plan.containers.join(", ") || t("None found")}.
                     </p>
                     <p>
-                      Dedicated Proxmox accounts:{" "}
-                      {plan.accounts.join(", ") || "None found"}.
+                      {t("Dedicated Proxmox accounts:")}{" "}
+                      {plan.accounts.join(", ") || t("None found")}.
                     </p>
-                    <h3>External storage is preserved</h3>
+                    <h3>{t("External storage is preserved")}</h3>
                     {externalMounts.length ? (
                       <ul>
                         {externalMounts.map((mount) => (
@@ -261,15 +276,18 @@ export function FjordHubUninstallPage() {
                       </ul>
                     ) : (
                       <p>
-                        No external bind mounts were found in this LXC. Shared
-                        media elsewhere are untouched.
+                        {t(
+                          "No external bind mounts were found in this LXC. Shared media elsewhere are untouched.",
+                        )}
                       </p>
                     )}
                     {gpuMounts.length > 0 && (
                       <details>
                         <summary>
-                          {gpuMounts.length} GPU mounts — host drivers and
-                          devices preserved
+                          {gpuMounts.length}
+                          {t(
+                            " GPU mounts — host drivers and devices preserved",
+                          )}
                         </summary>
                         <ul>
                           {gpuMounts.map((mount) => (
@@ -281,9 +299,9 @@ export function FjordHubUninstallPage() {
                       </details>
                     )}
                     <p>
-                      The matching MediaHub connection is removed. Installation
-                      history is retained. Extra managed disks, snapshots or
-                      detected media on internal disks block removal.
+                      {t(
+                        "The matching MediaHub connection is removed. Installation history is retained. Extra managed disks, snapshots or detected media on internal disks block removal.",
+                      )}
                     </p>
                     <label>
                       <input
@@ -292,12 +310,14 @@ export function FjordHubUninstallPage() {
                         checked={external}
                         onChange={(e) => setExternal(e.target.checked)}
                       />{" "}
-                      All my media are on external storage. The system and
-                      app-data disks listed above contain no media I want to
-                      keep.
+                      {t(
+                        "All my media are on external storage. The system and app-data disks listed above contain no media I want to keep.",
+                      )}
                     </label>
                     <label>
-                      Type LXC ID {plan.ctid} to confirm
+                      {t("Type LXC ID ")}
+                      {plan.ctid}
+                      {t(" to confirm")}
                       <input
                         disabled={pending}
                         value={confirmation}
@@ -314,7 +334,7 @@ export function FjordHubUninstallPage() {
                       }
                       onClick={() => void inspectOrRemove(true)}
                     >
-                      Permanently uninstall FjordHub
+                      {t("Permanently uninstall FjordHub")}
                     </button>
                   </section>
                 )}

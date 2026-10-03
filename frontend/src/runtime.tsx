@@ -1,4 +1,5 @@
-import { getLocale, t } from "./i18n";
+import { translateText, getLocale, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { runtimeIssues } from "./runtime-issues";
 import { seedboxStatus } from "./seedbox-status";
@@ -172,7 +173,7 @@ const localPlexUrl = () => {
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="runtime-row">
-      <dt>{typeof label === "string" ? t(label) : label}</dt>
+      <dt>{typeof label === "string" ? t(label) : translateText(label)}</dt>
       <dd>{typeof value === "string" ? t(value) : value}</dd>
     </div>
   );
@@ -198,7 +199,7 @@ export function DeviceDiagnostics({ report: r }: { report: Runtime }) {
           <div key={d.id}>
             <strong>{d.id}</strong>
             <Verified value={d.connected} />
-            <span>{d.message}</span>
+            <span>{translateText(d.message)}</span>
           </div>
         ))}
       </div>
@@ -322,7 +323,7 @@ function SeedboxPanel({
             <h3>{t("Torrent port forwarding")}</h3>
             {r.portForwarding?.lastError && (
               <p role="alert" className="notice">
-                {r.portForwarding.lastError}
+                {translateText(r.portForwarding.lastError)}
               </p>
             )}
             <dl>
@@ -392,11 +393,17 @@ function SeedboxPanel({
               </div>
               <div>
                 <span>{t("Download")}</span>
-                <strong>{size(q?.downloadSpeed)}/s</strong>
+                <strong>
+                  {size(q?.downloadSpeed)}
+                  {t("/s")}
+                </strong>
               </div>
               <div>
                 <span>{t("Upload")}</span>
-                <strong>{size(q?.uploadSpeed)}/s</strong>
+                <strong>
+                  {size(q?.uploadSpeed)}
+                  {t("/s")}
+                </strong>
               </div>
               {[
                 [t("Total"), counts?.torrents],
@@ -406,7 +413,11 @@ function SeedboxPanel({
                 [t("Errors"), counts?.errors],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <span>{typeof label === "string" ? t(label) : label}</span>
+                  <span>
+                    {typeof label === "string"
+                      ? t(label)
+                      : translateText(label)}
+                  </span>
                   <strong>{value ?? "\u2014"}</strong>
                 </div>
               ))}
@@ -494,7 +505,7 @@ function SeedboxPanel({
                 value={
                   host?.cpuPercent == null
                     ? t("Sampling / unavailable")
-                    : `${host.cpuPercent.toFixed(1)}% · ${host.cpuCores} cores`
+                    : `${host.cpuPercent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}% · ${host.cpuCores} cores`
                 }
               />
               <Row label={t("RAM used")} value={size(host?.ramUsedBytes)} />
@@ -538,11 +549,11 @@ function RuntimeIssues({
         {["critical", "unhealthy", "offline"].includes(report.health)
           ? t("Action required")
           : t("Warning")}
-        : what needs attention
+        {t(": what needs attention")}
       </strong>
       <ul>
         {issues.map((issue) => (
-          <li key={issue}>{issue}</li>
+          <li key={issue}>{t(issue)}</li>
         ))}
       </ul>
     </div>
@@ -558,7 +569,9 @@ function PlexPanel({ report: r }: { report: Runtime }) {
           <h1>{t("Your media library")}</h1>
           <p>{t("Managed by the local MediaHub Agent · read-only media")}</p>
         </div>
-        <div className={`runtime-health ${r.health}`}>{r.health}</div>
+        <div className={`runtime-health ${r.health}`}>
+          {translateText(r.health)}
+        </div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
       <LayoutGroup id="runtime-extra-1" className="runtime-panels">
@@ -595,7 +608,7 @@ function PlexPanel({ report: r }: { report: Runtime }) {
               value={
                 p?.cpuPercent == null
                   ? t("Sampling / unavailable")
-                  : `${p.cpuPercent.toFixed(1)}%`
+                  : `${p.cpuPercent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}%`
               }
             />
           </dl>
@@ -656,7 +669,10 @@ function PlexPanel({ report: r }: { report: Runtime }) {
               <span>
                 {l.count === undefined
                   ? l.type
-                  : `${l.count} items · ${l.type}`}
+                  : t("{value0} items · {value1}", {
+                      value0: l.count,
+                      value1: l.type,
+                    })}
               </span>
             </div>
           ))}
@@ -689,7 +705,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
         </div>
         <div className={`runtime-health ${r.health}`}>
           <Cloud size={22} />
-          {r.health}
+          {translateText(r.health)}
         </div>
       </header>
       <div className="runtime-observed">
@@ -765,7 +781,7 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
                 <div className="runtime-row" key={route.url}>
                   <dt>
                     <strong>{route.hostname}</strong>
-                    <small>{route.message}</small>
+                    <small>{translateText(route.message)}</small>
                   </dt>
                   <dd>
                     <Verified value={route.reachable} />
@@ -781,9 +797,9 @@ function CloudflaredPanel({ report: r }: { report: Runtime }) {
             <p>{t("No public route probes are configured.")}</p>
           )}
           <p className="muted">
-            A login response or redirect still proves that Cloudflare can reach
-            the origin. Server errors and connection failures are reported as
-            unavailable.
+            {t(
+              "A login response or redirect still proves that Cloudflare can reach the origin. Server errors and connection failures are reported as unavailable.",
+            )}
           </p>
         </Panel>
       </LayoutGroup>
@@ -876,7 +892,8 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
           .reverse()
           .map((e, i) => (
             <p key={i}>
-              {stamp(e.timestamp)} · {e.severity} · {e.message}
+              {stamp(e.timestamp)} · {translateText(e.severity)} ·{" "}
+              {translateText(e.message)}
               <small>
                 {" "}
                 · {e.app} / {e.hostId}
@@ -1021,7 +1038,7 @@ export function AppRuntimePage() {
               className={section === key ? "selected" : ""}
               aria-current={section === key ? "page" : undefined}
             >
-              {typeof label === "string" ? t(label) : label}
+              {typeof label === "string" ? t(label) : translateText(label)}
             </Link>
           ))}
         </nav>
@@ -1084,7 +1101,7 @@ export function AppRuntimePage() {
             )}
           </div>
           <p role="status">
-            {updateResult ||
+            {translateText(updateResult) ||
               t("No release check has been run in this session.")}
           </p>
           {actionError && <div role="alert">{actionError}</div>}
@@ -1130,7 +1147,7 @@ export function AppRuntimePage() {
                   }
                   onClick={() => act(action)}
                 >
-                  {typeof label === "string" ? t(label) : label}
+                  {typeof label === "string" ? t(label) : translateText(label)}
                 </button>
               ))}
             </div>
@@ -1165,19 +1182,21 @@ export function AppRuntimePage() {
                   )}
                 </div>
                 <p role="status">
-                  {data.report.operation?.message || updateResult}
+                  {translateText(data.report.operation?.message) ||
+                    translateText(updateResult)}
                 </p>
               </>
             )}
             <p role="status">
               {control?.operation.action || t("No operation")}:{" "}
-              {control?.operation.state || "idle"} {control?.operation.message}
+              {translateText(control?.operation.state) || t("idle")}{" "}
+              {translateText(control?.operation.message)}
             </p>
             {!!control?.manualIntervention.length && (
               <div role="alert">
                 {t("Manual intervention required:")}{" "}
-                {control.manualIntervention.join(", ")}. Automatic retries are
-                stopped.
+                {control.manualIntervention.join(", ")}
+                {t(". Automatic retries are stopped.")}
               </div>
             )}
             <button onClick={() => setShowLogs(!showLogs)}>
@@ -1191,7 +1210,9 @@ export function AppRuntimePage() {
                     : t("Open qBittorrent")}
                 </a>
                 {data.view === "seedbox" &&
-                  " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled."}
+                  t(
+                    " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled.",
+                  )}
               </p>
             )}
             {showLogs && data.view === "plex" && appId && (
@@ -1235,7 +1256,8 @@ export function AppRuntimePage() {
                   .reverse()
                   .map((e, i) => (
                     <p key={i}>
-                      {stamp(e.timestamp)} · {e.severity} · {e.message}
+                      {stamp(e.timestamp)} · {translateText(e.severity)} ·{" "}
+                      {translateText(e.message)}
                     </p>
                   ))}
               </>

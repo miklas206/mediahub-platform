@@ -1,4 +1,5 @@
-import { t } from "./i18n";
+import { getLocale, t } from "./i18n";
+
 export type RetentionRule = {
   mode: "disabled" | "time" | "ratio" | "both" | "either";
   seedHours: number;
@@ -97,7 +98,11 @@ export function TorrentRetention({
               >
                 {[1, 1.5, 2, 3, 5].map((r) => (
                   <option key={r} value={r}>
-                    {r.toFixed(1)}
+                    {r.toLocaleString(getLocale(), {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                      useGrouping: false,
+                    })}
                     {t(" — upload ")}
                     {r}
                     {t("× the content size")}

@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
@@ -30,11 +32,12 @@ export function AppStorePage() {
           <Store size={28} />
         </div>
         <div>
-          <p className="eyebrow">MEDIAHUB APP STORE</p>
-          <h2>Add only what you need.</h2>
+          <p className="eyebrow">{t("MEDIAHUB APP STORE")}</p>
+          <h2>{t("Add only what you need.")}</h2>
           <p>
-            Guided setup keeps required choices visible, stores secrets safely
-            and never changes DNS, storage or containers without a clear step.
+            {t(
+              "Guided setup keeps required choices visible, stores secrets safely and never changes DNS, storage or containers without a clear step.",
+            )}
           </p>
         </div>
       </section>
@@ -48,33 +51,35 @@ export function CloudflareStorePage() {
   return (
     <div className="stack store-install-page">
       <Link className="text-link" to="/store">
-        ← Back to App Store
+        {t("← Back to App Store")}
       </Link>
-      <Panel title="What MediaHub can prepare">
+      <Panel title={t("What MediaHub can prepare")}>
         <div className="store-discovery-grid">
           <div>
             <Check size={18} />
-            <strong>Detected automatically</strong>
+            <strong>{t("Detected automatically")}</strong>
             <p>
-              The current private MediaHub address, HTTPS protocol and the
-              health endpoints used after setup.
+              {t(
+                "The current private MediaHub address, HTTPS protocol and the health endpoints used after setup.",
+              )}
             </p>
           </div>
           <div>
             <PackagePlus size={18} />
-            <strong>You provide</strong>
+            <strong>{t("You provide")}</strong>
             <p>
-              The tunnel name, public hostname and any optional local metrics
-              URL. Cloudflare itself provides the connector token for a new
-              tunnel.
+              {t(
+                "The tunnel name, public hostname and any optional local metrics URL. Cloudflare itself provides the connector token for a new tunnel.",
+              )}
             </p>
           </div>
           <div>
             <ShieldCheck size={18} />
-            <strong>Never requested</strong>
+            <strong>{t("Never requested")}</strong>
             <p>
-              MediaHub does not need an account-wide Cloudflare API token and
-              does not disable TLS certificate verification.
+              {t(
+                "MediaHub does not need an account-wide Cloudflare API token and does not disable TLS certificate verification.",
+              )}
             </p>
           </div>
         </div>
@@ -82,9 +87,10 @@ export function CloudflareStorePage() {
       {saved && (
         <div className="success store-success" role="status">
           <Check size={18} />
-          Cloudflare Tunnel is now registered. Future visits show saved profiles
-          and “Edit configuration” instead of repeating first-time setup.
-          <Link to="/apps">Open installed apps →</Link>
+          {t(
+            "Cloudflare Tunnel is now registered. Future visits show saved profiles and “Edit configuration” instead of repeating first-time setup.",
+          )}
+          <Link to="/apps">{t("Open installed apps →")}</Link>
         </div>
       )}
       <CloudflareSetupManager onSaved={() => setSaved(true)} />
@@ -126,10 +132,14 @@ export function FjordHubStorePage() {
         disabled={step === 0 || deploying}
         onClick={() => setStep((value) => Math.max(0, value - 1))}
       >
-        <ChevronLeft size={16} /> Back
+        <ChevronLeft size={16} />
+        {t(" Back")}
       </button>
       <span>
-        Step {step + 1} of {fjordHubSteps.length}: {fjordHubSteps[step]}
+        {t("Step ")}
+        {step + 1}
+        {t(" of ")}
+        {fjordHubSteps.length}: {translateText(fjordHubSteps[step])}
       </span>
       {step < 3 ? (
         <button
@@ -142,13 +152,15 @@ export function FjordHubStorePage() {
             )
           }
         >
-          Continue to{" "}
-          {fjordHubSteps[step === 0 && mode === "existing" ? 3 : step + 1]}{" "}
+          {t("Continue to")}{" "}
+          {translateText(
+            fjordHubSteps[step === 0 && mode === "existing" ? 3 : step + 1],
+          )}{" "}
           <ChevronRight size={16} />
         </button>
       ) : (
         <Link className="primary" to="/integrations">
-          Manage integrations →
+          {t("Manage integrations →")}
         </Link>
       )}
     </div>
@@ -157,23 +169,26 @@ export function FjordHubStorePage() {
   return (
     <div className="stack store-install-page">
       <Link className="text-link" to="/store">
-        ← Back to App Store
+        {t("← Back to App Store")}
       </Link>
-      <Panel title="Guided FjordHub deployment">
+      <Panel title={t("Guided FjordHub deployment")}>
         <div className="assisted-setup-intro">
           <div className="store-hero-icon">
             <PackagePlus size={22} />
           </div>
           <div>
-            <strong>Official source, explicit choices</strong>
+            <strong>{t("Official source, explicit choices")}</strong>
             <p className="muted">
-              MediaHub links to FjordHub’s public source and explains every host
-              value. It does not silently mount the Docker socket or claim a
-              port on your server.
+              {t(
+                "MediaHub links to FjordHub’s public source and explains every host value. It does not silently mount the Docker socket or claim a port on your server.",
+              )}
             </p>
           </div>
         </div>
-        <ol className="assisted-steps" aria-label="FjordHub setup progress">
+        <ol
+          className="assisted-steps"
+          aria-label={t("FjordHub setup progress")}
+        >
           {fjordHubSteps.map((label, index) => (
             <li
               className={
@@ -183,7 +198,7 @@ export function FjordHubStorePage() {
               key={label}
             >
               <span>{index < step ? <Check size={14} /> : index + 1}</span>
-              {label}
+              {translateText(label)}
             </li>
           ))}
         </ol>
@@ -193,24 +208,28 @@ export function FjordHubStorePage() {
           tabIndex={-1}
           className="fjordhub-step-navigation"
           role="group"
-          aria-label={`Step ${step + 1} of ${fjordHubSteps.length}: ${fjordHubSteps[step]}`}
+          aria-label={t("Step {value0} of {value1}: {value2}", {
+            value0: step + 1,
+            value1: fjordHubSteps.length,
+            value2: fjordHubSteps[step],
+          })}
         >
           {navigation}
         </div>
 
         {step === 0 && (
           <div className="assisted-step">
-            <p className="eyebrow">STEP 1 · DEPLOYMENT</p>
-            <h3>Do you already run FjordHub?</h3>
+            <p className="eyebrow">{t("STEP 1 · DEPLOYMENT")}</p>
+            <h3>{t("Do you already run FjordHub?")}</h3>
             <div className="setup-choice-grid">
               <button
                 type="button"
                 className={mode === "new" ? "selected" : ""}
                 onClick={() => setMode("new")}
               >
-                <strong>Prepare a new installation</strong>
+                <strong>{t("Prepare a new installation")}</strong>
                 <span>
-                  Use FjordHub’s official repository and Docker Compose.
+                  {t("Use FjordHub’s official repository and Docker Compose.")}
                 </span>
               </button>
               <button
@@ -218,8 +237,10 @@ export function FjordHubStorePage() {
                 className={mode === "existing" ? "selected" : ""}
                 onClick={() => setMode("existing")}
               >
-                <strong>Connect an existing FjordHub</strong>
-                <span>Skip deployment and add its read-only Access Token.</span>
+                <strong>{t("Connect an existing FjordHub")}</strong>
+                <span>
+                  {t("Skip deployment and add its read-only Access Token.")}
+                </span>
               </button>
             </div>
             <a
@@ -227,33 +248,38 @@ export function FjordHubStorePage() {
               target="_blank"
               rel="noreferrer"
             >
-              Open the verified FjordHub source <ExternalLink size={14} />
+              {t("Open the verified FjordHub source ")}
+              <ExternalLink size={14} />
             </a>
           </div>
         )}
 
         {step === 1 && (
           <div className="assisted-step">
-            <p className="eyebrow">STEP 2 · STORAGE & PORTS</p>
-            <h3>Choose paths that survive container replacement</h3>
+            <p className="eyebrow">{t("STEP 2 · STORAGE & PORTS")}</p>
+            <h3>{t("Choose paths that survive container replacement")}</h3>
             <label>
-              Installation target
+              {t("Installation target")}
               <select
                 value={config.target}
                 onChange={(event) => field("target", event.target.value)}
               >
-                <option value="lxc">Create a new Proxmox LXC</option>
-                <option value="linux">Use an existing Debian host</option>
+                <option value="lxc">{t("Create a new Proxmox LXC")}</option>
+                <option value="linux">
+                  {t("Use an existing Debian host")}
+                </option>
               </select>
             </label>
             {config.target === "lxc" && (
               <>
                 <p className="muted">
-                  Recommended: 4 CPU cores and 10 GiB RAM (10240 MiB). Debian
-                  13, unprivileged LXC with Docker nesting. Storage names and
-                  bridge are defaults, not detected from your server. Use{" "}
-                  <code>pvesm status</code> and <code>ip link show</code> in the
-                  Proxmox shell to check them.
+                  {t(
+                    "Recommended: 4 CPU cores and 10 GiB RAM (10240 MiB). Debian 13, unprivileged LXC with Docker nesting. Storage names and bridge are defaults, not detected from your server. Use",
+                  )}{" "}
+                  <code>pvesm status</code>
+                  {t(" and ")}
+                  <code>ip link show</code>
+                  {t(" in the Proxmox shell to check them.")}
                 </p>
                 <div className="store-form-grid">
                   {(
@@ -270,7 +296,7 @@ export function FjordHubStorePage() {
                     ] as const
                   ).map(([key, label]) => (
                     <label key={key}>
-                      {label}
+                      {translateText(label)}
                       <input
                         value={config[key]}
                         onChange={(event) => field(key, event.target.value)}
@@ -278,19 +304,19 @@ export function FjordHubStorePage() {
                     </label>
                   ))}
                   <label>
-                    Network configuration
+                    {t("Network configuration")}
                     <select
                       value={config.network}
                       onChange={(event) => field("network", event.target.value)}
                     >
-                      <option value="dhcp">DHCP</option>
-                      <option value="static">Static IPv4</option>
+                      <option value="dhcp">{t("DHCP")}</option>
+                      <option value="static">{t("Static IPv4")}</option>
                     </select>
                   </label>
                   {config.network === "static" && (
                     <>
                       <label>
-                        IPv4 address/prefix
+                        {t("IPv4 address/prefix")}
                         <input
                           placeholder="192.168.1.50/24"
                           value={config.address}
@@ -300,7 +326,7 @@ export function FjordHubStorePage() {
                         />
                       </label>
                       <label>
-                        IPv4 gateway
+                        {t("IPv4 gateway")}
                         <input
                           placeholder="192.168.1.1"
                           value={config.gateway}
@@ -316,50 +342,47 @@ export function FjordHubStorePage() {
             )}
             <div className="store-form-grid">
               <label>
-                FjordHub source path
+                {t("FjordHub source path")}
                 <input
                   value={installPath}
                   onChange={(event) => field("installPath", event.target.value)}
                 />
                 <small>
-                  Dedicated folder for the Git checkout and Compose file.
+                  {t("Dedicated folder for the Git checkout and Compose file.")}
                 </small>
               </label>
               <label>
-                Persistent app-data path
+                {t("Persistent app-data path")}
                 <input
                   value={dataPath}
                   onChange={(event) => field("dataPath", event.target.value)}
                 />
                 <small>
-                  Path inside the guest. LXC mode creates a separate managed
-                  data disk here, included in backups. Existing media folders
-                  must be mounted separately; selecting a storage pool does not
-                  import files.
+                  {t(
+                    "Path inside the guest. LXC mode creates a separate managed data disk here, included in backups. Existing media folders must be mounted separately; selecting a storage pool does not import files.",
+                  )}
                 </small>
               </label>
               {config.target === "lxc" && (
                 <p className="muted">
-                  LXC setup creates a dedicated read-only Proxmox API account
-                  (PVEAuditor across the cluster) and verifies storage
-                  discovery. The API connection uses FjordHub's default
-                  self-signed TLS mode without certificate verification. Use a
-                  trusted private network.
+                  {t(
+                    "LXC setup creates a dedicated read-only Proxmox API account (PVEAuditor across the cluster) and verifies storage discovery. The API connection uses FjordHub's default self-signed TLS mode without certificate verification. Use a trusted private network.",
+                  )}
                 </p>
               )}
               <label>
-                Direct FjordHub port
+                {t("Direct FjordHub port")}
                 <input
                   inputMode="numeric"
                   value={appPort}
                   onChange={(event) => field("appPort", event.target.value)}
                 />
                 <small>
-                  Confirm that this port is free on the selected host.
+                  {t("Confirm that this port is free on the selected host.")}
                 </small>
               </label>
               <label>
-                Timezone
+                {t("Timezone")}
                 <input
                   value={timezone}
                   onChange={(event) => field("timezone", event.target.value)}
@@ -369,17 +392,16 @@ export function FjordHubStorePage() {
             {errors.length > 0 && (
               <div className="notice" role="alert">
                 {errors.map((error) => (
-                  <p key={error}>{error}</p>
+                  <p key={error}>{translateText(error)}</p>
                 ))}
               </div>
             )}
             <div className="setup-safety-note">
               <ShieldCheck size={20} />
               <p>
-                FjordHub controls Docker through the host socket, which is
-                effectively administrator access to that Docker host. A
-                dedicated trusted LXC or VM is recommended. Its bundled Traefik
-                also uses ports 80 and 8080 unless you change them.
+                {t(
+                  "FjordHub controls Docker through the host socket, which is effectively administrator access to that Docker host. A dedicated trusted LXC or VM is recommended. Its bundled Traefik also uses ports 80 and 8080 unless you change them.",
+                )}
               </p>
             </div>
           </div>
@@ -393,15 +415,15 @@ export function FjordHubStorePage() {
 
         {step === 3 && (
           <div className="assisted-step fjordhub-connect-step">
-            <p className="eyebrow">STEP 4 · CONNECT READ-ONLY</p>
-            <h3>Create a FjordHub Access Token</h3>
+            <p className="eyebrow">{t("STEP 4 · CONNECT READ-ONLY")}</p>
+            <h3>{t("Create a FjordHub Access Token")}</h3>
             <FjordHubTokenGuide baseUrl={fjordHubUrl} />
             <div className="setup-safety-note">
               <HardDrive size={20} />
               <p>
-                Connecting FjordHub does not grant MediaHub write access to its
-                storage, containers or users. It remains an optional external
-                integration, not a MediaHub Agent.
+                {t(
+                  "Connecting FjordHub does not grant MediaHub write access to its storage, containers or users. It remains an optional external integration, not a MediaHub Agent.",
+                )}
               </p>
             </div>
           </div>

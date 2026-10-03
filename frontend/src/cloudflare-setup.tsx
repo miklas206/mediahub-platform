@@ -1,3 +1,5 @@
+import { translateText, t } from "./i18n";
+
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -210,7 +212,9 @@ function CloudflareSetupEditor({
   return (
     <Panel
       title={
-        profile ? "Edit Cloudflare configuration" : "Assisted Cloudflare setup"
+        profile
+          ? t("Edit Cloudflare configuration")
+          : t("Assisted Cloudflare setup")
       }
     >
       <div className="assisted-setup-intro">
@@ -220,31 +224,35 @@ function CloudflareSetupEditor({
         <div>
           <strong>
             {profile
-              ? `Edit ${profile.name}`
-              : "Set up without command-line guesswork"}
+              ? t("Edit {value0}", { value0: profile.name })
+              : t("Set up without command-line guesswork")}
           </strong>
           <p className="muted">
-            MediaHub saves only non-secret monitoring details. It never receives
-            an account-wide Cloudflare API token and never opens a router port.
+            {t(
+              "MediaHub saves only non-secret monitoring details. It never receives an account-wide Cloudflare API token and never opens a router port.",
+            )}
           </p>
         </div>
       </div>
-      <ol className="assisted-steps" aria-label="Cloudflare setup progress">
+      <ol
+        className="assisted-steps"
+        aria-label={t("Cloudflare setup progress")}
+      >
         {["Tunnel", "Routes", "Monitoring", "Review"].map((label, index) => (
           <li
             className={index === step ? "current" : index < step ? "done" : ""}
             key={label}
           >
             <span>{index < step ? <Check size={14} /> : index + 1}</span>
-            {label}
+            {translateText(label)}
           </li>
         ))}
       </ol>
       <ErrorBox error={error || catalog.error} />
       {step === 0 && (
         <div className="assisted-step">
-          <p className="eyebrow">STEP 1 · TUNNEL</p>
-          <h3>Are you using an existing tunnel?</h3>
+          <p className="eyebrow">{t("STEP 1 · TUNNEL")}</p>
+          <h3>{t("Are you using an existing tunnel?")}</h3>
           <div className="setup-choice-grid">
             <button
               className={
@@ -253,9 +261,11 @@ function CloudflareSetupEditor({
               onClick={() => update("setup_mode", "existing-tunnel")}
               type="button"
             >
-              <strong>Use an existing tunnel</strong>
+              <strong>{t("Use an existing tunnel")}</strong>
               <span>
-                Best when Cloudflare already shows the connector as healthy.
+                {t(
+                  "Best when Cloudflare already shows the connector as healthy.",
+                )}
               </span>
             </button>
             <button
@@ -263,30 +273,34 @@ function CloudflareSetupEditor({
               onClick={() => update("setup_mode", "new-tunnel")}
               type="button"
             >
-              <strong>Prepare a new tunnel</strong>
+              <strong>{t("Prepare a new tunnel")}</strong>
               <span>
-                Follow Cloudflare's official creation flow, then return here.
+                {t(
+                  "Follow Cloudflare's official creation flow, then return here.",
+                )}
               </span>
             </button>
           </div>
           <label>
-            Tunnel name
+            {t("Tunnel name")}
             <input
               value={values.tunnel_name}
               onChange={(event) => update("tunnel_name", event.target.value)}
-              placeholder="For example: My home tunnel"
+              placeholder={t("For example: My home tunnel")}
               maxLength={100}
             />
-            <small>A friendly label for the actual tunnel in Cloudflare.</small>
+            <small>
+              {t("A friendly label for the actual tunnel in Cloudflare.")}
+            </small>
           </label>
           {values.setup_mode === "new-tunnel" && (
             <p className="notice">
-              Create the tunnel in Cloudflare, deploy the shown connector, and
-              add the published application. MediaHub deliberately does not ask
-              for your account API token.{" "}
+              {t(
+                "Create the tunnel in Cloudflare, deploy the shown connector, and add the published application. MediaHub deliberately does not ask for your account API token.",
+              )}{" "}
               {steps[1]?.helpUrl && (
                 <a href={steps[1].helpUrl} target="_blank" rel="noreferrer">
-                  Open official tunnel instructions →
+                  {t("Open official tunnel instructions →")}
                 </a>
               )}
             </p>
@@ -295,107 +309,108 @@ function CloudflareSetupEditor({
       )}
       {step === 1 && (
         <div className="assisted-step">
-          <p className="eyebrow">STEP 2 · PUBLISHED ROUTES</p>
-          <h3>Tell MediaHub which public routes to verify</h3>
+          <p className="eyebrow">{t("STEP 2 · PUBLISHED ROUTES")}</p>
+          <h3>{t("Tell MediaHub which public routes to verify")}</h3>
           <p className="muted">
-            One tunnel can publish several applications. Each hostname below is
-            a route, not another tunnel.
+            {t(
+              "One tunnel can publish several applications. Each hostname below is a route, not another tunnel.",
+            )}
           </p>
           <label>
-            Public hostnames
+            {t("Public hostnames")}
             <textarea
               value={values.public_hostnames}
               onChange={(event) =>
                 update("public_hostnames", event.target.value)
               }
-              placeholder={"media.example.com\nhome.example.com"}
+              placeholder={t("media.example.com\nhome.example.com")}
               rows={4}
             />
-            <small>One per line, or separate them with commas.</small>
+            <small>{t("One per line, or separate them with commas.")}</small>
           </label>
           <label>
-            Private MediaHub origin
+            {t("Private MediaHub origin")}
             <input
               value={values.origin_url}
               onChange={(event) => update("origin_url", event.target.value)}
-              placeholder="https://192.168.1.50:18765"
+              placeholder={t("https://192.168.1.50:18765")}
             />
             <small>
-              The LAN service URL used in Cloudflare. Match the protocol
-              exactly; an HTTPS-only MediaHub origin must start with https://.
+              {t(
+                "The LAN service URL used in Cloudflare. Match the protocol exactly; an HTTPS-only MediaHub origin must start with https://.",
+              )}
             </small>
           </label>
           <label>
-            CA Pool path on cloudflared host
+            {t("CA Pool path on cloudflared host")}
             <input
               value={values.origin_ca_pool}
               onChange={(event) => update("origin_ca_pool", event.target.value)}
-              placeholder="/etc/cloudflared/mediahub-ca.pem"
+              placeholder={t("/etc/cloudflared/mediahub-ca.pem")}
             />
             <small>
-              If MediaHub uses its internal CA, copy only the public CA
-              certificate to this path on the connector host. Set Cloudflare's
-              Origin Server Name to the hostname or IP in the certificate and
-              keep “Disable TLS certificate verification” turned off.
+              {t(
+                "If MediaHub uses its internal CA, copy only the public CA certificate to this path on the connector host. Set Cloudflare's Origin Server Name to the hostname or IP in the certificate and keep “Disable TLS certificate verification” turned off.",
+              )}
             </small>
           </label>
         </div>
       )}
       {step === 2 && (
         <div className="assisted-step">
-          <p className="eyebrow">STEP 3 · OPTIONAL CONNECTOR METRICS</p>
-          <h3>Distinguish connector sessions from tunnels</h3>
+          <p className="eyebrow">{t("STEP 3 · OPTIONAL CONNECTOR METRICS")}</p>
+          <h3>{t("Distinguish connector sessions from tunnels")}</h3>
           <p>
-            Cloudflared normally keeps several redundant outbound sessions for
-            one tunnel. A private metrics URL lets MediaHub show them
-            accurately.
+            {t(
+              "Cloudflared normally keeps several redundant outbound sessions for one tunnel. A private metrics URL lets MediaHub show them accurately.",
+            )}
           </p>
           <label>
-            Private metrics URL
+            {t("Private metrics URL")}
             <input
               value={values.status_url}
               onChange={(event) => update("status_url", event.target.value)}
-              placeholder="http://192.168.1.50:20241/metrics"
+              placeholder={t("http://192.168.1.50:20241/metrics")}
             />
-            <small>Optional. Never expose this endpoint publicly.</small>
+            <small>{t("Optional. Never expose this endpoint publicly.")}</small>
           </label>
           {steps[3]?.helpUrl && (
             <a href={steps[3].helpUrl} target="_blank" rel="noreferrer">
-              Open official Cloudflare guidance →
+              {t("Open official Cloudflare guidance →")}
             </a>
           )}
         </div>
       )}
       {step === 3 && (
         <div className="assisted-step">
-          <p className="eyebrow">STEP 4 · REVIEW</p>
-          <h3>Save this tunnel profile in MediaHub</h3>
+          <p className="eyebrow">{t("STEP 4 · REVIEW")}</p>
+          <h3>{t("Save this tunnel profile in MediaHub")}</h3>
           <div className="setup-review-grid">
-            <span>Mode</span>
+            <span>{t("Mode")}</span>
             <strong>
               {values.setup_mode === "existing-tunnel"
-                ? "Existing tunnel"
-                : "New tunnel"}
+                ? t("Existing tunnel")
+                : t("New tunnel")}
             </strong>
-            <span>Tunnel label</span>
+            <span>{t("Tunnel label")}</span>
             <strong>{values.tunnel_name}</strong>
-            <span>Published routes</span>
+            <span>{t("Published routes")}</span>
             <strong>{routeList.length}</strong>
-            <span>Private origin</span>
+            <span>{t("Private origin")}</span>
             <strong>{values.origin_url}</strong>
-            <span>Origin CA pool</span>
-            <strong>{values.origin_ca_pool || "System trust store"}</strong>
-            <span>Connector metrics</span>
+            <span>{t("Origin CA pool")}</span>
+            <strong>{values.origin_ca_pool || t("System trust store")}</strong>
+            <span>{t("Connector metrics")}</span>
             <strong>
-              {values.status_url || "Not configured — route checks only"}
+              {values.status_url || t("Not configured — route checks only")}
             </strong>
           </div>
           <div className="setup-safety-note">
             <ShieldCheck size={20} />
             <p>
-              Saving updates MediaHub's monitoring configuration only. It does
-              not change DNS, routes, tokens or connector processes in
-              Cloudflare.
+              {t(
+                "Saving updates MediaHub's monitoring configuration only. It does not change DNS, routes, tokens or connector processes in Cloudflare.",
+              )}
             </p>
           </div>
         </div>
@@ -405,16 +420,20 @@ function CloudflareSetupEditor({
           disabled={busy}
           onClick={() => (step ? setStep(step - 1) : onFinished(false))}
         >
-          <ChevronLeft size={16} /> {step ? "Back" : "Cancel"}
+          <ChevronLeft size={16} /> {step ? t("Back") : t("Cancel")}
         </button>
-        <span>{step + 1} of 4</span>
+        <span>
+          {step + 1}
+          {t(" of 4")}
+        </span>
         {step < 3 ? (
           <button
             className="primary"
             disabled={!valid || busy}
             onClick={() => setStep(step + 1)}
           >
-            Continue <ChevronRight size={16} />
+            {t("Continue ")}
+            <ChevronRight size={16} />
           </button>
         ) : (
           <button
@@ -422,7 +441,7 @@ function CloudflareSetupEditor({
             disabled={busy}
             onClick={() => void save()}
           >
-            {busy ? "Saving…" : "Save configuration"}
+            {busy ? t("Saving…") : t("Save configuration")}
           </button>
         )}
       </div>
@@ -485,8 +504,8 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
   };
   if (!stored.data)
     return (
-      <Panel title="Cloudflare configuration">
-        <p>Loading saved configuration…</p>
+      <Panel title={t("Cloudflare configuration")}>
+        <p>{t("Loading saved configuration…")}</p>
       </Panel>
     );
   if (adding || selected || !profiles.length)
@@ -499,19 +518,24 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
       />
     );
   return (
-    <Panel title="Saved Cloudflare configuration">
+    <Panel title={t("Saved Cloudflare configuration")}>
       <div className="assisted-setup-intro">
         <div className="tunnel-icon healthy">
           <Cloud size={22} />
         </div>
         <div>
           <strong>
-            {profiles.length} tunnel configuration
-            {profiles.length === 1 ? "" : "s"} saved
+            {t(
+              profiles.length === 1
+                ? "{count} tunnel configuration saved"
+                : "{count} tunnel configurations saved",
+              { count: profiles.length },
+            )}
           </strong>
           <p className="muted">
-            Edit existing monitoring details or add another tunnel. The guided
-            installer appears only while adding or editing a configuration.
+            {t(
+              "Edit existing monitoring details or add another tunnel. The guided installer appears only while adding or editing a configuration.",
+            )}
           </p>
         </div>
       </div>
@@ -522,28 +546,35 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
             <div>
               <strong>{profile.name}</strong>
               <span>
-                {profile.publicHostnames.length} published route
-                {profile.publicHostnames.length === 1 ? "" : "s"}
+                {t(
+                  profile.publicHostnames.length === 1
+                    ? "{count} published route"
+                    : "{count} published routes",
+                  { count: profile.publicHostnames.length },
+                )}
               </span>
               <small>{profile.originUrl}</small>
             </div>
             <div className="button-row">
               <button onClick={() => setEditing(profile.id)}>
-                <Pencil size={15} /> Edit configuration
+                <Pencil size={15} />
+                {t(" Edit configuration")}
               </button>
               <button disabled={busy} onClick={() => void remove(profile)}>
-                <Trash2 size={15} /> Remove
+                <Trash2 size={15} />
+                {t(" Remove")}
               </button>
             </div>
           </article>
         ))}
       </div>
       <button className="primary" onClick={() => setAdding(true)}>
-        <Plus size={16} /> Add tunnel configuration
+        <Plus size={16} />
+        {t(" Add tunnel configuration")}
       </button>
       {message && (
         <p className="success" role="status">
-          {message}
+          {translateText(message)}
         </p>
       )}
     </Panel>

@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { LayoutGroup } from "./page-layout";
 import {
   useCallback,
@@ -55,7 +57,7 @@ const statusLabels: Record<string, string> = {
   credentials_unavailable: "Stored Access Token unavailable",
   unhealthy: "FjordHub reports unhealthy",
 };
-const label = (s: string) => statusLabels[s] || s;
+const label = (s: string) => t(statusLabels[s] || s);
 
 export function useIntegrations() {
   const request = useRef<AbortController | null>(null);
@@ -114,7 +116,10 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Open ${row.name} · ${href}`}
+              title={t("Open {value0} · {value1}", {
+                value0: row.name,
+                value1: href,
+              })}
             >
               <span
                 className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
@@ -131,13 +136,15 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
 export function IntegrationsCard() {
   const { items, error, loading } = useIntegrations();
   return (
-    <Panel title="External integrations">
+    <Panel title={t("External integrations")}>
       <ErrorBox error={error} />
       {loading ? (
-        <p role="status">Loading integrations…</p>
+        <p role="status">{t("Loading integrations…")}</p>
       ) : !items.length ? (
         <p>
-          No external integrations configured. MediaHub works independently.
+          {t(
+            "No external integrations configured. MediaHub works independently.",
+          )}
         </p>
       ) : (
         items.map((row) => (
@@ -148,16 +155,16 @@ export function IntegrationsCard() {
                 {label(row.snapshot.status)} ·{" "}
                 {(row.snapshot.apps || []).length}{" "}
                 {row.snapshot.capabilities?.includes("docker.resources.read")
-                  ? "app groups"
-                  : "catalog entries"}
+                  ? t("app groups")
+                  : t("catalog entries")}
               </small>
             </div>
-            <Link to="/integrations">View</Link>
+            <Link to="/integrations">{t("View")}</Link>
           </div>
         ))
       )}
       <Link className="text-link" to="/integrations">
-        Manage FjordHub integration →
+        {t("Manage FjordHub integration →")}
       </Link>
     </Panel>
   );
@@ -231,18 +238,23 @@ export function IntegrationsPage({
     }
   }
   return (
-    <LayoutGroup id="integrations-IntegrationsPage-1" className="stack integrations-page">
+    <LayoutGroup
+      id="integrations-IntegrationsPage-1"
+      className="stack integrations-page"
+    >
       <div>
         <p className="muted">
-          Read-only external services. Separate from managed hosts and apps.
+          {t(
+            "Read-only external services. Separate from managed hosts and apps.",
+          )}
         </p>
       </div>
       <ErrorBox error={error || failure} />
-      {notice && <p role="status">{notice}</p>}
-      <Panel title="Connect FjordHub">
+      {notice && <p role="status">{translateText(notice)}</p>}
+      <Panel title={t("Connect FjordHub")}>
         <form onSubmit={submit} className="stack">
           <label>
-            Display name
+            {t("Display name")}
             <input
               required
               maxLength={80}
@@ -251,12 +263,12 @@ export function IntegrationsPage({
             />
           </label>
           <label>
-            FjordHub URL
+            {t("FjordHub URL")}
             <input
               required
               type="url"
               value={baseUrl}
-              placeholder="http://your-fjordhub-lan-ip:port"
+              placeholder={t("http://your-fjordhub-lan-ip:port")}
               onChange={(e) => {
                 setUrl(e.target.value);
                 setTest(null);
@@ -264,15 +276,13 @@ export function IntegrationsPage({
             />
           </label>
           <p className="muted">
-            Enter FjordHub’s normal local URL, without an API path. MediaHub
-            adds the supported read-only route automatically. Current FjordHub
-            versions expose Docker resource usage; older versions may expose
-            only a catalog. Public Cloudflare access cannot be used for this
-            LAN-only endpoint.
+            {t(
+              "Enter FjordHub’s normal local URL, without an API path. MediaHub adds the supported read-only route automatically. Current FjordHub versions expose Docker resource usage; older versions may expose only a catalog. Public Cloudflare access cannot be used for this LAN-only endpoint.",
+            )}
           </p>
           {showTokenGuide && <FjordHubTokenGuide baseUrl={baseUrl} />}
           <label>
-            Access Token
+            {t("Access Token")}
             <input
               required
               type="password"
@@ -292,13 +302,13 @@ export function IntegrationsPage({
               checked={allowHttp}
               onChange={(e) => setHttp(e.target.checked)}
             />{" "}
-            Allow HTTP to this LAN-only FjordHub API
+            {t("Allow HTTP to this LAN-only FjordHub API")}
           </label>
           {allowHttp && (
             <p role="note">
-              The Access Token is not encrypted between Core and an HTTP API.
-              Prefer verified HTTPS. Browser submission to MediaHub still
-              requires HTTPS.
+              {t(
+                "The Access Token is not encrypted between Core and an HTTP API. Prefer verified HTTPS. Browser submission to MediaHub still requires HTTPS.",
+              )}
             </p>
           )}
           <div className="button-row">
@@ -307,37 +317,45 @@ export function IntegrationsPage({
               disabled={busy || token.length < 16 || !baseUrl}
               onClick={() => void act("test")}
             >
-              Test Connection
+              {t("Test Connection")}
             </button>
             <button type="submit" disabled={busy || token.length < 16}>
-              {busy ? "Working…" : "Save"}
+              {busy ? t("Working…") : t("Save")}
             </button>
           </div>
           {test && (
             <div role="status">
               <strong>{label(test.status)}</strong>
               <p>
-                FjordHub {test.version || "version unavailable"} · API{" "}
-                {test.api_version || "not verified"}
+                {t("FjordHub ")}
+                {test.version || t("version unavailable")}
+                {t(" · API")} {test.api_version || t("not verified")}
               </p>
               {test.status === "online" && (
                 <p>
-                  {test.apps?.length ?? 0} entries found · Capabilities:{" "}
-                  {test.capabilities?.join(", ")} · Read-only integration
+                  {test.apps?.length ?? 0}
+                  {t(" entries found · Capabilities:")}{" "}
+                  {test.capabilities?.join(", ")}
+                  {t(" · Read-only integration")}
                 </p>
               )}
               {test.failed_endpoint && (
-                <p>Endpoint requiring attention: {test.failed_endpoint}</p>
+                <p>
+                  {t("Endpoint requiring attention: ")}
+                  {test.failed_endpoint}
+                </p>
               )}
             </div>
           )}
         </form>
       </Panel>
-      {loading && <p role="status">Loading configured integrations…</p>}
+      {loading && <p role="status">{t("Loading configured integrations…")}</p>}
       {!loading && !items.length && (
-        <Panel title="No integrations yet">
+        <Panel title={t("No integrations yet")}>
           <p>
-            Add FjordHub above. It is optional and cannot affect Core health.
+            {t(
+              "Add FjordHub above. It is optional and cannot affect Core health.",
+            )}
           </p>
         </Panel>
       )}
@@ -350,72 +368,83 @@ export function IntegrationsPage({
             </div>
             {row.snapshot.stale && (
               <p role="status">
-                Showing the last successful snapshot; these values are not live.
+                {t(
+                  "Showing the last successful snapshot; these values are not live.",
+                )}
               </p>
             )}
             {row.snapshot.failed_endpoint && (
               <p>
-                Endpoint requiring attention: {row.snapshot.failed_endpoint}
+                {t("Endpoint requiring attention: ")}
+                {row.snapshot.failed_endpoint}
               </p>
             )}
             <dl>
-              <dt>Access Token</dt>
-              <dd>{row.tokenConfigured ? "Configured" : "Not configured"}</dd>
-              <dt>Last successful sync</dt>
+              <dt>{t("Access Token")}</dt>
+              <dd>
+                {row.tokenConfigured ? t("Configured") : t("Not configured")}
+              </dd>
+              <dt>{t("Last successful sync")}</dt>
               <dd>
                 {row.lastSuccessfulSync
-                  ? new Date(row.lastSuccessfulSync).toLocaleString()
-                  : "Not yet verified"}
+                  ? new Date(row.lastSuccessfulSync).toLocaleString(getLocale())
+                  : t("Not yet verified")}
               </dd>
-              <dt>Version</dt>
-              <dd>{row.snapshot.version || "Unavailable"}</dd>
-              <dt>API version</dt>
-              <dd>{row.snapshot.api_version || "Unverified"}</dd>
+              <dt>{t("Version")}</dt>
+              <dd>{row.snapshot.version || t("Unavailable")}</dd>
+              <dt>{t("API version")}</dt>
+              <dd>{row.snapshot.api_version || t("Unverified")}</dd>
             </dl>
             <div className="button-row">
               <button
                 disabled={busy || !row.enabled}
                 onClick={() => void manage(row.id, "refresh")}
               >
-                Refresh
+                {t("Refresh")}
               </button>
               <button
                 disabled={busy || !row.enabled}
                 onClick={() => void manage(row.id, "disconnect")}
               >
-                Disconnect
+                {t("Disconnect")}
               </button>
             </div>
             <small className="muted">
               {row.enabled &&
               row.snapshot.capabilities?.includes("docker.resources.read")
                 ? row.snapshot.stale
-                  ? "Connection interrupted. Showing the last measurements while retrying automatically."
-                  : "Live resource updates approximately every 5 seconds."
-                : "Status updates automatically."}{" "}
-              Provider retry delays are respected.
+                  ? t(
+                      "Connection interrupted. Showing the last measurements while retrying automatically.",
+                    )
+                  : t("Live resource updates approximately every 5 seconds.")
+                : t("Status updates automatically.")}{" "}
+              {t("Provider retry delays are respected.")}
             </small>
             {(row.snapshot.warnings || []).map((warning, i) => (
               <p role="note" key={i}>
-                {warning}
+                {translateText(warning)}
               </p>
             ))}
             <h3>
               {row.snapshot.capabilities?.includes("docker.resources.read")
-                ? "Installed app groups"
-                : "Installable app catalog"}
+                ? t("Installed app groups")
+                : t("Installable app catalog")}
             </h3>
             {!row.snapshot.apps?.length ? (
-              <p>No apps reported by the API.</p>
+              <p>{t("No apps reported by the API.")}</p>
             ) : (
               row.snapshot.apps.map((app, i) => (
                 <div className="app-row" key={String(app.id ?? i)}>
                   <div className="app-row-name">
-                    <strong>{app.name || app.id || "Unnamed app"}</strong>
+                    <strong>{app.name || app.id || t("Unnamed app")}</strong>
                     <small>
                       {app.running_count !== undefined
-                        ? `${app.running_count} / ${app.container_count ?? "?"} containers running`
-                        : app.description || "No description provided"}
+                        ? t("{value0} / {value1} containers running", {
+                            value0: app.running_count,
+                            value1: app.container_count ?? "?",
+                          })
+                        : translateText(app.description) ||
+                          t("No description provided")}
                     </small>
                   </div>
                 </div>
@@ -423,18 +452,21 @@ export function IntegrationsPage({
             )}
             {!!row.snapshot.storage?.length && (
               <>
-                <h3>External storage · read-only</h3>
+                <h3>{t("External storage · read-only")}</h3>
                 {row.snapshot.storage.map((storage, i) => (
                   <div key={String(storage.id ?? i)}>
                     <strong>{storage.name || storage.id}</strong>
                     <p>
-                      {bytes(Number(storage.used_bytes || 0))} used ·{" "}
-                      {bytes(Number(storage.free_bytes || 0))} free ·{" "}
-                      {bytes(Number(storage.total_bytes || 0))} total
+                      {bytes(Number(storage.used_bytes || 0))}
+                      {t(" used ·")} {bytes(Number(storage.free_bytes || 0))}
+                      {t(" free ·")} {bytes(Number(storage.total_bytes || 0))}
+                      {t(" total")}
                     </p>
                     {Number(storage.total_bytes) > 0 && (
                       <progress
-                        aria-label={`${storage.name || "Storage"} usage`}
+                        aria-label={t("{value0} usage", {
+                          value0: storage.name || "Storage",
+                        })}
                         max={Number(storage.total_bytes)}
                         value={Number(storage.used_bytes || 0)}
                       />
@@ -445,7 +477,7 @@ export function IntegrationsPage({
             )}
             {!!Object.keys(row.snapshot.metrics || {}).length && (
               <>
-                <h3>Metrics</h3>
+                <h3>{t("Metrics")}</h3>
                 <dl>
                   {Object.entries(row.snapshot.metrics || {}).map(
                     ([key, value]) => (
@@ -457,7 +489,13 @@ export function IntegrationsPage({
                           {key.endsWith("Bytes")
                             ? bytes(value)
                             : key.endsWith("Percent")
-                              ? `${value.toFixed(1)}%`
+                              ? t("{value0}%", {
+                                  value0: value.toLocaleString(getLocale(), {
+                                    minimumFractionDigits: 1,
+                                    maximumFractionDigits: 1,
+                                    useGrouping: false,
+                                  }),
+                                })
                               : value}
                         </dd>
                       </div>
@@ -468,10 +506,11 @@ export function IntegrationsPage({
             )}
             {!!row.snapshot.events?.length && (
               <>
-                <h3>FjordHub events</h3>
+                <h3>{t("FjordHub events")}</h3>
                 {row.snapshot.events.map((event, i) => (
                   <p key={String(event.id ?? i)}>
-                    FjordHub · {event.message || event.type}
+                    {t("FjordHub · ")}
+                    {translateText(event.message) || event.type}
                   </p>
                 ))}
               </>

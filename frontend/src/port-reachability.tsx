@@ -1,3 +1,5 @@
+import { getLocale, translateText, t } from "./i18n";
+
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { ErrorBox } from "./phase2";
@@ -50,7 +52,7 @@ export function PortReachability({
   return (
     <div className="port-reachability">
       <div className="runtime-row">
-        <strong>Incoming TCP connection</strong>
+        <strong>{t("Incoming TCP connection")}</strong>
         <span
           className={
             state === "reachable"
@@ -61,23 +63,27 @@ export function PortReachability({
           }
         >
           {state === "reachable"
-            ? "Reachable from Core"
+            ? t("Reachable from Core")
             : state === "unreachable"
-              ? "Not reachable from Core"
-              : "Not verified"}
+              ? t("Not reachable from Core")
+              : t("Not verified")}
         </span>
       </div>
       <p className="muted">
         {current
-          ? value.message
-          : "Waiting for a check of the current VPN address and port."}
+          ? translateText(value.message)
+          : t("Waiting for a check of the current VPN address and port.")}
       </p>
       <p className="muted">
-        Checked every minute from MediaHub Core, outside the torrent VPN
-        namespace. A successful TCP test does not verify UDP or guarantee every
-        peer can connect.
+        {t(
+          "Checked every minute from MediaHub Core, outside the torrent VPN namespace. A successful TCP test does not verify UDP or guarantee every peer can connect.",
+        )}
         {value?.checkedAt
-          ? ` Last check: ${new Date(value.checkedAt * 1000).toLocaleTimeString()}.`
+          ? t(" Last check: {value0}.", {
+              value0: new Date(value.checkedAt * 1000).toLocaleTimeString(
+                getLocale(),
+              ),
+            })
           : ""}
       </p>
       <ErrorBox error={error} />
@@ -95,7 +101,7 @@ export function PortReachability({
           }
         }}
       >
-        {busy ? "Checking port?" : "Check incoming connection"}
+        {busy ? t("Checking port?") : t("Check incoming connection")}
       </button>
     </div>
   );
