@@ -4,6 +4,8 @@ from sqlalchemy import select
 
 from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
+from mediahub.windows_share import PACKAGE_ID as WINDOWS_SHARE
+from mediahub.windows_share import SETTING_KEY as WINDOWS_SHARE_KEY
 
 CLOUDFLARE = "org.mediahub.cloudflared"
 
@@ -13,6 +15,13 @@ async def removal_status(svc, app_id):
     if app["state"] == "uninstalled":
         return {"state": "succeeded", "dataPreserved": True}
     adapter = svc.apps.adapter(app_id)
+    if app["packageId"] == WINDOWS_SHARE:
+        return {
+            "state": "ready",
+            "installationId": app_id,
+            "mode": "monitoring",
+            "message": "Remove the saved Windows connection and its monitoring from MediaHub. Server shares, files and Windows drive mappings are preserved.",
+        }
     if app["packageId"] == CLOUDFLARE:
         return {
             "state": "ready",
@@ -63,6 +72,20 @@ async def remove_app(svc, app_id, confirmed):
     if not confirmed or confirmed != report.get("installationId"):
         raise DomainError("confirmation_required", "Exact installation confirmation required", 409)
     app = svc.apps.get(app_id)
+    if app["packageId"] == WINDOWS_SHARE:
+        with svc.sessions.begin() as db:
+            binding = db.scalar(select(Setting).where(Setting.key == WINDOWS_SHARE_KEY))
+            if binding:
+                db.delete(binding)
+            db.get(InstalledApp, app_id).state = "uninstalled"
+        svc.windows_share.cached = None
+        svc.apps.adapters.pop(app_id, None)
+        svc.events.record(
+            "app.monitoring_removed",
+            app_id,
+            "Windows share connection removed; server and files unchanged",
+        )
+        return {"state": "succeeded", "dataPreserved": True}
     if app["packageId"] == CLOUDFLARE:
         values = {
             "setup_mode": "existing-tunnel",

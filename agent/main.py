@@ -38,6 +38,7 @@ from agent.devices import device_report
 from agent.discovery import discovery_report
 from agent.fixtures import containers
 from agent.plex_control import PlexControl
+from agent.plex_media import PlexMedia
 from agent.plex_runtime import PlexRuntime
 from agent.seedbox_control import SeedboxControl
 from agent.seedbox_install import PrepareSeedbox, SeedboxInstaller
@@ -224,6 +225,7 @@ def create_agent(config: AgentConfig | None = None):
     torrents = TorrentService(control)
     locations = LocationService(control)
     plex = PlexControl(config.plex_policy_file, config.docker_socket)
+    plex_media = PlexMedia(plex)
     plex_runtime = PlexRuntime(plex, config.plex_install_policy_file, config.state_dir)
     if config.plex_install_policy_file:
         plex.runtime = plex_runtime
@@ -384,6 +386,14 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/plex/status")
     async def plex_status():
         return await plex.status()
+
+    @app.get("/v1/plex/recent-media")
+    async def plex_recent_media():
+        return await plex_media.recent()
+
+    @app.get("/v1/plex/artwork/{rating_key}")
+    async def plex_artwork(rating_key: str):
+        return await plex_media.artwork(rating_key)
 
     @app.get("/v1/plex/install-options")
     async def plex_install_options():

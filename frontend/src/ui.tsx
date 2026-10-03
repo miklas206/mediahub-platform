@@ -1,6 +1,20 @@
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
+import { AppearanceSettings } from "./appearance-settings";
+import { setAccountAppearance, useAppearanceTheme } from "./appearance";
+import {
+  ControlSummary,
+  ControlStatus,
+  ServiceOverview,
+  ResourceTrends,
+  useServiceReports,
+  useMetricHistory,
+} from "./control-center";
+import { WorkspaceSearch } from "./workspace-search";
+import { ServiceIcon } from "./service-icon";
+import { useDashboardData } from "./dashboard-data";
+import { DashboardUpdates } from "./dashboard-updates";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
 import { appStatusLabel } from "./seedbox-status";
@@ -26,11 +40,14 @@ import {
   ArrowUp,
   ArrowUpRight,
   Box,
-  Check,
+  Bell,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  Download,
+  FolderOpen,
   ChevronDown,
   ChevronRight,
-  Clock3,
-  Cpu,
   Database,
   HardDrive,
   LayoutDashboard,
@@ -69,6 +86,7 @@ import {
 } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
 import { AppStorePage, CloudflareStorePage, FjordHubStorePage } from "./store";
+import { WindowsSharePage } from "./windows-share";
 import { FjordHubUninstallPage } from "./fjordhub-uninstall";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
@@ -162,9 +180,15 @@ function useData<T>(path: string) {
   return { data, error, reload };
 }
 
-function Notice({ children }: { children: ReactNode }) {
+function Notice({
+  children,
+  tone = "danger",
+}: {
+  children: ReactNode;
+  tone?: "danger" | "warning" | "info";
+}) {
   return (
-    <div role="alert" className="notice">
+    <div role="alert" className={`notice ${tone}`}>
       {typeof children === "string" ? t(children) : children}
     </div>
   );
@@ -216,6 +240,7 @@ function Section({
 
 export function Application() {
   useLanguage();
+  useAppearanceTheme();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -234,9 +259,11 @@ export function Application() {
           const me = await api<User>("/auth/me");
           setCsrf(me.csrf);
           setLanguage(me.language || "en");
+          setAccountAppearance(me.appearance);
           setUser(me);
         } catch {
           setUser(null);
+          setAccountAppearance(null);
         }
       }
       setConnectionError("");
@@ -256,6 +283,7 @@ export function Application() {
       setUser(null);
       setCsrf("");
       setLanguage("en");
+      setAccountAppearance(null);
     };
     window.addEventListener("session-expired", expired);
     return () => window.removeEventListener("session-expired", expired);
@@ -269,6 +297,7 @@ export function Application() {
         onSignedIn={(value) => {
           setCsrf(value.csrf);
           setLanguage(value.language || "en");
+          setAccountAppearance(value.appearance);
           setUser(value);
           setNeedsSetup(false);
         }}
@@ -284,6 +313,7 @@ export function Application() {
         onLogin={(value) => {
           setCsrf(value.csrf);
           setLanguage(value.language || "en");
+          setAccountAppearance(value.appearance);
           setUser(value);
         }}
       />
@@ -296,6 +326,7 @@ export function Application() {
         setUser(null);
         setCsrf("");
         setLanguage("en");
+        setAccountAppearance(null);
       }}
     />
   );
@@ -415,8 +446,7 @@ function Brand() {
     <div className="brand">
       <img src="/favicon.svg" alt="" width="34" height="34" />
       <span>
-        {t("Media")}
-        <span>{t("Hub")}</span>
+        Media<span>Hub</span>
       </span>
     </div>
   );
@@ -511,18 +541,31 @@ function Shell({
     };
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
+    window.addEventListener("apps-changed", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("apps-changed", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [reloadNavigationApps, reloadUpdateSummary]);
-  const runtimePage = location.pathname.startsWith("/apps/");
+  const windowsSharePage = [
+    "/apps/windows-share",
+    "/store/windows-share",
+  ].includes(location.pathname);
+  const runtimePage =
+    location.pathname.startsWith("/apps/") && !windowsSharePage;
   const storePage = location.pathname.startsWith("/store/");
   const title =
     navigation.find(([path]) => path === location.pathname)?.[1] ||
-    (runtimePage ? "App runtime" : storePage ? "App Store" : "Dashboard");
+    (windowsSharePage
+      ? "Windows folder access"
+      : runtimePage
+        ? "App runtime"
+        : storePage
+          ? "App Store"
+          : "Dashboard");
   return (
     <div className="app-shell">
       {open && (
@@ -576,14 +619,20 @@ function Shell({
                           <div key={app.id}>
                             <NavLink
                               to={app.detailPath || "/apps"}
+                              className="app-shortcut"
                               title={
                                 navigationAppsError
                                   ? t("Status unavailable")
-                                  : app.health.summary
+                                  : t(app.health.summary || "Unknown")
                               }
                             >
+                              <ServiceIcon
+                                className="nav-service-icon"
+                                packageId={app.packageId}
+                                size={20}
+                              />
                               <span className="app-shortcut-name">
-                                {app.name}
+                                {translateText(app.name)}
                               </span>
                               <span
                                 className={`app-shortcut-status ${navigationAppsError ? "unknown" : app.health.status}`}
@@ -592,10 +641,12 @@ function Shell({
                                   aria-hidden="true"
                                   className={`app-shortcut-dot ${navigationAppsError ? "unknown" : app.health.status}`}
                                 />
-                                {appStatusLabel(
-                                  navigationAppsError
-                                    ? "unknown"
-                                    : app.health.status,
+                                {t(
+                                  appStatusLabel(
+                                    navigationAppsError
+                                      ? "unknown"
+                                      : app.health.status,
+                                  ),
                                 )}
                               </span>
                             </NavLink>
@@ -625,6 +676,13 @@ function Shell({
                                           : undefined
                                       }
                                     >
+                                      {key === "torrents" ? (
+                                        <Download size={14} />
+                                      ) : key === "vpn" ? (
+                                        <ShieldCheck size={14} />
+                                      ) : (
+                                        <Settings2 size={14} />
+                                      )}
                                       {typeof label === "string"
                                         ? t(label)
                                         : translateText(label)}
@@ -651,7 +709,6 @@ function Shell({
                       ? t(label)
                       : translateText(label)}
                   </span>
-                  {path === "/" && <span className="nav-shortcut">01</span>}
                   {path === "/updates" && !!updateSummary?.count && (
                     <span
                       className="nav-update-count"
@@ -667,11 +724,16 @@ function Shell({
             )}
         </nav>
         <div className="sidebar-bottom">
-          <div className="preview-label">
-            <Box size={16} />
+          <div
+            className={`preview-label sidebar-connection ${live ? "healthy" : "unknown"}`}
+          >
+            <span className={`status-dot ${live ? "healthy" : "unknown"}`} />
             <div>
-              {t("Your media workspace")}
-              <small>{t("Apps · Storage · Protection")}</small>
+              {t(live ? "Core online" : "Reconnecting")}
+              <small>
+                {t("Core uptime")}:{" "}
+                {metrics ? uptime(metrics.coreUptimeSeconds) : "—"}
+              </small>
             </div>
           </div>
           <div className="profile">
@@ -709,13 +771,52 @@ function Shell({
             <span>{displayName}</span>
             <ChevronRight size={15} />
             <strong>{t(title)}</strong>
+            <Link className="mobile-brand" to="/" aria-label="MediaHub">
+              <Brand />
+            </Link>
           </div>
           <div className="topbar-right">
+            <WorkspaceSearch
+              destinations={[
+                ...navigation
+                  .filter(
+                    ([path]) =>
+                      visibleNavigation.includes(path) &&
+                      (advancedMode || path !== "/hosts"),
+                  )
+                  .map(([path, label]) => ({ path, label: t(label) })),
+                ...(navigationApps || [])
+                  .filter((a) => a.detailPath)
+                  .map((a) => ({
+                    path: a.detailPath!,
+                    label: translateText(a.name),
+                  })),
+              ]}
+            />
             <Badge value={live ? "live" : "reconnecting"} />
-            <span className="version">
-              {t("v")}
-              {metrics?.version || "…"}
-            </span>
+            <div className="topbar-actions">
+              <Link
+                className="topbar-action"
+                to="/activity"
+                aria-label={t("Notifications")}
+                title={t("Notifications")}
+              >
+                <Bell size={18} />
+              </Link>
+              <Link
+                className="topbar-account"
+                to="/settings"
+                aria-label={t("Account settings")}
+              >
+                <span className="avatar topbar-avatar">
+                  {user.username.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="account-copy">
+                  <strong>{user.username}</strong>
+                  <small>{displayName}</small>
+                </span>
+              </Link>
+            </div>
           </div>
         </header>
         <main className="main-content">
@@ -727,16 +828,16 @@ function Shell({
                 </span>
                 <h1>
                   {title === "Dashboard"
-                    ? t("Everything, in view.")
+                    ? t("Dashboard")
                     : translateText(title)}
                 </h1>
                 <p>
                   {title === "Dashboard"
-                    ? t("A live overview of your MediaHub environment.")
+                    ? t("Your media. Your server. Together.")
                     : translateText(pageDescription(title))}
                 </p>
               </div>
-              {metrics && advancedMode && (
+              {metrics && advancedMode && title !== "Dashboard" && (
                 <div className="host-chip">
                   <Server size={17} />
                   <span>
@@ -751,7 +852,7 @@ function Shell({
           )}
           {error && <Notice>{translateText(error)}</Notice>}
           {!live && location.pathname !== "/updates" && (
-            <Notice>
+            <Notice tone="warning">
               {t(
                 "Live connection interrupted. Reconnecting automatically; displayed metrics may be stale.",
               )}
@@ -772,6 +873,14 @@ function Shell({
                 element={<SeedboxInstallPage />}
               />
               <Route path="/apps/:appId" element={<AppRuntimePage />} />
+              <Route
+                path="/apps/windows-share"
+                element={<WindowsSharePage />}
+              />
+              <Route
+                path="/store/windows-share"
+                element={<WindowsSharePage />}
+              />
               <Route
                 path="/store/cloudflare"
                 element={<CloudflareStorePage />}
@@ -874,20 +983,33 @@ function Shell({
                 element={
                   <SettingsExtensions
                     general={
-                      <LayoutGroup id="settings-general-cards">
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Language"
+                      <>
+                        <LayoutGroup
+                          id="settings-appearance-cards"
+                          className="settings-appearance-group stack"
                         >
-                          <LanguageSettings />
-                        </div>
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Workspace preferences"
-                        >
-                          <SettingsPage />
-                        </div>
-                      </LayoutGroup>
+                          <div
+                            className="dashboard-card"
+                            data-layout-title="Colors and shades"
+                          >
+                            <AppearanceSettings />
+                          </div>
+                        </LayoutGroup>
+                        <LayoutGroup id="settings-general-cards">
+                          <div
+                            className="dashboard-card"
+                            data-layout-title="Language"
+                          >
+                            <LanguageSettings />
+                          </div>
+                          <div
+                            className="dashboard-card"
+                            data-layout-title="Workspace preferences"
+                          >
+                            <SettingsPage />
+                          </div>
+                        </LayoutGroup>
+                      </>
                     }
                     maintenance={<MaintenancePage />}
                     security={<SecuritySettings />}
@@ -917,6 +1039,24 @@ function Shell({
           </footer>
         </main>
       </div>
+      <nav className="mobile-dock" aria-label={t("Quick navigation")}>
+        <NavLink to="/" end>
+          <LayoutDashboard size={19} />
+          <span>{t("Dashboard")}</span>
+        </NavLink>
+        <NavLink to="/apps">
+          <Box size={19} />
+          <span>{t("Apps")}</span>
+        </NavLink>
+        <NavLink to="/storage">
+          <HardDrive size={19} />
+          <span>{t("Storage")}</span>
+        </NavLink>
+        <NavLink to="/settings">
+          <Settings2 size={19} />
+          <span>{t("Settings")}</span>
+        </NavLink>
+      </nav>
     </div>
   );
 }
@@ -932,49 +1072,10 @@ function pageDescription(title: string) {
       Settings: "Make this workspace yours.",
       Updates: "Keep track of platform and app versions.",
       Backups: "Configuration protection and recovery.",
+      "Windows folder access":
+        "Your media folders in Windows Explorer, with guided setup and troubleshooting.",
     } as Record<string, string>
   )[title];
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  detail,
-  percent,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
-  percent?: number | null;
-}) {
-  return (
-    <div className="metric-card">
-      <div className="metric-label">
-        {icon}
-        <span>
-          {typeof label === "string" ? t(label) : translateText(label)}
-        </span>
-      </div>
-      <div className="metric-value">{value}</div>
-      <p>{translateText(detail)}</p>
-      {percent != null ? (
-        <div
-          className={`meter ${percent > 90 ? "warning" : ""}`}
-          role="meter"
-          aria-label={typeof label === "string" ? t(label) : label}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(percent)}
-        >
-          <span style={{ width: `${Math.max(0, Math.min(percent, 100))}%` }} />
-        </div>
-      ) : (
-        <div className="metric-baseline" />
-      )}
-    </div>
-  );
 }
 
 function Dashboard({
@@ -998,11 +1099,20 @@ function Dashboard({
   useEffect(() => {
     reloadActivity();
   }, [revision, reloadActivity]);
+  const reports = useServiceReports(apps);
+  const dashboardData = useDashboardData(
+    apps?.find((a) => a.packageId === "org.mediahub.seedbox")?.id,
+  );
+  const samples = useMetricHistory(m);
   if (!m) return <Loading />;
   const visible = new Set(sections);
-  const cards: { id: DashboardSection; content: ReactNode }[] = [
+  const cards: { id: DashboardSection | "updates"; content: ReactNode }[] = [
+    { id: "updates", content: <DashboardUpdates /> },
     { id: "storage", content: <StorageSummary /> },
-    { id: "torrents", content: <DashboardTorrents apps={apps} /> },
+    {
+      id: "torrents",
+      content: <DashboardTorrents apps={apps} data={dashboardData} />,
+    },
     {
       id: "apps",
       content: (
@@ -1015,63 +1125,13 @@ function Dashboard({
             </NavLink>
           }
         >
-          <div className="app-totals">
-            {[
-              ["Installed", apps?.length ?? 0],
-              [
-                "Healthy",
-                apps?.filter((a) => a.health.status === "healthy").length ?? 0,
-              ],
-              [
-                "Needs attention",
-                apps?.filter((a) =>
-                  ["degraded", "unhealthy"].includes(a.health.status),
-                ).length ?? 0,
-              ],
-              [
-                "Unknown",
-                apps?.filter((a) => a.health.status === "unknown").length ?? 0,
-              ],
-            ].map(([label, n]) => (
-              <div key={label}>
-                <strong>{n}</strong>
-                <span>
-                  {typeof label === "string" ? t(label) : translateText(label)}
-                </span>
-              </div>
-            ))}
-          </div>
-          {apps?.map((app) => (
-            <div className="app-row" key={app.id}>
-              <div className="app-icon">
-                <Box size={23} />
-              </div>
-              <div className="app-row-name">
-                <strong>{app.name}</strong>
-                <small>
-                  {app.isMock ? t("Mock adapter") : t("Installed")}
-                  {t(" · v")}
-                  {translateText(app.version)}
-                </small>
-              </div>
-              <Badge value={app.health.status} />
-            </div>
-          ))}
-          {!apps?.length && (
-            <Empty title={t("No apps installed")}>
-              {t("Apps will appear here when registered.")}
-            </Empty>
-          )}
-          <div className="panel-note">
-            <ShieldCheck size={16} />{" "}
-            {apps?.some((a) => a.isMock)
-              ? t("Development mock only. No real services controlled.")
-              : apps?.length
-                ? t(
-                    "Apps are monitored through paired Agents or restricted read-only integrations.",
-                  )
-                : t("No apps installed.")}
-          </div>
+          <ServiceOverview
+            apps={apps}
+            reports={reports}
+            live={live}
+            failed={!!error}
+            dashboard={dashboardData}
+          />
         </Section>
       ),
     },
@@ -1151,93 +1211,94 @@ function Dashboard({
     { id: "runtime", content: <RuntimePanel /> },
     {
       id: "system",
-      content: (
-        <details className="system-overview">
-          <summary>
-            <span className="system-summary-icon">
-              <Cpu size={18} />
-            </span>
-            <span>
-              <strong>{t("System details")}</strong>
-              <small>
-                {t("Core resource use, uptime and app runtime status")}
-              </small>
-            </span>
-            <Badge value={live ? "healthy" : "unknown"} />
-            <ChevronDown className="disclosure-chevron" size={18} />
-          </summary>
-          <div className="system-overview-body">
-            <div className="compact-metrics">
-              <MetricCard
-                icon={<Cpu size={18} />}
-                label={t("Core CPU")}
-                value={
-                  m.cpu.percent == null
-                    ? "Sampling…"
-                    : `${m.cpu.percent.toLocaleString(getLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}%`
-                }
-                detail={`${m.cpu.cores} allocated cores`}
-                percent={m.cpu.percent}
-              />
-              <MetricCard
-                icon={<Server size={18} />}
-                label={t("Core memory")}
-                value={bytes(m.ram.usedBytes)}
-                detail={`${bytes(m.ram.availableBytes)} available`}
-                percent={m.ram.percent}
-              />
-              <MetricCard
-                icon={<Clock3 size={18} />}
-                label={t("Core uptime")}
-                value={uptime(m.coreUptimeSeconds)}
-                detail={`Guest uptime ${uptime(m.uptimeSeconds)}`}
-              />
-            </div>
-            <div className="system-detail-lines">
-              <StatusLine
-                label={t("Core system disk")}
-                value={`${bytes(m.disk.freeBytes)} free of ${bytes(m.disk.totalBytes)}`}
-              />
-              {(apps || []).map((app) => (
-                <StatusLine
-                  key={app.id}
-                  label={app.name}
-                  value={`${app.state} · ${app.health.status}`}
-                />
-              ))}
-            </div>
-            <p className="muted">
-              {t(
-                "These numbers describe MediaHub Core, not the complete Proxmox server. Open an app for its own verified runtime details.",
-              )}
-            </p>
-          </div>
-        </details>
-      ),
+      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
     },
+  ];
+  const cardOrder = [
+    "apps",
+    "system",
+    "updates",
+    "activity",
+    "torrents",
+    "storage",
+    "network",
+    "core",
+    "runtime",
+    "integrations",
+    "cloudflare",
   ];
   return (
     <>
       {error && <Notice>{translateText(error)}</Notice>}
+      <div className="dashboard-context">
+        <div className="dashboard-status-stack">
+          <time dateTime={m.timestamp}>
+            {new Date(m.timestamp).toLocaleDateString(getLocale(), {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </time>
+          <ControlStatus
+            apps={apps}
+            live={live}
+            failed={!!error}
+            reports={reports}
+          />
+        </div>
+        <div className="quick-actions" aria-label={t("Quick actions")}>
+          <Link
+            to={
+              apps?.find((a) => a.packageId === "org.mediahub.seedbox")
+                ?.detailPath || "/apps"
+            }
+          >
+            <Download size={15} />
+            {t("Downloads")}
+          </Link>
+          <Link to="/storage">
+            <FolderOpen size={15} />
+            {t("Media files")}
+          </Link>
+          <Link to="/updates">
+            <RefreshCw size={15} />
+            {t("Updates")}
+          </Link>
+        </div>
+      </div>
+      <ControlSummary
+        metrics={m}
+        apps={apps}
+        live={live}
+        reports={reports}
+        appsError={!!error}
+        dashboard={dashboardData}
+      />
       <LayoutGroup
         id="ui-Dashboard-1"
         className="dashboard-grid"
         defaultHidden={cards
-          .filter(({ id }) => !visible.has(id))
+          .filter(({ id }) => id !== "updates" && !visible.has(id))
           .map(({ id }) => id)}
       >
-        {cards.map(({ id, content }) => (
-          <div
-            className="dashboard-card"
-            key={id}
-            data-section={id}
-            data-layout-title={
-              dashboardChoices.find((choice) => choice[0] === id)?.[1]
-            }
-          >
-            {content}
-          </div>
-        ))}
+        {cards
+          .sort((a, b) => cardOrder.indexOf(a.id) - cardOrder.indexOf(b.id))
+          .map(({ id, content }) => (
+            <div
+              className="dashboard-card"
+              key={id}
+              data-section={id}
+              data-layout-nested={id === "apps" ? "true" : undefined}
+              data-layout-title={
+                id === "updates"
+                  ? "Updates"
+                  : dashboardChoices.find((choice) => choice[0] === id)?.[1]
+              }
+            >
+              {content}
+            </div>
+          ))}
       </LayoutGroup>
     </>
   );
@@ -1256,13 +1317,21 @@ function ActivityList({ items }: { items: Activity[] }) {
     <div className="activity-list">
       {items.map((item) => (
         <div className="activity-item" key={item.id}>
-          <div className="activity-icon">
-            <Check size={15} />
+          <div className={`activity-icon ${item.severity}`}>
+            {item.severity === "error" ||
+            item.severity === "critical" ||
+            item.severity === "warning" ? (
+              <CircleAlert size={15} />
+            ) : item.severity === "success" ? (
+              <CircleCheck size={15} />
+            ) : (
+              <Info size={15} />
+            )}
           </div>
           <div>
             <strong>{translateText(item.message)}</strong>
             <small>
-              {item.event} · {translateText(item.severity)}
+              {translateText(item.source)} · {translateText(item.severity)}
             </small>
           </div>
           <time dateTime={item.timestamp}>
@@ -1325,11 +1394,11 @@ function Apps({ revision }: { revision: number }) {
               <section className="panel app-detail" key={app.id}>
                 <div className="panel-heading">
                   <div className="app-icon">
-                    <Box />
+                    <ServiceIcon packageId={app.packageId} />
                   </div>
                   <Badge value={app.health.status} />
                 </div>
-                <h2>{app.name}</h2>
+                <h2>{translateText(app.name)}</h2>
                 <p className="muted">
                   {app.packageId} · {translateText(app.version)}
                 </p>
@@ -1341,15 +1410,17 @@ function Apps({ revision }: { revision: number }) {
                 )}
                 {!app.isMock && (
                   <p className="muted">
-                    {app.packageId === "org.mediahub.cloudflared"
-                      ? t("Installed · Read-only infrastructure monitor")
-                      : t("Installed · Paired Agent runtime")}
+                    {app.packageId === "org.mediahub.windows-share"
+                      ? t("Installed · Windows setup and connection checks")
+                      : app.packageId === "org.mediahub.cloudflared"
+                        ? t("Installed · Read-only infrastructure monitor")
+                        : t("Installed · Paired Agent runtime")}
                   </p>
                 )}
                 {app.detailPath && (
                   <NavLink className="text-link" to={app.detailPath}>
                     {t("Open ")}
-                    {app.name} →
+                    {translateText(app.name)} →
                   </NavLink>
                 )}
                 {app.isMock && (
@@ -1808,7 +1879,7 @@ function SettingsPage() {
                           ? t(label)
                           : translateText(label)}
                       </strong>
-                      <small>{navigationHelp[path]}</small>
+                      <small>{t(navigationHelp[path])}</small>
                     </span>
                   </label>
                 );
@@ -2303,11 +2374,7 @@ const dashboardChoices: [DashboardSection, string, string][] = [
     "Ongoing torrents",
     "Torrent progress, transfer speeds and time remaining",
   ],
-  [
-    "system",
-    "System details",
-    "Collapsed Core resources, uptime and app status",
-  ],
+  ["system", "System resources", "Live CPU, memory and network measurements"],
   ["storage", "Storage", "Your configured disks and available space"],
   ["apps", "Apps", "Status for Plex, Seedbox and other apps"],
   ["activity", "Recent activity", "The latest MediaHub events"],

@@ -218,7 +218,8 @@ class PlexControl:
         except (OSError, ValueError, TypeError, KeyError):
             return False
 
-    async def plex_get(self, policy, endpoint, method="GET", params=None):
+    async def plex_connection(self, policy):
+        """Resolve only the owned private runtime and keep its token Agent-side."""
         try:
             api_url = policy.apiUrl
             if policy.apiNetwork:
@@ -233,6 +234,13 @@ class PlexControl:
                 token = ET.fromstring(await self.runtime.preferences(policy)).get("PlexOnlineToken")
             else:
                 token = ET.parse(policy.preferencesPath).getroot().get("PlexOnlineToken")
+            return api_url, token
+        except (OSError, ValueError, KeyError, ET.ParseError):
+            raise DomainError("plex_api_unavailable", "Plex API is unavailable", 503) from None
+
+    async def plex_get(self, policy, endpoint, method="GET", params=None):
+        try:
+            api_url, token = await self.plex_connection(policy)
             if not token and endpoint != "/identity":
                 raise ValueError()
             # Plex may spend roughly ten seconds publishing a changed manual
@@ -244,16 +252,22 @@ class PlexControl:
                 trust_env=False,
                 follow_redirects=False,
             ) as client:
-                response = await client.request(
+                async with client.stream(
                     method,
                     api_url + endpoint,
                     headers={"X-Plex-Token": token} if token else {},
                     params=params,
-                )
-                response.raise_for_status()
-                if len(response.content) > 2 * 1024 * 1024:
-                    raise ValueError()
-                return ET.fromstring(response.content) if response.content else ET.Element("Empty")
+                ) as response:
+                    response.raise_for_status()
+                    limit = 2 * 1024 * 1024
+                    if int(response.headers.get("content-length", "0")) > limit:
+                        raise ValueError()
+                    content = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(content) + len(chunk) > limit:
+                            raise ValueError()
+                        content.extend(chunk)
+                    return ET.fromstring(content) if content else ET.Element("Empty")
         except (OSError, ValueError, KeyError, ET.ParseError, httpx.HTTPError):
             raise DomainError("plex_api_unavailable", "Plex API is unavailable", 503) from None
 

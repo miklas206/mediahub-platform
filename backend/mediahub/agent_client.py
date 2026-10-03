@@ -1,3 +1,4 @@
+import asyncio
 import ssl
 from collections.abc import AsyncIterable
 from pathlib import Path
@@ -81,6 +82,8 @@ class AgentClient:
                 timeout=(
                     180
                     if path.startswith("/v1/backups/")
+                    else 20
+                    if path.startswith("/v1/plex/artwork/")
                     else 90
                     if path
                     in {
@@ -96,11 +99,28 @@ class AgentClient:
                     cafile=getattr(self.config, "agent_ca_file", None)
                 ),
             ) as client:
-                response = await client.request(
-                    method, path, json=payload, headers={"Authorization": "Bearer " + token}
-                )
+                if path == "/v1/plex/recent-media" or path.startswith("/v1/plex/artwork/"):
+                    # Artwork crosses this JSON transport as base64. Bound the entire
+                    # response before decoding it, including an unexpectedly large error.
+                    async with asyncio.timeout(8 if path.endswith("/recent-media") else 20):
+                        async with client.stream(
+                            method, path, json=payload, headers={"Authorization": "Bearer " + token}
+                        ) as incoming:
+                            limit = 1024 * 1024
+                            if int(incoming.headers.get("content-length", "0")) > limit:
+                                raise ValueError()
+                            content = bytearray()
+                            async for chunk in incoming.aiter_bytes():
+                                if len(content) + len(chunk) > limit:
+                                    raise ValueError()
+                                content.extend(chunk)
+                            response = httpx.Response(incoming.status_code, content=bytes(content))
+                else:
+                    response = await client.request(
+                        method, path, json=payload, headers={"Authorization": "Bearer " + token}
+                    )
             return self._response_body(response)
-        except (OSError, httpx.HTTPError, ValueError):
+        except (OSError, httpx.HTTPError, ValueError, TimeoutError):
             raise DomainError(
                 "agent_unavailable", "MediaHub Agent is unavailable or not configured", 503
             ) from None

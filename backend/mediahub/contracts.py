@@ -30,8 +30,21 @@ class Health(StrictModel):
     lastChecked: str = Field(default_factory=now)
 
 
+class AppearancePreferences(StrictModel):
+    accent: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
+    secondary: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
+    background: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
+    depth: int = Field(strict=True, ge=0, le=100)
+
+    @field_validator("accent", "secondary", "background")
+    @classmethod
+    def normalize_colour(cls, value: str):
+        return value.lower()
+
+
 class UserPreferences(StrictModel):
     language: Literal["en", "da"] = "en"
+    appearance: AppearancePreferences | None = None
 
 
 class PlatformSettings(StrictModel):

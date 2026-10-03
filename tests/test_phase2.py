@@ -259,6 +259,7 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
         "FjordHub",
         "Plex",
         "Seedbox",
+        "Windows folder access",
     }
     assert next(a for a in catalog if a["id"] == "org.mediahub.plex")["availability"] == "available"
     assert all(a["availability"] in {"coming-soon", "available"} for a in catalog)

@@ -1,5 +1,6 @@
 import { translateText, countryName, t } from "./i18n";
 import { LayoutGroup } from "./page-layout";
+import { CountryFlag, countryLabel } from "./country-flag";
 
 import { OperationProgress } from "./operation-progress";
 import { useCallback, useEffect, useState } from "react";
@@ -245,10 +246,17 @@ export function SeedboxDaily({
             <ErrorBox error={locationError} />
             <div className="runtime-row">
               <span>{t("Current")}</span>
-              <strong>
-                {location?.current?.country
-                  ? countryName(location.current.country)
-                  : t("Not identified")}
+              <strong className="country-label">
+                <CountryFlag
+                  country={location?.current?.country}
+                  size={24}
+                  decorative
+                />
+                <span>
+                  {location?.current?.country
+                    ? countryLabel(location.current.country)
+                    : t("Not identified")}
+                </span>
               </strong>
             </div>
             <div className="runtime-row">

@@ -20,6 +20,12 @@ export function AppUninstall({
   const [status, setStatus] = useState<Removal>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const windowsShare = app.packageId === "org.mediahub.windows-share";
+  const removalLabel = windowsShare
+    ? t("Remove connection")
+    : app.packageId === "org.mediahub.cloudflared"
+      ? t("Remove monitoring")
+      : t("Uninstall");
   const endpoint = `/apps/${app.id}/uninstall`;
   useEffect(() => {
     if (!open) return;
@@ -41,7 +47,9 @@ export function AppUninstall({
         if (!cancelled)
           setError(
             (e as Error).message +
-              " Check the Agent connection and update the Agent if removal is not supported.",
+              (windowsShare
+                ? " Check the connection to MediaHub and try again."
+                : " Check the Agent connection and update the Agent if removal is not supported."),
           );
       }
     };
@@ -50,7 +58,7 @@ export function AppUninstall({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, onRemoved, busy]);
+  }, [open, endpoint, onRemoved, busy, windowsShare]);
   const remove = async () => {
     if (!status?.installationId) return;
     setBusy(true);
@@ -79,30 +87,29 @@ export function AppUninstall({
           setOpen(true);
         }}
       >
-        {app.packageId === "org.mediahub.cloudflared"
-          ? t("Remove monitoring")
-          : t("Uninstall")}
+        {removalLabel}
       </button>
       {open && (
         <div
           role="dialog"
-          aria-label={t("Remove {value0}", { value0: app.name })}
+          aria-label={t("Remove {value0}", { value0: translateText(app.name) })}
           className="app-removal-dialog"
         >
           <h3>
-            {app.packageId === "org.mediahub.cloudflared"
-              ? t("Remove monitoring")
-              : t("Uninstall")}{" "}
-            {app.name}
+            {removalLabel} {translateText(app.name)}
           </h3>
           <p>
             {translateText(status?.message) ||
               t("Checking installation identity and removal support...")}
           </p>
           <p>
-            {t(
-              "Media files and app data will be kept. This does not free space used by downloads or libraries.",
-            )}
+            {windowsShare
+              ? t(
+                  "Only the connection saved in MediaHub is removed. Shared folders, files and mapped Windows drives stay in place.",
+                )
+              : t(
+                  "Media files and app data will be kept. This does not free space used by downloads or libraries.",
+                )}
           </p>
           {error && (
             <p role="alert" className="error">

@@ -19,6 +19,8 @@ import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
 import { SeedboxRSSSettings } from "./seedbox-rss-settings";
 import { CloudflareSetupManager } from "./cloudflare-setup";
+import { CountryFlag, countryLabel } from "./country-flag";
+import { PlexPosters } from "./plex-posters";
 
 export type Runtime = {
   operation?: { state: string; message?: string };
@@ -559,7 +561,7 @@ function RuntimeIssues({
     </div>
   );
 }
-function PlexPanel({ report: r }: { report: Runtime }) {
+function PlexPanel({ report: r, appId }: { report: Runtime; appId?: string }) {
   const p = r.plex;
   return (
     <LayoutGroup id="runtime-workspace-1" className="runtime-workspace">
@@ -574,6 +576,13 @@ function PlexPanel({ report: r }: { report: Runtime }) {
         </div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
+      {appId && (
+        <Panel title={t("Recently added media")}>
+          <div className="plex-library-preview">
+            <PlexPosters appId={appId} />
+          </div>
+        </Panel>
+      )}
       <LayoutGroup id="runtime-extra-1" className="runtime-panels">
         <Panel title={t("Plex server")}>
           <dl>
@@ -625,10 +634,17 @@ function PlexPanel({ report: r }: { report: Runtime }) {
               label={t("Provider")}
               value={r.vpn?.provider || t("Unavailable")}
             />
-            <Row
-              label={t("Country")}
-              value={r.vpn?.countryCode || t("Not verified")}
-            />
+            <div className="runtime-row">
+              <dt>{t("Country")}</dt>
+              <dd className="country-label">
+                <CountryFlag code={r.vpn?.countryCode} size={24} decorative />
+                <span>
+                  {r.vpn?.countryCode
+                    ? countryLabel(r.vpn.countryCode)
+                    : t("Not verified")}
+                </span>
+              </dd>
+            </div>
             <Row
               label={t("External IP")}
               value={r.vpn?.externalIp || t("Not verified")}
@@ -1059,6 +1075,7 @@ export function AppRuntimePage() {
         />
       ) : View && data ? (
         <View
+          appId={appId}
           report={
             error
               ? {

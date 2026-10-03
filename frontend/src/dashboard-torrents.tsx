@@ -1,9 +1,7 @@
-import { getLocale, translateText, t } from "./i18n";
+import { getLocale, t } from "./i18n";
 
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { api } from "./api";
 import { bytes, uptime } from "./format";
 
 import {
@@ -12,6 +10,7 @@ import {
   type Torrent,
 } from "./torrent-list";
 import type { AppInfo } from "./contracts";
+import type { DashboardData } from "./dashboard-data";
 import "./dashboard-torrents.css";
 
 export function ongoingTorrents(items: Torrent[]) {
@@ -30,44 +29,16 @@ export function ongoingTorrents(items: Torrent[]) {
     );
 }
 
-export function DashboardTorrents({ apps }: { apps?: AppInfo[] }) {
+export function DashboardTorrents({
+  apps,
+  data,
+}: {
+  apps?: AppInfo[];
+  data: DashboardData;
+}) {
   const seedbox = apps?.find((app) => app.packageId === "org.mediahub.seedbox");
-  const [items, setItems] = useState<Torrent[] | null>(null);
-  const [error, setError] = useState("");
-  const appId = seedbox?.id;
-  useEffect(() => {
-    if (!appId) return;
-    let disposed = false;
-    let loading = false;
-    const controller = new AbortController();
-    async function load() {
-      if (loading) return;
-      loading = true;
-      try {
-        const data = await api<{ items: Torrent[] }>(
-          "/seedbox/torrents",
-          "GET",
-          undefined,
-          controller.signal,
-        );
-        if (!disposed) {
-          setItems(data.items);
-          setError("");
-        }
-      } catch (e) {
-        if (!disposed) setError((e as Error).message);
-      } finally {
-        loading = false;
-      }
-    }
-    void load();
-    const timer = window.setInterval(() => void load(), 5000);
-    return () => {
-      disposed = true;
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [appId]);
+  const items = data.torrents;
+  const error = data.torrentError;
   const active = ongoingTorrents(items || []);
   return (
     <section className="panel dashboard-torrents">
@@ -92,7 +63,7 @@ export function DashboardTorrents({ apps }: { apps?: AppInfo[] }) {
         <>
           {error && (
             <p role="alert" className="notice">
-              {t("Torrent information is unavailable.")} {translateText(error)}
+              {t("Torrent information is unavailable.")}
             </p>
           )}
           {items && (

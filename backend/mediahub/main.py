@@ -26,6 +26,7 @@ from mediahub.apps.cloudflared import (
 )
 from mediahub.apps.framework import AppManager
 from mediahub.apps.remote_registry import register_remote_apps
+from mediahub.apps.windows_share import register_windows_share_app
 from mediahub.auth import AuthService
 from mediahub.backups_api import router as backups_router
 from mediahub.catalog import Catalog
@@ -54,6 +55,8 @@ from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
+from mediahub.windows_share import WindowsShareService
+from mediahub.windows_share_api import router as windows_share_router
 
 logger = logging.getLogger("mediahub.core")
 
@@ -88,6 +91,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.apps.initialize()
         svc.agent = AgentClient(config)
         svc.catalog = Catalog(config, sessions, svc.agent)
+        svc.windows_share = WindowsShareService(sessions)
         svc.integrations = IntegrationService(config, sessions, events)
         svc.cloudflare_tunnel = CloudflareTunnelMonitor(config)
         svc.cloudflare_tunnel.configure(svc.catalog.configuration("org.mediahub.cloudflared"))
@@ -99,6 +103,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions)
         register_remote_apps(svc)
+        register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
         svc.updates = UpdateMonitor(svc)
@@ -256,6 +261,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(integrations_router, prefix="/api/v1")
     app.include_router(security_router, prefix="/api/v1")
     app.include_router(backups_router, prefix="/api/v1")
+    app.include_router(windows_share_router, prefix="/api/v1")
     app.include_router(router, prefix="/api", include_in_schema=False)
 
     @app.get("/{path:path}", include_in_schema=False)

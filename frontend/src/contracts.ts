@@ -1,3 +1,5 @@
+import type { Appearance } from "./appearance";
+
 export type Health = {
   status: "healthy" | "degraded" | "unhealthy" | "unknown";
   summary: string;
@@ -20,6 +22,7 @@ export type User = {
   role: string;
   csrf: string;
   language?: "en" | "da";
+  appearance?: Appearance | null;
 };
 export type Metrics = {
   hostname: string;

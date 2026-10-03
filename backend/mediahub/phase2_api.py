@@ -21,6 +21,7 @@ from mediahub.errors import DomainError
 from mediahub.network import cookie_options
 from mediahub.path_policy import DirectoryPolicy
 from mediahub.plex_api import router as plex_router
+from mediahub.plex_media_api import router as plex_media_router
 from mediahub.seedbox_daily_api import router as daily_router
 from mediahub.seedbox_rss import router as rss_router
 from mediahub.seedbox_rss_feeds import router as rss_feeds_router
@@ -33,6 +34,7 @@ router.include_router(daily_router)
 router.include_router(rss_router)
 router.include_router(rss_feeds_router)
 router.include_router(plex_router)
+router.include_router(plex_media_router)
 
 
 class Bootstrap(StrictModel):
@@ -677,6 +679,12 @@ async def save_configuration(
     package_id: str, body: ConfigValues, request: Request, user=Depends(authenticated)
 ):
     svc = services(request)
+    if package_id == "org.mediahub.windows-share":
+        raise DomainError(
+            "windows_share_guided_setup",
+            "Use Windows folder access setup to save this connection",
+            409,
+        )
     saved = svc.catalog.save(package_id, body.values)
     if package_id == "org.mediahub.cloudflared":
         svc.cloudflare_tunnel.configure(saved)

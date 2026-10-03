@@ -53,8 +53,13 @@ class SettingsService:
     def save_user_preferences(self, user_id: str, preferences: UserPreferences):
         with self.sessions.begin() as db:
             row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
+            # Each preferences panel submits its own fields. Defaults from an omitted
+            # panel must not replace that account's existing choices.
+            saved = UserPreferences.model_validate(
+                {**(row.value if row else {}), **preferences.model_dump(exclude_unset=True)}
+            )
             if row:
-                row.value = preferences.model_dump()
+                row.value = saved.model_dump()
             else:
-                db.add(Setting(key=f"user.preferences:{user_id}", value=preferences.model_dump()))
-        return preferences
+                db.add(Setting(key=f"user.preferences:{user_id}", value=saved.model_dump()))
+        return saved

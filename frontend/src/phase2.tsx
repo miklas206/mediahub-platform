@@ -1,4 +1,5 @@
 import { getLocale, translateText, t } from "./i18n";
+import { ServiceIcon } from "./service-icon";
 
 import { LayoutGroup } from "./page-layout";
 import { AppUninstall } from "./app-uninstall";
@@ -907,7 +908,7 @@ export function MediaFiles() {
         </p>
         <ErrorBox error={locations.error || error} />
         {!locations.data ? (
-          <p>{t("Loading media locations…")}</p>
+          !locations.error && <p>{t("Loading media locations…")}</p>
         ) : available.length === 0 ? (
           <div className="empty">
             <Folder size={28} />
@@ -1403,7 +1404,7 @@ export function CatalogPage({
               <section className="panel app-detail store-card" key={app.id}>
                 <div className="panel-heading">
                   <div className="app-icon">
-                    <Box />
+                    <ServiceIcon packageId={app.id} />
                   </div>
                   <span className="badge">
                     {installedApp
@@ -1415,18 +1416,18 @@ export function CatalogPage({
                           : t("Coming soon")}
                   </span>
                 </div>
-                <h2>{app.name}</h2>
+                <h2>{translateText(app.name)}</h2>
                 <p>{translateText(app.description)}</p>
                 <p className="muted">
                   {translateText(app.category)}
                   {t(" · v")}
-                  {app.version} · {app.maintainer.name}
+                  {app.version} · {translateText(app.maintainer.name)}
                 </p>
                 <div className="store-card-action">
                   {installedApp?.detailPath ? (
                     <Link className="primary" to={installedApp.detailPath}>
                       {t("Open ")}
-                      {app.name} →
+                      {translateText(app.name)} →
                     </Link>
                   ) : connected ? (
                     <Link className="primary" to="/integrations">
@@ -1443,6 +1444,10 @@ export function CatalogPage({
                   ) : app.id === "org.mediahub.cloudflared" ? (
                     <Link className="primary" to="/store/cloudflare">
                       {t("Set up Cloudflare →")}
+                    </Link>
+                  ) : app.id === "org.mediahub.windows-share" ? (
+                    <Link className="primary" to="/store/windows-share">
+                      {t("Set up Windows access →")}
                     </Link>
                   ) : app.id === "org.mediahub.fjordhub" ? (
                     <Link className="primary" to="/store/fjordhub">
@@ -1469,169 +1474,183 @@ export function CatalogPage({
                     </a>
                   )}
                 </div>
-                <details>
-                  <summary>
-                    {t("Advanced requirements and configuration")}
-                  </summary>
-                  {!!app.installGuide?.length && (
-                    <div className="install-guide">
-                      <h3>{t("Guided setup")}</h3>
-                      <ol>
-                        {app.installGuide.map((step) => (
-                          <li key={step.id}>
-                            <strong>{translateText(step.title)}</strong>
-                            <p>{translateText(step.description)}</p>
-                            {step.helpUrl && (
-                              <a
-                                href={step.helpUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {t("Official instructions →")}
-                              </a>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
-                      <p className="muted">
-                        {t(
-                          "The dedicated guided page explains every value the user must supply. Advanced previews below never change a host by themselves.",
-                        )}
-                      </p>
-                    </div>
-                  )}
-                  <p>
-                    {t("Runtime: ")}
-                    {app.requiredRuntime}
-                  </p>
-                  <label>
-                    {t("Target host")}
-                    <select
-                      value={targets[app.id] || "local"}
-                      onChange={(e) => {
-                        setTargets({ ...targets, [app.id]: e.target.value });
-                        setPlan(undefined);
-                      }}
-                    >
-                      {hosts.data?.map((host) => (
-                        <option value={host.id} key={host.id}>
-                          {host.name}
-                          {host.status !== "online" ? t(" · Offline") : ""}
-                          {(app.hostCapabilities || []).some(
-                            (c) => !host.capabilities?.includes(c),
-                          )
-                            ? t(" · Missing capabilities")
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {app.recommendedIsolation === "dedicated-host" && (
-                    <p className="notice">
-                      {t(
-                        "Dedicated host recommended. This preview never installs the app; host compatibility is checked by the Agent.",
-                      )}
-                    </p>
-                  )}
+                {app.id === "org.mediahub.windows-share" ? (
                   <p className="muted">
-                    {t("Storage:")}{" "}
-                    {app.storageRequirements
-                      .map((s) => `${s.type} (${s.access})`)
-                      .join(", ")}
+                    {t(
+                      "Uses an existing SMB share on your home network. Setup and diagnostics run on your Windows PC.",
+                    )}
                   </p>
-                  <small>{app.capabilities.join(" · ")}</small>
-                  {onSelect && (
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        checked={selected?.includes(app.id) || false}
-                        onChange={(e) =>
-                          onSelect(
-                            e.target.checked
-                              ? [...(selected || []), app.id]
-                              : (selected || []).filter((id) => id !== app.id),
-                          )
-                        }
-                      />
-                      {t("Plan for later — do not install")}
-                    </label>
-                  )}
-                  <div className="button-row">
-                    <button
-                      onClick={() =>
-                        setExpanded(expanded === app.id ? "" : app.id)
-                      }
-                    >
-                      {t("Configure")}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          setPlan(
-                            await api("/catalog/" + app.id + "/plan", "POST", {
-                              logical_mappings: mappings[app.id] || {},
-                              host_id: targets[app.id] || "local",
-                            }),
-                          );
-                          setError("");
-                        } catch (e) {
-                          setError((e as Error).message);
-                        }
-                      }}
-                    >
-                      {t("Preview plan")}
-                    </button>
-                  </div>
-                  {expanded === app.id && (
-                    <>
-                      <ConfigurationForm app={app} />
-                      <div className="dynamic-form">
+                ) : (
+                  <details>
+                    <summary>
+                      {t("Advanced requirements and configuration")}
+                    </summary>
+                    {!!app.installGuide?.length && (
+                      <div className="install-guide">
+                        <h3>{t("Guided setup")}</h3>
+                        <ol>
+                          {app.installGuide.map((step) => (
+                            <li key={step.id}>
+                              <strong>{translateText(step.title)}</strong>
+                              <p>{translateText(step.description)}</p>
+                              {step.helpUrl && (
+                                <a
+                                  href={step.helpUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {t("Official instructions →")}
+                                </a>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
                         <p className="muted">
                           {t(
-                            "Storage preview mappings only. Nothing is created or mounted.",
+                            "The dedicated guided page explains every value the user must supply. Advanced previews below never change a host by themselves.",
                           )}
                         </p>
-                        {app.storageRequirements.map((slot) => (
-                          <label key={slot.id}>
-                            {slot.id} · {slot.access}
-                            {slot.required ? t(" (required)") : ""}
-                            <select
-                              value={mappings[app.id]?.[slot.id] || ""}
-                              onChange={(e) =>
-                                setMappings({
-                                  ...mappings,
-                                  [app.id]: {
-                                    ...mappings[app.id],
-                                    [slot.id]: e.target.value,
-                                  },
-                                })
-                              }
-                            >
-                              <option value="">
-                                {t("Choose logical storage")}
-                              </option>
-                              {logical.data
-                                ?.filter((s) =>
-                                  s.mappings.some(
-                                    (m) =>
-                                      m.host_id ===
-                                        (targets[app.id] || "local") &&
-                                      (slot.access !== "rw" ||
-                                        m.access === "rw"),
-                                  ),
-                                )
-                                .map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </label>
-                        ))}
                       </div>
-                    </>
-                  )}
-                </details>
+                    )}
+                    <p>
+                      {t("Runtime: ")}
+                      {app.requiredRuntime}
+                    </p>
+                    <label>
+                      {t("Target host")}
+                      <select
+                        value={targets[app.id] || "local"}
+                        onChange={(e) => {
+                          setTargets({ ...targets, [app.id]: e.target.value });
+                          setPlan(undefined);
+                        }}
+                      >
+                        {hosts.data?.map((host) => (
+                          <option value={host.id} key={host.id}>
+                            {host.name}
+                            {host.status !== "online" ? t(" · Offline") : ""}
+                            {(app.hostCapabilities || []).some(
+                              (c) => !host.capabilities?.includes(c),
+                            )
+                              ? t(" · Missing capabilities")
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {app.recommendedIsolation === "dedicated-host" && (
+                      <p className="notice">
+                        {t(
+                          "Dedicated host recommended. This preview never installs the app; host compatibility is checked by the Agent.",
+                        )}
+                      </p>
+                    )}
+                    <p className="muted">
+                      {t("Storage:")}{" "}
+                      {app.storageRequirements
+                        .map((s) => `${s.type} (${s.access})`)
+                        .join(", ")}
+                    </p>
+                    <small>{app.capabilities.join(" · ")}</small>
+                    {onSelect && (
+                      <label className="check-label">
+                        <input
+                          type="checkbox"
+                          checked={selected?.includes(app.id) || false}
+                          onChange={(e) =>
+                            onSelect(
+                              e.target.checked
+                                ? [...(selected || []), app.id]
+                                : (selected || []).filter(
+                                    (id) => id !== app.id,
+                                  ),
+                            )
+                          }
+                        />
+                        {t("Plan for later — do not install")}
+                      </label>
+                    )}
+                    <div className="button-row">
+                      <button
+                        onClick={() =>
+                          setExpanded(expanded === app.id ? "" : app.id)
+                        }
+                      >
+                        {t("Configure")}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            setPlan(
+                              await api(
+                                "/catalog/" + app.id + "/plan",
+                                "POST",
+                                {
+                                  logical_mappings: mappings[app.id] || {},
+                                  host_id: targets[app.id] || "local",
+                                },
+                              ),
+                            );
+                            setError("");
+                          } catch (e) {
+                            setError((e as Error).message);
+                          }
+                        }}
+                      >
+                        {t("Preview plan")}
+                      </button>
+                    </div>
+                    {expanded === app.id && (
+                      <>
+                        <ConfigurationForm app={app} />
+                        <div className="dynamic-form">
+                          <p className="muted">
+                            {t(
+                              "Storage preview mappings only. Nothing is created or mounted.",
+                            )}
+                          </p>
+                          {app.storageRequirements.map((slot) => (
+                            <label key={slot.id}>
+                              {slot.id} · {slot.access}
+                              {slot.required ? t(" (required)") : ""}
+                              <select
+                                value={mappings[app.id]?.[slot.id] || ""}
+                                onChange={(e) =>
+                                  setMappings({
+                                    ...mappings,
+                                    [app.id]: {
+                                      ...mappings[app.id],
+                                      [slot.id]: e.target.value,
+                                    },
+                                  })
+                                }
+                              >
+                                <option value="">
+                                  {t("Choose logical storage")}
+                                </option>
+                                {logical.data
+                                  ?.filter((s) =>
+                                    s.mappings.some(
+                                      (m) =>
+                                        m.host_id ===
+                                          (targets[app.id] || "local") &&
+                                        (slot.access !== "rw" ||
+                                          m.access === "rw"),
+                                    ),
+                                  )
+                                  .map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </details>
+                )}
               </section>
             );
           })}

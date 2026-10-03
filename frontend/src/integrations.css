@@ -11,35 +11,66 @@
   height: 1rem;
   flex: 0 0 1rem;
   margin: 0;
-  accent-color: #64e2ce;
+  accent-color: var(--accent);
 }
 .integration-details dl {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr);
   gap: 0.8rem 1.5rem;
   margin: 0;
-  padding: 1.25rem;
-  border: 1px solid #2b3d40;
+  padding: 1rem;
+  border: 1px solid var(--line);
   border-radius: 0.75rem;
-  background: #10191c;
+  background: var(--surface);
 }
-.integration-details dl > div { display: contents; }
-.integration-details dt { color: #a5bec3; font-weight: 400; }
-.integration-details dd { margin: 0; overflow-wrap: anywhere; }
+.integration-details dl > div {
+  display: contents;
+}
+.integration-details dt {
+  color: var(--muted);
+  font-weight: 400;
+}
+.integration-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .integration-details progress {
   display: block;
   width: 100%;
   height: 0.5rem;
   margin-top: 0.8rem;
-  accent-color: #64e2ce;
+  accent-color: var(--accent);
   border: 0;
   border-radius: 1rem;
   overflow: hidden;
 }
-.integration-details progress::-webkit-progress-bar { background: #293b3c; }
-.integration-details progress::-webkit-progress-value { background: #64e2ce; }
-.integration-details p { overflow-wrap: anywhere; }
+.integration-details progress::-webkit-progress-bar {
+  background: var(--raised);
+}
+.integration-details progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.integration-details progress::-moz-progress-bar {
+  background: var(--accent);
+}
+.integration-details p {
+  overflow-wrap: anywhere;
+}
+@container layout-card (max-width: 520px) {
+  .integration-details dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.4rem;
+  }
+  .integration-details dd {
+    margin-bottom: 0.6rem;
+  }
+}
 @media (max-width: 520px) {
-  .integration-details dl { grid-template-columns: 1fr; gap: 0.4rem; }
-  .integration-details dd { margin-bottom: 0.6rem; }
+  .integration-details dl {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .integration-details dd {
+    margin-bottom: 0.6rem;
+  }
 }

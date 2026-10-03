@@ -12,6 +12,7 @@ export function bytes(value: number | null | undefined): string {
     });
   if (value < 1024 ** 2) return `${number(value / 1024)} ${units[1]}`;
   if (value < 1024 ** 3) return `${number(value / 1024 ** 2)} MiB`;
+  if (value >= 1024 ** 4) return `${number(value / 1024 ** 4)} TiB`;
   return `${number(value / 1024 ** 3)} GiB`;
 }
 export function uptime(seconds: number): string {

@@ -859,7 +859,7 @@ test("all layout cards resize without a column prerequisite and keep their conte
     );
     for (let index = 0; index < count; index++) {
       const card = cards.nth(index);
-      await card.locator(".layout-width select").selectOption("33");
+      await card.locator(":scope > .layout-item-tools .layout-width select").selectOption("33");
       const ratio = await card.evaluate(
         (node) =>
           node.getBoundingClientRect().width /
@@ -971,6 +971,7 @@ test("whole cards move, hide, restore and persist without extra heading rows", a
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1200 });
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "Ongoing torrents" }),
@@ -988,6 +989,11 @@ test("whole cards move, hide, restore and persist without extra heading rows", a
     '.layout-item[data-layout-title="Ongoing torrents"]',
   );
   const surface = torrents.locator(".layout-drag-surface");
+  // Keep both cards on screen: dragTo scrolling after pointer-down can change
+  // the element beneath the pointer before Chromium starts the native drag.
+  await cards
+    .first()
+    .evaluate((node) => node.scrollIntoView({ block: "start" }));
   const cardBox = (await torrents.boundingBox())!;
   const dragBox = (await surface.boundingBox())!;
   expect(Math.abs(cardBox.height - dragBox.height)).toBeLessThan(2);
@@ -996,7 +1002,8 @@ test("whole cards move, hide, restore and persist without extra heading rows", a
     .boundingBox())!;
   expect(toolsBox.y).toBeGreaterThan(cardBox.y);
   expect(toolsBox.y + toolsBox.height).toBeLessThan(cardBox.y + cardBox.height);
-  await surface.dragTo(cards.first().locator(".layout-drag-surface"), {
+  // Dropping on a nested service surface also reaches the enclosing Apps card.
+  await surface.dragTo(cards.first().locator(".layout-drag-surface").last(), {
     sourcePosition: { x: 100, y: cardBox.height - 30 },
     targetPosition: { x: 100, y: 80 },
   });

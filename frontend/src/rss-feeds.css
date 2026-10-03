@@ -1,7 +1,7 @@
 .seedbox-daily .rss-feed-card button:not(.primary) {
   background: var(--raised);
   color: var(--text);
-  border-color: var(--muted);
+  border-color: var(--line);
 }
 .seedbox-daily .rss-feed-card button:hover:not(:disabled) {
   border-color: var(--accent);
@@ -12,6 +12,8 @@
 .rss-feed-card summary {
   cursor: pointer;
   padding: 8px 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .rss-feed-list {
@@ -21,6 +23,10 @@
 .rss-feed-list .rss-feed-card {
   padding: 14px 16px;
   margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
 }
 .rss-feed-list .rss-feed-card h3 {
   margin-top: 0;
@@ -42,7 +48,10 @@
   gap: 4px;
   padding: 10px 0;
   overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.rss-download-history li:last-child {
+  border-bottom: 0;
 }
 
 .rss-history-performance {
@@ -50,6 +59,9 @@
   gap: 8px;
   min-width: 0;
   margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--raised);
 }
 
 .rss-history-state {

@@ -501,13 +501,15 @@ function LayoutItem({
       onDragLeave={() => setOver(false)}
       onDrop={(event) => {
         if (!editing || !event.dataTransfer.types.includes(dragType)) return;
-        event.preventDefault();
-        event.stopPropagation();
         setOver(false);
         try {
           const data = JSON.parse(event.dataTransfer.getData(dragType));
-          if (data.group === group && typeof data.id === "string")
+          if (data.group === group && typeof data.id === "string") {
+            event.preventDefault();
+            event.stopPropagation();
             onDrop(data.id);
+          }
+          // A drop for an enclosing group must reach that group's card.
         } catch {
           /* Ignore unrelated or malformed drags. */
         }
@@ -590,7 +592,10 @@ function LayoutItem({
           </div>
         </>
       )}
-      <div className="layout-item-content" inert={editing}>
+      <div
+        className="layout-item-content"
+        inert={editing && !item.props["data-layout-nested"]}
+      >
         {item}
       </div>
     </div>

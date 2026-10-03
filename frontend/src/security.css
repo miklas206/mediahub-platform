@@ -1,7 +1,7 @@
 .security-workspace {
   display: grid;
-  gap: 22px;
-  margin-bottom: 32px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .security-workspace > header,
 .session-row {
@@ -18,18 +18,23 @@
 .security-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
 }
 .security-card,
 .recovery-panel {
-  padding: 26px;
+  padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 14px;
   background: var(--surface);
   min-width: 0;
+  box-shadow: 0 4px 16px #00000012;
 }
 .security-card > svg {
   color: var(--accent);
+}
+.security-card h3 {
+  margin-top: 10px;
+  margin-bottom: 6px;
 }
 .security-card p {
   color: var(--muted);
@@ -49,6 +54,8 @@
 }
 .security-card summary {
   cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 .totp-qr {
   display: block;
@@ -60,7 +67,7 @@
   margin: 22px auto;
 }
 .recovery-panel {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .recovery-grid {
   display: grid;
@@ -71,6 +78,10 @@
 .recovery-grid code {
   user-select: all;
   overflow-wrap: anywhere;
+  background: var(--raised);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 .session-row {
   padding: 16px 0;
@@ -86,6 +97,10 @@
   .session-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .security-workspace > header {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
   .security-card {
     padding: 20px;
