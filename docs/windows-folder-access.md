@@ -77,3 +77,35 @@ credential prompt/session. Downloaded scripts contain the saved connection
 details but no password. Removing this app removes MediaHub's saved connection
 and monitoring; it leaves server shares, media files and Windows drive mappings
 in place.
+
+
+## Forgotten SMB password
+
+The **Reset SMB password** card downloads `reset-password.ps1`. This tool is for
+an existing local account on a Linux/Samba server with SSH. It requires a separate
+server administrator login with root or sudo rights; the old SMB password is not
+required. NAS and Windows server accounts must be reset using their own account
+administration. If the administrator login is also lost, use server recovery.
+
+Run the downloaded file from normal Windows PowerShell after reviewing it:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\reset-password.ps1"
+```
+
+Enter the local Samba account and the SSH administrator account, confirm the
+selected server/account, and verify the SSH host fingerprint on first connection.
+SSH and sudo ask for administrator authentication; `New SMB password` asks for
+the new share password twice in the same terminal. MediaHub receives no password.
+The tool uses Windows OpenSSH Client and checks that the Samba account exists.
+It stops if Unix password synchronization is enabled or cannot be verified.
+It neither creates accounts nor changes shares, folder permissions or media.
+
+After success, close open files on the affected mapped drive and disconnect only
+that drive in File Explorer. Remove an outdated Windows credential for that
+server in Credential Manager if present. Then reconnect with the SMB account and
+new password. Other devices may need the new password on their next sign-in.
+Existing sessions are not forcibly disconnected by the reset tool.
+
+Downloads are restricted to MediaHub administrators. Generating or downloading
+the file does not contact the server or perform a password reset.

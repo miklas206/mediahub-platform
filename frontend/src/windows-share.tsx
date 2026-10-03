@@ -10,6 +10,7 @@ import {
   FolderOpen,
   HardDrive,
   Info,
+  KeyRound,
   Laptop,
   Network,
   RefreshCw,
@@ -65,7 +66,7 @@ export function WindowsSharePage({
   const [status, setStatus] = useState<ShareStatus>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<
-    "save" | "check" | "connect" | "diagnostics" | null
+    "save" | "check" | "connect" | "diagnostics" | "reset-password" | null
   >(null);
   const [error, setError] = useState("");
   const [checkError, setCheckError] = useState("");
@@ -201,7 +202,7 @@ export function WindowsSharePage({
     }
   }
 
-  async function download(kind: "connect" | "diagnostics") {
+  async function download(kind: "connect" | "diagnostics" | "reset-password") {
     if (!configuration || busy) return;
     setBusy(kind);
     setError("");
@@ -238,9 +239,11 @@ export function WindowsSharePage({
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage(
-        kind === "connect"
-          ? "Connection helper downloaded. Run it on your Windows PC."
-          : "Diagnostic helper downloaded. Its results appear on your Windows PC.",
+        kind === "reset-password"
+          ? "Password reset helper downloaded. Run it on Windows with your Samba server administrator login."
+          : kind === "connect"
+            ? "Connection helper downloaded. Run it on your Windows PC."
+            : "Diagnostic helper downloaded. Its results appear on your Windows PC.",
       );
     } catch (failure) {
       setError((failure as Error).message);
@@ -933,6 +936,103 @@ export function WindowsSharePage({
                 "Saving this guide changes connection details only. Files remain on your server.",
               )}
             </p>
+          </div>
+        </section>
+        <section
+          className="panel windows-share-card"
+          key="password"
+          data-layout-title={t("Reset SMB password")}
+        >
+          <header className="panel-heading">
+            <h2>
+              <KeyRound size={18} /> {t("Reset SMB password")}
+            </h2>
+          </header>
+          <div className="windows-share-content">
+            <p>
+              {t(
+                "Forgot the share password? Set a new password for an existing local Samba account. You do not need the old SMB password.",
+              )}
+            </p>
+            <p className="muted">
+              {t(
+                "Requires a Linux/Samba server with SSH and a server administrator login with sudo or root access. For a NAS or Windows server, reset the account in that server's administration.",
+              )}
+            </p>
+            <button
+              type="button"
+              className="windows-share-download"
+              disabled={!configuration || !!busy || !!dirty}
+              onClick={() => void download("reset-password")}
+            >
+              <Download size={16} />{" "}
+              {t(
+                busy === "reset-password"
+                  ? "Downloading…"
+                  : "Download SMB password reset tool",
+              )}
+            </button>
+            {!configuration && (
+              <p className="muted">
+                {t(
+                  "Save the share details first to get your network path and Windows helper.",
+                )}
+              </p>
+            )}
+            {dirty && (
+              <p className="muted">
+                {t(
+                  "The connection steps use your saved details. Save your changes before downloading a new helper.",
+                )}
+              </p>
+            )}
+            <details className="windows-share-help windows-share-script">
+              <summary>
+                {t("How to reset the password and reconnect Windows")}
+              </summary>
+              <ol>
+                <li>
+                  {t(
+                    "Save reset-password.ps1 in Downloads. Open Windows PowerShell as your usual Windows user and run the command below.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Enter the existing local SMB account and the server's SSH administrator account. Confirm the selected server and account. Verify the SSH fingerprint before accepting a first connection.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Log in to SSH and sudo when asked. At New SMB password, enter your new share password twice. Passwords stay in the encrypted SSH session and are not sent to MediaHub.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "After the server confirms success, close files on the mapped drive and disconnect only that drive in File Explorer. In Windows Credential Manager, remove an outdated Windows credential for this server if present.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "Reconnect using the saved network path, the SMB account and your new password. Other devices may also need the new password at their next login.",
+                  )}
+                </li>
+              </ol>
+              <code className="windows-share-command">
+                {
+                  'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\\Downloads\\reset-password.ps1"'
+                }
+              </code>
+              <p className="muted">
+                {t(
+                  "Review the downloaded script before running it. This command allows it only in the new PowerShell process and does not change your permanent script policy. If you saved the file elsewhere, replace the path.",
+                )}
+              </p>
+              <p className="muted">
+                {t(
+                  "The tool does not create accounts or change shares, folder permissions or media files. It stops if Samba is configured to synchronize Linux passwords. If the administrator login is also forgotten, use the server's recovery procedure.",
+                )}
+              </p>
+            </details>
           </div>
         </section>
       </LayoutGroup>

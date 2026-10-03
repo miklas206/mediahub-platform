@@ -101,7 +101,7 @@ def test_optional_fields_default_and_normalize():
 def test_routes_require_login_and_configuration_changes_require_csrf(client, logged_in):
     cookie = client.cookies.get("mediahub_session")
     client.cookies.clear()
-    for suffix in ("configuration", "status", "connect.ps1", "diagnostics.ps1"):
+    for suffix in ("configuration", "status", "connect.ps1", "diagnostics.ps1", "reset-password.ps1"):
         assert client.get("/api/v1/windows-share/" + suffix).status_code == 401
     assert client.post("/api/v1/windows-share/check").status_code == 401
     assert client.put("/api/v1/windows-share/configuration", json=CONFIG).status_code == 401
@@ -123,6 +123,7 @@ def test_viewer_cannot_save_probe_or_download_helpers(logged_in, monkeypatch):
     assert logged_in.post("/api/v1/windows-share/check").status_code == 403
     assert logged_in.get("/api/v1/windows-share/connect.ps1").status_code == 403
     assert logged_in.get("/api/v1/windows-share/diagnostics.ps1").status_code == 403
+    assert logged_in.get("/api/v1/windows-share/reset-password.ps1").status_code == 403
 
 
 def test_catalog_does_not_install_or_register_an_unconfigured_share(logged_in):
@@ -297,6 +298,7 @@ def test_downloads_are_generated_from_saved_connection_without_running_them(
     for endpoint, filename in (
         ("connect.ps1", "mediahub-connect-share.ps1"),
         ("diagnostics.ps1", "mediahub-windows-diagnostics.ps1"),
+        ("reset-password.ps1", "mediahub-reset-smb-password.ps1"),
     ):
         response = logged_in.get("/api/v1/windows-share/" + endpoint)
         assert response.status_code == 200

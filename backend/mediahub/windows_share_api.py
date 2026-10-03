@@ -46,17 +46,21 @@ async def check(request: Request, user=Depends(administrator)):
     return result(await svc.windows_share.status(force=True))
 
 
-def script_download(request, diagnostics):
+def script_download(request, kind):
     from mediahub.windows_share_scripts import (
         generate_connect_script,
         generate_diagnostics_script,
+        generate_password_reset_script,
         utf8_bom_script,
     )
 
     config = services(request).windows_share.require_configuration()
-    generate = generate_diagnostics_script if diagnostics else generate_connect_script
+    generate, filename = {
+        "connect": (generate_connect_script, "mediahub-connect-share.ps1"),
+        "diagnostics": (generate_diagnostics_script, "mediahub-windows-diagnostics.ps1"),
+        "reset-password": (generate_password_reset_script, "mediahub-reset-smb-password.ps1"),
+    }[kind]
     script = generate(config.server, config.shareName, config.driveLetter, config.username or None)
-    filename = "mediahub-windows-diagnostics.ps1" if diagnostics else "mediahub-connect-share.ps1"
     return Response(
         utf8_bom_script(script),
         media_type="application/octet-stream",
@@ -70,9 +74,14 @@ def script_download(request, diagnostics):
 
 @router.get("/connect.ps1")
 def connect_script(request: Request, user=Depends(administrator)):
-    return script_download(request, False)
+    return script_download(request, "connect")
 
 
 @router.get("/diagnostics.ps1")
 def diagnostic_script(request: Request, user=Depends(administrator)):
-    return script_download(request, True)
+    return script_download(request, "diagnostics")
+
+
+@router.get("/reset-password.ps1")
+def password_reset_script(request: Request, user=Depends(administrator)):
+    return script_download(request, "reset-password")

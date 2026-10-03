@@ -11,10 +11,11 @@ import pytest
 from mediahub.windows_share_scripts import (
     generate_connect_script,
     generate_diagnostics_script,
+    generate_password_reset_script,
     utf8_bom_script,
 )
 
-GENERATORS = (generate_connect_script, generate_diagnostics_script)
+GENERATORS = (generate_connect_script, generate_diagnostics_script, generate_password_reset_script)
 POWERSHELL = shutil.which("powershell.exe") if os.name == "nt" else None
 
 
@@ -190,7 +191,7 @@ def test_real_ps51_parser_accepts_scripts_and_mutation_surface_is_limited(genera
     assert not any(command.startswith(("Set-", "Remove-", "Clear-", "Enable-", "Disable-")) for command in commands)
     assert ("New-PSDrive" in commands) == (generate is generate_connect_script)
     assert "Get-Credential" not in commands
-    assert ("Read-Host" in commands) == (generate is generate_connect_script)
+    assert ("Read-Host" in commands) == (generate is not generate_diagnostics_script)
     if generate is generate_connect_script:
         assert "-AsSecureString" in path.read_text(encoding="utf-8-sig")
 
@@ -279,3 +280,41 @@ def test_access_operation_checks_browsing_without_returning_names(tmp_path):
         {"Ok": True, "Value": False},
     ]
     assert "private-entry-name" not in output
+
+
+def test_password_reset_requires_confirmation_and_only_changes_existing_samba_account():
+    script = generate_password_reset_script("192.168.1.148", "MediaHub", "M", "mediahub-upload")
+    assert "StrictHostKeyChecking=ask" in script
+    assert "ConnectTimeout=10" in script
+    assert script.index("$PSCmdlet.ShouldProcess") < script.index("& $Ssh")
+    assert "unix password sync" in script and "No|no)" in script
+    assert "pdbedit -L" in script and "grep -Fxq" in script
+    assert "$admin smbpasswd '__SMB_USER__'" in script
+    assert "smbpasswd -a" not in script and "smbpasswd -s" not in script
+    assert "net use" not in script and "Remove-SmbMapping" not in script
+    assert "Get-Credential" not in script and "StrictHostKeyChecking=no" not in script
+    assert "$SmbUsername -cnotmatch" in script and "$ServerAdmin -cnotmatch" in script
+
+
+@pytest.mark.skipif(not POWERSHELL, reason="Windows PowerShell requires Windows")
+def test_password_reset_whatif_and_invalid_users_never_invoke_ssh(tmp_path):
+    path = tmp_path / "reset.ps1"
+    path.write_bytes(utf8_bom_script(generate_password_reset_script("192.168.1.148", "MediaHub", "M")))
+    literal = "'" + str(path).replace("'", "''") + "'"
+    command = r"""
+    $ErrorActionPreference = 'Stop'
+    function Read-Host { throw 'No interactive input allowed in this test' }
+    & SCRIPT -SmbUsername mediahub-upload -ServerAdmin mediahub -WhatIf 6>$null
+    $Rejected = @()
+    foreach ($Pair in @(
+      @{Smb='-root';Admin='mediahub'},
+      @{Smb='user;id';Admin='mediahub'},
+      @{Smb='DOMAIN\reader';Admin='mediahub'},
+      @{Smb='reader';Admin='root;id'}
+    )) {
+      try { & SCRIPT -SmbUsername $Pair.Smb -ServerAdmin $Pair.Admin -WhatIf 6>$null; $Rejected += $false }
+      catch { $Rejected += $true }
+    }
+    $Rejected | ConvertTo-Json -Compress
+    """.replace("SCRIPT", "([scriptblock]::Create([System.IO.File]::ReadAllText(" + literal + ")))" )
+    assert json.loads(_powershell(command).splitlines()[-1]) == [True, True, True, True]

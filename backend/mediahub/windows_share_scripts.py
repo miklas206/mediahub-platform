@@ -35,6 +35,74 @@ def utf8_bom_script(script: str) -> bytes:
     return script.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
 
 
+def generate_password_reset_script(host: str, share: str, drive: str, username: str | None = None) -> str:
+    """Reset an existing local Samba account through a user-owned SSH terminal.
+
+    No password goes through Core, command arguments, or a generated file.
+    The user supplies a separate server administrator account at run time.
+    """
+    return r'''[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
+param([string]$SmbUsername = '', [string]$ServerAdmin = '')
+''' + _configuration(host, share, drive, username) + r'''
+$ErrorActionPreference = 'Stop'
+Write-Host ('MediaHub - Nulstil SMB-adgangskode paa ' + $ServerAddress)
+Write-Host 'Dette er til en Linux/Samba-server med SSH og en eksisterende lokal SMB-konto.'
+Write-Host 'Du skal kende serverens administratorlogin. Den gamle SMB-kode er ikke noedvendig.'
+Write-Host 'NAS eller Windows-server: brug serverens egen kontoadministration i stedet.'
+Write-Host 'Adgangskoder indtastes skjult i denne terminal via SSH og sendes ikke til MediaHub.'
+Write-Host 'Andre pc-er skal bruge den nye SMB-kode ved naeste login. Ctrl+C afbryder.'
+if ([string]::IsNullOrWhiteSpace($SmbUsername)) {
+    $SmbUsername = Read-Host -Prompt ('Lokal SMB-bruger (Enter bruger ' + $SuggestedUsername + ')')
+    if ([string]::IsNullOrWhiteSpace($SmbUsername)) { $SmbUsername = $SuggestedUsername }
+}
+if ($SmbUsername -cnotmatch '^[a-zA-Z_][a-zA-Z0-9_.-]{0,31}$') {
+    throw 'Angiv den eksisterende lokale Samba-bruger, uden domaene, mellemrum eller kommandoer.'
+}
+if ([string]::IsNullOrWhiteSpace($ServerAdmin)) {
+    $ServerAdmin = Read-Host -Prompt 'Serverens SSH-administrator (fx mediahub; ikke din Windows-bruger)'
+}
+if ($ServerAdmin -cnotmatch '^[a-zA-Z_][a-zA-Z0-9_.-]{0,31}$') {
+    throw 'Angiv et lokalt SSH-login uden domaene eller kommandoer.'
+}
+if (-not $PSCmdlet.ShouldProcess(($ServerAddress + ' / ' + $SmbUsername), 'Saet en ny adgangskode for denne eksisterende SMB-konto')) { return }
+$Ssh = Join-Path $env:WINDIR 'System32\OpenSSH\ssh.exe'
+if (-not (Test-Path -LiteralPath $Ssh -PathType Leaf)) {
+    throw 'Windows OpenSSH-klient mangler. Installer OpenSSH Client under Windows valgfrie funktioner, eller nulstil kontoen fra serverens terminal.'
+}
+Write-Host 'Foerste forbindelse: sammenlign SSH-fingeraftrykket med serverens, foer du godkender det.'
+Write-Host 'SSH-login og evt. sudo-login bruger serverens administratorkode. New SMB password er den nye SMB-kode; indtast den to gange.'
+$RemoteCommand = @'
+set -eu
+for tool in smbpasswd pdbedit testparm; do
+    command -v "$tool" >/dev/null 2>&1 || { echo 'Samba tools missing. Use the NAS/server account administration.' >&2; exit 20; }
+done
+admin=''
+if [ "$(id -u)" != 0 ]; then
+    command -v sudo >/dev/null 2>&1 || { echo 'Administrator access required.' >&2; exit 21; }
+    sudo -v || exit 21
+    admin=sudo
+fi
+sync=$($admin testparm -s --parameter-name='unix password sync' 2>/dev/null) || exit 22
+case "$sync" in
+    No|no) ;;
+    *) echo 'Unix password sync enabled or unknown. Ask the server administrator to reset SMB without changing the Linux password.' >&2; exit 22 ;;
+esac
+$admin pdbedit -L | cut -d: -f1 | grep -Fxq '__SMB_USER__' || { echo 'Existing local Samba account not found. No account created.' >&2; exit 23; }
+$admin smbpasswd '__SMB_USER__'
+'@
+$RemoteCommand = $RemoteCommand.Replace('__SMB_USER__', $SmbUsername).Replace("`r", '')
+& $Ssh -t -o StrictHostKeyChecking=ask -o ConnectTimeout=10 -l $ServerAdmin $ServerAddress $RemoteCommand
+if ($LASTEXITCODE -ne 0) {
+    throw 'Nulstillingen blev ikke bekraeftet. Se serverens fejl ovenfor. Kontrollér SSH-login, sudo-adgang og den eksisterende Samba-konto.'
+}
+Write-Host 'Serveren har bekraeftet den nye SMB-adgangskode.' -ForegroundColor Green
+Write-Host ('Luk filer paa ' + $LocalPath + ' og afbryd kun dette netvaerksdrev i Stifinder.')
+Write-Host ('Aabn Windows Legitimationsstyring, og fjern kun et gammelt gemt Windows-login til ' + $ServerAddress + ', hvis det findes.')
+Write-Host ('Forbind igen til ' + $SharePath + ' med SMB-brugeren ' + $SmbUsername + ' og din nye kode.')
+Write-Host 'Dette vaerktoej aendrer ikke dine Windows-drev, delingsrettigheder eller mediefiler.'
+'''
+
+
 # Potentially blocking read operations run in an owned, hidden child process.
 # Its only output is small JSON metadata; killing it cannot affect another shell.
 # In particular Test-Path/Get-PSDrive on an offline SMB server cannot stall the UI

@@ -1855,7 +1855,7 @@ async function windowsShareFixtures(
         return;
       }
       data = report();
-    } else if (path === "connect.ps1" || path === "diagnostics.ps1") {
+    } else if (path === "connect.ps1" || path === "diagnostics.ps1" || path === "reset-password.ps1") {
       state.downloads.push(path);
       // Download fixtures are comments only and are never executed by these tests.
       await route.fulfill({
@@ -1947,9 +1947,9 @@ async function windowsShareReady(page: Page) {
   await expect(
     page.locator(".windows-share-form fieldset input").first(),
   ).toBeEnabled();
-  await expect(page.locator(".windows-share-card")).toHaveCount(4);
+  await expect(page.locator(".windows-share-card")).toHaveCount(5);
   await expect(page.locator(".windows-share-intro .badge")).not.toContainText(
-    translated("Loading connectionâ€¦"),
+    translated("Loading connection…"),
   );
 }
 
@@ -2007,14 +2007,14 @@ test("Windows folder app installs through the store, persists its saved path and
   await expect(storeCard.locator(".app-icon svg")).toBeVisible();
   await expect(
     storeCard.getByRole("link", {
-      name: translated("Set up Windows access â†’"),
+      name: translated("Set up Windows access →"),
       exact: true,
     }),
   ).toBeVisible();
   await captureWindowsShare(page, "windows-share-store-desktop.png");
   await storeCard
     .getByRole("link", {
-      name: translated("Set up Windows access â†’"),
+      name: translated("Set up Windows access →"),
       exact: true,
     })
     .click();
@@ -2150,7 +2150,7 @@ test("Windows folder app installs through the store, persists its saved path and
   });
   await expect(installed).toBeVisible();
   await expect(installed).toContainText(
-    translated("Installed Â· Windows setup and connection checks"),
+    translated("Installed · Windows setup and connection checks"),
   );
   await page.locator('.sidebar a[href="/apps/windows-share"]').click();
   await expect(page).toHaveURL(/\/apps\/windows-share$/);
@@ -3154,4 +3154,62 @@ test("native dashboard cards resize on the grid during the gesture", async ({
       ),
     )
     .toBeLessThan(1);
+});
+
+
+test("SMB password reset tool is guided, translated and downloads without sending secrets", async ({
+  page,
+}) => {
+  const state = await windowsShareFixtures(page);
+  await page.goto("/apps/windows-share");
+  await windowsShareReady(page);
+  const button = page.getByRole("button", {
+    name: translated("Download SMB password reset tool"),
+    exact: true,
+  });
+  await expect(button).toBeDisabled();
+  state.configuration = { ...windowsShareExample };
+  await page.reload();
+  await windowsShareReady(page);
+  await expect(button).toBeEnabled();
+  await page
+    .getByText(translated("How to reset the password and reconnect Windows"), {
+      exact: true,
+    })
+    .click();
+  const card = page
+    .locator(".windows-share-card")
+    .filter({
+      has: page.getByRole("heading", {
+        name: translated("Reset SMB password"),
+        exact: true,
+      }),
+    });
+  await expect(card).toContainText(
+    translated(
+      "Forgot the share password? Set a new password for an existing local Samba account. You do not need the old SMB password.",
+    ),
+  );
+  await expect(card.locator(".windows-share-command")).toContainText(
+    "reset-password.ps1",
+  );
+  await expect(card.locator('input[type="password"]')).toHaveCount(0);
+  const download = page.waitForEvent("download");
+  await button.click();
+  expect((await download).suggestedFilename()).toBe("reset-password.ps1");
+  expect(state.downloads).toEqual(["reset-password.ps1"]);
+  expect(state.writes).toEqual([]);
+  await card.screenshot({
+    path: "../.qa/smb-password-reset-desktop.png",
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await card.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await card.screenshot({
+    path: "../.qa/smb-password-reset-mobile.png",
+    animations: "disabled",
+  });
 });
