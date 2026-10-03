@@ -111,7 +111,6 @@ export function SeedboxRSS(
     <LayoutGroup
       id="seedbox-torrent-panels"
       className="torrent-panels"
-      resizable
       wideFirst
     >
       {props.torrentList}

@@ -69,7 +69,71 @@ test.beforeEach(async ({ page }) => {
       };
     if (path === "/system/status") data = metrics;
     if (path === "/apps") data = [app];
-    if (path === "/updates/summary") data = { count: 0 };
+    if (path === "/updates/summary")
+      data = {
+        count: 0,
+        checkedAt: 1,
+        items: [],
+        notifications: [],
+        intervalHours: 24,
+        lastError: null,
+      };
+    if (path === "/updates/platform")
+      data = {
+        configured: false,
+        installedVersion: "QA",
+        latestVersion: null,
+        assets: {},
+        updateAvailable: false,
+        message: "QA",
+      };
+    if (path.endsWith("/operation") || path === "/updates/queue")
+      data = { state: "idle", message: "", logs: [], items: [] };
+    if (path === "/backups")
+      data = { includes: ["Configuration"], excludes: ["Media"] };
+    if (path === "/hosts")
+      data = [
+        {
+          id: "qa",
+          name: "Local host",
+          address: "http://qa.local",
+          local: true,
+          status: "online",
+          capabilities: [],
+        },
+      ];
+    if (path === "/runtime")
+      data = { connected: true, version: "QA", docker: { available: true } };
+    if (path === "/catalog")
+      data = [
+        {
+          id: "org.mediahub.seedbox",
+          name: "Seedbox",
+          version: "QA",
+          description: "Torrent downloads",
+          maintainer: { name: "QA" },
+          capabilities: [],
+          configFields: [],
+          storageRequirements: [],
+        },
+      ];
+    if (path === "/seedbox/rss/feeds/settings") data = { intervalSeconds: 300 };
+    if (path === "/security")
+      data = {
+        totpEnabled: false,
+        requireTotp: false,
+        recoveryCodesRemaining: 0,
+      };
+    if (path === "/network")
+      data = {
+        pending: {
+          listen_host: "127.0.0.1",
+          port: 18766,
+          base_url: "http://localhost",
+          trusted_proxies: [],
+          allowed_origins: [],
+        },
+      };
     if (path === "/apps/seedbox/runtime")
       data = {
         view: "seedbox",
@@ -85,6 +149,8 @@ test.beforeEach(async ({ page }) => {
             torrents: 2,
             downloading: 1,
             seeding: 1,
+            downloadSpeed: 1000,
+            uploadSpeed: 500,
           },
           vpn: { verified: true },
           storage: { mounted: true, appWritable: true },
@@ -145,6 +211,165 @@ test.beforeEach(async ({ page }) => {
       data = { feeds: [], intervalSeconds: 300 };
     await route.fulfill({ json: { data } });
   });
+});
+
+test("all layout cards resize without a column prerequisite and keep their content contained", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const path of [
+    "/",
+    "/apps/seedbox?section=vpn",
+    "/apps/seedbox?section=torrents",
+    "/apps/seedbox?section=settings",
+    "/apps",
+    "/store",
+    "/storage",
+    "/hosts",
+    "/integrations",
+    "/activity",
+    "/logs",
+    "/updates",
+    "/backups",
+    "/settings",
+    "/settings#Maintenance",
+    "/settings#Storage",
+    "/settings#Network",
+    "/settings#Agent",
+    "/settings#Security",
+    "/settings#Advanced",
+  ]) {
+    await page.goto(path);
+    if (path.includes("#"))
+      await page
+        .getByRole("tab", { name: path.split("#")[1], exact: true })
+        .click();
+    await expect(page.locator(".layout-item").first()).toBeVisible();
+    const customize = page.getByRole("button", { name: "Customize layout" });
+    if (await customize.count()) await customize.click();
+    await expect(
+      page.getByRole("button", { name: "Done arranging" }),
+      path,
+    ).toBeVisible();
+    const technicalStorage = page.locator(
+      "details.technical-disclosure > summary",
+    );
+    if (await technicalStorage.count()) await technicalStorage.click();
+    await expect(page.getByLabel("Columns", { exact: true })).toHaveValue("0");
+    const cards = page.locator(".layout-item");
+    const count = await cards.count();
+    expect(await page.locator(".layout-width select").count(), path).toBe(
+      count,
+    );
+    for (let index = 0; index < count; index++) {
+      const card = cards.nth(index);
+      await card.locator(".layout-width select").selectOption("33");
+      const ratio = await card.evaluate(
+        (node) =>
+          node.getBoundingClientRect().width /
+          node.parentElement!.getBoundingClientRect().width,
+      );
+      expect(
+        ratio,
+        `${path}: ${await card.getAttribute("data-layout-title")}`,
+      ).toBeGreaterThan(0.29);
+      expect(ratio, path).toBeLessThan(0.35);
+      const overflowing = await card.evaluate((node) =>
+        [
+          ...node.querySelectorAll<HTMLElement>(
+            ".panel, .phase-content, .security-card, .seedbox-client-summary",
+          ),
+        ]
+          .filter(
+            (content) =>
+              content.clientWidth > 0 &&
+              content.scrollWidth > content.clientWidth + 1,
+          )
+          .map((content) => content.className),
+      );
+      expect(overflowing, path).toEqual([]);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      path,
+    ).toBe(true);
+  }
+  expect(errors).toEqual([]);
+});
+
+test("VPN width changes persist and content follows the card instead of the viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/apps/seedbox?section=vpn");
+  await expect(
+    page.getByRole("heading", { name: "VPN Location", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const vpn = page.locator('.layout-item[data-layout-title="VPN Location"]');
+  const width = vpn.locator(".layout-width select");
+  const originalWidth = (await vpn.boundingBox())!.width;
+  await width.selectOption("33");
+  expect((await vpn.boundingBox())!.width).toBeLessThan(originalWidth * 0.35);
+  // Page columns affect default card widths; an explicit width works independently.
+  await page.getByLabel("Columns", { exact: true }).selectOption("1");
+  expect((await vpn.boundingBox())!.width).toBeLessThan(originalWidth * 0.35);
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "Country", exact: true }),
+  ).toBeEnabled();
+  expect(
+    await vpn
+      .locator(".panel")
+      .evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
+  await page.reload();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await expect(width).toHaveValue("33");
+  await page.screenshot({
+    path: "../.qa/vpn-width-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await width.selectOption("100");
+  expect((await vpn.boundingBox())!.width).toBeGreaterThan(
+    originalWidth * 0.98,
+  );
+  await width.selectOption("25");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => {
+      const box = (await page.locator(".sidebar").boundingBox())!;
+      return box.x + box.width;
+    })
+    .toBeLessThanOrEqual(1);
+  expect(
+    await vpn.evaluate(
+      (node) =>
+        node.getBoundingClientRect().width /
+        node.parentElement!.getBoundingClientRect().width,
+    ),
+  ).toBeGreaterThan(0.98);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "../.qa/vpn-width-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "Reset this page" }).click();
+  await expect(width).toHaveValue("-1");
+  expect((await vpn.boundingBox())!.width).toBeGreaterThan(
+    originalWidth * 0.98,
+  );
 });
 
 test("whole cards move, hide, restore and persist without extra heading rows", async ({

@@ -284,12 +284,12 @@ export function TorrentList({
               return (
                 <Fragment key={torrent.hash}>
                   <tr>
-                    <td className="torrent-name">
+                    <td className="torrent-name" data-label={t("Name")}>
                       <span className="torrent-title" title={torrent.name}>
                         {torrent.name}
                       </span>
                     </td>
-                    <td className="torrent-progress">
+                    <td className="torrent-progress" data-label={t("Progress")}>
                       <progress
                         max={1}
                         value={torrent.progress}
@@ -299,14 +299,14 @@ export function TorrentList({
                       />
                       <small>{(torrent.progress * 100).toFixed(1)}%</small>
                     </td>
-                    <td>
+                    <td data-label={t("Status")}>
                       <span className="torrent-state" title={torrent.state}>
                         {paused
                           ? t("Paused")
                           : t(stateLabels[torrent.state] || torrent.state)}
                       </span>
                     </td>
-                    <td>
+                    <td data-label={t("Transfer")}>
                       <div className="torrent-transfer">
                         <span title={t("Download speed")}>
                           <ArrowDown size={12} aria-hidden="true" />
@@ -321,15 +321,21 @@ export function TorrentList({
                       </div>
                     </td>
                     <td
+                      data-label={t("Ratio")}
                       title={t(
                         "qBittorrent upload/download history. Tracker totals may differ.",
                       )}
                     >
                       {torrent.ratio.toFixed(2)}
                     </td>
-                    <td>{hasEta(torrent) ? uptime(torrent.eta) : "—"}</td>
-                    <td>{bytes(torrent.size)}</td>
-                    <td>
+                    <td data-label={t("ETA")}>
+                      {hasEta(torrent) ? uptime(torrent.eta) : "—"}
+                    </td>
+                    <td data-label={t("Size")}>{bytes(torrent.size)}</td>
+                    <td
+                      className="torrent-actions-cell"
+                      data-label={t("Actions")}
+                    >
                       <div className="torrent-actions">
                         <button
                           type="button"

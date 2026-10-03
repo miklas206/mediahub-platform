@@ -1186,7 +1186,6 @@ function Dashboard({
       <LayoutGroup
         id="ui-Dashboard-1"
         className="dashboard-grid"
-        resizable
         defaultHidden={cards
           .filter(({ id }) => !visible.has(id))
           .map(({ id }) => id)}
@@ -1279,7 +1278,7 @@ function Apps({ revision }: { revision: number }) {
           ))}
         </div>
       ) : data.length ? (
-        <LayoutGroup id="ui-Apps-1" className="apps-grid" resizable>
+        <LayoutGroup id="ui-Apps-1" className="apps-grid">
           {[...data]
             .sort((left, right) => left.name.localeCompare(right.name))
             .map((app) => (

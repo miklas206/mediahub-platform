@@ -23,6 +23,14 @@ import "./page-layout.css";
 
 type Layouts = Record<string, string[]>;
 type Geometry = { columns: number; widths: Record<string, number> };
+const widthPercentages = [25, 33, 50, 67, 75, 100];
+export function cardWidthPercentage(width: number, columns: number) {
+  // Older preferences store a column span. Keep the same visual width on upgrade.
+  if (width === 0) return 100;
+  if (width <= 3 && width > 0)
+    return Math.round((Math.min(width, columns || 3) / (columns || 3)) * 100);
+  return width;
+}
 export function readGeometry(raw: string | null): Geometry {
   try {
     const value = JSON.parse(raw || "{}");
@@ -36,7 +44,7 @@ export function readGeometry(raw: string | null): Geometry {
               ([key, width]) =>
                 key.length < 1000 &&
                 typeof width === "number" &&
-                [0, 1, 2, 3].includes(width),
+                [0, 1, 2, 3, ...widthPercentages].includes(width),
             ),
           )
         : {};
@@ -172,11 +180,15 @@ export function PageLayout({
         register,
         editing,
         geometry,
-        resize: (group, item, width) =>
+        resize: (group, item, width) => {
+          const widths = { ...geometry.widths };
+          if (width === -1) delete widths[`${group}:${item}`];
+          else widths[`${group}:${item}`] = width;
           persistGeometry({
             ...geometry,
-            widths: { ...geometry.widths, [`${group}:${item}`]: width },
-          }),
+            widths,
+          });
+        },
         layouts,
         save: (group, order) => persist({ ...layouts, [group]: order }),
       }}
@@ -321,13 +333,11 @@ export function LayoutGroup({
   id,
   className = "stack",
   children,
-  resizable = false,
   wideFirst = false,
   defaultHidden = [],
 }: {
   id: string;
   className?: string;
-  resizable?: boolean;
   wideFirst?: boolean;
   defaultHidden?: string[];
   children: ReactNode;
@@ -380,13 +390,21 @@ export function LayoutGroup({
       }),
     );
   }
-  const columns = resizable ? context?.geometry.columns || 0 : 0;
+  const columns = context?.geometry.columns || 0;
+  const customGrid =
+    movable.length > 0 &&
+    (columns > 0 ||
+      ids.some(
+        (item) => context?.geometry.widths[`${id}:${item}`] !== undefined,
+      ));
   let cursor = 0;
   return (
     <div
-      className={`${className} layout-group ${columns ? "layout-custom-grid" : ""}`}
+      className={`${className} layout-group ${customGrid ? "layout-custom-grid" : ""} ${customGrid && !columns ? "layout-auto-grid" : ""}`}
       style={
-        columns ? ({ "--layout-columns": columns } as CSSProperties) : undefined
+        columns
+          ? ({ "--layout-default-span": 12 / columns } as CSSProperties)
+          : undefined
       }
     >
       {nodes.map((node) => {
@@ -405,10 +423,10 @@ export function LayoutGroup({
             columns={columns}
             width={
               context?.geometry.widths[`${id}:${itemId}`] ??
-              (wideFirst && itemId === String(movable[0]?.key) ? 0 : 1)
+              (wideFirst && itemId === String(movable[0]?.key) ? 0 : -1)
             }
             resize={
-              resizable && columns
+              context
                 ? (width) => context?.resize(id, itemId, width)
                 : undefined
             }
@@ -460,11 +478,13 @@ function LayoutItem({
   const [over, setOver] = useState(false);
   return (
     <div
-      className={`layout-item ${editing ? "is-arranging" : ""} ${over ? "is-drop-target" : ""}`}
+      className={`layout-item ${width === -1 ? "is-default-width" : ""} ${editing ? "is-arranging" : ""} ${over ? "is-drop-target" : ""}`}
       style={
-        columns
+        width !== -1
           ? ({
-              "--layout-span": width === 0 ? columns : Math.min(width, columns),
+              "--layout-span": Math.round(
+                (cardWidthPercentage(width, columns) * 12) / 100,
+              ),
             } as CSSProperties)
           : undefined
       }
@@ -525,16 +545,16 @@ function LayoutItem({
           <div className="layout-item-tools">
             {resize && (
               <label className="layout-width">
-                {t("Width")}
+                <span>{t("Width")}</span>
                 <select
                   aria-label={t("Width of {title}", { title })}
-                  value={width}
+                  value={cardWidthPercentage(width, columns)}
                   onChange={(event) => resize(Number(event.target.value))}
                 >
-                  <option value={0}>{t("Full row")}</option>
-                  {[1, 2, 3].map((span) => (
-                    <option key={span} value={span}>
-                      {t("{count} columns", { count: span })}
+                  <option value={-1}>{t("Original width")}</option>
+                  {widthPercentages.map((percent) => (
+                    <option key={percent} value={percent}>
+                      {percent === 100 ? t("Full row") : `${percent}%`}
                     </option>
                   ))}
                 </select>

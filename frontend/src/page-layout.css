@@ -24,6 +24,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  container: layout-card / inline-size;
 }
 .layout-item-content > .panel,
 .layout-item-content > .dashboard-card {
@@ -142,14 +143,52 @@
 .layout-item-content > .dashboard-card {
   grid-column: auto;
 }
+.layout-group {
+  --layout-default-span: 12;
+}
+.layout-group:is(
+  .dashboard-grid,
+  .apps-grid,
+  .runtime-panels,
+  .security-grid,
+  .torrent-panels
+) {
+  --layout-default-span: 6;
+}
+.layout-group.apps-grid:not(:has(> .layout-item ~ .layout-item)),
+.layout-group.updates-grid,
+.section-torrents .layout-group.runtime-panels {
+  --layout-default-span: 12;
+}
 .layout-group.layout-custom-grid {
   display: grid;
-  grid-template-columns: repeat(var(--layout-columns), minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
 .layout-group.layout-custom-grid > .layout-item {
-  grid-column: span var(--layout-span, 1);
+  grid-column: span var(--layout-span, var(--layout-default-span));
+}
+.layout-group.layout-custom-grid > :not(.layout-item) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.dashboard-grid.layout-auto-grid
+  > .layout-item.is-default-width:nth-last-child(2):nth-child(odd),
+.torrent-panels.layout-auto-grid
+  > .layout-item.is-default-width:nth-child(-n + 2) {
+  grid-column: 1 / -1;
+}
+/* The updates page has a more specific native list rule. Widths must override it. */
+.updates-page .updates-grid.layout-custom-grid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  border: 0;
+  overflow: visible;
+}
+.updates-page .updates-grid.layout-custom-grid .panel {
+  border: 1px solid var(--line);
+  border-radius: 11px;
 }
 .layout-columns,
 .layout-width {
@@ -192,7 +231,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .layout-group.layout-custom-grid > .layout-item {
-    grid-column: 1 / -1;
+    grid-column: 1 / -1 !important;
+  }
+  .updates-page .updates-grid.layout-custom-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -214,4 +256,168 @@
 }
 .layout-card > .panel {
   flex: 1;
+}
+
+/* Cards respond to their own width, including narrow cards on a wide desktop. */
+.layout-item-content
+  :is(
+    .panel,
+    .phase-content,
+    .panel-heading,
+    form,
+    fieldset,
+    label,
+    .button-row
+  ) {
+  min-width: 0;
+  max-width: 100%;
+}
+.layout-item-content :is(p, h2, h3, strong, small, code, dd, li, a) {
+  overflow-wrap: anywhere;
+}
+.layout-item-content :is(input, select, textarea, button) {
+  max-width: 100%;
+}
+.layout-item-content .button-row {
+  flex-wrap: wrap;
+}
+.layout-item-content .panel-heading {
+  flex-wrap: wrap;
+}
+.layout-item-content .storage-row > div {
+  min-width: 0;
+}
+
+@container layout-card (max-width: 600px) {
+  .layout-item-content .torrent-table {
+    display: block;
+    min-width: 0;
+  }
+  .layout-item-content .torrent-table thead {
+    display: none;
+  }
+  .layout-item-content .torrent-table tbody {
+    display: block;
+  }
+  .layout-item-content .torrent-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-bottom: 1px solid var(--line);
+  }
+  .layout-item-content .torrent-table td {
+    display: block;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    white-space: normal !important;
+    border-bottom: 0;
+  }
+  .layout-item-content .torrent-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 5px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .layout-item-content
+    .torrent-table
+    :is(.torrent-name, .torrent-actions-cell, .torrent-details-row td) {
+    grid-column: 1 / -1;
+  }
+  .layout-item-content .torrent-table .torrent-name::before {
+    display: none;
+  }
+  .layout-item-content .torrent-table .torrent-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .layout-item-content .torrent-table .torrent-actions {
+    flex-wrap: wrap;
+  }
+  .layout-item-content
+    :is(
+      .runtime-grid,
+      .runtime-device-list,
+      .runtime-speeds,
+      .choice-grid,
+      .storage-form,
+      .setup-choice-grid,
+      .setup-review-grid,
+      .media-file-list,
+      .storage-volume-grid
+    ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-item-content .seedbox-client-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .layout-item-content .runtime-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .layout-item-content
+    :is(.runtime-row, .session-row, .store-callout, .torrent-toolbar) {
+    flex-wrap: wrap;
+  }
+  .layout-item-content .runtime-row > :is(strong, dd) {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .layout-item-content .runtime-verdict {
+    white-space: normal;
+  }
+  .layout-item-content .torrent-sort-controls {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .layout-item-content .media-browser-toolbar label {
+    min-width: 0;
+  }
+  .layout-item-content .media-browser-actions {
+    position: relative;
+    flex-wrap: wrap;
+  }
+  .layout-item-content .media-upload-picker {
+    position: static;
+  }
+  .layout-item-content .media-upload-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-item-content :is(.maintenance-grid, .compact-metrics) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .updates-page .updates-grid .layout-item-content .panel,
+  .updates-page .updates-grid .layout-item-content .panel > .phase-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container layout-card (max-width: 360px) {
+  .layout-width > span {
+    display: none;
+  }
+  .layout-width select {
+    width: 110px;
+  }
+  .layout-item-content :is(.app-totals, .network-card, .recovery-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .layout-item-content
+    :is(.panel-heading, .phase-content, .settings-form, .security-card) {
+    padding: 14px;
+  }
+  .layout-item-content
+    :is(.app-row, .media-browser-toolbar, .visibility-heading) {
+    flex-wrap: wrap;
+  }
+  .layout-item-content .host-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-item-content .panel-note {
+    flex-wrap: wrap;
+  }
+  .layout-item-content .app-totals > div:nth-child(2) {
+    border-right: 0;
+  }
+  .layout-item-content .visibility-settings label {
+    flex-wrap: wrap;
+  }
 }

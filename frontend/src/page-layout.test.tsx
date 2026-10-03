@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canMove,
+  cardWidthPercentage,
   LayoutGroup,
   orderedIds,
   readLayouts,
@@ -8,6 +9,17 @@ import {
 } from "./page-layout";
 
 describe("page layout preferences", () => {
+  it("preserves old column widths while allowing independent percentage widths", () => {
+    expect(cardWidthPercentage(1, 2)).toBe(50);
+    expect(cardWidthPercentage(2, 3)).toBe(67);
+    expect(cardWidthPercentage(3, 2)).toBe(100);
+    expect(cardWidthPercentage(0, 3)).toBe(100);
+    expect(cardWidthPercentage(-1, 0)).toBe(-1);
+    expect(cardWidthPercentage(25, 1)).toBe(25);
+    expect(
+      readGeometry('{"columns":0,"widths":{"vpn":33,"backup":50,"bad":42}}'),
+    ).toEqual({ columns: 0, widths: { vpn: 33, backup: 50 } });
+  });
   it("keeps headings, status, navigation and nested page containers fixed", () => {
     function Page() {
       return (

@@ -1751,47 +1751,57 @@ export function SettingsExtensions({
       {tab === "Maintenance" && maintenance}
       {tab === "Storage" && <StorageWorkspace />}
       {tab === "Network" && (
-        <Panel title="Network configuration">
-          <ErrorBox error={network.error} />
-          {network.data && (
-            <>
-              <NetworkForm
-                value={edited || network.data.pending}
-                onChange={setEdited}
-              />
-              <button
-                onClick={async () => {
-                  try {
-                    await api(
-                      "/network",
-                      "PUT",
-                      edited || network.data?.pending,
-                    );
-                    setMessage(
-                      "Saved as pending. Restart explicitly to activate; no firewall changes.",
-                    );
-                  } catch (e) {
-                    setMessage((e as Error).message);
-                  }
-                }}
-              >
-                Save network settings
-              </button>
-              <p role="status">{message}</p>
-            </>
-          )}
-        </Panel>
+        <LayoutGroup id="settings-network-cards">
+          <Panel title="Network configuration">
+            <ErrorBox error={network.error} />
+            {network.data && (
+              <>
+                <NetworkForm
+                  value={edited || network.data.pending}
+                  onChange={setEdited}
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      await api(
+                        "/network",
+                        "PUT",
+                        edited || network.data?.pending,
+                      );
+                      setMessage(
+                        "Saved as pending. Restart explicitly to activate; no firewall changes.",
+                      );
+                    } catch (e) {
+                      setMessage((e as Error).message);
+                    }
+                  }}
+                >
+                  Save network settings
+                </button>
+                <p role="status">{message}</p>
+              </>
+            )}
+          </Panel>
+        </LayoutGroup>
       )}
-      {tab === "Agent" && <RuntimePanel />}
+      {tab === "Agent" && (
+        <LayoutGroup id="settings-agent-cards">
+          <div className="layout-card" data-layout-title="Agent & app runtime">
+            <RuntimePanel />
+          </div>
+        </LayoutGroup>
+      )}
       {tab === "Security" && security}
       {tab === "Advanced" && (
-        <Panel title="Advanced settings">
-          <p>
-            Storage roots, agent token files and developer fixtures are
-            server-side configuration only. No dangerous path override or raw
-            Docker command endpoint is exposed.
-          </p>
-        </Panel>
+        <LayoutGroup id="settings-advanced-cards">
+          <Panel title="Advanced settings">
+            <p>
+              Storage roots, agent token files and developer fixtures are
+              server-side configuration only. No dangerous path override or raw
+              Docker command endpoint is exposed.
+            </p>
+          </Panel>
+        </LayoutGroup>
       )}
     </div>
   );

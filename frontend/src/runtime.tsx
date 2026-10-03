@@ -282,11 +282,7 @@ function SeedboxPanel({
           )}
         </div>
       )}
-      <LayoutGroup
-        id="runtime-SeedboxPanel-1"
-        className="runtime-panels"
-        resizable
-      >
+      <LayoutGroup id="runtime-SeedboxPanel-1" className="runtime-panels">
         {section === "vpn" && (
           <Panel title={t("VPN protection")}>
             <div className="runtime-panel-title">
