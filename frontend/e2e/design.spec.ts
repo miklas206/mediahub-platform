@@ -3003,3 +3003,155 @@ test("a successful FjordHub connection test clearly offers saving and then shows
   await page.goto("/apps");
   await expect(page.locator("main").getByRole("heading",{name:"FjordHub",exact:true})).toBeVisible();
 });
+
+
+test("dashboard editing preserves card dimensions and dragging snaps visibly to its grid", async ({
+  page,
+}) => {
+  await designFixtures(page);
+  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.goto("/");
+  await expect(page.locator(".control-summary > .layout-item")).toHaveCount(4);
+  await expect(page.locator(".service-overview > .layout-item")).toHaveCount(4);
+  const cards = page.locator(
+    ".control-summary > .layout-item, .service-overview > .layout-item, .dashboard-grid > .layout-item",
+  );
+  const dimensions = () =>
+    cards.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const b = node.getBoundingClientRect(),
+          g = node.parentElement!.getBoundingClientRect();
+        return {
+          title: node.getAttribute("data-layout-title"),
+          width: b.width,
+          height: b.height,
+          left: b.left - g.left,
+          top: b.top - g.top,
+        };
+      }),
+    );
+  const before = await dimensions();
+  expect(before[0].width).toBeLessThan(400);
+  await page.screenshot({
+    path: "../.qa/dashboard-grid-normal-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: translated("Customize layout"), exact: true })
+    .click();
+  const after = await dimensions();
+  await page.screenshot({
+    path: "../.qa/dashboard-grid-edit-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  expect(after.length).toBe(before.length);
+  for (let i = 0; i < before.length; i++) {
+    expect(after[i].title).toBe(before[i].title);
+    for (const key of ["width", "height", "left", "top"] as const)
+      expect(
+        Math.abs(after[i][key] - before[i][key]),
+        `${before[i].title} ${key}`,
+      ).toBeLessThan(1);
+  }
+  await expect(
+    page.locator('.dashboard-card[data-section="apps"]').locator(".."),
+  ).not.toHaveClass(/is-arranging/);
+  const cardId = await page
+    .locator(".control-summary > .layout-item")
+    .first()
+    .getAttribute("data-layout-item");
+  const card = page.locator(
+    `.control-summary > .layout-item[data-layout-item="${cardId}"]`,
+  );
+  const box = (await card.boundingBox())!;
+  const group = (await page.locator(".control-summary").boundingBox())!;
+  const step = (group.width + 16) / 12;
+  await page.mouse.move(box.x + 60, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 67, box.y + 36);
+  await expect(card).toHaveClass(/is-pointer-dragging/);
+  expect(Math.abs((await card.boundingBox())!.x - box.x)).toBeLessThan(1);
+  expect(Math.abs((await card.boundingBox())!.y - box.y)).toBeLessThan(1);
+  await page.mouse.move(box.x + 60 + step + 3, box.y + 30 + 24);
+  await expect
+    .poll(async () => Math.abs((await card.boundingBox())!.x - box.x - step))
+    .toBeLessThan(1);
+  await expect
+    .poll(async () => Math.abs((await card.boundingBox())!.y - box.y - 24))
+    .toBeLessThan(1);
+  await page.mouse.up();
+  await expect(card).toHaveAttribute("data-layout-positioned", "true");
+  expect(
+    await page
+      .locator(".control-summary")
+      .evaluate((node) => getComputedStyle(node).rowGap),
+  ).toBe("0px");
+  expect(
+    await card.evaluate((node) => getComputedStyle(node).gridColumnStart),
+  ).toBe("2");
+  await page.reload();
+  await expect(card).toHaveAttribute("data-layout-positioned", "true");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileBefore = await dimensions();
+  await page
+    .getByRole("button", { name: translated("Customize layout"), exact: true })
+    .click();
+  const mobileAfter = await dimensions();
+  for (let i = 0; i < mobileBefore.length; i++)
+    for (const key of ["width", "height", "left", "top"] as const)
+      expect(Math.abs(mobileAfter[i][key] - mobileBefore[i][key])).toBeLessThan(
+        1,
+      );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: "../.qa/dashboard-grid-edit-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("native dashboard cards resize on the grid during the gesture", async ({
+  page,
+}) => {
+  await designFixtures(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: translated("Customize layout"), exact: true })
+    .click();
+  const card = page.locator(".service-overview > .layout-item").first();
+  const before = (await card.boundingBox())!;
+  const grid = (await card.locator("..").boundingBox())!;
+  const edge = (await card.locator(":scope > .resize-right").boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    edge.x + edge.width / 2 + (grid.width + 16) / 12,
+    edge.y + edge.height / 2,
+  );
+  await expect(card).toHaveClass(/is-resizing/);
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await card.boundingBox())!.width -
+          before.width -
+          (grid.width + 16) / 12,
+      ),
+    )
+    .toBeLessThan(1);
+  await page.mouse.up();
+  await expect(card).not.toHaveClass(/is-resizing/);
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await card.boundingBox())!.width -
+          before.width -
+          (grid.width + 16) / 12,
+      ),
+    )
+    .toBeLessThan(1);
+});

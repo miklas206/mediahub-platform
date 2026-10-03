@@ -36,13 +36,27 @@ export function useLayoutPointer(
     surface.setPointerCapture(pointer);
 
     function draw() {
+      const grid = group!.getBoundingClientRect();
+      const columns = Math.max(
+        3,
+        Math.min(
+          12,
+          Math.round((bounds.width + 16) / ((grid.width + 16) / 12)),
+        ),
+      );
+      const position = gridPosition(
+        point.x - anchor.x - grid.left,
+        point.y - anchor.y - grid.top,
+        grid.width,
+        columns,
+      );
       card!.style.setProperty(
         "--layout-drag-x",
-        `${point.x - anchor.x - origin.x + scrollX}px`,
+        `${grid.left + (position.column - 1) * ((grid.width + 16) / 12) - origin.x + scrollX}px`,
       );
       card!.style.setProperty(
         "--layout-drag-y",
-        `${point.y - anchor.y - origin.y + scrollY}px`,
+        `${grid.top + (position.row - 1) * 24 - origin.y + scrollY}px`,
       );
     }
     function tick() {

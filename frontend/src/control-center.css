@@ -1,7 +1,7 @@
-﻿.layout-group.control-summary {
+.layout-group.control-summary {
   --layout-default-span: 3;
   display: grid;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 12px;
 }
 .main-content:has(.control-summary) {
@@ -254,7 +254,7 @@
 .service-overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 11px;
+  gap: 16px;
   padding: 15px;
 }
 .layout-group.service-overview.layout-custom-grid {

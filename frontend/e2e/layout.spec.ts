@@ -1003,7 +1003,7 @@ test("all layout cards resize without a column prerequisite and keep their conte
     );
     if (await technicalStorage.count()) await technicalStorage.click();
     await expect(page.getByLabel("Columns", { exact: true })).toHaveValue("0");
-    const cards = page.locator(".layout-item");
+    const cards = page.locator(".layout-item.is-arranging");
     const count = await cards.count();
     expect(await page.locator(".layout-width select").count(), path).toBe(
       count,
@@ -1062,6 +1062,8 @@ test("all layout cards resize without a column prerequisite and keep their conte
         .click();
     }
     for (const group of await page.locator(".layout-group").all()) {
+      // A dashboard section containing its own grid is a fixed container, not a draggable card.
+      if (await group.locator(":scope > .layout-item:not(.is-arranging)").count()) continue;
       const groupCards = group.locator(":scope > .layout-item");
       if ((await groupCards.count()) < 2) continue;
       const keys = await groupCards.evaluateAll((nodes) =>

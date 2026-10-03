@@ -224,17 +224,29 @@
   display: inline-flex;
   align-items: center;
 }
-/* Reserve space inside the card so floating controls never cover its title or content. */
-.layout-item.is-arranging
-  .layout-item-content
-  :is(
-    .panel,
-    .system-overview,
-    .security-card,
-    .store-callout,
-    .seedbox-client-summary
-  ) {
-  padding-bottom: 38px;
+/* Editing outlines and controls must not change a card's content dimensions. */
+.layout-group.is-editing-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--accent) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--accent) 5%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: calc((100% + 16px) / 12) 24px;
+}
+.layout-item-tools {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.layout-item:is(:hover, :focus-within) > .layout-item-tools,
+.layout-item-tools:hover {
+  opacity: 1;
+  pointer-events: auto;
 }
 .layout-card-picker {
   position: relative;
@@ -305,6 +317,7 @@
 .section-torrents .layout-group.runtime-panels {
   --layout-default-span: 12;
 }
+.layout-group.layout-group:has(> .is-resizing),
 .layout-group.layout-custom-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -313,6 +326,13 @@
   grid-auto-rows: 24px;
   align-items: start;
 }
+/* Native summary/service gaps must not alter the 24px positioning grid. */
+.layout-group.layout-custom-grid.control-summary,
+.layout-group.layout-custom-grid.service-overview {
+  column-gap: 16px;
+  row-gap: 0;
+}
+.layout-group.layout-group:has(> .is-resizing) > .layout-item,
 .layout-group.layout-custom-grid > .layout-item {
   align-self: start;
   grid-column: var(--layout-column, auto) / span
@@ -381,9 +401,11 @@
   .torrent-panels:not(.layout-custom-grid) {
     grid-template-columns: minmax(0, 1fr);
   }
+  .layout-group.layout-group:has(> .is-resizing),
   .layout-group.layout-custom-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .layout-group.layout-group:has(> .is-resizing) > .layout-item,
   .layout-group.layout-custom-grid > .layout-item {
     grid-column: 1 / -1 !important;
     grid-row: auto / span var(--layout-row-span, 1);

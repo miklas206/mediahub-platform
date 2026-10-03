@@ -696,7 +696,6 @@ export function LayoutGroup({
     movable.length > 0 &&
     (entries.some((entry) => entry.sourceGroup !== id) ||
       fullWidth.length > 0 ||
-      context?.editing ||
       columns > 0 ||
       ids.some(
         (item) =>
@@ -711,7 +710,7 @@ export function LayoutGroup({
       <div
         ref={gridElement}
         data-layout-group={id}
-        className={`${className} layout-group ${customGrid ? "layout-custom-grid" : ""} ${customGrid && !columns ? "layout-auto-grid" : ""}`}
+        className={`${className} layout-group ${context?.editing ? "is-editing-grid" : ""} ${customGrid ? "layout-custom-grid" : ""} ${customGrid && !columns ? "layout-auto-grid" : ""}`}
         style={
           columns
             ? ({ "--layout-default-span": 12 / columns } as CSSProperties)
@@ -729,7 +728,7 @@ export function LayoutGroup({
             <LayoutItem
               key={itemId}
               item={item}
-              editing={!!context?.editing}
+              editing={!!context?.editing && !item.props["data-layout-nested"]}
               title={cardTitle(item) || t("Box {count}", { count: index + 1 })}
               hide={() => context?.hide(id, [...hidden, itemId])}
               columns={columns}
