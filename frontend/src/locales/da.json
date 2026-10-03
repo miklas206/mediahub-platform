@@ -2553,5 +2553,19 @@
   "Windows share connection configured; Windows access remains unverified": "Windows-forbindelsen er konfigureret. Adgangen fra Windows er endnu ikke kontrolleret",
   "storage": "lager",
   "Enter the published share name without a folder path or special command characters.": "Indtast navnet på delingen uden mappesti eller særlige kommandotegn.",
-  "Enter an SMB username without special command characters.": "Indtast et SMB-brugernavn uden særlige kommandotegn."
+  "Enter an SMB username without special command characters.": "Indtast et SMB-brugernavn uden særlige kommandotegn.",
+  "Seeding time (hours)": "Seedtid (timer)",
+  "Choose from 1 to 8,760 hours.": "Vælg mellem 1 og 8.760 timer.",
+  "Choose a ratio from 0.1 to 100.": "Vælg en ratio mellem 0,1 og 100.",
+  "Automatic cleanup is off. The torrent job and its files will be kept.": "Automatisk oprydning er slået fra. Torrenten og dens filer bevares.",
+  "After {hours} hours of seeding": "Efter {hours} timers seeding",
+  "After upload ratio {ratio}": "Efter uploadratio {ratio}",
+  "After {hours} hours AND ratio {ratio}": "Efter {hours} timer OG ratio {ratio}",
+  "After {hours} hours OR ratio {ratio}": "Efter {hours} timer ELLER ratio {ratio}",
+  "Save a rule for this torrent only. It replaces any cleanup rule copied from a feed without changing the feed or other torrents.": "Gem en regel kun for denne torrent. Den erstatter en eventuel oprydningsregel fra feedet uden at ændre feedet eller andre torrents.",
+  "Individual rule": "Individuel regel",
+  "Individual cleanup rule": "Individuel oprydningsregel",
+  "Cleanup settings saved for this torrent.": "Oprydningsindstillingerne er gemt for denne torrent.",
+  "Individual rule · Never": "Individuel regel · Behold altid",
+  "An individual rule replaces any cleanup settings copied from a feed.": "En individuel regel erstatter eventuelle oprydningsindstillinger fra et feed."
 }

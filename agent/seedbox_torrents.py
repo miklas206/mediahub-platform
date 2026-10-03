@@ -69,6 +69,8 @@ class TorrentService:
             for item in response.json():
                 path = PurePosixPath(item.get("save_path", ""))
                 allowed = any(path == root or root in path.parents for root in allowed_roots)
+                record = cleanup.get(item.get("hash"), {})
+                current_rule = bool(record) and self.retention.tagged(item, record)
                 rows.append(
                     {
                         key: item.get(key)
@@ -92,8 +94,9 @@ class TorrentService:
                     }
                     | {
                         "actionsAllowed": allowed,
-                        "retention": cleanup.get(item.get("hash"), {}).get("rule"),
-                        "retentionMessage": cleanup.get(item.get("hash"), {}).get("error", ""),
+                        "retention": record.get("rule") if current_rule else None,
+                        "retentionOverride": current_rule and record.get("override") is True,
+                        "retentionMessage": record.get("error", ""),
                     }
                 )
             locations = self.download_locations(policy, spec)
@@ -262,7 +265,9 @@ class TorrentService:
             rows = response.json()
             if len(rows) != 1:
                 raise DomainError("torrent_missing", "Torrent not found", 404)
-            await self.retention.register(client, policy, spec, rows[0], body.retention)
+            await self.retention.register(
+                client, policy, spec, rows[0], body.retention, override=True
+            )
             return {"state": "saved"}
 
     async def action(self, body):

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { AppInfo, Metrics, Storage } from "../src/contracts";
+import type { Torrent } from "../src/torrent-list";
+import type { RetentionRule } from "../src/torrent-retention";
 import danish from "../src/locales/da.json" with { type: "json" };
 
 // These examples use isolated browser fixtures; production never receives demo data.
@@ -8,6 +10,7 @@ const gib = 1024 ** 3;
 const mib = 1024 ** 2;
 const examples = "../.qa/redesign";
 const designAppLists = new WeakMap<Page, AppInfo[]>();
+const designTorrentLists = new WeakMap<Page, Torrent[]>();
 const translated = (source: string, values: Record<string, string> = {}) =>
   (danish[source as keyof typeof danish] || source).replace(
     /\{(\w+)\}/g,
@@ -222,6 +225,7 @@ async function designFixtures(page: Page) {
       seeding_time: 72000,
     },
   ];
+  designTorrentLists.set(page, torrents);
   const cloudflare = {
     configured: true,
     status: "healthy",
@@ -2382,5 +2386,304 @@ test("Windows folder guidance adapts to narrow phones and individually resized c
   }
   await captureWindowsShare(page, "windows-share-mobile.png");
   await captureWindowsShare(page, "windows-share-mobile-viewport.png", false);
+  expect(errors).toEqual([]);
+});
+
+async function torrentCleanupFixtures(page: Page) {
+  const inherited: RetentionRule = {
+    mode: "both",
+    seedHours: 48,
+    uploadRatio: 2,
+    action: "delete_files",
+  };
+  const state = {
+    items: (designTorrentLists.get(page) ?? []).map((torrent) => ({
+      ...torrent,
+      retention: { ...inherited },
+      retentionOverride: false,
+    })),
+    writes: [] as { hash: string; retention: RetentionRule }[],
+    failSave: false,
+    listReads: 0,
+  };
+  await page.route("**/api/v1/seedbox/torrents", (route) => {
+    expect(route.request().method()).toBe("GET");
+    state.listReads += 1;
+    return route.fulfill({
+      json: {
+        data: {
+          items: state.items,
+          storageId: "downloads",
+          limit: 100,
+          downloadLocations: [{ id: "root", label: "Top folder" }],
+          retentionSupported: true,
+        },
+      },
+    });
+  });
+  await page.route("**/api/v1/seedbox/torrents/retention", (route) => {
+    expect(route.request().method()).toBe("POST");
+    const request = route
+      .request()
+      .postDataJSON() as (typeof state.writes)[number];
+    state.writes.push(request);
+    if (state.failSave) {
+      return route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: "cleanup_unavailable",
+            message: "MediaHub is temporarily unavailable",
+          },
+        },
+      });
+    }
+    const selected = state.items.find(
+      (torrent) => torrent.hash === request.hash,
+    )!;
+    selected.retention = { ...request.retention };
+    selected.retentionOverride = true;
+    return route.fulfill({
+      json: {
+        data: { retention: selected.retention, retentionOverride: true },
+      },
+    });
+  });
+  return state;
+}
+
+const cleanupTrigger = (page: Page, name: string) =>
+  page.getByRole("button", {
+    name: translated("Cleanup settings for {name}", { name }),
+    exact: true,
+  });
+const cleanupDialog = (page: Page) =>
+  page.getByRole("dialog", {
+    name: translated("Torrent cleanup settings"),
+    exact: true,
+  });
+
+test("per-torrent cleanup Never overrides just the selected torrent and remains after reload", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const state = await torrentCleanupFixtures(page);
+  const selected = state.items[0];
+  const unchanged = structuredClone(state.items.slice(1));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/apps/seedbox?section=torrents");
+  const trigger = cleanupTrigger(page, selected.name);
+  await trigger.click();
+  const dialog = cleanupDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(selected.name);
+  await dialog
+    .getByLabel(translated("Seeding time (hours)"), { exact: true })
+    .fill("");
+  await dialog
+    .getByLabel(translated("When to clean up"), { exact: false })
+    .selectOption("disabled");
+  await expect(
+    dialog.getByLabel(translated("Cleanup action"), { exact: false }),
+  ).toHaveCount(0);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-design-samples",
+    "ready",
+  );
+  await page.screenshot({
+    path: "../.qa/retention/cleanup-desktop.png",
+    animations: "disabled",
+  });
+  const beforeSaveReads = state.listReads;
+  await dialog
+    .getByRole("button", {
+      name: translated("Save cleanup settings"),
+      exact: true,
+    })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => state.listReads).toBeGreaterThan(beforeSaveReads);
+  expect(state.writes).toMatchObject([
+    { hash: selected.hash, retention: { mode: "disabled" } },
+  ]);
+  expect(Number.isFinite(state.writes[0].retention.seedHours)).toBe(true);
+  expect(state.writes[0].retention.seedHours).toBeGreaterThanOrEqual(1);
+  expect(state.items[0].retentionOverride).toBe(true);
+  expect(state.items.slice(1)).toEqual(unchanged);
+  await expect(trigger).toHaveAttribute(
+    "title",
+    new RegExp(translated("Never — keep torrent and files")),
+  );
+  const row = page
+    .locator(".torrent-table tbody > tr")
+    .filter({ has: page.getByText(selected.name, { exact: true }) });
+  await expect(row.locator(".torrent-cleanup-override")).toHaveText(
+    translated("Individual rule · Never"),
+  );
+  await expect(page.locator(".torrent-cleanup-override")).toHaveCount(1);
+  await page.reload();
+  await expect(trigger).toBeVisible();
+  await expect(row.locator(".torrent-cleanup-override")).toHaveText(
+    translated("Individual rule · Never"),
+  );
+  await trigger.click();
+  await expect(
+    dialog.getByLabel(translated("When to clean up"), { exact: false }),
+  ).toHaveValue("disabled");
+  await dialog
+    .getByRole("button", { name: translated("Cancel"), exact: true })
+    .click();
+  expect(errors).toEqual([]);
+});
+
+test("per-torrent cleanup saves custom hours ratio and each action without changing other jobs", async ({
+  page,
+}) => {
+  const state = await torrentCleanupFixtures(page);
+  const selected = state.items[1];
+  const untouched = structuredClone([state.items[0], state.items[2]]);
+  await page.goto("/apps/seedbox?section=torrents");
+  await cleanupTrigger(page, selected.name).click();
+  const dialog = cleanupDialog(page);
+  await dialog
+    .getByLabel(translated("When to clean up"), { exact: false })
+    .selectOption("both");
+  await dialog
+    .getByLabel(translated("Seeding time (hours)"), { exact: true })
+    .fill("37");
+  await dialog
+    .getByLabel(translated("Upload ratio"), { exact: true })
+    .fill("2.75");
+  await dialog
+    .getByLabel(translated("Cleanup action"), { exact: false })
+    .selectOption("remove_job");
+  await dialog
+    .getByRole("button", {
+      name: translated("Save cleanup settings"),
+      exact: true,
+    })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes).toEqual([
+    {
+      hash: selected.hash,
+      retention: {
+        mode: "both",
+        seedHours: 37,
+        uploadRatio: 2.75,
+        action: "remove_job",
+      },
+    },
+  ]);
+  await cleanupTrigger(page, selected.name).click();
+  await expect(
+    dialog.getByLabel(translated("Seeding time (hours)"), { exact: true }),
+  ).toHaveValue("37");
+  await expect(
+    dialog.getByLabel(translated("Upload ratio"), { exact: true }),
+  ).toHaveValue("2.75");
+  await dialog
+    .getByLabel(translated("Cleanup action"), { exact: false })
+    .selectOption("delete_files");
+  await expect(dialog.getByRole("note")).toContainText(
+    translated(
+      "The downloaded files will be permanently deleted from storage, including files used by Plex. Shared files or unsafe paths block deletion.",
+    ),
+  );
+  await dialog
+    .getByRole("button", {
+      name: translated("Save cleanup settings"),
+      exact: true,
+    })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes[1]).toEqual({
+    hash: selected.hash,
+    retention: {
+      mode: "both",
+      seedHours: 37,
+      uploadRatio: 2.75,
+      action: "delete_files",
+    },
+  });
+  expect([state.items[0], state.items[2]]).toEqual(untouched);
+  expect(state.items[1].retentionOverride).toBe(true);
+});
+
+test("per-torrent cleanup keeps failed saves open and supports keyboard cancel on mobile", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const state = await torrentCleanupFixtures(page);
+  state.failSave = true;
+  const selected = state.items[2];
+  const original = structuredClone(selected);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/apps/seedbox?section=torrents");
+  const trigger = cleanupTrigger(page, selected.name);
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const dialog = cleanupDialog(page);
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByLabel(translated("When to clean up"), { exact: false })
+    .selectOption("time");
+  await dialog
+    .getByLabel(translated("Seeding time (hours)"), { exact: true })
+    .fill("73");
+  await dialog
+    .getByLabel(translated("Cleanup action"), { exact: false })
+    .selectOption("remove_job");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-design-samples",
+    "ready",
+  );
+  await page.screenshot({
+    path: "../.qa/retention/cleanup-mobile.png",
+    animations: "disabled",
+  });
+  await dialog
+    .getByRole("button", {
+      name: translated("Save cleanup settings"),
+      exact: true,
+    })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    translated("MediaHub is temporarily unavailable"),
+  );
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByLabel(translated("Seeding time (hours)"), { exact: true }),
+  ).toHaveValue("73");
+  expect(state.items[2]).toEqual(original);
+  await contained(page);
+  const box = (await dialog.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(391);
+  expect(
+    await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBe(true);
+  await dialog
+    .getByRole("button", { name: translated("Cancel"), exact: true })
+    .focus();
+  await page.keyboard.press("Tab");
+  expect(
+    await dialog.evaluate((node) => node.contains(document.activeElement)),
+  ).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(
+    dialog.getByLabel(translated("Seeding time (hours)"), { exact: true }),
+  ).toHaveValue("48");
+  await dialog
+    .getByRole("button", { name: translated("Cancel"), exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect(state.writes).toHaveLength(1);
   expect(errors).toEqual([]);
 });

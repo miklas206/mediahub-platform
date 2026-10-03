@@ -10,6 +10,7 @@ import { TorrentList, type Torrent } from "./torrent-list";
 import { SeedboxRSS } from "./seedbox-rss-feeds";
 import {
   TorrentRetention,
+  TorrentCleanupDialog,
   defaultRetention,
   type RetentionRule,
 } from "./torrent-retention";
@@ -66,6 +67,7 @@ export function SeedboxDaily({
     name: string;
     rule: RetentionRule;
   } | null>(null);
+  const [cleanupError, setCleanupError] = useState("");
   const [error, setError] = useState(""),
     [listError, setListError] = useState(""),
     [locationError, setLocationError] = useState("");
@@ -116,6 +118,24 @@ export function SeedboxDaily({
     return () => clearInterval(timer);
   }, [reload]);
   const changing = location?.operation.state === "running";
+  async function saveCleanup() {
+    if (!cleanupEdit || busy) return;
+    setBusy(true);
+    setCleanupError("");
+    try {
+      await api("/seedbox/torrents/retention", "POST", {
+        hash: cleanupEdit.hash,
+        retention: cleanupEdit.rule,
+      });
+      setCleanupEdit(null);
+      setNotice(t("Cleanup settings saved for this torrent."));
+      reload();
+    } catch (error) {
+      setCleanupError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function action(hash: string, action: string) {
     if (
       action === "remove" &&
@@ -398,13 +418,14 @@ export function SeedboxDaily({
                   disabled={busy || !!changing || !!listError}
                   retentionSupported={list?.retentionSupported}
                   onAction={(hash, command) => void action(hash, command)}
-                  onCleanup={(torrent) =>
+                  onCleanup={(torrent) => {
+                    setCleanupError("");
                     setCleanupEdit({
                       hash: torrent.hash,
                       name: torrent.name,
                       rule: torrent.retention || defaultRetention,
-                    })
-                  }
+                    });
+                  }}
                 />
                 {list && !list.items.length && !listError && (
                   <p>
@@ -513,44 +534,15 @@ export function SeedboxDaily({
             }
           />
           {cleanupEdit && (
-            <Panel title={t("Torrent cleanup settings")}>
-              <p style={{ overflowWrap: "anywhere" }}>{cleanupEdit.name}</p>
-              <TorrentRetention
-                value={cleanupEdit.rule}
-                onChange={(rule) => setCleanupEdit({ ...cleanupEdit, rule })}
-                disabled={busy}
-              />
-              <p className="muted">
-                {t(
-                  "Applies to this torrent's existing seeding time and uploaded bytes. If its thresholds are already reached, cleanup can run on the next check.",
-                )}
-              </p>
-              <div className="button-row">
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() => {
-                    setBusy(true);
-                    setError("");
-                    void api("/seedbox/torrents/retention", "POST", {
-                      hash: cleanupEdit.hash,
-                      retention: cleanupEdit.rule,
-                    })
-                      .then(() => {
-                        setCleanupEdit(null);
-                        reload();
-                      })
-                      .catch((e) => setError(e.message))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {t("Save cleanup settings")}
-                </button>
-                <button disabled={busy} onClick={() => setCleanupEdit(null)}>
-                  {t("Cancel")}
-                </button>
-              </div>
-            </Panel>
+            <TorrentCleanupDialog
+              name={cleanupEdit.name}
+              value={cleanupEdit.rule}
+              onChange={(rule) => setCleanupEdit({ ...cleanupEdit, rule })}
+              busy={busy}
+              error={cleanupError}
+              onSave={() => void saveCleanup()}
+              onCancel={() => setCleanupEdit(null)}
+            />
           )}
         </>
       )}

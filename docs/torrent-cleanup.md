@@ -2,10 +2,14 @@
 
 Cleanup is **off by default**. Use **Never — keep torrent and files** to keep
 seeding indefinitely without automatic removal. Saving this choice for an
-existing torrent cancels its cleanup rule.
+existing torrent saves an explicit individual override that prevents automatic
+cleanup, including cleanup originally configured by its RSS feed.
 
 The same controls are available when adding a torrent file or magnet, in RSS
-feed settings, and through **Cleanup** beside an existing torrent. RSS rules
+feed settings, and through the settings icon beside an existing torrent. The
+dialog edits only that torrent; saving never changes its feed or other torrents.
+An **Individual rule** label identifies a saved per-torrent override, including
+**Never**. RSS rules
 are copied to future torrents as they are added (including manual feed
 selections). Changing a feed does not silently alter existing torrent rules;
 edit those individually. Removing/disabling a feed does not cancel its torrents'
@@ -14,8 +18,8 @@ by an RSS retry or another add request.
 
 Choose one trigger:
 
-- Seeding time: 24, 48 or 72 hours, or 7, 14 or 30 days.
-- Uploaded amount: ratio 1.0, 1.5, 2.0, 3.0 or 5.0 relative to content size.
+- Seeding time: a chosen whole number of hours from 1 to 8760.
+- Uploaded amount: a chosen ratio from 0.1 to 100 relative to content size.
 - Both time and ratio: both thresholds must be reached.
 - Either time or ratio: the first threshold reached is sufficient.
 

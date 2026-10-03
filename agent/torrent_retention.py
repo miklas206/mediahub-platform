@@ -40,17 +40,30 @@ class RetentionService:
             and row.get("save_path", "").rstrip("/") == record["savePath"]
         )
 
-    async def register(self, client, policy, spec, row, rule):
+    async def register(self, client, policy, spec, row, rule, *, override=False):
         records = self.load(policy)
         identity = row["hash"]
-        if rule.mode == "disabled":
+        previous = records.get(identity)
+        if (
+            not override
+            and previous
+            and previous.get("override") is True
+            and self.tagged(row, previous)
+        ):
+            # Feed defaults must not replace a choice saved for this particular job.
+            return
+        if rule.mode == "disabled" and not override:
             records.pop(identity, None)
             self.save(policy, records)
             return
         save_path = PurePosixPath(row.get("save_path", ""))
-        if not save_path.is_absolute() or not any(
-            save_path == p or p in save_path.parents
-            for p in self.torrents.allowed_save_roots(policy, spec)
+        if (
+            not save_path.is_absolute()
+            or ".." in save_path.parts
+            or not any(
+                save_path == p or p in save_path.parents
+                for p in self.torrents.allowed_save_roots(policy, spec)
+            )
         ):
             raise DomainError(
                 "retention_storage", "Cleanup requires an approved download location", 409
@@ -65,6 +78,7 @@ class RetentionService:
             "addedOn": row["added_on"],
             "savePath": str(save_path),
             "rule": rule.model_dump(),
+            "override": override,
             "error": "",
         }
         records[identity] = record
@@ -155,6 +169,8 @@ class RetentionService:
                         )
                         continue
                     rule = RetentionRule(**record["rule"])
+                    if rule.mode == "disabled":
+                        continue
                     save_path = PurePosixPath(record["savePath"])
                     if not any(
                         root == save_path or root in save_path.parents

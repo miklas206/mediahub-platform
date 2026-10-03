@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Brush,
+  Settings2,
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
@@ -14,7 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { bytes, uptime } from "./format";
-import { retentionModeLabel, type RetentionRule } from "./torrent-retention";
+import { retentionSummary, type RetentionRule } from "./torrent-retention";
 
 export type Torrent = {
   hash: string;
@@ -34,6 +34,7 @@ export type Torrent = {
   category?: string;
   seeding_time?: number;
   retention?: RetentionRule | null;
+  retentionOverride?: boolean;
   retentionMessage?: string;
 };
 
@@ -274,13 +275,7 @@ export function TorrentList({
               const showDetails = expanded === torrent.hash;
               const blocked = disabled || !torrent.actionsAllowed;
               const cleanup = torrent.retention
-                ? t("Cleanup: {mode} · {action}", {
-                    mode: retentionModeLabel(torrent.retention.mode),
-                    action:
-                      torrent.retention.action === "delete_files"
-                        ? t("deletes files")
-                        : t("keeps files"),
-                  })
+                ? retentionSummary(torrent.retention)
                 : t("Cleanup settings");
               return (
                 <Fragment key={torrent.hash}>
@@ -289,6 +284,21 @@ export function TorrentList({
                       <span className="torrent-title" title={torrent.name}>
                         {torrent.name}
                       </span>
+                      {torrent.retentionOverride && (
+                        <span
+                          className="torrent-cleanup-override"
+                          title={cleanup}
+                        >
+                          <Settings2
+                            size={11}
+                            strokeWidth={1.75}
+                            aria-hidden="true"
+                          />
+                          {torrent.retention?.mode === "disabled"
+                            ? t("Individual rule · Never")
+                            : t("Individual cleanup rule")}
+                        </span>
+                      )}
                     </td>
                     <td className="torrent-progress" data-label={t("Progress")}>
                       <progress
@@ -387,13 +397,18 @@ export function TorrentList({
                             type="button"
                             className="torrent-icon-button"
                             disabled={blocked}
-                            title={cleanup}
+                            title={`${t("Cleanup settings")} · ${cleanup}`}
                             aria-label={t("Cleanup settings for {name}", {
                               name: torrent.name,
                             })}
+                            aria-haspopup="dialog"
                             onClick={() => onCleanup(torrent)}
                           >
-                            <Brush size={16} aria-hidden="true" />
+                            <Settings2
+                              size={16}
+                              strokeWidth={1.75}
+                              aria-hidden="true"
+                            />
                           </button>
                         )}
                         <button
@@ -471,6 +486,13 @@ export function TorrentList({
                               </span>
                             )}
                           {torrent.retention && <span>{cleanup}</span>}
+                          {torrent.retentionOverride && (
+                            <span>
+                              {t(
+                                "An individual rule replaces any cleanup settings copied from a feed.",
+                              )}
+                            </span>
+                          )}
                         </div>
                         {torrent.retentionMessage && (
                           <p

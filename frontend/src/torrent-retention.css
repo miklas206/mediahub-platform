@@ -1,0 +1,134 @@
+.torrent-retention-fields {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.torrent-retention-fields legend {
+  padding: 0 6px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.torrent-retention-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 14px;
+  min-width: 0;
+}
+.torrent-retention-fields label:last-child {
+  margin-bottom: 0;
+}
+.torrent-retention-fields input,
+.torrent-retention-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.torrent-retention-fields small {
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.5;
+}
+.torrent-retention-fields > p {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.torrent-cleanup-override {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  white-space: normal;
+}
+.torrent-cleanup-override svg {
+  flex: none;
+}
+.torrent-cleanup-dialog {
+  width: min(540px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: calc(100dvh - 48px);
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-overlay);
+}
+.torrent-cleanup-dialog::backdrop {
+  background: #03070db8;
+}
+.torrent-cleanup-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.torrent-cleanup-heading > svg {
+  flex: none;
+  color: var(--accent);
+}
+.torrent-cleanup-heading h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.torrent-cleanup-heading > button {
+  flex: none;
+}
+.torrent-cleanup-dialog > form {
+  padding: 18px;
+}
+.torrent-cleanup-dialog form > p {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+.torrent-cleanup-dialog .torrent-cleanup-name {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.torrent-cleanup-dialog .torrent-retention-fields {
+  margin: 18px 0;
+}
+.torrent-cleanup-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.torrent-cleanup-actions > button {
+  min-height: 40px;
+}
+@media (max-width: 480px) {
+  .torrent-cleanup-dialog {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 12px;
+  }
+  .torrent-cleanup-heading {
+    padding: 12px 14px;
+  }
+  .torrent-cleanup-dialog > form {
+    padding: 14px;
+  }
+  .torrent-cleanup-actions > button {
+    flex: 1 1 130px;
+  }
+}

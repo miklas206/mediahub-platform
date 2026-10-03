@@ -1,4 +1,8 @@
+import { useEffect, useId, useRef } from "react";
+import { Settings2, X } from "lucide-react";
 import { getLocale, t } from "./i18n";
+import { ErrorBox } from "./phase2";
+import "./torrent-retention.css";
 
 export type RetentionRule = {
   mode: "disabled" | "time" | "ratio" | "both" | "either";
@@ -24,16 +28,12 @@ export function TorrentRetention({
   disabled?: boolean;
   supported?: boolean;
 }) {
+  const hoursLabelId = useId();
+  const hoursHelpId = useId();
+  const ratioLabelId = useId();
+  const ratioHelpId = useId();
   return (
-    <fieldset
-      disabled={disabled}
-      style={{
-        border: "1px solid var(--line)",
-        borderRadius: 8,
-        padding: 14,
-        margin: "16px 0",
-      }}
-    >
+    <fieldset disabled={disabled} className="torrent-retention-fields">
       <legend>{t("Automatic cleanup")}</legend>
       <label>
         {t("When to clean up")}
@@ -44,6 +44,18 @@ export function TorrentRetention({
             onChange({
               ...value,
               mode: e.target.value as RetentionRule["mode"],
+              seedHours:
+                Number.isInteger(value.seedHours) &&
+                value.seedHours >= 1 &&
+                value.seedHours <= 8760
+                  ? value.seedHours
+                  : defaultRetention.seedHours,
+              uploadRatio:
+                Number.isFinite(value.uploadRatio) &&
+                value.uploadRatio >= 0.1 &&
+                value.uploadRatio <= 100
+                  ? value.uploadRatio
+                  : defaultRetention.uploadRatio,
             })
           }
         >
@@ -69,46 +81,46 @@ export function TorrentRetention({
         <>
           {value.mode !== "ratio" && (
             <label>
-              {t("Seeding time")}
-              <select
-                value={value.seedHours}
+              <span id={hoursLabelId}>{t("Seeding time (hours)")}</span>
+              <input
+                type="number"
+                aria-labelledby={hoursLabelId}
+                aria-describedby={hoursHelpId}
+                min={1}
+                max={8760}
+                step={1}
+                required
+                value={Number.isFinite(value.seedHours) ? value.seedHours : ""}
                 onChange={(e) =>
-                  onChange({ ...value, seedHours: Number(e.target.value) })
+                  onChange({ ...value, seedHours: e.target.valueAsNumber })
                 }
-              >
-                {[24, 48, 72, 168, 336, 720].map((h) => (
-                  <option value={h} key={h}>
-                    {h / 24}
-                    {t(" day(s) / ")}
-                    {h}
-                    {t(" hours")}
-                  </option>
-                ))}
-              </select>
+              />
+              <small id={hoursHelpId}>
+                {t("Choose from 1 to 8,760 hours.")}
+              </small>
             </label>
           )}
           {value.mode !== "time" && (
             <label>
-              {t("Upload ratio")}
-              <select
-                value={value.uploadRatio}
-                onChange={(e) =>
-                  onChange({ ...value, uploadRatio: Number(e.target.value) })
+              <span id={ratioLabelId}>{t("Upload ratio")}</span>
+              <input
+                type="number"
+                aria-labelledby={ratioLabelId}
+                aria-describedby={ratioHelpId}
+                min={0.1}
+                max={100}
+                step="any"
+                required
+                value={
+                  Number.isFinite(value.uploadRatio) ? value.uploadRatio : ""
                 }
-              >
-                {[1, 1.5, 2, 3, 5].map((r) => (
-                  <option key={r} value={r}>
-                    {r.toLocaleString(getLocale(), {
-                      minimumFractionDigits: 1,
-                      maximumFractionDigits: 1,
-                      useGrouping: false,
-                    })}
-                    {t(" — upload ")}
-                    {r}
-                    {t("× the content size")}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) =>
+                  onChange({ ...value, uploadRatio: e.target.valueAsNumber })
+                }
+              />
+              <small id={ratioHelpId}>
+                {t("Choose a ratio from 0.1 to 100.")}
+              </small>
             </label>
           )}
           <label>
@@ -144,7 +156,125 @@ export function TorrentRetention({
           )}
         </>
       )}
+      {value.mode === "disabled" && (
+        <p className="muted">
+          {t(
+            "Automatic cleanup is off. The torrent job and its files will be kept.",
+          )}
+        </p>
+      )}
     </fieldset>
+  );
+}
+
+export function retentionSummary(rule: RetentionRule) {
+  if (rule.mode === "disabled") return t("Never — keep torrent and files");
+  const hours = rule.seedHours.toLocaleString(getLocale());
+  const ratio = rule.uploadRatio.toLocaleString(getLocale(), {
+    maximumFractionDigits: 20,
+    useGrouping: false,
+  });
+  const threshold = {
+    time: t("After {hours} hours of seeding", { hours }),
+    ratio: t("After upload ratio {ratio}", { ratio }),
+    both: t("After {hours} hours AND ratio {ratio}", { hours, ratio }),
+    either: t("After {hours} hours OR ratio {ratio}", { hours, ratio }),
+  }[rule.mode];
+  return t("Cleanup: {mode} · {action}", {
+    mode: threshold,
+    action:
+      rule.action === "delete_files" ? t("deletes files") : t("keeps files"),
+  });
+}
+
+export function TorrentCleanupDialog({
+  name,
+  value,
+  onChange,
+  onSave,
+  onCancel,
+  busy,
+  error,
+}: {
+  name: string;
+  value: RetentionRule;
+  onChange: (rule: RetentionRule) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  busy: boolean;
+  error: string;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  useEffect(() => {
+    const element = dialog.current;
+    const trigger = document.activeElement;
+    element?.showModal();
+    element?.querySelector<HTMLSelectElement>("select")?.focus();
+    return () => {
+      element?.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected)
+        trigger.focus();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialog}
+      className="torrent-cleanup-dialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      aria-busy={busy}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <header className="torrent-cleanup-heading">
+        <Settings2 size={20} strokeWidth={1.75} aria-hidden="true" />
+        <h2 id={titleId}>{t("Torrent cleanup settings")}</h2>
+        <button
+          type="button"
+          className="topbar-action"
+          aria-label={t("Close")}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          <X size={18} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </header>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!busy) onSave();
+        }}
+      >
+        <p className="torrent-cleanup-name">{name}</p>
+        <p className="muted" id={descriptionId}>
+          {t(
+            "Save a rule for this torrent only. It replaces any cleanup rule copied from a feed without changing the feed or other torrents.",
+          )}
+        </p>
+        <TorrentRetention value={value} onChange={onChange} disabled={busy} />
+        {value.mode !== "disabled" && (
+          <p className="muted">
+            {t(
+              "Applies to this torrent's existing seeding time and uploaded bytes. If its thresholds are already reached, cleanup can run on the next check.",
+            )}
+          </p>
+        )}
+        <ErrorBox error={error} />
+        <footer className="torrent-cleanup-actions">
+          <button type="button" disabled={busy} onClick={onCancel}>
+            {t("Cancel")}
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? t("Saving…") : t("Save cleanup settings")}
+          </button>
+        </footer>
+      </form>
+    </dialog>
   );
 }
 
