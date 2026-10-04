@@ -1462,7 +1462,8 @@ export function CatalogPage({
                       {t("Set up FjordHub →")}
                     </Link>
                   ) : null}
-                  {app.id === "org.mediahub.fjordhub" && (
+                  <div className="store-card-secondary-actions">
+                  {app.id === "org.mediahub.fjordhub" && deployed && !installedApp && (
                     <Link
                       className="button-link"
                       to="/store/fjordhub/uninstall"
@@ -1481,15 +1482,16 @@ export function CatalogPage({
                       {t("Source →")}
                     </a>
                   )}
+                  </div>
                 </div>
                 {app.id === "org.mediahub.windows-share" ? (
-                  <p className="muted">
+                  <p className="muted store-card-footer">
                     {t(
                       "Uses an existing SMB share on your home network. Setup and diagnostics run on your Windows PC.",
                     )}
                   </p>
                 ) : (
-                  <details>
+                  <details className="store-card-footer">
                     <summary>
                       {t("Advanced requirements and configuration")}
                     </summary>

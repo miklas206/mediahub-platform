@@ -441,11 +441,22 @@
 }
 .store-card-action {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
   margin-top: auto;
   padding: 1rem 0;
+}
+.store-card-secondary-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+.store-card > .store-card-footer {
+  min-height: 5rem;
+  margin: 0;
 }
 .store-card-action .primary,
 .assisted-actions .primary,
