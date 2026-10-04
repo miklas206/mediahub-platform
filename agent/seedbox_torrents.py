@@ -90,6 +90,7 @@ class TorrentService:
                             "num_leechs",
                             "category",
                             "seeding_time",
+                            "added_on",
                         ]
                     }
                     | {

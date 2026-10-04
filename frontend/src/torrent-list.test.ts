@@ -49,6 +49,20 @@ describe("torrent controls", () => {
     expect(items.map((item) => item.hash)).toEqual(["a", "b"]);
   });
 
+  it("sorts by date added with newest first in descending order", () => {
+    const items = [
+      torrent("old", "Old", { added_on: 100 }),
+      torrent("new", "New", { added_on: 200 }),
+      torrent("missing", "Missing", { added_on: null }),
+    ];
+    expect(sortTorrents(items, "added_on", true).map((item) => item.hash)).toEqual([
+      "new", "old", "missing",
+    ]);
+    expect(sortTorrents(items, "added_on", false).map((item) => item.hash)).toEqual([
+      "missing", "old", "new",
+    ]);
+  });
+
   it("keeps unknown ETA last in either direction", () => {
     const items = [
       torrent("unknown", "unknown"),

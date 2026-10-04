@@ -33,6 +33,7 @@ export type Torrent = {
   num_leechs?: number;
   category?: string;
   seeding_time?: number;
+  added_on?: number | null;
   retention?: RetentionRule | null;
   retentionOverride?: boolean;
   retentionMessage?: string;
@@ -40,6 +41,7 @@ export type Torrent = {
 
 const sortOptions = [
   ["name", "Name"],
+  ["added_on", "Date added"],
   ["progress", "Progress"],
   ["state", "Status"],
   ["dlspeed", "Download speed"],
@@ -161,7 +163,11 @@ export function TorrentList({
             <select
               aria-label={t("Sort by")}
               value={sort}
-              onChange={(event) => setSort(event.target.value as TorrentSort)}
+              onChange={(event) => {
+                const key = event.target.value as TorrentSort;
+                setSort(key);
+                setDescending(key === "added_on");
+              }}
             >
               {sortOptions.map(([key, label]) => (
                 <option value={key} key={key}>
