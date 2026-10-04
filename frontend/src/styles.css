@@ -311,6 +311,10 @@ nav a.active {
   padding-left: 18px;
   gap: 8px;
 }
+.storage-shortcuts .app-shortcut {
+  padding-left: 13px;
+  gap: 13px;
+}
 .nav-service-icon {
   flex: none;
 }

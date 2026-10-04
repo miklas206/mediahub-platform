@@ -723,12 +723,12 @@ function Shell({
                     <Icon size={19} />
                     <span>{t("Storage")}</span>
                   </NavLink>
-                  <div className="app-shortcuts">
+                  <div className="app-shortcuts storage-shortcuts">
                     <NavLink to="/apps/windows-share" className="app-shortcut">
                       <ServiceIcon
                         className="nav-service-icon"
                         packageId="org.mediahub.windows-share"
-                        size={20}
+                        size={19}
                       />
                       <span className="app-shortcut-name">
                         {t("Windows folder access")}
