@@ -627,9 +627,11 @@ function Shell({
                               to={app.detailPath || "/apps"}
                               className="app-shortcut"
                               title={
-                                navigationAppsError
-                                  ? t("Status unavailable")
-                                  : t(app.health.summary || "Unknown")
+                                app.packageId === "org.mediahub.windows-share"
+                                  ? undefined
+                                  : navigationAppsError
+                                    ? t("Status unavailable")
+                                    : t(app.health.summary || "Unknown")
                               }
                             >
                               <ServiceIcon
@@ -640,21 +642,24 @@ function Shell({
                               <span className="app-shortcut-name">
                                 {translateText(app.name)}
                               </span>
-                              <span
-                                className={`app-shortcut-status ${navigationAppsError ? "unknown" : app.health.status}`}
-                              >
+                              {app.packageId !==
+                                "org.mediahub.windows-share" && (
                                 <span
-                                  aria-hidden="true"
-                                  className={`app-shortcut-dot ${navigationAppsError ? "unknown" : app.health.status}`}
-                                />
-                                {t(
-                                  appStatusLabel(
-                                    navigationAppsError
-                                      ? "unknown"
-                                      : app.health.status,
-                                  ),
-                                )}
-                              </span>
+                                  className={`app-shortcut-status ${navigationAppsError ? "unknown" : app.health.status}`}
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className={`app-shortcut-dot ${navigationAppsError ? "unknown" : app.health.status}`}
+                                  />
+                                  {t(
+                                    appStatusLabel(
+                                      navigationAppsError
+                                        ? "unknown"
+                                        : app.health.status,
+                                    ),
+                                  )}
+                                </span>
+                              )}
                             </NavLink>
                             {app.packageId === "org.mediahub.seedbox" &&
                               location.pathname === app.detailPath && (
