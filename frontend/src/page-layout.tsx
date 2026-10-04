@@ -694,7 +694,8 @@ export function LayoutGroup({
   const columns = context?.geometry.columns || 0;
   const customGrid =
     movable.length > 0 &&
-    (entries.some((entry) => entry.sourceGroup !== id) ||
+    (!!context?.editing ||
+      entries.some((entry) => entry.sourceGroup !== id) ||
       fullWidth.length > 0 ||
       columns > 0 ||
       ids.some(

@@ -82,7 +82,7 @@
 }
 .layout-item.is-arranging {
   outline: 1px dashed var(--accent);
-  outline-offset: 3px;
+  outline-offset: -1px;
   border-radius: 10px;
 }
 .layout-drag-surface {

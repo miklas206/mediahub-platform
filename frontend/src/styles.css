@@ -527,7 +527,8 @@ nav a.active {
   font-size: 12px;
 }
 .main-content {
-  max-width: 1650px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 28px 32px 22px;
 }
