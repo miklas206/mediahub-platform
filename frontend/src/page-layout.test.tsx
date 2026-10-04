@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { runtimeLayoutSection } from "./seedbox-sections";
 import {
   canMove,
   cardWidthPercentage,
@@ -15,6 +16,14 @@ import {
 } from "./page-layout";
 
 describe("page layout preferences", () => {
+  it("uses the same Seedbox layout on first entry and return from VPN", () => {
+    expect(runtimeLayoutSection(null, true)).toBe("torrents");
+    expect(runtimeLayoutSection("torrents", true)).toBe("torrents");
+    expect(runtimeLayoutSection("vpn", true)).toBe("vpn");
+    expect(runtimeLayoutSection("settings", true)).toBe("settings");
+    expect(runtimeLayoutSection(null, false)).toBe("");
+    expect(runtimeLayoutSection("custom", false)).toBe("custom");
+  });
   it("unifies nested movement boundaries while retaining prior sizes, hidden cards and fixed headings", () => {
     const saved: Record<string, string> = {
       "mediahub.layout.v1:qa": JSON.stringify({ nested: [".$b", ".$a"] }),

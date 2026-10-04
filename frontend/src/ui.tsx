@@ -19,7 +19,11 @@ import { DashboardUpdates } from "./dashboard-updates";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
 import { appStatusLabel } from "./seedbox-status";
-import { seedboxSections, seedboxSection } from "./seedbox-sections";
+import {
+  seedboxSections,
+  seedboxSection,
+  runtimeLayoutSection,
+} from "./seedbox-sections";
 import {
   useCallback,
   useEffect,
@@ -861,8 +865,8 @@ function Shell({
             </Notice>
           )}
           <PageLayout
-            key={`${user.id}:${location.pathname}:${new URLSearchParams(location.search).get("section") || ""}`}
-            storageKey={`${user.id}:${location.pathname}:${new URLSearchParams(location.search).get("section") || ""}`}
+            key={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
+            storageKey={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
           >
             <Routes>
               <Route path="/apps/install/plex" element={<PlexInstallPage />} />
