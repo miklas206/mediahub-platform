@@ -1,3 +1,4 @@
+import { isFjordHubInstalled, type FjordHubInstallation } from "./fjordhub-status";
 import { getLocale, translateText, t } from "./i18n";
 import { ServiceIcon } from "./service-icon";
 
@@ -1355,6 +1356,7 @@ export function CatalogPage({
   const installed = useLoad<AppInfo[]>("/apps");
   const integrations =
     useLoad<{ id: string; enabled: boolean }[]>("/integrations");
+  const fjordHubDeployment = useLoad<FjordHubInstallation | null>("/fjordhub/deployment");
   const hosts = useLoad<HostInfo[]>("/hosts");
   const logical = useLoad<LogicalStorage[]>("/storage/logical");
   const [targets, setTargets] = useState<Record<string, string>>({});
@@ -1366,11 +1368,12 @@ export function CatalogPage({
   >({});
   const ready = !!data && !!installed.data && !!integrations.data;
   const fjordHubConnected = !!integrations.data?.some((item) => item.enabled);
+  const fjordHubInstalled = fjordHubConnected || isFjordHubInstalled(fjordHubDeployment.data);
   const visibleApps = data
     ?.filter((app) => app.availability !== "development")
     .filter((app) => {
       if (showInstalled) return true;
-      if (app.id === "org.mediahub.fjordhub" && fjordHubConnected) return false;
+      if (app.id === "org.mediahub.fjordhub" && fjordHubInstalled) return false;
       return !installed.data?.some((item) => item.packageId === app.id);
     });
   return (
@@ -1400,6 +1403,7 @@ export function CatalogPage({
             );
             const connected =
               app.id === "org.mediahub.fjordhub" && fjordHubConnected;
+            const deployed = app.id === "org.mediahub.fjordhub" && fjordHubInstalled;
             return (
               <section className="panel app-detail store-card" key={app.id}>
                 <div className="panel-heading">
@@ -1409,7 +1413,7 @@ export function CatalogPage({
                   <span className="badge">
                     {installedApp
                       ? t("Installed")
-                      : connected
+                      : deployed
                         ? t("Installed")
                         : app.availability === "available"
                           ? t("Guided setup")
@@ -1431,6 +1435,10 @@ export function CatalogPage({
                     </Link>
                   ) : connected ? (
                     <Link className="primary" to="/integrations">
+                      {t("Manage FjordHub →")}
+                    </Link>
+                  ) : deployed ? (
+                    <Link className="primary" to="/store/fjordhub">
                       {t("Manage FjordHub →")}
                     </Link>
                   ) : app.id === "org.mediahub.plex" ? (
