@@ -1,6 +1,6 @@
 import { getLocale, t } from "./i18n";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -52,6 +52,25 @@ const sortOptions = [
   ["seeding_time", "Seeding time"],
 ] as const;
 export type TorrentSort = (typeof sortOptions)[number][0];
+
+const sortStorageKey = "mediahub.torrents.sort.v1";
+
+export function readTorrentSort(raw: string | null): {
+  key: TorrentSort;
+  descending: boolean;
+} {
+  try {
+    const value = JSON.parse(raw || "null");
+    if (
+      sortOptions.some(([key]) => key === value?.key) &&
+      typeof value.descending === "boolean"
+    )
+      return { key: value.key, descending: value.descending };
+  } catch {
+    return { key: "name", descending: false };
+  }
+  return { key: "name", descending: false };
+}
 
 export function isTorrentPaused(state: string) {
   return /^(paused|stopped)/i.test(state);
@@ -128,8 +147,25 @@ export function TorrentList({
   onAction: (hash: string, action: string) => void;
   onCleanup: (torrent: Torrent) => void;
 }) {
-  const [sort, setSort] = useState<TorrentSort>("name");
-  const [descending, setDescending] = useState(false);
+  const [initialSort] = useState(() => {
+    try {
+      return readTorrentSort(localStorage.getItem(sortStorageKey));
+    } catch {
+      return readTorrentSort(null);
+    }
+  });
+  const [sort, setSort] = useState<TorrentSort>(initialSort.key);
+  const [descending, setDescending] = useState(initialSort.descending);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        sortStorageKey,
+        JSON.stringify({ key: sort, descending }),
+      );
+    } catch {
+      return;
+    }
+  }, [sort, descending]);
   const [expanded, setExpanded] = useState<string | null>(null);
   function selectSort(key: TorrentSort) {
     if (sort === key) setDescending(!descending);
@@ -290,6 +326,24 @@ export function TorrentList({
                       <span className="torrent-title" title={torrent.name}>
                         {torrent.name}
                       </span>
+                      {typeof torrent.added_on === "number" &&
+                        torrent.added_on > 0 &&
+                        Number.isFinite(
+                          new Date(torrent.added_on * 1000).getTime(),
+                        ) && (
+                          <small className="muted" style={{ display: "block" }}>
+                            {t("Date added")}:{" "}
+                            <time
+                              dateTime={new Date(
+                                torrent.added_on * 1000,
+                              ).toISOString()}
+                            >
+                              {new Date(torrent.added_on * 1000).toLocaleString(
+                                getLocale(),
+                              )}
+                            </time>
+                          </small>
+                        )}
                       {torrent.retentionOverride && (
                         <span
                           className="torrent-cleanup-override"

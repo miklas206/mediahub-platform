@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isTorrentPaused, sortTorrents, type Torrent } from "./torrent-list";
+import {
+  isTorrentPaused,
+  readTorrentSort,
+  sortTorrents,
+  type Torrent,
+} from "./torrent-list";
 
 function torrent(
   hash: string,
@@ -22,6 +27,24 @@ function torrent(
 }
 
 describe("torrent controls", () => {
+  it("restores saved sorting and direction and rejects invalid preferences", () => {
+    expect(readTorrentSort('{"key":"added_on","descending":true}')).toEqual({
+      key: "added_on",
+      descending: true,
+    });
+    expect(readTorrentSort('{"key":"ratio","descending":false}')).toEqual({
+      key: "ratio",
+      descending: false,
+    });
+    for (const raw of [
+      null,
+      "bad",
+      "null",
+      '{"key":"invalid","descending":true}',
+      '{"key":"name","descending":"false"}',
+    ])
+      expect(readTorrentSort(raw)).toEqual({ key: "name", descending: false });
+  });
   it("offers resume for both legacy paused and current stopped states", () => {
     for (const state of ["pausedDL", "pausedUP", "stoppedDL", "stoppedUP"])
       expect(isTorrentPaused(state)).toBe(true);
@@ -55,12 +78,12 @@ describe("torrent controls", () => {
       torrent("new", "New", { added_on: 200 }),
       torrent("missing", "Missing", { added_on: null }),
     ];
-    expect(sortTorrents(items, "added_on", true).map((item) => item.hash)).toEqual([
-      "new", "old", "missing",
-    ]);
-    expect(sortTorrents(items, "added_on", false).map((item) => item.hash)).toEqual([
-      "missing", "old", "new",
-    ]);
+    expect(
+      sortTorrents(items, "added_on", true).map((item) => item.hash),
+    ).toEqual(["new", "old", "missing"]);
+    expect(
+      sortTorrents(items, "added_on", false).map((item) => item.hash),
+    ).toEqual(["missing", "old", "new"]);
   });
 
   it("keeps unknown ETA last in either direction", () => {
