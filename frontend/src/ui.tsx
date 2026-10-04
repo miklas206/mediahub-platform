@@ -617,7 +617,12 @@ function Shell({
                   {appsExpanded && (
                     <div className="app-shortcuts">
                       {(navigationApps || [])
-                        .filter((app) => app.detailPath && !app.isMock)
+                        .filter(
+                          (app) =>
+                            app.detailPath &&
+                            !app.isMock &&
+                            app.packageId !== "org.mediahub.windows-share",
+                        )
                         .sort((left, right) =>
                           left.name.localeCompare(right.name),
                         )
@@ -711,6 +716,25 @@ function Shell({
                       <IntegrationAppLinks items={navigationIntegrations} />
                     </div>
                   )}
+                </div>
+              ) : path === "/storage" ? (
+                <div className="nav-app-group" key={path}>
+                  <NavLink to={path}>
+                    <Icon size={19} />
+                    <span>{t("Storage")}</span>
+                  </NavLink>
+                  <div className="app-shortcuts">
+                    <NavLink to="/apps/windows-share" className="app-shortcut">
+                      <ServiceIcon
+                        className="nav-service-icon"
+                        packageId="org.mediahub.windows-share"
+                        size={20}
+                      />
+                      <span className="app-shortcut-name">
+                        {t("Windows folder access")}
+                      </span>
+                    </NavLink>
+                  </div>
                 </div>
               ) : (
                 <NavLink end={path === "/"} key={path} to={path}>
