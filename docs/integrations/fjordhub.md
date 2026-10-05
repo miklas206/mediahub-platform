@@ -20,6 +20,20 @@ Navigation, installed-app cards and the FjordFlix dashboard share one resolver. 
 
 Local fixtures cover legacy/empty/Unicode/metadata, independent stale/recovery, image authentication/SSRF/redirect/type/size and desktop/mobile dashboard carousel rendering. No live token, private-page content or deployment is claimed.
 
+## FjordHub home and branding
+
+The sidebar's FjordHub parent opens authenticated local `/integrations/{id}`. Each configured integration has its own status, apps, Docker resource measurements, optional FjordFlix library/streams and local launch settings. **Open FjordHub** remains a separately labelled external action. Child sidebar labels stay concise; tooltips distinguish direct app opening from the explicit management fallback. All app surfaces use the same override-aware link resolver. Settings show the signed-in MediaHub username, not remote credentials.
+
+Official artwork was checked against `qlerup/fjordhub`'s public `app_registry/*.json` / `registry.json` and each listed source repository on 2026-10-05. The new FjordHub/FjordFlix export provenance is documented in their `branding/README.md`; official assets exist, but neither repository grants a redistribution license. FjordVPN, UrbanExplorer, FjordLens and FjordBudget similarly had no verified license; OrbitMap's README explicitly reserves all rights. No screenshot was edited, no new logo was guessed and no unlicensed mark was copied. These products use existing Lucide interface icons (house, film, shield, map pin, camera, graph, planet/package as applicable), not claimed official logos. The old gradient FjordHub PNG remains untouched but is no longer rendered.
+
+The Fjord3D icon is the official `static/logos/icons/fjord3D-mark-transparent-512.png` named by its `fjordhub.json`, bundled unchanged as `frontend/public/assets/services/fjord3d.png`. Its verified [MIT license](https://github.com/qlerup/fjord3d/blob/main/LICENSE), copyright © 2026 Glerup, is retained in adjacent `fjord3d-LICENSE.txt`. No remote image loads are needed. Verified Fjord3D source revision: `cb445bcbe72e8a6b0d3b86bc23a9657a6e4a5403`; bundled PNG SHA-256: `eacceb4093bcf511b4bc70a5f39e04e3d4a0774a5719e9708c5dc9ab50af3ce0`. The remaining new official marks can replace these fallbacks once redistribution permission is provided; app defaults/ports from the registry are never used as launch URLs.
+
+## Local app launch overrides
+
+Authenticated integration responses include `appLaunchOverrides`, a map keyed by installed app ID. Administrators can set or clear an entry with session/CSRF-protected `PUT /api/v1/integrations/{id}/apps/{app_id}/launch-url`, body `{"url":"https://<configured-LAN-IP>:<actual-port>/path"}` or `{"url":null}`. The app must occur in that integration's snapshot and have a safe identifier; an existing override can still be cleared after the app disappears.
+
+These are browser-only links, not remote FjordHub configuration or a server fetch capability. The configured host is required; explicit ports and application paths are permitted without port guessing. HTTP requires the integration's explicit LAN consent. Credentials, control characters (including encoded controls), query strings, fragments and the integration's Access Token are rejected with sanitized errors. URLs are persisted in local settings scoped to the integration, survive restarts and are removed on permanent integration deletion. Clearing restores explicit API-address/management fallback behavior. No other integration, deployment or installed-app configuration is changed.
+
 ## Removing an unused integration (local only)
 
 **Disconnect** stops polling, deletes MediaHub's encrypted token and cached snapshot, but keeps the integration entry for manual reconnection. To clean up an unused entry, disconnect it first and choose **Permanently remove integration** (**Fjern integration permanent** in Danish). The confirmation names the selected integration and URL; Cancel makes no changes.

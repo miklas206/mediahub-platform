@@ -203,7 +203,7 @@ for (const width of [1440, 390]) {
       .toBeGreaterThan(0);
     await expect(
       page.getByRole("link", {
-        name: "FjordCalendar · Manage in FjordHub (app address unavailable)",
+        name: "FjordCalendar",
       }),
     ).toHaveAttribute("href", "https://192.168.50.20:8443/#card-fjordcalendar");
     expect(

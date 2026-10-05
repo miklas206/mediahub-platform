@@ -1,8 +1,12 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as render } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactNode } from "react";
+const renderToStaticMarkup = (node: ReactNode) =>
+  render(<MemoryRouter>{node}</MemoryRouter>);
 import { expect, it } from "vitest";
 import { IntegrationAppLinks, type Integration } from "./integrations";
 
-it("opens configured FjordHub directly without linking disconnected or unsafe entries", () => {
+it("opens local FjordHub overview without linking disconnected or unsafe entries", () => {
   const row: Integration = {
     id: "fjordhub",
     name: "FjordHub",
@@ -28,14 +32,14 @@ it("opens configured FjordHub directly without linking disconnected or unsafe en
       ]}
     />,
   );
-  expect(html).toContain('href="http://192.168.1.40:8888"');
-  expect(html).toContain('target="_blank"');
+  expect(html).toContain('href="/integrations/fjordhub"');
+  expect(html).not.toContain('target="_blank"');
   expect(html).toContain("FjordHub");
   expect(html).not.toContain("Disconnected");
   expect(html).not.toContain("Unsafe");
 });
 
-it("shows the official logo and installed child apps, excluding catalog entries and unsafe IDs", () => {
+it("shows licensed artwork or honest interface fallback and installed child apps, excluding catalog entries and unsafe IDs", () => {
   const row: Integration = {
     id: "hub",
     name: "FjordHub",
@@ -61,7 +65,7 @@ it("shows the official logo and installed child apps, excluding catalog entries 
     },
   };
   const html = renderToStaticMarkup(<IntegrationAppLinks items={[row]} />);
-  expect(html).toContain("/assets/services/fjordhub.png");
+  expect(html).toContain('data-brand-fallback="fjordhub"');
   expect(html).toContain('href="http://192.168.1.40:8888/#card-fjordflix"');
   expect(html).toContain("FjordFlix");
   expect(html).toContain("Manage in FjordHub (app address unavailable)");

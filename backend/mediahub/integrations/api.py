@@ -25,6 +25,10 @@ class IntegrationInput(StrictModel):
         return value
 
 
+class AppLaunchInput(StrictModel):
+    url: SecretStr | None = Field(default=None, max_length=500, exclude=True)
+
+
 class DetectionInput(StrictModel):
     name: str = Field(default="FjordHub", min_length=1, max_length=80)
     baseUrl: str = Field(min_length=8, max_length=500)
@@ -107,6 +111,19 @@ async def poster(identifier: str, movie_id: str, request: Request, user=Depends(
             "Cross-Origin-Resource-Policy": "same-origin",
         },
     )
+
+
+@router.put("/{identifier}/apps/{app_id}/launch-url")
+async def app_launch_url(
+    identifier: str,
+    app_id: str,
+    body: AppLaunchInput,
+    request: Request,
+    user=Depends(authenticated),
+):
+    require_admin(user)
+    value = body.url.get_secret_value() if body.url is not None else None
+    return result(services(request).integrations.set_launch_url(identifier, app_id, value))
 
 
 @router.post("/{identifier}/refresh")

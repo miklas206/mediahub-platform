@@ -10,7 +10,7 @@ import paramiko
 from pydantic import Field
 from sqlalchemy import select
 
-from mediahub.db import ExternalIntegration
+from mediahub.db import ExternalIntegration, Setting
 from mediahub.errors import DomainError
 from mediahub.fjordhub_deploy import DeployConfig, PinnedKey
 from mediahub.fjordhub_inspect import InspectDeployment
@@ -120,6 +120,13 @@ def uninstall_deployment(services, body):
                 with services.sessions.begin() as db:
                     row = db.get(ExternalIntegration, identifier)
                     if row:
+                        launch_setting = db.scalar(
+                            select(Setting).where(
+                                Setting.key == services.integrations.launch_key(identifier)
+                            )
+                        )
+                        if launch_setting:
+                            db.delete(launch_setting)
                         db.delete(row)
             job["verification"] = {
                 "state": "removed",

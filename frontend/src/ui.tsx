@@ -83,6 +83,7 @@ import {
 import {
   IntegrationsCard,
   IntegrationsPage,
+  FjordHubHome,
   IntegrationAppLinks,
   IntegrationAppCard,
   useIntegrations,
@@ -591,7 +592,9 @@ function Shell({
   const storePage = location.pathname.startsWith("/store/");
   const title =
     navigation.find(([path]) => path === location.pathname)?.[1] ||
-    (windowsSharePage
+    (location.pathname.startsWith("/integrations/")
+      ? "FjordHub overview"
+      : windowsSharePage
       ? "Windows folder access"
       : runtimePage
         ? "App runtime"
@@ -1033,7 +1036,8 @@ function Shell({
                     }
                   />
                   <Route path="/hosts" element={<HostsPage />} />
-                  <Route path="/integrations" element={<IntegrationsPage />} />
+                  <Route path="/integrations/:integrationId" element={<FjordHubHome administrator={user.role === "administrator"} username={user.username} />} />
+                  <Route path="/integrations" element={<IntegrationsPage administrator={user.role === "administrator"} username={user.username} />} />
                   <Route
                     path="/activity"
                     element={

@@ -11,7 +11,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { AppLaunchSettings } from "./fjordhub-launch-settings";
 import { api } from "./api";
 import { bytes } from "./format";
 import { ErrorBox, Panel } from "./phase2";
@@ -45,6 +46,7 @@ export type Integration = {
   tokenConfigured: boolean;
   enabled: boolean;
   managedByEnvironment?: boolean;
+  appLaunchOverrides?: Record<string, string>;
   snapshot: Snapshot;
   lastSuccessfulSync: string | null;
   nextSync: number;
@@ -202,6 +204,12 @@ export function IntegrationAppCard({
           ? t("Installed · Read-only integration")
           : t("Installed · Access Token required")}
       </p>
+      <Link
+        className="text-link"
+        to={`/integrations/${encodeURIComponent(row.id)}`}
+      >
+        {t("FjordHub overview")}
+      </Link>
       <a
         className="text-link"
         href={href}
@@ -216,12 +224,24 @@ export function IntegrationAppCard({
           <a
             key={String(app.id)}
             className="text-link"
-            href={fjordHubAppLink(row.baseUrl, app)?.href}
+            href={
+              fjordHubAppLink(
+                row.baseUrl,
+                app,
+                row.appLaunchOverrides,
+                row.allowHttp,
+              )?.href
+            }
             target="_blank"
             rel="noopener noreferrer"
           >
             {String(app.name)}
-            {fjordHubAppLink(row.baseUrl, app)?.management &&
+            {fjordHubAppLink(
+              row.baseUrl,
+              app,
+              row.appLaunchOverrides,
+              row.allowHttp,
+            )?.management &&
               " · Manage in FjordHub (app address unavailable)"}{" "}
             · {Number(app.running_count)}/{Number(app.container_count)}{" "}
             {t("running")}
@@ -245,36 +265,44 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
             row.snapshot.status === "online" && !row.snapshot.stale;
           return (
             <div key={row.id} className="fjordhub-app-navigation">
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={t("Open {value0} · {value1}", {
-                  value0: row.name,
-                  value1: href,
-                })}
+              <Link
+                to={`/integrations/${encodeURIComponent(row.id)}`}
+                title={t("FjordHub overview")}
               >
                 <ServiceIcon packageId="org.mediahub.fjordhub" size={18} />
                 <span
                   className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
                 />
                 <span>{row.name}</span>
-                <ArrowUpRight size={13} aria-hidden="true" />
-              </a>
+              </Link>
               <div className="app-subnav">
                 {installedFjordHubApps(row).map((app) => (
                   <a
                     key={String(app.id)}
-                    href={fjordHubAppLink(row.baseUrl, app)?.href}
+                    href={
+                      fjordHubAppLink(
+                        row.baseUrl,
+                        app,
+                        row.appLaunchOverrides,
+                        row.allowHttp,
+                      )?.href
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
+                    title={
+                      fjordHubAppLink(
+                        row.baseUrl,
+                        app,
+                        row.appLaunchOverrides,
+                        row.allowHttp,
+                      )?.management
+                        ? t("Manage in FjordHub (app address unavailable)")
+                        : t("Open app")
+                    }
                   >
                     <ServiceIcon packageId={String(app.id)} size={16} />
-                    <span>
-                      {String(app.name)}
-                      {fjordHubAppLink(row.baseUrl, app)?.management &&
-                        " · Manage in FjordHub (app address unavailable)"}
-                    </span>
+                    <span>{String(app.name)}</span>
+                    <ArrowUpRight size={12} aria-hidden="true" />
                     <span
                       className={`app-shortcut-dot ${!row.snapshot.stale && Number(app.running_count) > 0 ? "healthy" : "unknown"}`}
                     />
@@ -314,7 +342,9 @@ export function IntegrationsCard() {
                   : t("catalog entries")}
               </small>
             </div>
-            <Link to="/integrations">{t("View")}</Link>
+            <Link to={`/integrations/${encodeURIComponent(row.id)}`}>
+              {t("View")}
+            </Link>
           </div>
         ))
       )}
@@ -328,9 +358,15 @@ export function IntegrationsCard() {
 export function IntegrationsPage({
   onUrlChange,
   showTokenGuide = true,
+  integrationId,
+  administrator = false,
+  username,
 }: {
   onUrlChange?: (url: string) => void;
   showTokenGuide?: boolean;
+  integrationId?: string;
+  administrator?: boolean;
+  username?: string;
 } = {}) {
   const { items, error, loading, reload } = useIntegrations();
   const [name, setName] = useState("FjordHub"),
@@ -344,7 +380,11 @@ export function IntegrationsPage({
   const [removing, setRemoving] = useState<Integration | null>(null);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const removalDialog = useRef<HTMLDialogElement>(null);
-  const visibleItems = items.filter((row) => !removedIds.includes(row.id));
+  const visibleItems = items.filter(
+    (row) =>
+      !removedIds.includes(row.id) &&
+      (!integrationId || row.id === integrationId),
+  );
   useEffect(() => {
     const dialog = removalDialog.current;
     if (removing && dialog && !dialog.open) dialog.showModal();
@@ -456,120 +496,137 @@ export function IntegrationsPage({
       </div>
       <ErrorBox error={error || failure} />
       {notice && <p role="status">{translateText(notice)}</p>}
-      <Panel title={t("Connect FjordHub")}>
-        <form onSubmit={submit} className="stack">
-          <label>
-            {t("Display name")}
-            <input
-              required
-              maxLength={80}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label>
-            {t("FjordHub URL")}
-            <input
-              required
-              type="url"
-              value={baseUrl}
-              placeholder={t("http://your-fjordhub-lan-ip:port")}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setTest(null);
-              }}
-            />
-          </label>
-          <p className="muted">
-            {t(
-              "Enter FjordHub’s normal local URL, without an API path. MediaHub adds the supported read-only route automatically. Current FjordHub versions expose Docker resource usage; older versions may expose only a catalog. Public Cloudflare access cannot be used for this LAN-only endpoint.",
-            )}
-          </p>
-          {showTokenGuide && <FjordHubTokenGuide baseUrl={baseUrl} />}
-          <label>
-            {t("Access Token")}
-            <input
-              required
-              type="password"
-              autoComplete="new-password"
-              minLength={16}
-              maxLength={8192}
-              value={token}
-              onChange={(e) => {
-                setToken(e.target.value);
-                setTest(null);
-              }}
-            />
-          </label>
-          <label className="integration-consent">
-            <input
-              type="checkbox"
-              checked={allowHttp}
-              onChange={(e) => setHttp(e.target.checked)}
-            />{" "}
-            {t("Allow HTTP to this LAN-only FjordHub API")}
-          </label>
-          {allowHttp && (
-            <p role="note">
+      {integrationId && (
+        <header className="fjordhub-home-heading">
+          <ServiceIcon packageId="fjordhub" size={48} />
+          <div>
+            <h1>{visibleItems[0]?.name || "FjordHub"}</h1>
+            <p className="muted">{t("Overview · Apps · Docker resources")}</p>
+          </div>
+          <Link className="text-link" to="/integrations">
+            {t("All integrations")}
+          </Link>
+        </header>
+      )}
+      {!integrationId && (
+        <Panel title={t("Connect FjordHub")}>
+          <form onSubmit={submit} className="stack">
+            <label>
+              {t("Display name")}
+              <input
+                required
+                maxLength={80}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label>
+              {t("FjordHub URL")}
+              <input
+                required
+                type="url"
+                value={baseUrl}
+                placeholder={t("http://your-fjordhub-lan-ip:port")}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setTest(null);
+                }}
+              />
+            </label>
+            <p className="muted">
               {t(
-                "The Access Token is not encrypted between Core and an HTTP API. Prefer verified HTTPS. Browser submission to MediaHub still requires HTTPS.",
+                "Enter FjordHub’s normal local URL, without an API path. MediaHub adds the supported read-only route automatically. Current FjordHub versions expose Docker resource usage; older versions may expose only a catalog. Public Cloudflare access cannot be used for this LAN-only endpoint.",
               )}
             </p>
-          )}
-          <div className="button-row">
-            <button
-              type="button"
-              disabled={busy || !baseUrl}
-              onClick={() => void detect()}
-            >
-              {t("Detect existing FjordHub")}
-            </button>
-            <button
-              type="button"
-              disabled={busy || token.length < 16 || !baseUrl}
-              onClick={() => void act("test")}
-            >
-              {t("Test Connection")}
-            </button>
-            <button type="submit" disabled={busy || token.length < 16}>
-              {busy ? t("Working…") : t("Save and connect FjordHub")}
-            </button>
-          </div>
-          {test && (
-            <div role="status">
-              <strong>{label(test.status)}</strong>
-              {["online", "degraded"].includes(test.status) && (
-                <p>
-                  {t(
-                    "Connection test succeeded. Save and connect to show FjordHub and its apps under Apps.",
-                  )}
-                </p>
-              )}
-              <p>
-                {t("FjordHub ")}
-                {test.version || t("version unavailable")}
-                {t(" · API")} {test.api_version || t("not verified")}
+            {showTokenGuide && <FjordHubTokenGuide baseUrl={baseUrl} />}
+            <label>
+              {t("Access Token")}
+              <input
+                required
+                type="password"
+                autoComplete="new-password"
+                minLength={16}
+                maxLength={8192}
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value);
+                  setTest(null);
+                }}
+              />
+            </label>
+            <label className="integration-consent">
+              <input
+                type="checkbox"
+                checked={allowHttp}
+                onChange={(e) => setHttp(e.target.checked)}
+              />{" "}
+              {t("Allow HTTP to this LAN-only FjordHub API")}
+            </label>
+            {allowHttp && (
+              <p role="note">
+                {t(
+                  "The Access Token is not encrypted between Core and an HTTP API. Prefer verified HTTPS. Browser submission to MediaHub still requires HTTPS.",
+                )}
               </p>
-              {test.status === "online" && (
-                <p>
-                  {test.apps?.length ?? 0}
-                  {t(" entries found · Capabilities:")}{" "}
-                  {test.capabilities?.join(", ")}
-                  {t(" · Read-only integration")}
-                </p>
-              )}
-              {test.failed_endpoint && (
-                <p>
-                  {t("Endpoint requiring attention: ")}
-                  {test.failed_endpoint}
-                </p>
-              )}
+            )}
+            <div className="button-row">
+              <button
+                type="button"
+                disabled={busy || !baseUrl}
+                onClick={() => void detect()}
+              >
+                {t("Detect existing FjordHub")}
+              </button>
+              <button
+                type="button"
+                disabled={busy || token.length < 16 || !baseUrl}
+                onClick={() => void act("test")}
+              >
+                {t("Test Connection")}
+              </button>
+              <button type="submit" disabled={busy || token.length < 16}>
+                {busy ? t("Working…") : t("Save and connect FjordHub")}
+              </button>
             </div>
-          )}
-        </form>
-      </Panel>
+            {test && (
+              <div role="status">
+                <strong>{label(test.status)}</strong>
+                {["online", "degraded"].includes(test.status) && (
+                  <p>
+                    {t(
+                      "Connection test succeeded. Save and connect to show FjordHub and its apps under Apps.",
+                    )}
+                  </p>
+                )}
+                <p>
+                  {t("FjordHub ")}
+                  {test.version || t("version unavailable")}
+                  {t(" · API")} {test.api_version || t("not verified")}
+                </p>
+                {test.status === "online" && (
+                  <p>
+                    {test.apps?.length ?? 0}
+                    {t(" entries found · Capabilities:")}{" "}
+                    {test.capabilities?.join(", ")}
+                    {t(" · Read-only integration")}
+                  </p>
+                )}
+                {test.failed_endpoint && (
+                  <p>
+                    {t("Endpoint requiring attention: ")}
+                    {test.failed_endpoint}
+                  </p>
+                )}
+              </div>
+            )}
+          </form>
+        </Panel>
+      )}
+      {integrationId && !loading && !visibleItems.length && (
+        <p role="status">{t("Integration not found")}</p>
+      )}
       {loading && <p role="status">{t("Loading configured integrations…")}</p>}
-      {!loading && !visibleItems.length && (
+      {!integrationId && !loading && !visibleItems.length && (
         <Panel title={t("No integrations yet")}>
           <p>
             {t(
@@ -630,6 +687,23 @@ export function IntegrationsPage({
             <div>
               <strong>{label(row.snapshot.status)}</strong>
               <p className="muted">{row.baseUrl}</p>
+              <div className="button-row">
+                {!integrationId && (
+                  <Link to={`/integrations/${encodeURIComponent(row.id)}`}>
+                    {t("FjordHub overview")}
+                  </Link>
+                )}
+                {fjordHubLink(row.baseUrl) && (
+                  <a
+                    className="text-link"
+                    href={fjordHubLink(row.baseUrl)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("Open FjordHub")} <ArrowUpRight size={14} />
+                  </a>
+                )}
+              </div>
             </div>
             {row.snapshot.stale && (
               <p role="status">
@@ -738,6 +812,7 @@ export function IntegrationsPage({
             ) : (
               row.snapshot.apps.map((app, i) => (
                 <div className="app-row" key={String(app.id ?? i)}>
+                  <ServiceIcon packageId={String(app.id)} size={30} />
                   <div className="app-row-name">
                     <strong>{app.name || app.id || t("Unnamed app")}</strong>
                     <small>
@@ -750,6 +825,36 @@ export function IntegrationsPage({
                           t("No description provided")}
                     </small>
                   </div>
+                  {installedFjordHubApps(row).includes(app) &&
+                    fjordHubAppLink(
+                      row.baseUrl,
+                      app,
+                      row.appLaunchOverrides,
+                      row.allowHttp,
+                    ) && (
+                      <a
+                        className="text-link"
+                        href={
+                          fjordHubAppLink(
+                            row.baseUrl,
+                            app,
+                            row.appLaunchOverrides,
+                            row.allowHttp,
+                          )!.href
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {fjordHubAppLink(
+                          row.baseUrl,
+                          app,
+                          row.appLaunchOverrides,
+                          row.allowHttp,
+                        )!.management
+                          ? t("Manage in FjordHub")
+                          : t("Open app")}
+                      </a>
+                    )}
                 </div>
               ))
             )}
@@ -808,6 +913,12 @@ export function IntegrationsPage({
               </>
             )}
             <FjordFlix integration={row.id} data={row.snapshot.fjordflix} />
+            <AppLaunchSettings
+              row={row}
+              administrator={administrator}
+              username={username}
+              reload={reload}
+            />
             {!!row.snapshot.events?.length && (
               <>
                 <h3>{t("FjordHub events")}</h3>
@@ -823,5 +934,23 @@ export function IntegrationsPage({
         </Panel>
       ))}
     </LayoutGroup>
+  );
+}
+
+export function FjordHubHome({
+  administrator,
+  username,
+}: {
+  administrator: boolean;
+  username: string;
+}) {
+  const { integrationId } = useParams();
+  return (
+    <IntegrationsPage
+      integrationId={integrationId}
+      administrator={administrator}
+      username={username}
+      showTokenGuide={false}
+    />
   );
 }

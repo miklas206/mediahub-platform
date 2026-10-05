@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add authenticated per-integration FjordHub home pages with internal sidebar navigation, an explicit external Open FjordHub action, Docker/app/FjordFlix overview and administrator-only local app launch URL settings. Persist same-host, explicit-port overrides with session/CSRF checks and consistent sidebar/card/dashboard links; clearing restores API/management fallback, and removal cleans up scoped settings. Bundle verified MIT Fjord3D artwork with its copyright/license; use clearly documented ordinary interface-icon fallbacks where official artwork has no verified redistribution license, rather than copying screenshots or inventing replacement logos.
+
 - Reduce Cloudflare Tunnel release-check requests with shared, restart-persistent validated metadata, ETag revalidation and existing encrypted GitHub access. Persist GitHub cooldowns even for manual/forced checks; show deferred checks and explicitly stale versions without marking a working tunnel unhealthy or hiding genuine source failures. Tunnel updates remain manual.
 
 - Add a dedicated configurable Plex-style FjordFlix dashboard card under Your apps, including ordered last-10 protected poster carousel, library/active-stream counts and independent stale/empty/error states. Share one child-app link resolver between navigation, app cards and dashboard: preserve validated explicit app addresses/nondefault ports, reject unsafe or untrusted destinations, and explicitly label FjordHub management links when the resource API omits app addresses (never guess ports).

@@ -5,6 +5,7 @@ import type { Integration } from "./integrations";
 import { fjordHubAppLink } from "./fjordhub-app-link";
 import { FjordFlixPoster } from "./fjordflix";
 import { t } from "./i18n";
+import { ServiceIcon } from "./service-icon";
 
 export function FjordFlixDashboardCard({
   row,
@@ -28,7 +29,9 @@ export function FjordFlixDashboardCard({
   }, [items.length]);
   if (!row.enabled || !row.tokenConfigured || !data) return null;
   const app = row.snapshot.apps?.find((app) => app.id === "fjordflix");
-  const link = app ? fjordHubAppLink(row.baseUrl, app) : null;
+  const link = app
+    ? fjordHubAppLink(row.baseUrl, app, row.appLaunchOverrides, row.allowHttp)
+    : null;
   const stale = !!data.stale;
   return (
     <article
@@ -37,7 +40,7 @@ export function FjordFlixDashboardCard({
       aria-label={`FjordFlix · ${row.name}`}
     >
       <div className="service-tile-title">
-        <Film size={32} className="service-line-icon" />
+        <ServiceIcon packageId="fjordflix" size={32} />
         <h3>FjordFlix</h3>
         <span
           className={`badge ${stale ? "degraded" : data.ok ? "healthy" : "unknown"}`}
@@ -73,7 +76,7 @@ export function FjordFlixDashboardCard({
               {items.map((item, index) => (
                 <Link
                   className="plex-poster"
-                  to="/integrations"
+                  to={`/integrations/${encodeURIComponent(row.id)}`}
                   key={item.id ?? index}
                   title={item.title || "Untitled"}
                 >
@@ -127,7 +130,10 @@ export function FjordFlixDashboardCard({
           <ArrowUpRight size={13} />
         </a>
       ) : (
-        <Link className="service-open" to="/integrations">
+        <Link
+          className="service-open"
+          to={`/integrations/${encodeURIComponent(row.id)}`}
+        >
           View FjordFlix integration
           <ArrowUpRight size={13} />
         </Link>

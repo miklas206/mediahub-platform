@@ -1,4 +1,30 @@
-import { Box, FolderSymlink, type LucideProps } from "lucide-react";
+import {
+  Box,
+  FolderSymlink,
+  House,
+  Film,
+  Shield,
+  MapPin,
+  Camera,
+  Package,
+  Globe,
+  ChartNoAxesCombined,
+  type LucideProps,
+} from "lucide-react";
+
+// Only artwork with verified redistribution permission is bundled. These are
+// ordinary interface icons, not approximations of unlicensed product marks.
+const fjordFallbacks = {
+  fjordhub: House,
+  fjordflix: Film,
+  fjordvpn: Shield,
+  "urban-explorer": MapPin,
+  urbanexplorer: MapPin,
+  fjordlens: Camera,
+  fjordparcel: Package,
+  orbitmap: Globe,
+  fjordbudget: ChartNoAxesCombined,
+};
 
 /** Product marks identify services; interface actions still use the Lucide line family. */
 export function ServiceIcon({
@@ -8,6 +34,30 @@ export function ServiceIcon({
   ...props
 }: LucideProps & { packageId: string }) {
   const id = packageId.toLowerCase();
+  const appId = id.replace(/^org\.mediahub\./, "");
+  const Fallback = fjordFallbacks[appId as keyof typeof fjordFallbacks];
+  if (Fallback)
+    return (
+      <Fallback
+        size={size}
+        className={className}
+        data-brand-fallback={appId}
+        {...props}
+      />
+    );
+  if (appId === "fjord3d")
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 32 32"
+        className={className}
+        aria-hidden={props["aria-label"] ? undefined : true}
+        {...props}
+      >
+        <image href="/assets/services/fjord3d.png" width="32" height="32" />
+      </svg>
+    );
   if (id === "org.mediahub.windows-share")
     return <FolderSymlink size={size} className={className} {...props} />;
   const brand = id.includes("plex")

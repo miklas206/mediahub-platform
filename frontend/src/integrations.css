@@ -111,3 +111,44 @@
 .app-shortcuts .fjordhub-app-navigation > a {
   padding-left: 18px;
 }
+
+.fjordhub-home-heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.fjordhub-home-heading h1 {
+  margin: 0;
+}
+.fjordhub-home-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.fjordhub-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.fjordhub-settings summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.5rem 0;
+}
+.fjordhub-launch-form {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  min-width: 0;
+}
+.fjordhub-launch-form input {
+  min-width: 0;
+  width: 100%;
+}
+.fjordhub-launch-form .button-row {
+  flex-wrap: wrap;
+}
+.fjordhub-app-navigation .app-subnav a > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

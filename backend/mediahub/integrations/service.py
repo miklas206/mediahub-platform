@@ -13,6 +13,7 @@ from sqlalchemy import select
 from mediahub.db import ExternalIntegration, Setting, now
 from mediahub.errors import DomainError
 from mediahub.integrations.fjordhub import FjordHubIntegrationProvider, validate_url
+from mediahub.integrations.launch_urls import APP_ID, validate_launch_url
 from mediahub.integrations.provider import IntegrationSnapshot
 from mediahub.secret_store import SecretStore
 
@@ -65,6 +66,58 @@ class IntegrationService:
     def removal_key(origin):
         return "integration.removed." + sha256(origin.encode()).hexdigest()
 
+    @staticmethod
+    def launch_key(identifier):
+        return "integration.launch-urls." + identifier
+
+    def launch_overrides(self, identifier):
+        with self.sessions() as db:
+            setting = db.scalar(select(Setting).where(Setting.key == self.launch_key(identifier)))
+            return dict(setting.value) if setting else {}
+
+    def set_launch_url(self, identifier, app_id, value):
+        if not APP_ID.fullmatch(app_id):
+            raise DomainError("invalid_app_id", "Invalid integration app identifier", 422)
+        with self.persistence_lock, self.sessions.begin() as db:
+            row = db.get(ExternalIntegration, identifier)
+            if row is None or row.provider != "fjordhub":
+                raise DomainError("not_found", "Integration not found", 404)
+            key = self.launch_key(identifier)
+            setting = db.scalar(select(Setting).where(Setting.key == key))
+            overrides = dict(setting.value) if setting else {}
+            known = any(
+                app.get("id") == app_id
+                for app in (row.snapshot or {}).get("apps", [])
+                if isinstance(app, dict)
+            )
+            if value is not None:
+                if not known:
+                    raise DomainError("not_found", "Integration app not found", 404)
+                token = (
+                    self.store.get(row.secret_reference).decode() if row.secret_reference else ""
+                )
+                try:
+                    value = validate_launch_url(value, row.base_url, row.allow_http, token)
+                except ValueError:
+                    raise DomainError(
+                        "invalid_launch_url",
+                        "Use a credential-free same-host HTTP(S) app URL without query or fragment; HTTP requires LAN consent",
+                        422,
+                    ) from None
+                overrides[app_id] = value
+            else:
+                # Clearing remains possible when an app vanishes from a later snapshot.
+                overrides.pop(app_id, None)
+            if overrides:
+                if setting:
+                    setting.value = overrides
+                else:
+                    db.add(Setting(key=key, value=overrides))
+            elif setting:
+                db.delete(setting)
+        self.events.publish("integration.updated", {"id": identifier})
+        return {"id": identifier, "appLaunchOverrides": overrides}
+
     def public(self, row):
         return {
             "id": row.id,
@@ -76,6 +129,7 @@ class IntegrationService:
             "enabled": row.enabled,
             "managedByEnvironment": row.base_url == self.environment_origin,
             "snapshot": row.snapshot,
+            "appLaunchOverrides": self.launch_overrides(row.id),
             "lastSuccessfulSync": row.last_success,
             "nextSync": row.next_sync,
         }
@@ -122,6 +176,10 @@ class IntegrationService:
             if row is None and len(db.scalars(select(ExternalIntegration.id)).all()) >= 20:
                 raise DomainError(
                     "integration_limit", "Maximum configured integrations reached", 409
+                )
+            if row and any(token in value for value in self.launch_overrides(row.id).values()):
+                raise DomainError(
+                    "invalid_integration_metadata", "Token must only be in its private field", 422
                 )
             reference = "external-" + uuid4().hex
             self.store.put(reference, token.encode())
@@ -430,6 +488,11 @@ class IntegrationService:
             if db.scalar(select(Setting).where(Setting.key == key)) is None:
                 # Durable opt-out also fences discovery already awaiting the network.
                 db.add(Setting(key=key, value={}))
+            launch_setting = db.scalar(
+                select(Setting).where(Setting.key == self.launch_key(identifier))
+            )
+            if launch_setting:
+                db.delete(launch_setting)
             db.delete(row)
         self.events.publish("integration.removed", {"id": identifier})
         self.events.record(
