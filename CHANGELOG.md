@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use the MediaHub logo for iPhone and Android home-screen webapps with an Apple touch icon, maskable PNG icons and a standalone web app manifest.
+
 - Follow the configured GitHub repository's main branch by commit instead of requiring a new release or version number. Pin source downloads to the selected commit and retain bounded archive validation, builds, snapshots and rollback.
 - Display installed and available commit IDs, and add a one-time host-helper migration for same-version source updates.
 

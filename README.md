@@ -56,6 +56,20 @@ See [installation prerequisites and procedure](docs/install.md). The installer
 does not provision a Proxmox VM, install Docker, or automatically migrate an old
 server. Those host-level steps require deliberate administration.
 
+## Phone home-screen app
+
+Open MediaHub's HTTPS address in Safari on iPhone or Chrome on Android, then use
+**Add to Home Screen** (or **Install app**, when offered). The shortcut uses the
+MediaHub logo and opens in a standalone window. An internet/LAN connection to
+Core is still required; this does not add offline support.
+
+If an existing shortcut shows a letter instead of the logo, remove that shortcut
+and add it again after updating MediaHub. Phones can cache the old icon.
+
+The PNG home-screen icons are generated from `frontend/public/favicon.svg` with
+`node frontend/scripts/generate-webapp-icons.mjs` (requires the frontend's existing
+Playwright dependency and Chrome). Regenerate them when changing the logo.
+
 ## Architecture
 
 ```text
