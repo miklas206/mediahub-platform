@@ -55,7 +55,10 @@ type PlatformRelease = {
 };
 
 type UpdateItem = {
-  checkStatus?: "failed";
+  checkStatus?: "failed" | "deferred" | "checked";
+  stale?: boolean;
+  checkedAt?: number | null;
+  retryAt?: number | null;
   errorCode?: string;
   id: string;
   name: string;
@@ -448,15 +451,22 @@ export function UpdatesPage({
         latestVersion?: string | null;
         installedVersion?: string | null;
         supported?: boolean;
+        checkStatus?: string;
         message?: string;
         reason?: string;
       }>(`/apps/${app.id}/update-check`, "POST");
       setLatest((current) => ({
         ...current,
         [app.id]:
-          result.latestVersion ||
-          result.releaseVersions?.join(", ") ||
-          "No newer release reported",
+          result.checkStatus === "deferred"
+            ? result.latestVersion
+              ? t("Last verified release: {version} (stale)", {
+                  version: result.latestVersion,
+                })
+              : t("Update check deferred")
+            : result.latestVersion ||
+              result.releaseVersions?.join(", ") ||
+              "No newer release reported",
       }));
       task.steps[0].state = "complete";
       task.details.push(
@@ -472,12 +482,17 @@ export function UpdatesPage({
       task.details.push(
         `Release result · ${result.releaseVersions?.join(", ") || result.reason || "no newer release"}`,
       );
+      if (result.checkStatus === "deferred") task.steps[1].state = "pending";
       task.publish(
         100,
-        "success",
+        result.checkStatus === "deferred" ? "deferred" : "success",
         result.message || result.reason || "Update check completed.",
       );
-      setNotice(result.message || result.reason || "Update check completed.");
+      setNotice(
+        result.checkStatus === "deferred"
+          ? ""
+          : result.message || result.reason || "Update check completed.",
+      );
       updateSummary.reload();
     } catch (caught) {
       const running = task.steps.find((step) => step.state === "running");
@@ -690,7 +705,14 @@ export function UpdatesPage({
     task.publish(10, "running", "Checking MediaHub and installed apps…");
     try {
       const result = await api<UpdateSummary>("/updates/check", "POST");
-      task.steps[0].state = result.lastError ? "error" : "complete";
+      const deferred = result.items.some(
+        (item) => item.checkStatus === "deferred",
+      );
+      task.steps[0].state = result.lastError
+        ? "error"
+        : deferred
+          ? "pending"
+          : "complete";
       task.steps[1].state = "complete";
       task.steps[2].state = "complete";
       task.details.push(`${result.items.length} update sources checked`);
@@ -702,17 +724,26 @@ export function UpdatesPage({
       }
       task.publish(
         100,
-        result.lastError ? "error" : "success",
+        result.lastError ? "error" : deferred ? "deferred" : "success",
         result.lastError
           ? `Update check incomplete: ${result.lastError}`
-          : result.count
-            ? `${result.count} update${result.count === 1 ? " is" : "s are"} available.`
-            : "Everything checked is up to date.",
+          : deferred
+            ? "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected."
+            : result.count
+              ? `${result.count} update${result.count === 1 ? " is" : "s are"} available.`
+              : "Everything checked is up to date.",
       );
       const reported: Record<string, string> = {};
       for (const item of result.items) {
-        if (item.id !== "mediahub-core" && item.latestVersion)
-          reported[item.id] = item.latestVersion;
+        if (item.id !== "mediahub-core")
+          reported[item.id] =
+            item.checkStatus === "deferred"
+              ? item.latestVersion
+                ? t("Last verified release: {version} (stale)", {
+                    version: item.latestVersion,
+                  })
+                : t("Update check deferred")
+              : item.latestVersion || "No newer release reported";
       }
       setLatest((current) => ({ ...current, ...reported }));
       if (result.lastError)
@@ -889,7 +920,13 @@ export function UpdatesPage({
                 ? t("Checking update status...")
                 : updateSummary.data.lastError
                   ? t("Some update sources could not be checked")
-                  : t("All checked components are up to date")}
+                  : updateSummary.data.items.some(
+                        (item) => item.checkStatus === "deferred",
+                      )
+                    ? t(
+                        "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected.",
+                      )
+                    : t("All checked components are up to date")}
           </strong>
           {!!updateSummary.data?.notifications.length && (
             <button
@@ -912,6 +949,29 @@ export function UpdatesPage({
             <p className="notice" role="alert" key={item.id}>
               <strong>{item.name}:</strong> {translateText(item.message)}
               {item.errorCode && <small> ({item.errorCode})</small>}
+            </p>
+          ))}
+        {updateSummary.data?.items
+          .filter((item) => item.checkStatus === "deferred")
+          .map((item) => (
+            <p className="muted" role="status" key={item.id}>
+              <strong>{item.name}:</strong>{" "}
+              {t(
+                "GitHub rate limit: update check deferred until {time}. Tunnel operation is unaffected.",
+                { time: checkedAt(item.retryAt) },
+              )}
+              {item.latestVersion && (
+                <>
+                  {" "}
+                  {t(
+                    "Last verified release: {version} (stale, checked {time})",
+                    {
+                      version: item.latestVersion,
+                      time: checkedAt(item.checkedAt),
+                    },
+                  )}
+                </>
+              )}
             </p>
           ))}
         {batchPlan.manual.length > 0 && (

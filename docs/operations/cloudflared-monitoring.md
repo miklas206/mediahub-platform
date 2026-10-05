@@ -33,6 +33,24 @@ release from the fixed official
 semantic versions are validated and the release link is generated for that
 allowlisted repository rather than trusted from the response.
 
+Release checks share one in-flight request and reuse validated metadata for 15
+minutes, including across Core restarts. Manual forced refreshes still reuse a
+result for at least 60 seconds; stale metadata is revalidated using GitHub's
+ETag. If GitHub access is configured in Updates, Core reuses that encrypted
+backend credential only for the fixed GitHub API endpoint, never for route or
+status probes and never in browser responses. No new token is required.
+
+GitHub HTTP 429 or a rate-limited HTTP 403 defers the update check until the
+later of Retry-After, X-RateLimit-Reset and a 15-minute minimum cooldown. The
+non-secret deadline is saved in Core's settings database and applies to scheduled,
+manual and forced checks after restarts. The Updates page displays the deadline
+informationally, not as unhealthy tunnel status or an all-checks-success result.
+Any last verified release remains explicitly stale with its original check time;
+without prior metadata, the latest version stays unknown. After cooldown, the
+next check validates the official source again. Authentication, malformed metadata,
+timeouts and other upstream failures remain visible errors; there is no scraping
+fallback or automatic tunnel installation/restart.
+
 MediaHub does not install the update or restart cloudflared. Cloudflare's
 supported update procedure depends on whether the installation uses a package
 manager, Docker or a standalone binary, and an update can briefly interrupt

@@ -74,6 +74,11 @@ class UpdateMonitor:
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
+            **{
+                key: result[key]
+                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode")
+                if key in result
+            },
         }
 
     @staticmethod
@@ -111,7 +116,8 @@ class UpdateMonitor:
                 "lastError": error,
             }
         )
-        if not signature and not error:
+        deferred = any(item.get("checkStatus") == "deferred" for item in items)
+        if not signature and not error and not deferred:
             # A successful zero-update result resolves old update alerts. Their
             # Event rows remain in the audit timeline, but they must not keep a
             # stale badge or ask the user to dismiss an already installed release.

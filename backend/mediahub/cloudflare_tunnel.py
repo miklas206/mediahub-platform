@@ -6,19 +6,30 @@ import math
 import re
 import time
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import quote, urlsplit
 
 import httpx
 from packaging.version import InvalidVersion, Version
+from sqlalchemy import select
 
 from mediahub.config import Config
+from mediahub.db import Setting
 from mediahub.errors import DomainError
 
 LATEST_RELEASE_URL = "https://api.github.com/repos/cloudflare/cloudflared/releases/latest"
 
 
 class CloudflareTunnelMonitor:
-    def __init__(self, config, *, cache_seconds=10, release_cache_seconds=900):
+    def __init__(
+        self,
+        config,
+        *,
+        cache_seconds=10,
+        release_cache_seconds=900,
+        sessions=None,
+        token_provider=None,
+    ):
         self.status_url = config.cloudflared_status_url
         self.probe_urls = config.cloudflared_probe_urls
         self.setup_mode = "existing-tunnel"
@@ -35,6 +46,63 @@ class CloudflareTunnelMonitor:
         self.release_cached_at = 0.0
         self.release_retry_at = 0.0
         self.release_limit_message = ""
+        self.release_retry_epoch = 0.0
+        self.release_etag = None
+        self.release_task = None
+        self.sessions = sessions
+        self.token_provider = token_provider
+        if sessions:
+            with sessions() as db:
+                row = db.scalar(select(Setting).where(Setting.key == "cloudflared-release-cache"))
+                state = dict(row.value) if row else {}
+            cached = state.get("release")
+            if isinstance(cached, dict):
+                try:
+                    Version(cached["version"])
+                    age = max(0, time.time() - float(cached["checkedAt"]))
+                    if not math.isfinite(age) or not str(cached["releaseUrl"]).startswith(
+                        "https://github.com/cloudflare/cloudflared/releases/tag/"
+                    ):
+                        raise ValueError("Invalid saved release")
+                    self.release_cached = cached
+                    self.release_cached_at = time.monotonic() - age
+                    etag = state.get("etag")
+                    if (
+                        isinstance(etag, str)
+                        and len(etag) <= 512
+                        and not any(char in etag for char in "\r\n")
+                    ):
+                        self.release_etag = etag
+                except (KeyError, ValueError, TypeError, InvalidVersion):
+                    pass
+            retry = state.get("retryAt", 0)
+            if isinstance(retry, (int, float)) and math.isfinite(retry):
+                self.release_retry_epoch = retry
+                self.release_retry_at = time.monotonic() + max(0, retry - time.time())
+                self.release_limit_message = self._rate_message(retry) if retry else ""
+
+    @staticmethod
+    def _rate_message(retry):
+        timestamp = datetime.fromtimestamp(retry, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        return (
+            f"GitHub rate limit reached for cloudflared. Next attempt no earlier than {timestamp}. "
+            "Tunnel operation is unaffected by this update check."
+        )
+
+    def _save_release(self):
+        if not self.sessions:
+            return
+        value = {
+            "release": self.release_cached,
+            "etag": self.release_etag,
+            "retryAt": self.release_retry_epoch,
+        }
+        with self.sessions.begin() as db:
+            row = db.scalar(select(Setting).where(Setting.key == "cloudflared-release-cache"))
+            if row:
+                row.value = value
+            else:
+                db.add(Setting(key="cloudflared-release-cache", value=value))
 
     @staticmethod
     def _public_routes(value):
@@ -319,26 +387,46 @@ class CloudflareTunnelMonitor:
             return result
 
     async def _latest_release(self, *, force=False):
+        # Manual and scheduled callers share a request, even if a caller disconnects.
+        if self.release_task is None or self.release_task.done():
+            self.release_task = asyncio.create_task(self._fetch_latest_release(force=force))
+            self.release_task.add_done_callback(
+                lambda task: task.exception() if not task.cancelled() else None
+            )
+        return await asyncio.shield(self.release_task)
+
+    async def _fetch_latest_release(self, *, force=False):
         async with self.release_lock:
             if time.monotonic() < self.release_retry_at:
                 raise DomainError("update_source_rate_limited", self.release_limit_message, 503)
-            if (
-                not force
-                and self.release_cached
-                and time.monotonic() - self.release_cached_at < self.release_cache_seconds
+            if self.release_cached and time.monotonic() - self.release_cached_at < (
+                min(60, self.release_cache_seconds) if force else self.release_cache_seconds
             ):
                 return {**self.release_cached, "cached": True}
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "MediaHub-cloudflared-update-check/1",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+            token = self.token_provider() if self.token_provider else None
+            if token:
+                headers["Authorization"] = "Bearer " + token
+            if self.release_cached and self.release_etag:
+                headers["If-None-Match"] = self.release_etag
             try:
                 timeout = httpx.Timeout(8, connect=4)
-                async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                    response = await client.get(
-                        LATEST_RELEASE_URL,
-                        headers={
-                            "Accept": "application/vnd.github+json",
-                            "User-Agent": "MediaHub-cloudflared-update-check/1",
-                            "X-GitHub-Api-Version": "2022-11-28",
-                        },
-                    )
+                async with httpx.AsyncClient(
+                    timeout=timeout, follow_redirects=False, trust_env=False
+                ) as client:
+                    response = await client.get(LATEST_RELEASE_URL, headers=headers)
+                if response.status_code == 304:
+                    if not self.release_cached or not self.release_etag:
+                        raise ValueError("No validated release for conditional response")
+                    self.release_cached = {**self.release_cached, "checkedAt": time.time()}
+                    self.release_cached_at = time.monotonic()
+                    self.release_retry_at = self.release_retry_epoch = 0.0
+                    self._save_release()
+                    return {**self.release_cached, "cached": True}
                 response.raise_for_status()
                 if len(response.content) > 64 * 1024:
                     raise ValueError("Release response is too large")
@@ -355,7 +443,10 @@ class CloudflareTunnelMonitor:
             except httpx.HTTPStatusError as error:
                 limited = error.response.status_code == 429 or (
                     error.response.status_code == 403
-                    and error.response.headers.get("x-ratelimit-remaining") == "0"
+                    and (
+                        error.response.headers.get("x-ratelimit-remaining") == "0"
+                        or "retry-after" in error.response.headers
+                    )
                 )
                 if limited:
                     now = time.time()
@@ -366,16 +457,21 @@ class CloudflareTunnelMonitor:
                             if math.isfinite(delay):
                                 delays.append(delay)
                         except ValueError:
-                            pass
+                            if header == "retry-after":
+                                try:
+                                    delays.append(
+                                        parsedate_to_datetime(
+                                            error.response.headers[header]
+                                        ).timestamp()
+                                        - now
+                                    )
+                                except (ValueError, TypeError, OverflowError):
+                                    pass
                     delay = max(delays)
                     self.release_retry_at = time.monotonic() + delay
-                    retry = datetime.fromtimestamp(now + delay, timezone.utc).strftime(
-                        "%Y-%m-%d %H:%M UTC"
-                    )
-                    self.release_limit_message = (
-                        f"GitHub rate limit reached for cloudflared. Next attempt no earlier than {retry}. "
-                        "Tunnel operation is unaffected by this update check."
-                    )
+                    self.release_retry_epoch = now + delay
+                    self.release_limit_message = self._rate_message(self.release_retry_epoch)
+                    self._save_release()
                 raise DomainError(
                     "update_source_rate_limited" if limited else "update_source_http_error",
                     self.release_limit_message
@@ -403,6 +499,14 @@ class CloudflareTunnelMonitor:
                 "cached": False,
             }
             self.release_cached, self.release_cached_at = result, time.monotonic()
+            etag = response.headers.get("etag")
+            self.release_etag = (
+                etag
+                if etag and len(etag) <= 512 and not any(char in etag for char in "\r\n")
+                else None
+            )
+            self.release_retry_at = self.release_retry_epoch = 0.0
+            self._save_release()
             return result
 
     async def update_check(self, *, force=False):
@@ -412,7 +516,15 @@ class CloudflareTunnelMonitor:
         on how cloudflared was installed and therefore remains an operator action.
         """
 
-        tunnel, release = await asyncio.gather(self.status(), self._latest_release(force=force))
+        tunnel = await self.status()
+        deferred = False
+        try:
+            release = await self._latest_release(force=force)
+        except DomainError as error:
+            if error.code != "update_source_rate_limited":
+                raise
+            deferred = True
+            release = self.release_cached or {}
         installed_raw = tunnel.get("version")
         installed = None
         if installed_raw:
@@ -420,9 +532,11 @@ class CloudflareTunnelMonitor:
                 installed = Version(str(installed_raw).removeprefix("v"))
             except InvalidVersion:
                 installed = None
-        latest = Version(release["version"])
-        update_available = bool(installed is not None and installed < latest)
-        if installed is None:
+        latest = Version(release["version"]) if release.get("version") else None
+        update_available = bool(installed is not None and latest is not None and installed < latest)
+        if deferred:
+            message = self.release_limit_message
+        elif installed is None:
             message = (
                 f"Latest stable cloudflared release is {latest}; "
                 "the installed version is not currently observable"
@@ -438,11 +552,15 @@ class CloudflareTunnelMonitor:
             "supported": True,
             "installSupported": False,
             "installedVersion": str(installed) if installed is not None else None,
-            "latestVersion": str(latest),
+            "latestVersion": str(latest) if latest is not None else None,
             "releaseVersions": [str(latest)] if update_available else [],
             "updateAvailable": update_available,
-            "releaseUrl": release["releaseUrl"],
-            "checkedAt": release["checkedAt"],
-            "cached": release.get("cached", False),
+            "releaseUrl": release.get("releaseUrl"),
+            "checkedAt": release.get("checkedAt"),
+            "cached": bool(release) if deferred else release.get("cached", False),
+            "checkStatus": "deferred" if deferred else "checked",
+            "stale": deferred,
+            "retryAt": self.release_retry_epoch if deferred else None,
+            "errorCode": "update_source_rate_limited" if deferred else None,
             "message": message,
         }

@@ -83,25 +83,29 @@ export function DashboardUpdates() {
                 <span>
                   <strong>{item.name}</strong>
                   <small>
-                    {item.checkStatus === "failed"
-                      ? t("Check failed")
-                      : item.updateAvailable
-                        ? t("Available: {version}", {
-                            version: item.latestVersion || "—",
-                          })
-                        : t("Installed: {version}", {
-                            version: item.installedVersion || "—",
-                          })}
+                    {item.checkStatus === "deferred"
+                      ? t("Update check deferred")
+                      : item.checkStatus === "failed"
+                        ? t("Check failed")
+                        : item.updateAvailable
+                          ? t("Available: {version}", {
+                              version: item.latestVersion || "—",
+                            })
+                          : t("Installed: {version}", {
+                              version: item.installedVersion || "—",
+                            })}
                   </small>
                 </span>
                 <span
-                  className={`update-state-dot ${item.checkStatus === "failed" ? "warning" : "active"}`}
+                  className={`update-state-dot ${item.checkStatus === "failed" ? "warning" : item.checkStatus === "deferred" ? "" : "active"}`}
                   title={t(
-                    item.checkStatus === "failed"
-                      ? "Check failed"
-                      : item.updateAvailable
-                        ? "Update available"
-                        : "Installed",
+                    item.checkStatus === "deferred"
+                      ? "Update check deferred"
+                      : item.checkStatus === "failed"
+                        ? "Check failed"
+                        : item.updateAvailable
+                          ? "Update available"
+                          : "Installed",
                   )}
                 />
               </Link>

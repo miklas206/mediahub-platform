@@ -357,3 +357,189 @@ def test_rate_limit_pauses_even_forced_checks_until_retry_then_recovers(monkeypa
         assert len(requests) == 2
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize(
+    "status,headers",
+    [
+        (403, {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(int(time.time()) + 3600)}),
+        (403, {"retry-after": "3600"}),
+        (429, {"retry-after": "Mon, 05 Oct 2099 22:00:00 GMT"}),
+        (429, {"retry-after": "invalid", "x-ratelimit-reset": "nan"}),
+    ],
+)
+def test_deferred_check_survives_restart_with_stale_release(
+    logged_in, monkeypatch, status, headers
+):
+    requests = []
+    token = "ghp_" + "a" * 30
+
+    async def handler(request):
+        if request.url.host != "api.github.com":
+            assert "authorization" not in request.headers
+            return httpx.Response(
+                200, json={"metricsReachable": True, "connections": 4, "version": "2026.8.0"}
+            )
+        requests.append(request)
+        assert request.headers["authorization"] == "Bearer " + token
+        if len(requests) == 1:
+            return httpx.Response(
+                200, headers={"etag": '"release-1"'}, json={"tag_name": "2026.9.1"}
+            )
+        return httpx.Response(status, headers=headers, text=token)
+
+    mock_client(monkeypatch, handler)
+    sessions = logged_in.app.state.services.sessions
+
+    async def scenario():
+        monitor = CloudflareTunnelMonitor(
+            config(probes=[]), sessions=sessions, token_provider=lambda: token
+        )
+        await monitor.update_check()
+        monitor.release_cached_at -= 1000
+        first = await monitor.update_check(force=True)
+        assert first["checkStatus"] == "deferred"
+        assert first["latestVersion"] == "2026.9.1"
+        assert first["stale"] is True
+        assert first["updateAvailable"] is True
+        assert token not in json.dumps(first)
+        restarted = CloudflareTunnelMonitor(
+            config(probes=[]), sessions=sessions, token_provider=lambda: token
+        )
+        assert restarted.release_etag == '"release-1"'
+        for force in (False, True, True):
+            result = await restarted.update_check(force=force)
+            assert result["retryAt"] == first["retryAt"]
+            assert result["checkedAt"] == first["checkedAt"]
+            assert result["checkStatus"] == "deferred"
+        assert (await restarted.status())["metricsReachable"] is True
+        assert (await restarted.status())["connections"] == 4
+        assert (await restarted.status())["status"] == (await monitor.status())["status"]
+        assert len(requests) == 2
+
+    asyncio.run(scenario())
+
+
+def test_conditional_cache_is_reused_after_restart_and_revalidated(logged_in, monkeypatch):
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        if len(requests) == 1:
+            assert "if-none-match" not in request.headers
+            return httpx.Response(200, headers={"etag": '"stable"'}, json={"tag_name": "2026.9.1"})
+        assert request.headers["if-none-match"] == '"stable"'
+        return httpx.Response(304)
+
+    mock_client(monkeypatch, handler)
+    sessions = logged_in.app.state.services.sessions
+
+    async def scenario():
+        monitor = CloudflareTunnelMonitor(config(), sessions=sessions)
+        original = await monitor._latest_release()
+        restarted = CloudflareTunnelMonitor(config(), sessions=sessions)
+        assert (await restarted._latest_release())["version"] == original["version"]
+        assert len(requests) == 1
+        restarted.release_cached_at -= 1000
+        refreshed = await restarted._latest_release()
+        assert refreshed["version"] == original["version"]
+        assert refreshed["checkedAt"] >= original["checkedAt"]
+        assert refreshed["cached"] is True
+        assert len(requests) == 2
+
+    asyncio.run(scenario())
+
+
+def test_concurrent_forced_checks_and_repeat_force_make_one_request(monkeypatch):
+    requests = []
+
+    async def handler(request):
+        requests.append(request)
+        await asyncio.sleep(0.01)
+        return httpx.Response(200, json={"tag_name": "2026.9.1"})
+
+    mock_client(monkeypatch, handler)
+
+    async def scenario():
+        monitor = CloudflareTunnelMonitor(config())
+        results = await asyncio.gather(*(monitor._latest_release(force=True) for _ in range(10)))
+        assert all(result["version"] == "2026.9.1" for result in results)
+        for _ in range(5):
+            await monitor._latest_release(force=True)
+        assert len(requests) == 1
+
+    asyncio.run(scenario())
+
+
+def test_rate_limit_without_cache_is_deferred_not_up_to_date(monkeypatch):
+    async def handler(request):
+        return httpx.Response(429)
+
+    mock_client(monkeypatch, handler)
+    result = asyncio.run(CloudflareTunnelMonitor(config(probes=[])).update_check())
+    assert result["checkStatus"] == "deferred"
+    assert result["latestVersion"] is None
+    assert result["checkedAt"] is None
+    assert result["updateAvailable"] is False
+    assert "up to date" not in result["message"]
+
+
+@pytest.mark.parametrize("status", [401, 403, 502])
+def test_other_http_failures_are_not_hidden_by_saved_release(monkeypatch, status):
+    async def handler(request):
+        return httpx.Response(status, text="secret upstream detail")
+
+    mock_client(monkeypatch, handler)
+    monitor = CloudflareTunnelMonitor(config())
+    monitor.release_cached = {
+        "version": "2026.9.1",
+        "releaseUrl": "unused",
+        "checkedAt": time.time(),
+    }
+    with pytest.raises(DomainError) as error:
+        asyncio.run(monitor._latest_release())
+    assert error.value.code == "update_source_http_error"
+    assert "secret" not in error.value.message
+
+
+def test_persisted_cooldown_expires_and_success_clears_it(logged_in, monkeypatch):
+    from mediahub.db import Setting
+    from sqlalchemy import select
+
+    requests = []
+    sessions = logged_in.app.state.services.sessions
+
+    async def handler(request):
+        if request.url.host != "api.github.com":
+            return httpx.Response(200, json={"metricsReachable": True, "connections": 4})
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(429, headers={"retry-after": "900"})
+        return httpx.Response(200, json={"tag_name": "2026.10.0"})
+
+    mock_client(monkeypatch, handler)
+
+    async def scenario():
+        monitor = CloudflareTunnelMonitor(config(), sessions=sessions)
+        results = await asyncio.gather(*(monitor.update_check(force=True) for _ in range(5)))
+        assert all(result["checkStatus"] == "deferred" for result in results)
+        github_calls = [request for request in requests if request.url.host == "api.github.com"]
+        # Only GitHub requests are relevant; status helper requests are read-only.
+        assert len(github_calls) == 1
+        restarted = CloudflareTunnelMonitor(config(), sessions=sessions)
+        with pytest.raises(DomainError):
+            await restarted._latest_release(force=True)
+        clock, monotonic = time.time, time.monotonic
+        with monkeypatch.context() as context:
+            context.setattr(time, "time", lambda: clock() + 901)
+            context.setattr(time, "monotonic", lambda: monotonic() + 901)
+            recovered = CloudflareTunnelMonitor(config(), sessions=sessions)
+            assert (await recovered._latest_release())["version"] == "2026.10.0"
+        with sessions() as db:
+            state = db.scalar(select(Setting).where(Setting.key == "cloudflared-release-cache"))
+            assert state.value["retryAt"] == 0
+        assert (await CloudflareTunnelMonitor(config(), sessions=sessions)._latest_release())[
+            "version"
+        ] == "2026.10.0"
+
+    asyncio.run(scenario())

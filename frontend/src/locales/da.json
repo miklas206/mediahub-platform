@@ -1,4 +1,10 @@
 {
+  "Update check deferred": "Opdateringskontrol udskudt",
+  "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected.": "Nogle opdateringskontroller er udskudt af GitHubs forespørgselsgrænse; tunnelen fungerer uændret.",
+  "GitHub rate limit: update check deferred until {time}. Tunnel operation is unaffected.": "GitHubs forespørgselsgrænse: opdateringskontrol udskudt til {time}. Tunnelen fungerer uændret.",
+  "Last verified release: {version} (stale, checked {time})": "Senest verificerede udgivelse: {version} (forældet, kontrolleret {time})",
+  "Last verified release: {version} (stale)": "Senest verificerede udgivelse: {version} (forældet)",
+  "GitHub rate limit reached for cloudflared. Next attempt no earlier than {time}. Tunnel operation is unaffected by this update check.": "GitHubs forespørgselsgrænse er nået for cloudflared. Næste forsøg tidligst {time}. Denne opdateringskontrol påvirker ikke tunnelen.",
   "Permanently remove integration": "Fjern integration permanent",
   "Permanently remove integration?": "Fjern integrationen permanent?",
   "Only this MediaHub integration, its stored token and cached resources, appdata and gallery are removed. FjordHub, its apps and remote files are not uninstalled or changed. You can connect it again manually later.": "Kun denne MediaHub-integration, dens gemte token og cachede ressourcer, appdata og galleri fjernes. FjordHub, dens apps og eksterne filer bliver ikke afinstalleret eller ændret. Du kan tilslutte integrationen manuelt igen senere.",

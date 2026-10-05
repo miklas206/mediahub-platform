@@ -207,3 +207,32 @@ def test_failed_sources_are_all_identified(logged_in, monkeypatch):
     assert all(item["checkStatus"] == "failed" for item in result["items"])
     assert result["items"][2]["errorCode"] == "update_check_timeout"
     assert result["lastError"] == "Could not check: MediaHub Core, Seedbox Agent, Cloudflare Tunnel"
+
+
+def test_deferred_source_stays_explicit_and_does_not_clear_alerts(logged_in):
+    svc = logged_in.app.state.services
+    svc.updates._store_results([available_item()])
+    app = {"id": "cloudflare", "name": "Cloudflare Tunnel", "version": "1.0"}
+    deferred = {
+        "checkStatus": "deferred",
+        "stale": True,
+        "retryAt": 123456,
+        "checkedAt": 123000,
+        "latestVersion": "2026.9.1",
+        "updateAvailable": False,
+        "errorCode": "update_source_rate_limited",
+        "message": "GitHub release check deferred; tunnel operation is unaffected",
+    }
+    asyncio.run(svc.updates.record_app(app, deferred))
+    summary = svc.updates.summary()
+    item = next(item for item in summary["items"] if item["id"] == "cloudflare")
+    assert item["checkStatus"] == "deferred"
+    assert item["stale"] is True
+    assert item["retryAt"] == 123456
+    assert item["checkedAt"] == 123000
+    assert summary["lastError"] is None
+    svc.updates._store_results([item])
+    assert len(svc.updates.summary()["notifications"]) == 1
+    asyncio.run(svc.updates.record_app(app, {"updateAvailable": False, "message": "Up to date"}))
+    assert svc.updates.summary()["notifications"] == []
+    assert "checkStatus" not in svc.updates.summary()["items"][0]

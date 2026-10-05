@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reduce Cloudflare Tunnel release-check requests with shared, restart-persistent validated metadata, ETag revalidation and existing encrypted GitHub access. Persist GitHub cooldowns even for manual/forced checks; show deferred checks and explicitly stale versions without marking a working tunnel unhealthy or hiding genuine source failures. Tunnel updates remain manual.
+
 - Add a dedicated configurable Plex-style FjordFlix dashboard card under Your apps, including ordered last-10 protected poster carousel, library/active-stream counts and independent stale/empty/error states. Share one child-app link resolver between navigation, app cards and dashboard: preserve validated explicit app addresses/nondefault ports, reject unsafe or untrusted destinations, and explicitly label FjordHub management links when the resource API omits app addresses (never guess ports).
 
 - Add confirmed, administrator-only permanent removal for disconnected FjordHub integration entries. Remove only the selected local record, token and cached snapshots/gallery; never uninstall or modify FjordHub. Fence late refresh/discovery, persist discovery opt-outs across restarts, and explain environment-managed entries that require operator configuration changes first. Existing disconnect still preserves the row.

@@ -18,7 +18,7 @@ export type OperationStep = {
 
 export type OperationState = {
   title: string;
-  status: "running" | "success" | "error";
+  status: "running" | "success" | "error" | "deferred";
   progress: number;
   message: string;
   steps: OperationStep[];
