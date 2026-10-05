@@ -372,6 +372,34 @@ def cached_source_updater(tmp_path, monkeypatch):
     return updater, root, commands
 
 
+@pytest.mark.parametrize("fast", [False, True])
+def test_platform_update_never_restarts_managed_plex_or_vpn(tmp_path, monkeypatch, fast):
+    factory = cached_source_updater if fast else source_updater
+    updater, root, commands = factory(tmp_path, monkeypatch)
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    mutations = [
+        args
+        for args in commands
+        if args[:2] == ["docker", "compose"]
+        and any(action in args for action in ("stop", "up", "down", "restart", "kill", "rm"))
+    ]
+    assert mutations
+    for args in mutations:
+        assert "down" not in args and "restart" not in args
+        action = "stop" if "stop" in args else "up"
+        assert action in args
+        services = [
+            arg
+            for arg in args[args.index(action) + 1 :]
+            if arg in {"core", "agent", "plex", "vpn", "gluetun", "seedbox"}
+        ]
+        assert services and set(services) <= {"core", "agent"}
+        if action == "up":
+            assert "--no-deps" in args
+    assert not any(args[:2] in (["docker", "restart"], ["docker", "stop"]) for args in commands)
+
+
 def test_unchanged_agent_is_not_built_stopped_recreated_or_snapshotted(tmp_path, monkeypatch):
     updater, root, commands = cached_source_updater(tmp_path, monkeypatch)
     updater.process()

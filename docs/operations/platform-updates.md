@@ -1,5 +1,17 @@
 # Platform updates from GitHub source
 
+## Plex playback during MediaHub updates
+
+The normal MediaHub platform updater stops/replaces only changed Core and Agent
+services. Compose starts use `--no-deps`; managed Plex and its VPN container are
+not update targets. Agent shutdown cancels the Plex monitor without stopping Plex.
+A Core-only fast update also leaves the Agent running.
+
+This is not a guarantee of uninterrupted playback during a Plex image update,
+manual Plex/VPN restart, host reboot, VPN failure or unavailable media storage.
+Those operations or safety failures can interrupt streams. After an Agent update,
+Plex monitoring resumes and retains the existing fail-closed storage/VPN checks.
+Updating Plex itself should be scheduled when nobody is watching. from GitHub source
 MediaHub downloads **source code** from GitHub and builds Core and the local
 Agent on the user's server. The update channel follows the configured repository's `main` branch.
 The installed Git commit is compared with `main`; a new commit is an update even

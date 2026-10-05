@@ -141,6 +141,30 @@ def test_stop_remains_available_when_storage_fails(policy):
     assert calls == [("POST", "/containers/mediahub-plex/stop?t=30")]
 
 
+def test_agent_shutdown_leaves_plex_and_vpn_running():
+    async def scenario():
+        control = PlexControl(None, None)
+        calls = []
+        entered = asyncio.Event()
+
+        async def monitor():
+            entered.set()
+            await asyncio.Event().wait()
+
+        async def mutation(*args):
+            calls.append(args)
+
+        control.docker = mutation
+        control.runtime = type("Runtime", (), {"stop": mutation})()
+        control.monitor_task = asyncio.create_task(monitor())
+        await entered.wait()
+        await control.close()
+        assert control.monitor_task.cancelled()
+        assert calls == []
+
+    asyncio.run(scenario())
+
+
 def test_update_check_never_returns_download_url_or_token(policy):
     import xml.etree.ElementTree as ET
 
