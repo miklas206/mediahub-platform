@@ -3,6 +3,7 @@
 import base64
 import contextlib
 import hashlib
+import math
 from pathlib import Path, PurePosixPath
 
 from mediahub.errors import DomainError
@@ -71,6 +72,9 @@ class TorrentService:
                 allowed = any(path == root or root in path.parents for root in allowed_roots)
                 record = cleanup.get(item.get("hash"), {})
                 current_rule = bool(record) and self.retention.tagged(item, record)
+                popularity = item.get("popularity")
+                if type(popularity) not in (int, float) or not math.isfinite(popularity):
+                    popularity = None
                 rows.append(
                     {
                         key: item.get(key)
@@ -94,6 +98,7 @@ class TorrentService:
                         ]
                     }
                     | {
+                        "popularity": popularity,
                         "actionsAllowed": allowed,
                         "retention": record.get("rule") if current_rule else None,
                         "retentionOverride": current_rule and record.get("override") is True,

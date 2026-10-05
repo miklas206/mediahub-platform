@@ -24,6 +24,7 @@ export type Torrent = {
   dlspeed: number;
   upspeed: number;
   ratio: number;
+  popularity?: number | null;
   uploaded?: number;
   downloaded?: number;
   eta: number;
@@ -45,6 +46,20 @@ export function torrentSeedingTime(seconds: number | undefined): string {
     : "—";
 }
 
+function hasPopularity(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+export function torrentPopularity(value: unknown): string {
+  return hasPopularity(value)
+    ? value.toLocaleString(getLocale(), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: false,
+      })
+    : "—";
+}
+
 const sortOptions = [
   ["name", "Name"],
   ["added_on", "Date added"],
@@ -53,6 +68,7 @@ const sortOptions = [
   ["dlspeed", "Download speed"],
   ["upspeed", "Upload speed"],
   ["ratio", "Client ratio"],
+  ["popularity", "Popularity"],
   ["eta", "Time remaining"],
   ["size", "Size"],
   ["seeding_time", "Seeding time"],
@@ -94,10 +110,23 @@ export function sortTorrents(
   descending: boolean,
 ) {
   return [...items].sort((a, b) => {
+    if (key === "popularity") {
+      const leftKnown = hasPopularity(a.popularity);
+      const rightKnown = hasPopularity(b.popularity);
+      if (leftKnown !== rightKnown) return leftKnown ? -1 : 1;
+    }
     // Unknown estimates stay last in either direction.
     if (key === "eta" && hasEta(a) !== hasEta(b)) return hasEta(a) ? -1 : 1;
-    const left = key === "eta" && !hasEta(a) ? 0 : (a[key] ?? 0);
-    const right = key === "eta" && !hasEta(b) ? 0 : (b[key] ?? 0);
+    const left =
+      (key === "eta" && !hasEta(a)) ||
+      (key === "popularity" && !hasPopularity(a.popularity))
+        ? 0
+        : (a[key] ?? 0);
+    const right =
+      (key === "eta" && !hasEta(b)) ||
+      (key === "popularity" && !hasPopularity(b.popularity))
+        ? 0
+        : (b[key] ?? 0);
     const comparison =
       typeof left === "string" && typeof right === "string"
         ? left.localeCompare(right, undefined, {
@@ -186,6 +215,7 @@ export function TorrentList({
     { label: t("Status"), key: "state" },
     { label: t("Transfer"), key: "dlspeed" },
     { label: t("Ratio"), key: "ratio" },
+    { label: t("Popularity"), key: "popularity" },
     { label: t("ETA"), key: "eta" },
     { label: t("Size"), key: "size" },
     { label: t("Actions") },
@@ -422,6 +452,9 @@ export function TorrentList({
                         useGrouping: false,
                       })}
                     </td>
+                    <td data-label={t("Popularity")}>
+                      {torrentPopularity(torrent.popularity)}
+                    </td>
                     <td data-label={t("ETA")}>
                       {hasEta(torrent) ? uptime(torrent.eta) : "—"}
                     </td>
@@ -525,7 +558,7 @@ export function TorrentList({
                       className="torrent-details-row"
                       id={`torrent-details-${torrent.hash}`}
                     >
-                      <td colSpan={8}>
+                      <td colSpan={columns.length}>
                         <strong className="torrent-full-name">
                           {torrent.name}
                         </strong>

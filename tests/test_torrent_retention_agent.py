@@ -88,6 +88,35 @@ def setup(tmp_path, action="remove_job"):
     return service, client, policy, spec, row, rows, files, root
 
 
+@pytest.mark.parametrize(
+    "popularity", [0, 0.125, 12, None, "1.5", True, float("nan"), float("inf"), -float("inf")]
+)
+def test_torrent_list_forwards_only_finite_numeric_popularity(tmp_path, popularity):
+    service, client, policy, spec, row, *_ = setup(tmp_path)
+    row.update(
+        popularity=popularity,
+        tracker="https://tracker.invalid/secret-passkey",
+        magnet_uri="magnet:?private-token",
+        password="private-password",
+    )
+    result = asyncio.run(service.torrents.list())
+    item = result["items"][0]
+    assert item["popularity"] == (
+        popularity if type(popularity) in (int, float) and popularity in (0, 0.125, 12) else None
+    )
+    assert item["seeding_time"] == row["seeding_time"]
+    assert item["uploaded"] == row["uploaded"]
+    for key in ("tracker", "magnet_uri", "password", "save_path", "tags"):
+        assert key not in item
+    assert "private-" not in str(result)
+    assert "secret-passkey" not in str(result)
+
+
+def test_torrent_list_missing_popularity_stays_unknown(tmp_path):
+    service, *_ = setup(tmp_path)
+    assert asyncio.run(service.torrents.list())["items"][0]["popularity"] is None
+
+
 @pytest.mark.parametrize("action,delete", [("remove_job", "false"), ("delete_files", "true")])
 def test_cleanup_uses_explicit_action_and_keeps_rule_until_removal_confirmed(
     tmp_path, action, delete

@@ -6,9 +6,12 @@ import {
   readTorrentSort,
   sortTorrents,
   torrentSeedingTime,
+  torrentPopularity,
   TorrentList,
   type Torrent,
 } from "./torrent-list";
+
+import { setLanguage } from "./i18n";
 
 function torrent(
   hash: string,
@@ -31,6 +34,70 @@ function torrent(
 }
 
 describe("torrent controls", () => {
+  it("renders a sortable popularity column including zero and unknown values", () => {
+    const html = renderToStaticMarkup(
+      createElement(TorrentList, {
+        items: [
+          torrent("popular", "Popular", { popularity: 1.234 }),
+          torrent("zero", "Zero", { popularity: 0 }),
+          torrent("unknown", "Unknown"),
+          torrent("invalid", "Invalid", { popularity: Infinity }),
+        ],
+        disabled: false,
+        onAction: () => {},
+        onCleanup: () => {},
+      }),
+    );
+    expect(html).toContain('<option value="popularity">Popularity</option>');
+    expect(html).toContain('data-label="Popularity">1.23</td>');
+    expect(html).toContain('data-label="Popularity">0.00</td>');
+    expect(html.match(/data-label="Popularity">—<\/td>/g)).toHaveLength(2);
+  });
+
+  it("formats popularity with two localized decimals, not derived from ratio", () => {
+    expect(torrentPopularity(0)).toBe("0.00");
+    expect(torrentPopularity(1.234)).toBe("1.23");
+    for (const value of [undefined, null, NaN, Infinity, -Infinity, "2", true])
+      expect(torrentPopularity(value)).toBe("—");
+    try {
+      setLanguage("da");
+      expect(torrentPopularity(0)).toBe("0,00");
+      const html = renderToStaticMarkup(
+        createElement(TorrentList, {
+          items: [torrent("zero", "Zero", { popularity: 0 })],
+          disabled: false,
+          onAction: () => {},
+          onCleanup: () => {},
+        }),
+      );
+      expect(html).toContain('data-label="Popularitet">0,00</td>');
+      expect(html).toContain('<option value="popularity">Popularitet</option>');
+    } finally {
+      setLanguage("en");
+    }
+  });
+
+  it("sorts popularity numerically with unknowns last in both directions", () => {
+    const rows = [
+      torrent("missing", "Missing"),
+      torrent("null", "Null", { popularity: null }),
+      torrent("invalid", "Invalid", { popularity: NaN }),
+      torrent("zero", "Zero", { popularity: 0 }),
+      torrent("low", "Low", { popularity: 2 }),
+      torrent("high", "High", { popularity: 10 }),
+    ];
+    expect(
+      sortTorrents(rows, "popularity", false).map((row) => row.hash),
+    ).toEqual(["zero", "low", "high", "invalid", "missing", "null"]);
+    expect(
+      sortTorrents(rows, "popularity", true).map((row) => row.hash),
+    ).toEqual(["high", "low", "zero", "invalid", "missing", "null"]);
+    expect(rows[0].hash).toBe("missing");
+    expect(readTorrentSort('{"key":"popularity","descending":true}')).toEqual({
+      key: "popularity",
+      descending: true,
+    });
+  });
   it("shows seed time in collapsed torrent rows without opening details", () => {
     const html = renderToStaticMarkup(
       createElement(TorrentList, {
