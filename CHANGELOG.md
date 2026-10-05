@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a dedicated configurable Plex-style FjordFlix dashboard card under Your apps, including ordered last-10 protected poster carousel, library/active-stream counts and independent stale/empty/error states. Share one child-app link resolver between navigation, app cards and dashboard: preserve validated explicit app addresses/nondefault ports, reject unsafe or untrusted destinations, and explicitly label FjordHub management links when the resource API omits app addresses (never guess ports).
+
 - Add confirmed, administrator-only permanent removal for disconnected FjordHub integration entries. Remove only the selected local record, token and cached snapshots/gallery; never uninstall or modify FjordHub. Fence late refresh/discovery, persist discovery opt-outs across restarts, and explain environment-managed entries that require operator configuration changes first. Existing disconnect still preserves the row.
 
 - Show qBittorrent's reported popularity as a sortable torrent-list column on desktop and mobile. Preserve saved sort preferences, display real zero values with two localized decimals, and show unavailable/invalid values as unknown without calculating a replacement.

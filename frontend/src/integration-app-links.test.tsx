@@ -64,6 +64,8 @@ it("shows the official logo and installed child apps, excluding catalog entries 
   expect(html).toContain("/assets/services/fjordhub.png");
   expect(html).toContain('href="http://192.168.1.40:8888/#card-fjordflix"');
   expect(html).toContain("FjordFlix");
+  expect(html).toContain("Manage in FjordHub (app address unavailable)");
+  expect(html).not.toContain("Open FjordFlix");
   expect(html).not.toContain("Not installed");
   expect(html).not.toContain("Unsafe child");
   const legacy = renderToStaticMarkup(

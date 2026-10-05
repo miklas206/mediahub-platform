@@ -77,6 +77,36 @@
 .fjordflix-warning {
   color: var(--warning, #f8c35e);
 }
+.fjordflix-service-tile .fjordflix-poster {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.fjordflix-service-tile p {
+  overflow-wrap: anywhere;
+}
+.fjordflix-service-tile .fjordflix-poster small {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding: 4px;
+  font-size: 8px;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .service-tile.fjordflix-service-tile .plex-recent-media {
+    display: block;
+    margin-top: 12px;
+  }
+  .fjordflix-service-tile .service-open {
+    position: static;
+    font-size: 11px;
+    padding: 8px 0 0;
+    justify-content: start;
+  }
+}
 @media (max-width: 480px) {
   .fjordflix-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -146,3 +146,73 @@ def test_private_address_policy():
         with pytest.raises(ValueError):
             validate_url(url)
     assert validate_url("http://192.168.50.20", allow_http=True) == "http://192.168.50.20"
+
+
+@pytest.mark.parametrize("field", ["url", "local_url", "external_url"])
+def test_explicit_installed_app_addresses_keep_nondefault_ports(field):
+    body = {
+        "ok": True,
+        "capacity": {},
+        "hub": {},
+        "apps": [
+            None,
+            {
+                "id": "fjordflix",
+                "name": "FjordFlix",
+                "container_count": 1,
+                field: "https://192.168.50.20:9234/library",
+            },
+        ],
+    }
+    snapshot = provider().resource_snapshot(body)
+    assert snapshot.apps[0][field] == "https://192.168.50.20:9234/library"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://evil.example:9234/",
+        "http://192.168.50.20:9234/",
+        "https://user:pass@192.168.50.20:9234/",
+        "https://192.168.50.20:9234/?token=x",
+        "https://192.168.50.20:9234/#token=x",
+        "javascript:alert(1)",
+        "https://192.168.50.20:8443/",
+        "https://192.168.50.20:0/",
+        "https://192.168.50.20:9234/test-private-key",
+    ],
+)
+def test_untrusted_installed_app_addresses_are_not_projected(value):
+    snapshot = provider().resource_snapshot(
+        {
+            "ok": True,
+            "capacity": {},
+            "hub": {},
+            "apps": [{"id": "fjordflix", "name": "FjordFlix", "container_count": 1, "url": value}],
+        }
+    )
+    assert "url" not in snapshot.apps[0]
+
+
+def test_verified_upstream_metrics_only_contract_has_no_invented_app_addresses():
+    snapshot = provider().resource_snapshot(
+        {
+            "ok": True,
+            "capacity": {},
+            "hub": {},
+            "hub_url": "http://192.168.50.20:8091/",
+            "apps": [
+                {
+                    "id": "fjordflix",
+                    "name": "FjordFlix",
+                    "container_count": 1,
+                    "running_count": 1,
+                    "default_port": 8093,
+                    "port": 9234,
+                }
+            ],
+        }
+    )
+    assert snapshot.apps == [
+        {"id": "fjordflix", "name": "FjordFlix", "container_count": 1, "running_count": 1}
+    ]

@@ -42,7 +42,7 @@ export type FjordFlixData = {
   streams?: FjordFlixStream[];
 };
 
-function Poster({
+export function FjordFlixPoster({
   integration,
   item,
 }: {
@@ -66,6 +66,7 @@ function Poster({
       ) : (
         <span role="img" aria-label="Poster unavailable">
           <Film size={32} />
+          <small>{item.title || "Untitled"}</small>
         </span>
       )}
     </div>
@@ -111,7 +112,7 @@ export function FjordFlix({
               <div className="fjordflix-gallery">
                 {data.items.slice(0, 10).map((item, index) => (
                   <article className="fjordflix-title" key={item.id ?? index}>
-                    <Poster integration={integration} item={item} />
+                    <FjordFlixPoster integration={integration} item={item} />
                     <h4>{item.title || "Untitled"}</h4>
                     <small className="muted">
                       {[
@@ -157,7 +158,7 @@ export function FjordFlix({
                     className="fjordflix-stream"
                     key={stream.id ?? index}
                   >
-                    <Poster integration={integration} item={stream} />
+                    <FjordFlixPoster integration={integration} item={stream} />
                     <div>
                       <h4>{stream.title || "Untitled"}</h4>
                       <p>

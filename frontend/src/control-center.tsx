@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
+import { useIntegrations } from "./integrations";
+import { FjordFlixDashboardCard } from "./fjordflix-dashboard";
 import { ongoingTorrents } from "./dashboard-torrents";
 import { mediaCapacity, type DashboardData } from "./dashboard-data";
 import { api } from "./api";
@@ -302,6 +304,10 @@ export function ServiceOverview({
   failed: boolean;
   dashboard: DashboardData;
 }) {
+  const { items: integrations } = useIntegrations();
+  const fjordflixIntegrations = integrations.filter(
+    (row) => row.enabled && row.tokenConfigured && row.snapshot.fjordflix,
+  );
   const plex = apps?.find((a) => a.packageId === "org.mediahub.plex");
   const seedbox = apps?.find((a) => a.packageId === "org.mediahub.seedbox");
   const plexReport =
@@ -328,6 +334,13 @@ export function ServiceOverview({
   return (
     <>
       <LayoutGroup id="control-services" className="service-overview">
+        {fjordflixIntegrations.map((row) => (
+          <FjordFlixDashboardCard
+            key={`fjordflix-${row.id}`}
+            title={`FjordFlix · ${row.name}`}
+            row={row}
+          />
+        ))}
         {plex && (
           <article
             key="plex"
@@ -559,7 +572,7 @@ export function ServiceOverview({
             <ArrowUpRight size={13} />
           </Link>
         </article>
-        {!apps?.length && (
+        {!apps?.length && !fjordflixIntegrations.length && (
           <div key="empty" className="service-empty">
             <Layers3 size={24} />
             <h3>{t(apps ? "No apps installed" : "Loading apps…")}</h3>

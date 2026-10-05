@@ -154,6 +154,41 @@ class FjordHubClient:
             "block_write",
         ]
         apps = self.rows(body["apps"], fields)
+        # Current upstream resources omit addresses/ports. Preserve only explicit
+        # validated addresses when an upstream version supplies them; never infer
+        # an installed app's port from catalog defaults or Docker counters.
+        base = urlsplit(self.base_url)
+        sources = [item for item in body["apps"][:200] if isinstance(item, dict)]
+        for source, target in zip(sources, apps, strict=True):
+            for field in ("url", "local_url", "external_url"):
+                value = source.get(field)
+                if (
+                    not isinstance(value, str)
+                    or len(value) > 500
+                    or any(ord(char) < 33 or char in "%\\" for char in value)
+                ):
+                    continue
+                try:
+                    address = urlsplit(value)
+                    valid = (
+                        address.scheme == base.scheme
+                        and address.hostname == base.hostname
+                        and address.port != 0
+                        and not address.username
+                        and not address.password
+                        and not address.query
+                        and not address.fragment
+                        and (
+                            (address.port or (443 if address.scheme == "https" else 80))
+                            != (base.port or (443 if base.scheme == "https" else 80))
+                            or address.path not in {"", "/"}
+                        )
+                        and not (self._access_token and self._access_token in value)
+                    )
+                except ValueError:
+                    valid = False
+                if valid:
+                    target[field] = value[:500]
         metrics = {}
         for source, target in {
             "cpu_capacity_percent": "cpuPercent",

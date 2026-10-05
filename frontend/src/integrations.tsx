@@ -20,6 +20,7 @@ import { FjordHubTokenGuide, fjordHubLink } from "./fjordhub-token-guide";
 import { ServiceIcon } from "./service-icon";
 import { ArrowUpRight } from "lucide-react";
 import { FjordFlix, type FjordFlixData } from "./fjordflix";
+import { fjordHubAppLink } from "./fjordhub-app-link";
 
 type Row = Record<string, string | number>;
 type Snapshot = {
@@ -215,12 +216,15 @@ export function IntegrationAppCard({
           <a
             key={String(app.id)}
             className="text-link"
-            href={`${href}/#card-${encodeURIComponent(String(app.id))}`}
+            href={fjordHubAppLink(row.baseUrl, app)?.href}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {String(app.name)} · {Number(app.running_count)}/
-            {Number(app.container_count)} {t("running")}
+            {String(app.name)}
+            {fjordHubAppLink(row.baseUrl, app)?.management &&
+              " · Manage in FjordHub (app address unavailable)"}{" "}
+            · {Number(app.running_count)}/{Number(app.container_count)}{" "}
+            {t("running")}
           </a>
         ))}
       </div>
@@ -261,12 +265,16 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
                 {installedFjordHubApps(row).map((app) => (
                   <a
                     key={String(app.id)}
-                    href={`${href}/#card-${encodeURIComponent(String(app.id))}`}
+                    href={fjordHubAppLink(row.baseUrl, app)?.href}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     <ServiceIcon packageId={String(app.id)} size={16} />
-                    <span>{String(app.name)}</span>
+                    <span>
+                      {String(app.name)}
+                      {fjordHubAppLink(row.baseUrl, app)?.management &&
+                        " · Manage in FjordHub (app address unavailable)"}
+                    </span>
                     <span
                       className={`app-shortcut-dot ${!row.snapshot.stale && Number(app.running_count) > 0 ? "healthy" : "unknown"}`}
                     />
