@@ -33,6 +33,41 @@ def test_app_list_checks_independent_apps_concurrently():
     asyncio.run(scenario())
 
 
+def test_app_list_lightweight_endpoint_skips_health(logged_in, monkeypatch):
+    svc = logged_in.app.state.services
+    rows = svc.apps.list()
+    assert rows
+
+    async def unexpected_health(app_id):
+        pytest.fail(f"Lightweight listing requested health for {app_id}")
+
+    monkeypatch.setattr(svc.apps, "health", unexpected_health)
+    response = logged_in.get("/api/v1/apps?include_health=false")
+    assert response.status_code == 200
+    assert response.json()["data"] == rows
+    assert all("health" not in row for row in response.json()["data"])
+
+
+@pytest.mark.parametrize("query", ["", "?include_health=true"])
+def test_app_list_endpoint_includes_health_by_default(logged_in, monkeypatch, query):
+    svc = logged_in.app.state.services
+    rows = svc.apps.list()
+    checked = []
+    reports = {row["id"]: Health(status="healthy", summary=row["id"]) for row in rows}
+
+    async def health(app_id):
+        checked.append(app_id)
+        return reports[app_id]
+
+    monkeypatch.setattr(svc.apps, "health", health)
+    response = logged_in.get("/api/v1/apps" + query)
+    assert response.status_code == 200
+    assert checked == [row["id"] for row in rows]
+    assert response.json()["data"] == [
+        {**row, "health": reports[row["id"]].model_dump(mode="json")} for row in rows
+    ]
+
+
 def test_live_stream_checks_initial_apps_concurrently_and_cleans_up():
     async def scenario():
         started = set()

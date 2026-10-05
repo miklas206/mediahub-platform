@@ -16,6 +16,7 @@ export type AppInfo = {
   detailPath?: string | null;
   health: Health;
 };
+export type InstalledAppInfo = Omit<AppInfo, "health">;
 export type User = {
   id: string;
   username: string;

@@ -2,7 +2,7 @@ import { translateText, t } from "./i18n";
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import type { AppInfo } from "./contracts";
+import type { InstalledAppInfo } from "./contracts";
 type Removal = {
   state: string;
   installationId?: string;
@@ -13,7 +13,7 @@ export function AppUninstall({
   app,
   onRemoved,
 }: {
-  app: AppInfo;
+  app: InstalledAppInfo;
   onRemoved: () => void;
 }) {
   const [open, setOpen] = useState(app.state === "removing");

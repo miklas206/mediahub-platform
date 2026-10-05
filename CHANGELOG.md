@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Load App Store installation badges and setup selections from lightweight installed-app metadata (`GET /apps?include_health=false`) without waiting for remote health checks. The default app listing still includes health, and store controls still wait for installation and integration metadata.
+
 - Reuse app and integration snapshots across authenticated pages instead of repeating page-mount requests and integration polls. Cancel obsolete reads/retries, pause integration polling in hidden tabs, and batch app health event bursts into a bounded refresh.
 - Load optional pages and the upload client on demand, and fetch authentication/setup state in parallel. Reduce initial JavaScript from 948.42 kB to 767.32 kB (gzip 284.11 kB to 235.75 kB) in the local production build.
 - Check independent app health reports concurrently (up to eight at a time) for the app list and initial live stream, retaining response order, authentication, bounded remote timeouts and status validation. Fetch installed app rows with one database query instead of one additional query per app.

@@ -30,7 +30,7 @@ import { droppedMediaFiles, type MediaUploadFile } from "./media-drop";
 import { Link } from "react-router-dom";
 import { bytes, fileFormat } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
-import type { Storage, AppInfo } from "./contracts";
+import type { Storage, InstalledAppInfo } from "./contracts";
 import type {
   AgentStatus,
   CatalogApp,
@@ -1353,7 +1353,7 @@ export function CatalogPage({
   showInstalled?: boolean;
 }) {
   const { data, error } = useLoad<CatalogApp[]>("/catalog");
-  const installed = useLoad<AppInfo[]>("/apps");
+  const installed = useLoad<InstalledAppInfo[]>("/apps?include_health=false");
   const integrations =
     useLoad<{ id: string; enabled: boolean }[]>("/integrations");
   const fjordHubDeployment = useLoad<FjordHubInstallation | null>("/fjordhub/deployment");

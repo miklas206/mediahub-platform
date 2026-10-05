@@ -1,6 +1,6 @@
 import asyncio
 import secrets
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -136,8 +136,13 @@ async def _apps_with_health(svc):
 
 
 @router.get("/apps")
-async def apps(request: Request, user=Depends(authenticated)):
-    return result(await _apps_with_health(services(request)))
+async def apps(
+    request: Request,
+    include_health: Annotated[bool, Query()] = True,
+    user=Depends(authenticated),
+):
+    svc = services(request)
+    return result(await _apps_with_health(svc) if include_health else svc.apps.list())
 
 
 @router.get("/apps/{app_id}")
