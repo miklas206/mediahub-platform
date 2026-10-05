@@ -39,6 +39,12 @@ export type Torrent = {
   retentionMessage?: string;
 };
 
+export function torrentSeedingTime(seconds: number | undefined): string {
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0
+    ? uptime(seconds)
+    : "—";
+}
+
 const sortOptions = [
   ["name", "Name"],
   ["added_on", "Date added"],
@@ -344,6 +350,10 @@ export function TorrentList({
                             </time>
                           </small>
                         )}
+                      <small className="muted" style={{ display: "block" }}>
+                        {t("Seeding time")}:{" "}
+                        {torrentSeedingTime(torrent.seeding_time)}
+                      </small>
                       {torrent.retentionOverride && (
                         <span
                           className="torrent-cleanup-override"
@@ -531,12 +541,10 @@ export function TorrentList({
                               {torrent.category}
                             </span>
                           )}
-                          {!!torrent.seeding_time && (
-                            <span>
-                              {t("Seeded ")}
-                              {uptime(torrent.seeding_time)}
-                            </span>
-                          )}
+                          <span>
+                            {t("Seeding time")}:{" "}
+                            {torrentSeedingTime(torrent.seeding_time)}
+                          </span>
                           {typeof torrent.uploaded === "number" &&
                             typeof torrent.downloaded === "number" && (
                               <span>

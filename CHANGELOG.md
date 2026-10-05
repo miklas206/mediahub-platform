@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show qBittorrent's accumulated seeding time directly below each torrent name on desktop and mobile, including zero and unavailable values; keep the existing seeding-time sort and expanded details.
+
 - Load App Store installation badges and setup selections from lightweight installed-app metadata (`GET /apps?include_health=false`) without waiting for remote health checks. The default app listing still includes health, and store controls still wait for installation and integration metadata.
 
 - Reuse app and integration snapshots across authenticated pages instead of repeating page-mount requests and integration polls. Cancel obsolete reads/retries, pause integration polling in hidden tabs, and batch app health event bursts into a bounded refresh.

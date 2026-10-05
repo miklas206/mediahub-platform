@@ -1,8 +1,12 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   isTorrentPaused,
   readTorrentSort,
   sortTorrents,
+  torrentSeedingTime,
+  TorrentList,
   type Torrent,
 } from "./torrent-list";
 
@@ -27,6 +31,41 @@ function torrent(
 }
 
 describe("torrent controls", () => {
+  it("shows seed time in collapsed torrent rows without opening details", () => {
+    const html = renderToStaticMarkup(
+      createElement(TorrentList, {
+        items: [
+          torrent("seed", "Seed", { seeding_time: 90000 }),
+          torrent("zero", "Zero", { seeding_time: 0 }),
+          torrent("unknown", "Unknown"),
+        ],
+        disabled: false,
+        onAction: () => {},
+        onCleanup: () => {},
+      }),
+    );
+    expect(html).toContain("Seeding time: 1d 1h");
+    expect(html).toContain("Seeding time: 0h 0m");
+    expect(html).toContain("Seeding time: —");
+    expect(html).not.toContain('class="torrent-details-row"');
+  });
+  it("formats actual accumulated seed time including zero and missing values", () => {
+    expect(torrentSeedingTime(0)).toBe("0h 0m");
+    expect(torrentSeedingTime(3660)).toBe("1h 1m");
+    expect(torrentSeedingTime(25 * 3600)).toBe("1d 1h");
+    for (const value of [undefined, -1, NaN, Infinity])
+      expect(torrentSeedingTime(value)).toBe("—");
+  });
+
+  it("sorts torrents by accumulated seeding time", () => {
+    const rows = [
+      torrent("short", "Short", { seeding_time: 60 }),
+      torrent("long", "Long", { seeding_time: 90000 }),
+    ];
+    expect(
+      sortTorrents(rows, "seeding_time", true).map((row) => row.hash),
+    ).toEqual(["long", "short"]);
+  });
   it("restores saved sorting and direction and rejects invalid preferences", () => {
     expect(readTorrentSort('{"key":"added_on","descending":true}')).toEqual({
       key: "added_on",
