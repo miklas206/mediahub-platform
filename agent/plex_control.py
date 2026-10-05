@@ -272,13 +272,18 @@ class PlexControl:
             raise DomainError("plex_api_unavailable", "Plex API is unavailable", 503) from None
 
     async def update_check(self):
+        if self.runtime is not None:
+            return await self.runtime.update_check()
         policy = self.policy()
         await self.inspect(policy)
         # Official PMS updater API: download=0 checks only; never apply an update.
         await self.plex_get(policy, "/updater/check?download=0", "PUT")
         status = await self.plex_get(policy, "/updater/status")
         return {
-            "supported": True,
+            "supported": False,
+            "updateAvailable": False,
+            "updateSource": "plex-server",
+            "reason": "Plex server releases do not verify a managed container image update",
             "checkRequested": True,
             "downloadRequested": False,
             "installationRequested": False,

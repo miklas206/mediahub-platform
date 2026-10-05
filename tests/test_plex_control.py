@@ -186,6 +186,22 @@ def test_update_check_never_returns_download_url_or_token(policy):
     result = asyncio.run(control.update_check())
     assert calls == [("PUT", "/updater/check?download=0"), ("GET", "/updater/status")]
     assert result["releaseVersions"] == ["1.2"]
+    assert result["supported"] is False
+    assert result["updateAvailable"] is False
+    assert result["updateSource"] == "plex-server"
     assert not result["downloadRequested"]
     assert not result["installationRequested"]
     assert "SECRET_TEST" not in json.dumps(result)
+
+
+def test_managed_update_check_delegates_to_image_provider():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    control = PlexControl(None, None)
+    result = {"supported": True, "updateAvailable": True, "updateSource": "container-image"}
+    control.runtime = SimpleNamespace(update_check=AsyncMock(return_value=result))
+    control.plex_get = AsyncMock()
+    assert asyncio.run(control.update_check()) == result
+    control.runtime.update_check.assert_awaited_once()
+    control.plex_get.assert_not_called()

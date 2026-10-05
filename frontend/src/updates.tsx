@@ -26,6 +26,31 @@ type Versions = {
   available: boolean;
 };
 
+type PlexUpdateCheck = {
+  supported?: boolean;
+  updateAvailable?: boolean;
+  updateSource?: string;
+  checkStatus?: string;
+  stale?: boolean;
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  message?: string;
+  reason?: string;
+};
+
+export function plexUpdateReady(result?: PlexUpdateCheck) {
+  return (
+    result?.supported === true &&
+    result.updateAvailable === true &&
+    result.updateSource === "container-image" &&
+    result.checkStatus === "checked" &&
+    result.stale !== true &&
+    !!result.installedVersion &&
+    !!result.latestVersion &&
+    result.installedVersion !== result.latestVersion
+  );
+}
+
 type ReleaseAsset = {
   name: string;
   digest: string;
@@ -257,6 +282,9 @@ export function UpdatesPage({
   const refreshAfterUpdate = useRef(() => {});
   const commandGeneration = useRef(0);
   const [latest, setLatest] = useState<Record<string, string>>({});
+  const [plexChecks, setPlexChecks] = useState<Record<string, PlexUpdateCheck>>(
+    {},
+  );
   const [githubToken, setGithubToken] = useState("");
   const [operations, setOperations] = useState<
     Record<string, OperationState | undefined>
@@ -442,19 +470,24 @@ export function UpdatesPage({
       (value) => updateOperation(app.id, value),
     );
     setBusy(`check:${app.id}`);
+    setPlexChecks((current) => ({ ...current, [app.id]: {} }));
     setError("");
     task.steps[0].state = "running";
     task.publish(10, "running", `Contacting the ${app.name} update service…`);
     try {
-      const result = await api<{
-        releaseVersions?: string[];
-        latestVersion?: string | null;
-        installedVersion?: string | null;
-        supported?: boolean;
-        checkStatus?: string;
-        message?: string;
-        reason?: string;
-      }>(`/apps/${app.id}/update-check`, "POST");
+      const result = await api<
+        PlexUpdateCheck & {
+          releaseVersions?: string[];
+          latestVersion?: string | null;
+          installedVersion?: string | null;
+          supported?: boolean;
+          checkStatus?: string;
+          message?: string;
+          reason?: string;
+        }
+      >(`/apps/${app.id}/update-check`, "POST");
+      if (app.packageId === "org.mediahub.plex")
+        setPlexChecks((current) => ({ ...current, [app.id]: result }));
       setLatest((current) => ({
         ...current,
         [app.id]:
@@ -464,9 +497,15 @@ export function UpdatesPage({
                   version: result.latestVersion,
                 })
               : t("Update check deferred")
-            : result.latestVersion ||
-              result.releaseVersions?.join(", ") ||
-              "No newer release reported",
+            : app.packageId === "org.mediahub.plex"
+              ? result.updateSource === "container-image"
+                ? result.latestVersion ||
+                  result.reason ||
+                  "Image update not verified"
+                : "Managed image update not verified"
+              : result.latestVersion ||
+                result.releaseVersions?.join(", ") ||
+                "No newer release reported",
       }));
       task.steps[0].state = "complete";
       task.details.push(
@@ -506,6 +545,8 @@ export function UpdatesPage({
   }
 
   async function updatePlex(id: string) {
+    if (busy || !versions[id]?.available || !plexUpdateReady(plexChecks[id]))
+      return;
     if (
       !window.confirm(
         "Update Plex? Playback will pause. Media files are not changed; a configuration rollback snapshot is created first.",
@@ -522,6 +563,7 @@ export function UpdatesPage({
       (value) => updateOperation(id, value),
     );
     setBusy(`update:${id}`);
+    setPlexChecks((current) => ({ ...current, [id]: {} }));
     setError("");
     task.steps[0].state = "running";
     task.publish(10, "running", "Sending the approved Plex update request…");
@@ -1174,7 +1216,7 @@ export function UpdatesPage({
                   </div>
                 )}
                 <div className="runtime-row">
-                  <span>{t("Latest")}</span>
+                  <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
                   <span>{latest[app.id] || t("Not checked")}</span>
                 </div>
                 <div className="runtime-row">
@@ -1207,7 +1249,11 @@ export function UpdatesPage({
                       {isPlex && (
                         <button
                           className="primary"
-                          disabled={!!busy || !version?.available}
+                          disabled={
+                            !!busy ||
+                            !version?.available ||
+                            !plexUpdateReady(plexChecks[app.id])
+                          }
                           onClick={() => void updatePlex(app.id)}
                         >
                           {busy === `update:${app.id}`
@@ -1221,6 +1267,13 @@ export function UpdatesPage({
                     {t("Open app & recovery →")}
                   </Link>
                 </div>
+                {isPlex && (
+                  <p className="muted">
+                    {plexChecks[app.id]?.message ||
+                      plexChecks[app.id]?.reason ||
+                      "Check the managed publisher image before updating. Plex server releases alone do not confirm an image update."}
+                  </p>
+                )}
                 {operations[app.id] && (
                   <OperationProgress
                     activeOnly
@@ -1242,7 +1295,7 @@ export function UpdatesPage({
                     <summary>{t("Update details")}</summary>
                     <p className="muted">
                       {t(
-                        "MediaHub checks Plex releases and creates a configuration rollback snapshot before an update. Media files stay separate.",
+                        "MediaHub checks the LinuxServer publisher image digest, not Plex's in-server updater. An image release may leave the Plex server version unchanged. A configuration rollback snapshot is created before replacing the runtime. Media files stay separate.",
                       )}
                     </p>
                   </details>

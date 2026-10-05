@@ -40,6 +40,31 @@ Plex has no Docker automatic-start policy: the Agent starts it after storage
 validation and restores encrypted preferences first. Changing that restart policy
 would bypass this ordering and is unsupported.
 
+## Updates
+
+The Updates card checks the same fixed `lscr.io/linuxserver/plex:latest`
+container-image publisher used by the managed update transaction. It reads Docker's
+`GET /distribution/{image}/json` metadata and verifies the installed pinned
+repository digest against the local image's `RepoDigests`. The publisher must list
+the installed OS/architecture/variant; different digests must refer to matching
+manifest types, so a platform manifest is not mistaken for a newer multi-platform
+index. This check neither pulls
+an image nor stops Plex. Unsupported images or unverifiable metadata do not enable
+Update Plex; failed checks clear the previous approval. A successful fresh check
+must explicitly confirm a different publisher digest before the button is enabled.
+The installed Plex server version and latest publisher-image digest are separate:
+an image release can change packaging without changing the Plex server version.
+
+Plex's `/updater/check?download=0` and `/updater/status` describe the **server's**
+updater, not the managed container release. They cannot authorize an image update;
+the legacy server-only check reports managed updating as unsupported. Recovery and
+explicit lifecycle controls remain available independently on the app page.
+
+On an approved update the Agent pulls the publisher image and rechecks its image
+ID under the lifecycle lock. If it is already installed, it returns "already up
+to date" before stopping Plex, changing intent, or creating a rollback snapshot.
+Concurrent requests cannot admit multiple background update transactions.
+
 ## Network
 
 Only the configured private LAN address publishes TCP 32400. No router rule,

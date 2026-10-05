@@ -9,7 +9,9 @@ import contextlib
 import hashlib
 import io
 import json
+import re
 import tarfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -603,11 +605,99 @@ class PlexRuntime:
                 self.control.record("vpn_enable_failed")
                 raise
 
+    async def update_check(self):
+        """Read publisher metadata only; PMS's updater is not the image updater."""
+        policy = self.control.policy()
+        async with self.control.lock:
+            container = await self.control.inspect(policy)
+            installed = container.get("Config", {}).get("Image", "")
+            repository = "lscr.io/linuxserver/plex"
+            prefix = repository + "@"
+            result = {
+                "supported": False,
+                "updateAvailable": False,
+                "updateSource": "container-image",
+                "checkRequested": True,
+                "downloadRequested": False,
+                "installationRequested": False,
+                "checkedAt": time.time(),
+                "checkStatus": "checked",
+                "installedVersion": None,
+                "latestVersion": None,
+            }
+            if (
+                not isinstance(installed, str)
+                or not installed.startswith(prefix)
+                or not re.fullmatch(r"sha256:[a-f0-9]{64}", installed[len(prefix) :])
+            ):
+                return {
+                    **result,
+                    "reason": "Installed Plex image is not pinned to the managed LinuxServer publisher",
+                }
+            local = await self.request("GET", f"/images/{policy.imageId}/json")
+            if installed not in local.get("RepoDigests", []):
+                return {
+                    **result,
+                    "reason": "Installed Plex publisher digest could not be verified",
+                }
+            remote = await self.request("GET", f"/distribution/{repository}:latest/json")
+            digest = remote.get("Descriptor", {}).get("digest", "")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+                raise DomainError(
+                    "plex_update_check_invalid", "Plex publisher image digest is unavailable", 503
+                )
+            platforms = remote.get("Platforms") or []
+            if not any(
+                platform.get("os") == local.get("Os")
+                and platform.get("architecture") == local.get("Architecture")
+                and platform.get("variant", "") == local.get("Variant", "")
+                for platform in platforms
+                if isinstance(platform, dict)
+            ):
+                return {
+                    **result,
+                    "reason": "Plex publisher image compatibility could not be verified",
+                }
+            available = digest != installed[len(prefix) :]
+            if available:
+                pinned = await self.request("GET", f"/distribution/{installed}/json")
+                media_type = remote.get("Descriptor", {}).get("mediaType")
+                if (
+                    media_type
+                    not in (
+                        "application/vnd.oci.image.index.v1+json",
+                        "application/vnd.docker.distribution.manifest.list.v2+json",
+                        "application/vnd.oci.image.manifest.v1+json",
+                        "application/vnd.docker.distribution.manifest.v2+json",
+                    )
+                    or pinned.get("Descriptor", {}).get("mediaType") != media_type
+                    or pinned.get("Descriptor", {}).get("digest") != installed[len(prefix) :]
+                ):
+                    return {
+                        **result,
+                        "reason": "Installed and latest Plex publisher manifest types cannot be compared",
+                    }
+            return {
+                **result,
+                "supported": True,
+                "updateAvailable": available,
+                "installedVersion": installed[len(prefix) :],
+                "latestVersion": digest,
+                "message": (
+                    "A new publisher image is available; the Plex server version may be unchanged."
+                    if available
+                    else "Plex managed image is already up to date."
+                ),
+            }
+
     async def update(self):
         if self.update_task and not self.update_task.done():
             raise DomainError("plex_busy", "A Plex update is already running", 409)
         # Validate ownership before admitting a background operation.
         await self.control.inspect(self.control.policy())
+        # Ownership inspection yields; another request may have admitted an update.
+        if self.update_task and not self.update_task.done():
+            raise DomainError("plex_busy", "A Plex update is already running", 409)
         self.operation = {"state": "running", "message": "Checking the image publisher"}
         self.update_task = asyncio.create_task(self._update())
         return self.operation
