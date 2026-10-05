@@ -34,17 +34,45 @@ async def authenticated_client(base, credentials):
         raise
 
 
+class RotationError(ValueError):
+    """Public diagnostics are fixed codes/steps, never private exception text."""
+
+    def __init__(self, code, failed_step):
+        super().__init__(code)
+        self.code = code
+        self.failed_step = failed_step
+
+
 async def rotate(control, store, credentials, kind):
     driver = control.driver
-    policy, spec = driver.binding()
-    root = Path(policy.workRoot)
-    previous = store.load("seedbox-runtime")
-    if kind == "client" and previous.webPassword == credentials.webPassword:
-        raise ValueError("New client credential must differ")
-    reference = "rotation-" + uuid.uuid4().hex
-    store.stage(reference, credentials)
-    path = root / "credential-rotation.json"
-    save_json(path, {"state": "Applying", "kind": kind, "stagedReference": reference})
+    stage = "validate_runtime_binding"
+    operation_id = getattr(control, "operation", {}).get("id")
+    try:
+        policy, spec = driver.binding()
+        root = Path(policy.workRoot)
+        stage = "load_current_credential"
+        previous = store.load("seedbox-runtime")
+        stage = "stage_private_credential"
+        reference = "rotation-" + uuid.uuid4().hex
+        store.stage(reference, credentials)
+        path = root / "credential-rotation.json"
+        stage = "record_rotation_intent"
+        save_json(
+            path,
+            {
+                "state": "Applying",
+                "kind": kind,
+                "stagedReference": reference,
+                "operationId": operation_id,
+            },
+        )
+    except Exception as error:
+        raise RotationError("rotation_preflight_failed", stage) from error
+    unchanged = (
+        kind == "client"
+        and previous.webUsername == credentials.webUsername
+        and previous.webPassword == credentials.webPassword
+    )
     control.lifecycle.state["desiredRunning"] = False
     control.lifecycle.persist()
     stage = "verify_current_runtime"
@@ -59,7 +87,7 @@ async def rotate(control, store, credentials, kind):
             store.replace("seedbox-runtime", private_record(credentials))
             RuntimeSecrets(root).materialize()
             await control.lifecycle.gated_start(restart_vpn=True)
-        elif kind == "client":
+        elif kind == "client" and not unchanged:
             base = f"http://127.0.0.1:{spec.webPort}"
             stage = "authenticate_current_client"
             client = await authenticated_client(base, previous)
@@ -107,6 +135,13 @@ async def rotate(control, store, credentials, kind):
             stage = "verify_forwarding_after_rotation"
             if (await driver.forwarding.renew())["status"] != "healthy":
                 raise ValueError("Forwarding not verified after rotation")
+        elif unchanged:
+            stage = "verify_unchanged_client_credential"
+            client = await authenticated_client(f"http://127.0.0.1:{spec.webPort}", credentials)
+            await client.aclose()
+            stage = "verify_forwarding_after_rotation"
+            if (await driver.forwarding.renew())["status"] != "healthy":
+                raise ValueError("Forwarding not verified after rotation")
         else:
             raise ValueError("Unsupported rotation")
         save_json(
@@ -115,12 +150,14 @@ async def rotate(control, store, credentials, kind):
                 "state": "Healthy",
                 "kind": kind,
                 "stagedReference": reference,
-                "previousCredentialRejected": kind == "client",
+                "previousCredentialRejected": kind == "client" and not unchanged,
+                "unchangedCredentialVerified": unchanged,
+                "operationId": operation_id,
             },
         )
         control.lifecycle.state["desiredRunning"] = True
         control.lifecycle.persist()
-    except (Exception, asyncio.CancelledError):
+    except (Exception, asyncio.CancelledError) as error:
         control.lifecycle.state["desiredRunning"] = False
         control.lifecycle.persist()
         try:
@@ -133,6 +170,9 @@ async def rotate(control, store, credentials, kind):
                     "kind": kind,
                     "stagedReference": reference,
                     "failedStep": stage,
+                    "operationId": operation_id,
                 },
             )
-        raise
+        if isinstance(error, asyncio.CancelledError):
+            raise
+        raise RotationError("rotation_verification_failed", stage) from error

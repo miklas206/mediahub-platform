@@ -29,7 +29,15 @@ encrypted recovery information on failure. Wizard status reports credential rota
 separately from the original installation transaction: an installation may remain
 Healthy while a later rotation requires ManualIntervention. Rotation reports expose
 only state, kind and a fixed failed-step identifier, never the encrypted candidate's
-private reference or exception text. The one-time MediaHub login form polls the
+private reference or exception text. Operations expose fixed error codes and failed
+steps, including binding/credential/staging preflight failures before runtime changes.
+A journal is matched to the current operation and credential kind; older Healthy VPN
+or client history is not evidence of a new client's success. Reapplying the identical
+username/password requires a fresh authenticated login and runtime/forwarding checks,
+without changing preferences or claiming the identical previous login was rejected.
+A username-only change may reuse the password but must reject the old username/password.
+Existing Applying/ManualIntervention journals block another rotation until operator
+reconciliation. The one-time MediaHub login form polls the
 rotation result; accepted means queued, not verified. After a MediaHub password
 change, sign in again (existing MediaHub sessions are revoked), then enter the new
 password. Passwords shorter than Seedbox's 16-character minimum must use separate

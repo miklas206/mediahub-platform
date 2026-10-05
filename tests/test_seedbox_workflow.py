@@ -213,3 +213,69 @@ def test_wizard_is_admin_and_https_only(logged_in):
     )
     assert result.status_code == 403
     assert "test-only-private-password" not in result.text
+
+
+@pytest.mark.parametrize("old_kind", ["vpn", "client"])
+@pytest.mark.parametrize("failure_step", ["validate_runtime_binding", "load_current_credential"])
+def test_preflight_failure_does_not_reuse_healthy_rotation(
+    tmp_path, monkeypatch, old_kind, failure_step
+):
+    from agent.seedbox_rotation import RotationError
+
+    async def run():
+        item = workflow(tmp_path)
+        item.control.status = SimpleNamespace(cached="stale")
+        item.store.stage(
+            "seedbox-runtime",
+            SeedboxCredentials(
+                vpnConfig="test-profile", webUsername="tester", webPassword="old-test-password-123"
+            ),
+        )
+        save_json(
+            tmp_path / "credential-rotation.json",
+            {"state": "Healthy", "kind": old_kind, "operationId": "old-operation"},
+        )
+        if failure_step == "load_current_credential":
+            monkeypatch.setattr(
+                type(item.store),
+                "load",
+                lambda self, _: (_ for _ in ()).throw(
+                    DomainError("credentials_unavailable", "SECRET_SENTINEL", 409)
+                ),
+            )
+        else:
+            monkeypatch.setattr(
+                "agent.seedbox_workflow.rotate",
+                AsyncMock(side_effect=RotationError("rotation_preflight_failed", failure_step)),
+            )
+        await item.rotation(
+            ClientImport(revision=0, webUsername="tester", webPassword="new-test-password-123"),
+            "client",
+        )
+        assert item.public()["rotation"] is None
+        await item.control.job
+        public = item.public()
+        assert public["rotation"] is None
+        assert public["operation"]["state"] == "failed"
+        assert public["operation"]["errorCode"] == "rotation_preflight_failed"
+        assert public["operation"]["failedStep"] == failure_step
+        assert "SECRET_SENTINEL" not in json.dumps(public)
+        assert item.control.lifecycle.state["desiredRunning"] is False
+        assert json.loads((tmp_path / "credential-rotation.json").read_text())["kind"] == old_kind
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("state", ["Applying", "ManualIntervention"])
+def test_unreconciled_rotation_blocks_another_change(tmp_path, state):
+    async def run():
+        item = workflow(tmp_path)
+        save_json(tmp_path / "credential-rotation.json", {"state": state, "kind": "client"})
+        with pytest.raises(DomainError, match="interrupted credential rotation"):
+            await item.rotation(
+                ClientImport(revision=0, webUsername="tester", webPassword="new-test-password-123"),
+                "client",
+            )
+        assert item.control.job is None
+
+    asyncio.run(run())

@@ -19,7 +19,7 @@ from mediahub.secret_store import SecretStore
 
 from agent.install_files import read_json, save_json
 from agent.seedbox_install_driver import BoundInstallRuntime, ProductionInstallDriver
-from agent.seedbox_rotation import rotate
+from agent.seedbox_rotation import RotationError, rotate
 from agent.seedbox_secret_store import SeedboxSecretStore
 from agent.seedbox_transaction import InstallTransaction
 
@@ -153,6 +153,17 @@ class SeedboxWorkflow:
         ):
             rotation["state"] = "ManualIntervention"
             save_json(rotation_path, rotation)
+        operation = getattr(self.control, "operation", {"state": "idle", "action": None})
+        if (
+            rotation
+            and str(operation.get("action", "")).startswith("rotate-")
+            and (
+                rotation["kind"] != operation["action"].removeprefix("rotate-")
+                or (operation.get("id") and rotation.get("operationId") != operation["id"])
+            )
+        ):
+            # An earlier journal is recovery history, not this operation's result.
+            rotation = None
         # Only named public fields. Vault records and import payloads never leave Agent.
         return {
             key: self.draft[key]
@@ -205,30 +216,65 @@ class SeedboxWorkflow:
         async with self.lock:
             self.check(body.revision)
             self.control.initialize()
-            previous = self.store.load("seedbox-runtime")
-            if kind == "vpn":
-                updated = SeedboxCredentials(
-                    vpnConfig=VPNProfileRegistry().get(self.spec.protocol).validate(body.vpnConfig),
-                    webUsername=previous.webUsername,
-                    webPassword=previous.webPassword,
-                )
-            else:
-                updated = SeedboxCredentials(
-                    vpnConfig=previous.vpnConfig,
-                    webUsername=body.webUsername,
-                    webPassword=body.webPassword,
+            rotation_path = self.root / "credential-rotation.json"
+            if rotation_path.exists() and read_json(rotation_path).get("state") in {
+                "Applying",
+                "ManualIntervention",
+            }:
+                raise DomainError(
+                    "reconciliation_required",
+                    "Inspect the interrupted credential rotation before changing credentials",
+                    409,
                 )
 
-            self.control.operation = {"state": "running", "action": "rotate-" + kind}
+            self.control.operation = {
+                "state": "running",
+                "action": "rotate-" + kind,
+                "id": uuid.uuid4().hex,
+            }
 
             async def run():
                 async with self.control.lifecycle.lock:
                     try:
+                        stage = "load_current_credential"
+                        try:
+                            previous = self.store.load("seedbox-runtime")
+                            stage = "validate_candidate_credential"
+                            updated = SeedboxCredentials(
+                                vpnConfig=(
+                                    VPNProfileRegistry()
+                                    .get(self.spec.protocol)
+                                    .validate(body.vpnConfig)
+                                    if kind == "vpn"
+                                    else previous.vpnConfig
+                                ),
+                                webUsername=previous.webUsername
+                                if kind == "vpn"
+                                else body.webUsername,
+                                webPassword=previous.webPassword
+                                if kind == "vpn"
+                                else body.webPassword,
+                            )
+                        except Exception as error:
+                            raise RotationError("rotation_preflight_failed", stage) from error
                         await rotate(self.control, self.store, updated, kind)
-                    except Exception:
+                    except Exception as error:
+                        preflight = isinstance(error, RotationError) and (
+                            error.code == "rotation_preflight_failed"
+                        )
                         self.control.operation.update(
                             state="failed",
-                            message="Rotation needs inspection; private input is retained encrypted",
+                            errorCode=error.code
+                            if isinstance(error, RotationError)
+                            else "rotation_failed",
+                            failedStep=error.failed_step
+                            if isinstance(error, RotationError)
+                            else None,
+                            message=(
+                                "Rotation preflight failed before runtime changes; inspect the reported step"
+                                if preflight
+                                else "Rotation needs inspection; private input is retained encrypted"
+                            ),
                         )
                     else:
                         self.control.operation.update(

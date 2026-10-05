@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 for (const surface of ["installation", "settings"] as const) {
-  for (const outcome of ["Healthy", "ManualIntervention"] as const) {
+  for (const outcome of [
+    "Healthy",
+    "ManualIntervention",
+    "PreflightFailed",
+  ] as const) {
     test(`${surface}: accepted rotation reports its actual ${outcome} result`, async ({
       page,
     }) => {
@@ -72,16 +76,26 @@ for (const surface of ["installation", "settings"] as const) {
                   : "failed"
                 : "idle",
               action: submitted ? "rotate-client" : null,
+              ...(outcome === "PreflightFailed" && submitted
+                ? {
+                    errorCode: "rotation_preflight_failed",
+                    failedStep: "validate_runtime_binding",
+                    message:
+                      "Rotation preflight failed before runtime changes; inspect the reported step",
+                  }
+                : {}),
             },
             rotation: submitted
-              ? {
-                  state: outcome,
-                  kind: "client",
-                  failedStep:
-                    outcome === "ManualIntervention"
-                      ? "verify_new_client_credential"
-                      : null,
-                }
+              ? outcome === "PreflightFailed"
+                ? { state: "Healthy", kind: "vpn", failedStep: null }
+                : {
+                    state: outcome,
+                    kind: "client",
+                    failedStep:
+                      outcome === "ManualIntervention"
+                        ? "verify_new_client_credential"
+                        : null,
+                  }
               : null,
           };
         else if (path === "/seedbox/wizard/client/mediahub") {
@@ -135,7 +149,12 @@ for (const surface of ["installation", "settings"] as const) {
         await expect(
           page
             .getByRole("alert")
-            .filter({ hasText: "verify new client credential" })
+            .filter({
+              hasText:
+                outcome === "PreflightFailed"
+                  ? "validate runtime binding"
+                  : "verify new client credential",
+            })
             .first(),
         ).toBeVisible();
         await expect(

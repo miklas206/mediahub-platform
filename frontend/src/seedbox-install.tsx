@@ -41,7 +41,13 @@ type Wizard = {
     kind: string;
     failedStep?: string | null;
   } | null;
-  operation?: { state: string; action: string | null; message?: string };
+  operation?: {
+    state: string;
+    action: string | null;
+    message?: string;
+    errorCode?: string;
+    failedStep?: string | null;
+  };
   transaction: {
     state: string;
     failedStep?: string;
@@ -575,9 +581,13 @@ export function SeedboxInstallPage() {
             )}
             {!data.busy && data.operation?.state === "failed" && (
               <ErrorBox
-                error={
-                  data.operation.message || t("Credential rotation failed.")
-                }
+                error={[
+                  data.operation.message || t("Credential rotation failed."),
+                  data.operation.errorCode,
+                  data.operation.failedStep?.replaceAll("_", " "),
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               />
             )}
             {data.rotation?.state === "Healthy" &&

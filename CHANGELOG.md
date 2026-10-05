@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Verify identical qBittorrent username/password reapplication with a fresh login instead of rejecting it; allow username-only changes while still proving the previous login is rejected. Report sanitized rotation preflight errors and correlate status with the current operation, so an older healthy VPN journal cannot mask a failed client change. Interrupted/partial rotations still require operator recovery; no live rotation or deployment performed.
+
 - Report asynchronous Seedbox credential rotation separately from installation health, including a sanitized failed step and interrupted-operation recovery state. Poll the result in **Use my MediaHub login** so an accepted request cannot hide a later failure; keep encrypted recovery references private. No live password changes or deployment are performed.
 
 - Add opt-in **Use my MediaHub login** to Seedbox installation and existing Seedbox Settings. Reauthenticate the administrator's entered password and enabled MFA with session/CSRF checks; copy the server-side account username through existing encrypted credential import/client rotation without changing VPN or WebUI protections. Clearly reject logins incompatible with Seedbox's existing policy and explain one-time copying, not continuous password synchronization. Existing users must opt in after updating; no live rotation or deployment is automatic.

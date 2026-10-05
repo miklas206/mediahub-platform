@@ -29,13 +29,26 @@ export function SeedboxMediaHubLogin({
       try {
         const status = await api<{
           busy: boolean;
-          operation?: { state: string; message?: string };
-          rotation?: { state: string; failedStep?: string | null } | null;
+          operation?: {
+            state: string;
+            action?: string | null;
+            message?: string;
+            errorCode?: string;
+            failedStep?: string | null;
+          };
+          rotation?: {
+            state: string;
+            kind?: string;
+            failedStep?: string | null;
+          } | null;
         }>("/seedbox/wizard");
         if (!active || status.busy) return;
+        const rotation =
+          status.rotation?.kind === "client" ? status.rotation : null;
+        if (status.operation?.action !== "rotate-client") return;
         if (
           status.operation?.state === "failed" ||
-          status.rotation?.state === "ManualIntervention"
+          rotation?.state === "ManualIntervention"
         ) {
           setAccepted(false);
           setFailure(
@@ -43,15 +56,18 @@ export function SeedboxMediaHubLogin({
               t(
                 "Credential rotation failed. Inspect Seedbox installation status before retrying.",
               ),
-              status.rotation?.failedStep?.replaceAll("_", " "),
+              status.operation?.message,
+              status.operation?.errorCode,
+              (
+                status.operation?.failedStep ?? rotation?.failedStep
+              )?.replaceAll("_", " "),
             ]
               .filter(Boolean)
               .join(" "),
           );
         } else if (
-          (status.operation?.state === "succeeded" ||
-            status.operation?.state === "idle") &&
-          status.rotation?.state === "Healthy"
+          status.operation?.state === "succeeded" &&
+          rotation?.state === "Healthy"
         ) {
           setFailure("");
           setVerified(true);
