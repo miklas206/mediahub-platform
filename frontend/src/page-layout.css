@@ -225,19 +225,37 @@
   align-items: center;
 }
 /* Editing outlines and controls must not change a card's content dimensions. */
-.layout-group.is-editing-grid {
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in srgb, var(--accent) 7%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--accent) 5%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: calc((100% + 16px) / 12) 24px;
+.layout-group {
+  position: relative;
+}
+.layout-grid-guides {
+  display: none;
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  pointer-events: none;
+}
+.layout-group.is-editing-grid > .layout-grid-guides {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: inherit;
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 5%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 100% 24px;
+}
+.layout-grid-guides > span {
+  border-inline: 1px solid color-mix(in srgb, var(--accent) 7%, transparent);
+}
+@media (max-width: 760px) {
+  .layout-group.layout-custom-grid.is-editing-grid > .layout-grid-guides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-custom-grid > .layout-grid-guides > span:not(:first-child) {
+    display: none;
+  }
 }
 .layout-item-tools {
   opacity: 0;
@@ -266,6 +284,7 @@
   max-width: min(340px, 85vw);
   max-height: 60vh;
   overflow-y: auto;
+  overflow-anchor: none;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -294,7 +313,7 @@
   clip-path: inset(50%);
 }
 .dashboard-grid:not(.layout-custom-grid)
-  > .layout-item:nth-last-child(2):nth-child(odd) {
+  > .layout-item:nth-last-child(1 of .layout-item):nth-child(odd) {
   grid-column: 1 / -1;
 }
 .layout-item-content > .dashboard-card {
@@ -345,7 +364,7 @@
 }
 .dashboard-grid.layout-auto-grid
   > .layout-item.is-default-width:not([data-layout-positioned]):nth-last-child(
-    2
+    1 of .layout-item
   ):nth-child(odd),
 .torrent-panels.layout-auto-grid
   > .layout-item.is-default-width:not([data-layout-positioned]):nth-child(

@@ -122,7 +122,8 @@ export function readGeometry(raw: string | null): Geometry {
 type LayoutContext = {
   hidden: Layouts;
   hide: (group: string, items: string[]) => void;
-  register: (group: string, cards: CardChoice[]) => () => void;
+  register: (group: string, cards: CardChoice[]) => void;
+  unregister: (group: string) => void;
   geometry: Geometry;
   resize: (group: string, item: string, width: number) => void;
   resizeCard: (
@@ -246,12 +247,13 @@ export function PageLayout({
   const [groups, setGroups] = useState<Record<string, CardChoice[]>>({});
   const register = useCallback((group: string, cards: CardChoice[]) => {
     setGroups((current) => ({ ...current, [group]: cards }));
-    return () =>
-      setGroups((current) => {
-        const next = { ...current };
-        delete next[group];
-        return next;
-      });
+  }, []);
+  const unregister = useCallback((group: string) => {
+    setGroups((current) => {
+      const next = { ...current };
+      delete next[group];
+      return next;
+    });
   }, []);
   function persistHidden(next: Layouts) {
     setHidden(next);
@@ -285,6 +287,7 @@ export function PageLayout({
         hidden,
         hide: (group, items) => persistHidden({ ...hidden, [group]: items }),
         register,
+        unregister,
         editing,
         geometry,
         resize: (group, item, width) => {
@@ -589,7 +592,10 @@ export function LayoutGroup({
     })),
   );
   const register = context?.register;
+  const unregister = context?.unregister;
+  // Choice updates must retain group insertion order and the picker's DOM nodes.
   useEffect(() => register?.(id, JSON.parse(choices)), [id, choices, register]);
+  useEffect(() => () => unregister?.(id), [id, unregister]);
   const hidden =
     context?.hidden[id] ||
     (JSON.parse(choices) as CardChoice[])
@@ -694,8 +700,7 @@ export function LayoutGroup({
   const columns = context?.geometry.columns || 0;
   const customGrid =
     movable.length > 0 &&
-    (!!context?.editing ||
-      entries.some((entry) => entry.sourceGroup !== id) ||
+    (entries.some((entry) => entry.sourceGroup !== id) ||
       fullWidth.length > 0 ||
       columns > 0 ||
       ids.some(
@@ -775,6 +780,11 @@ export function LayoutGroup({
             />
           );
         })}
+        <div className="layout-grid-guides" aria-hidden="true">
+          {Array.from({ length: 12 }, (_, column) => (
+            <span key={column} />
+          ))}
+        </div>
         <span className="layout-announcement" role="status">
           {announcement}
         </span>

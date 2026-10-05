@@ -1635,3 +1635,303 @@ test("Danish maintenance cards translate dynamic health messages", async ({
     cards.getByText("1 app er sund.", { exact: true }),
   ).toBeVisible();
 });
+
+for (const width of [1440, 1366, 390]) {
+  test(`dashboard edit toggles preserve original and saved geometry (${width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("/");
+    await expect(page.locator(".dashboard-torrent")).toHaveCount(2);
+    async function geometry() {
+      return page.locator("main .layout-item").evaluateAll(async (nodes) => {
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        const origin = document
+          .querySelector("main .layout-group")!
+          .getBoundingClientRect();
+        return nodes
+          .filter((node) => node.getBoundingClientRect().height > 0)
+          .map((node) => {
+            const rect = node.getBoundingClientRect();
+            return {
+              id: node.getAttribute("data-layout-item"),
+              x: rect.left - origin.left,
+              y: rect.top - origin.top,
+              width: rect.width,
+              height: rect.height,
+            };
+          });
+      });
+    }
+    async function unchanged(expected: Awaited<ReturnType<typeof geometry>>) {
+      await expect
+        .poll(async () => {
+          const actual = await geometry();
+          return (
+            actual.length === expected.length &&
+            actual.every(
+              (card, index) =>
+                card.id === expected[index].id &&
+                (["x", "y", "width", "height"] as const).every(
+                  (key) => Math.abs(card[key] - expected[index][key]) < 0.5,
+                ),
+            )
+          );
+        })
+        .toBe(true);
+    }
+    const original = await geometry();
+    await page.getByRole("button", { name: "Customize layout" }).click();
+    await unchanged(original);
+    const originalEdges = await page
+      .locator(".layout-group")
+      .evaluateAll((groups) =>
+        groups.flatMap((group) => {
+          const guides = [
+            ...group.querySelectorAll<HTMLElement>(
+              ":scope > .layout-grid-guides > span",
+            ),
+          ]
+            .filter((node) => node.getBoundingClientRect().width > 0)
+            .map((node) => node.getBoundingClientRect());
+          return [...group.querySelectorAll(":scope > .layout-item")]
+            .filter((node) => {
+              const rect = node.getBoundingClientRect();
+              return (
+                !guides.some(
+                  (guide) => Math.abs(guide.left - rect.left) < 0.5,
+                ) ||
+                !guides.some(
+                  (guide) => Math.abs(guide.right - rect.right) < 0.5,
+                )
+              );
+            })
+            .map((node) => node.getAttribute("data-layout-title"));
+        }),
+      );
+    expect(originalEdges).toEqual([]);
+    await page.getByRole("button", { name: "Done arranging" }).click();
+    await unchanged(original);
+    await page.getByRole("button", { name: "Customize layout" }).click();
+    await page.getByLabel("Columns", { exact: true }).selectOption("3");
+    const first = page.locator(".layout-item.is-arranging").first();
+    await first
+      .locator(":scope > .layout-item-tools .layout-width select")
+      .selectOption("50");
+    await first.locator(":scope > .resize-bottom").press("ArrowDown");
+    if (width > 760) {
+      await first.locator(":scope > .layout-drag-surface").press("Alt+ArrowRight");
+      await expect(first).toHaveAttribute("data-layout-positioned", "true");
+    }
+    if (width === 390) {
+      const handle = first.locator(":scope > .resize-bottom");
+      await handle.scrollIntoViewIfNeeded();
+      const before = (await first.boundingBox())!.height;
+      const box = (await handle.boundingBox())!;
+      const touch = await page.context().newCDPSession(page);
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y }],
+      });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x, y: y + 72 }],
+      });
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await touch.detach();
+      await expect
+        .poll(async () => (await first.boundingBox())!.height)
+        .toBe(before + 72);
+    }
+    const saved = await geometry();
+    const misaligned = await page
+      .locator(".layout-group.layout-custom-grid")
+      .evaluateAll((groups) =>
+        groups.flatMap((group) => {
+          const guides = [
+            ...group.querySelectorAll<HTMLElement>(
+              ":scope > .layout-grid-guides > span",
+            ),
+          ]
+            .filter((node) => node.getBoundingClientRect().width > 0)
+            .map((node) => node.getBoundingClientRect());
+          return [...group.querySelectorAll(":scope > .layout-item")]
+            .filter((node) => {
+              const rect = node.getBoundingClientRect();
+              return (
+                !guides.some(
+                  (guide) => Math.abs(guide.left - rect.left) < 0.5,
+                ) ||
+                !guides.some(
+                  (guide) => Math.abs(guide.right - rect.right) < 0.5,
+                )
+              );
+            })
+            .map((node) => node.getAttribute("data-layout-title"));
+        }),
+      );
+    expect(misaligned).toEqual([]);
+    await page.getByRole("button", { name: "Done arranging" }).click();
+    await unchanged(saved);
+    await page.reload();
+    await expect(page.locator(".dashboard-torrent")).toHaveCount(2);
+    await unchanged(saved);
+    await page.getByRole("button", { name: "Customize layout" }).click();
+    await unchanged(saved);
+    await page.getByRole("button", { name: "Done arranging" }).click();
+    await unchanged(saved);
+    await page.getByRole("button", { name: "Customize layout" }).click();
+    await page.getByRole("button", { name: "Reset this page" }).click();
+    await unchanged(original);
+    await page.getByRole("button", { name: "Done arranging" }).click();
+    await unchanged(original);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("Choose cards retains scroll, label order and checkbox focus after visibility updates", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 260 });
+  await page.goto("/");
+  await expect(page.locator(".layout-item").first()).toBeVisible();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await page.getByText("Choose cards", { exact: true }).click();
+  const menu = page.locator(".layout-card-picker > div");
+  expect(await menu.locator("input").count()).toBeGreaterThan(5);
+  const state = await menu.evaluate((node) => {
+    node.scrollTop = Math.min(70, node.scrollHeight - node.clientHeight);
+    const rect = node.getBoundingClientRect();
+    const input = [...node.querySelectorAll<HTMLInputElement>("input")].find(
+      (input) => {
+        const box = input.getBoundingClientRect();
+        return box.top > rect.top + 8 && box.bottom < rect.bottom - 8;
+      },
+    )!;
+    input.focus({ preventScroll: true });
+    return {
+      top: node.scrollTop,
+      labels: [...node.querySelectorAll("label")].map(
+        (label) => label.textContent,
+      ),
+      index: [...node.querySelectorAll("input")].indexOf(input),
+    };
+  });
+  expect(state.top).toBeGreaterThan(0);
+  const checkbox = menu.locator("input").nth(state.index);
+  await checkbox.click();
+  expect(await menu.evaluate((node) => node.scrollTop)).toBe(state.top);
+  expect(await menu.locator("label").allTextContents()).toEqual(state.labels);
+  await expect(checkbox).toBeFocused();
+  await checkbox.press("Space");
+  expect(await menu.evaluate((node) => node.scrollTop)).toBe(state.top);
+  await expect(checkbox).toBeFocused();
+});
+
+test("asynchronous FjordFlix cards retain geometry and picker identity through editing", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.documentElement.style.zoom = "0.9";
+    });
+  });
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/integrations", async (route) => {
+    await ready;
+    await route.fulfill({
+      json: {
+        data: [
+          {
+            id: "layout-fixture",
+            name: "Local fixture",
+            baseUrl: "https://fixture.invalid",
+            enabled: true,
+            tokenConfigured: true,
+            snapshot: {
+              status: "online",
+              stale: false,
+              apps: [],
+              fjordflix: {
+                ok: true,
+                library_count: 10,
+                items: Array.from({ length: 10 }, (_, i) => ({
+                  id: String(i),
+                  title: "Long title and description ".repeat(12),
+                  overview: "Long description ".repeat(30),
+                  genres: ["Drama"],
+                })),
+                streams: [
+                  {
+                    id: "stream",
+                    title: "A long playing title ".repeat(30),
+                    user: "Synthetic viewer",
+                    state: "playing",
+                    mode: "Direct Play",
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator(".dashboard-torrent")).toHaveCount(2);
+  await expect(page.locator(".fjordflix-service-tile")).toHaveCount(0);
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await page.getByText("Choose cards", { exact: true }).click();
+  const menu = page.locator(".layout-card-picker > div");
+  const first = menu.locator("input").first();
+  await first.focus();
+  const labels = await menu.locator("label").allTextContents();
+  release();
+  await expect(page.locator(".fjordflix-service-tile")).toBeVisible();
+  await expect(first).toBeFocused();
+  const after = await menu.locator("label").allTextContents();
+  expect(after.filter((title) => labels.includes(title))).toEqual(labels);
+  await page.getByText("Choose cards", { exact: true }).click();
+  async function rects() {
+    return page.locator("main .layout-item").evaluateAll(async (nodes) => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const origin = document
+        .querySelector("main .layout-group")!
+        .getBoundingClientRect();
+      return nodes.map((node) => {
+        const box = node.getBoundingClientRect();
+        return [
+          box.left - origin.left,
+          box.top - origin.top,
+          box.width,
+          box.height,
+        ];
+      });
+    });
+  }
+  const editing = await rects();
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  const viewing = await rects();
+  expect(viewing).toHaveLength(editing.length);
+  for (let i = 0; i < editing.length; i++)
+    for (let j = 0; j < 4; j++)
+      expect(viewing[i][j]).toBeCloseTo(editing[i][j], 0);
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  const reentered = await rects();
+  for (let i = 0; i < editing.length; i++)
+    for (let j = 0; j < 4; j++)
+      expect(reentered[i][j]).toBeCloseTo(editing[i][j], 0);
+});
