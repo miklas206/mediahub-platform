@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Extend the read-only FjordHub resources integration with optional FjordFlix appdata: the last 10 recently added titles in API order, current streams and playback metadata, independently stale app/resource snapshots, and authenticated bounded same-origin poster proxying. Add backend-only `FJORDHUB_BASE_URL` / `FJORDHUB_ACCESS_TOKEN` configuration and sequential 10-second polling; old responses without appdata remain compatible.
+
 - Verify identical qBittorrent username/password reapplication with a fresh login instead of rejecting it; allow username-only changes while still proving the previous login is rejected. Report sanitized rotation preflight errors and correlate status with the current operation, so an older healthy VPN journal cannot mask a failed client change. Interrupted/partial rotations still require operator recovery; no live rotation or deployment performed.
 
 - Report asynchronous Seedbox credential rotation separately from installation health, including a sanitized failed step and interrupted-operation recovery state. Poll the result in **Use my MediaHub login** so an accepted request cannot hide a later failure; keep encrypted recovery references private. No live password changes or deployment are performed.

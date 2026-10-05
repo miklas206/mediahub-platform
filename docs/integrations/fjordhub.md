@@ -1,6 +1,20 @@
 # FjordHub external integration — verified correction (2026-09-16)
 
-## CURRENT implementation: real LAN catalog contract
+## CURRENT implementation: resources and optional FjordFlix appdata
+
+Contract verified against [FjordHub appdata documentation](https://github.com/qlerup/fjordhub/blob/main/docs/app-data-integration.md), October 2026. Update FjordHub and FjordFlix (installed through FjordHub); select **FjordFlix** in **Settings → Access Tokens → Edit appdata access**. Docker resources remain included. Core must reach the normal private-IP origin over LAN, not a public/Cloudflare route.
+
+Configure via Integrations or set backend-only `FJORDHUB_BASE_URL` and `FJORDHUB_ACCESS_TOKEN` (also supports `MEDIAHUB_` aliases). Both are required for environment-based setup. Explicit HTTP configuration consents to plaintext LAN token transport; prefer certificate-verified HTTPS. Startup imports the credential into the existing encrypted integration store for enabled integrations. An explicit disconnect remains authoritative across restarts. Keep environment files private; never put tokens in URLs, browser settings or logs.
+
+`GET /api/integrations/v1/resources` retains Docker metrics and reads optional `app_data.fjordflix`, checking its own `ok` independently from top-level Docker `ok`. Old responses without appdata remain valid, without speculative calls to the separate appdata endpoint. App failures never hide resource measurements. Both retain their latest good values with separate visible stale markers; successful empty arrays clear prior data. App statuses 401/403/404/503 become fixed sanitized messages, never upstream error bodies.
+
+Apps and Integrations show a responsive gallery of the **last 10 recently added titles**, preserving API `items` order, plus current streams (including pause/buffering). Optional metadata may be absent; seconds/pixels/Mbit/s are displayed correctly. Viewer names are private appdata available only to local authenticated users. Resource polling is sequential/nonoverlapping with a 10-second healthy interval and existing backoff/deadlines.
+
+Posters use only authenticated local `/api/v1/integrations/{id}/fjordflix/posters/{movie_id}` requests; the browser never sees the upstream poster URL or bearer token. Only the configured origin and `/api/integrations/v1/app-data/fjordflix/posters/` path are accepted. Encoded/traversal paths, credentials, queries and fragments are rejected. No redirects/proxy inheritance; 8-second total timeout, 5 MiB limit, signature-checked JPEG/PNG/WebP, no-store/nosniff/same-origin responses and missing-image placeholders. No media playback controls, files or administrator APIs are exposed.
+
+Local fixtures cover legacy/empty/Unicode/metadata, independent stale/recovery, image authentication/SSRF/redirect/type/size and responsive browser rendering. No live token or deployment is claimed.
+
+## HISTORICAL September 2026 catalog-only correction
 
 The historical proposal below is **superseded**. The adapter now calls only
 `GET <normal FjordHub LAN URL>/api/integrations/v1/apps` with

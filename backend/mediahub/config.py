@@ -4,17 +4,49 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(os.environ.get("MEDIAHUB_PROJECT_ROOT", str(Path(__file__).resolve().parents[2])))
 
 
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MEDIAHUB_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="MEDIAHUB_", env_file=".env", extra="ignore", hide_input_in_errors=True
+    )
     base_url: str = "http://127.0.0.1:18765"
     public_url: str | None = None
     fjordhub_url: str | None = None  # Optional operator-discovered normal LAN URL.
+    fjordhub_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FJORDHUB_BASE_URL", "MEDIAHUB_FJORDHUB_BASE_URL"),
+    )
+    fjordhub_access_token: SecretStr | None = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        validation_alias=AliasChoices("FJORDHUB_ACCESS_TOKEN", "MEDIAHUB_FJORDHUB_ACCESS_TOKEN"),
+    )
+
+    @field_validator("fjordhub_access_token")
+    @classmethod
+    def valid_fjordhub_token(cls, value):
+        if value is not None and (
+            not 16 <= len(value.get_secret_value()) <= 8192
+            or any(not 33 <= ord(c) <= 126 for c in value.get_secret_value())
+        ):
+            raise ValueError("Invalid FjordHub Access Token format")
+        return value
+
+    @field_validator("fjordhub_base_url")
+    @classmethod
+    def valid_fjordhub_base(cls, value):
+        if value is None:
+            return None
+        from mediahub.integrations.fjordhub import validate_url
+
+        return validate_url(value, allow_http=True)
+
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
     cloudflared_status_url: str | None = None
     cloudflared_probe_urls: list[str] = Field(default_factory=list)

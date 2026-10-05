@@ -79,6 +79,11 @@ export function FjordHubTokenGuide({ baseUrl }: { baseUrl: string }) {
           <strong>{t("Save")}</strong> {t("once the connection succeeds.")}
         </li>
       </ol>
+      <p>
+        {t(
+          "For library posters and current streams, select FjordFlix under Edit appdata access for this token in FjordHub. Update FjordHub and FjordFlix, and use a LAN-reachable address. Docker resources work independently of appdata access.",
+        )}
+      </p>
     </div>
   );
 }

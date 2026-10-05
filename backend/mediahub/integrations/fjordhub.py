@@ -22,6 +22,8 @@ class ProviderFailure(Exception):
 
 
 def validate_url(value: str, allow_http: bool = False):
+    if any(ord(c) < 33 for c in value) or any(c in value for c in "%\\"):
+        raise ValueError("Invalid integration origin")
     parsed = urlsplit(value)
     try:
         address = ip_address(parsed.hostname or "")
@@ -206,7 +208,20 @@ class FjordHubClient:
                         # catalog route. Never fall back on auth or permission errors.
                         body = await self._get(client, "/api/integrations/v1/apps")
                     else:
-                        return self.resource_snapshot(body)
+                        from mediahub.integrations.fjordflix import normalize
+
+                        app_data = body.get("app_data")
+                        app = (
+                            normalize(self, app_data["fjordflix"])
+                            if isinstance(app_data, dict) and "fjordflix" in app_data
+                            else None
+                        )
+                        try:
+                            snapshot = self.resource_snapshot(body)
+                        except ProviderFailure as error:
+                            snapshot.status = error.status
+                        snapshot.fjordflix = app
+                        return snapshot
                     items = body.get("items")
                     if not isinstance(items, list) or any(
                         not isinstance(item, dict)

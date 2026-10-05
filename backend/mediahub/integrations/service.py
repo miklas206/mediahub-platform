@@ -25,6 +25,35 @@ class IntegrationService:
         self.test_lock = asyncio.Lock()
         self.default_origin = config.fjordhub_url
         self.persistence_lock = threading.RLock()
+        if config.fjordhub_base_url and config.fjordhub_access_token:
+            from types import SimpleNamespace
+
+            origin = config.fjordhub_base_url
+            with self.sessions() as db:
+                existing = db.scalar(
+                    select(ExternalIntegration).where(
+                        ExternalIntegration.provider == "fjordhub",
+                        ExternalIntegration.base_url == origin,
+                    )
+                )
+            unchanged = False
+            if existing and existing.secret_reference:
+                try:
+                    unchanged = self.store.get(existing.secret_reference).decode() == (
+                        config.fjordhub_access_token.get_secret_value()
+                    )
+                except (DomainError, UnicodeError):
+                    pass
+            # Preserve snapshots and deliberate disconnects across restarts.
+            if (existing is None or existing.enabled) and not unchanged:
+                self.save(
+                    SimpleNamespace(
+                        name="FjordHub",
+                        baseUrl=origin,
+                        accessToken=config.fjordhub_access_token,
+                        allowHttp=origin.startswith("http://"),
+                    )
+                )
 
     @staticmethod
     def public(row):
@@ -260,8 +289,25 @@ class IntegrationService:
                         "failed_endpoint": snapshot.failed_endpoint,
                         "retry_after": snapshot.retry_after,
                     }
+                app = snapshot.fjordflix
+                old_app = previous.get("fjordflix")
+                if app is None and not success and old_app and old_app.get("ok"):
+                    row.snapshot["fjordflix"] = {
+                        **old_app,
+                        "stale": True,
+                        "error": "FjordHub connection interrupted.",
+                    }
+                elif app and not app.get("ok") and old_app and old_app.get("ok"):
+                    row.snapshot["fjordflix"] = {
+                        **old_app,
+                        "stale": True,
+                        "error": app["error"],
+                        "status": app["status"],
+                    }
+                else:
+                    row.snapshot["fjordflix"] = app
                 row.failures = 0 if success else min(8, row.failures + 1)
-                interval = 5 if "docker.resources.read" in snapshot.capabilities else 60
+                interval = 10 if "docker.resources.read" in snapshot.capabilities else 60
                 delay = snapshot.retry_after or (
                     interval if success else min(3600, 30 * 2**row.failures)
                 )
@@ -291,6 +337,28 @@ class IntegrationService:
                         else "info",
                     )
             return output
+
+    async def poster(self, identifier, movie_id):
+        from mediahub.integrations.fjordflix import fetch_poster
+        from mediahub.integrations.fjordhub import ProviderFailure
+
+        with self.sessions() as db:
+            row = db.get(ExternalIntegration, identifier)
+            if row is None or not row.enabled or not row.secret_reference:
+                raise DomainError("not_found", "Poster unavailable", 404)
+            reference, origin, allow_http = row.secret_reference, row.base_url, row.allow_http
+        try:
+            token = self.store.get(reference).decode()
+            client = self.provider_factory(origin, token, allow_http=allow_http)
+            async with asyncio.timeout(8):
+                data = await fetch_poster(client, movie_id)
+            with self.sessions() as db:
+                row = db.get(ExternalIntegration, identifier)
+                if row is None or not row.enabled or row.secret_reference != reference:
+                    raise DomainError("not_found", "Poster unavailable", 404)
+            return data
+        except (ProviderFailure, httpx.HTTPError, TimeoutError, DomainError, ValueError):
+            raise DomainError("poster_unavailable", "Poster unavailable", 404) from None
 
     def disconnect(self, identifier):
         reference = None

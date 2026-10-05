@@ -18,6 +18,7 @@ class IntegrationSnapshot:
     retry_after: int | None = None
     failed_endpoint: str | None = None
     stale: bool = False
+    fjordflix: dict | None = None
 
 
 class IntegrationProvider(Protocol):

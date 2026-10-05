@@ -25,7 +25,7 @@ def body():
             IntegrationSnapshot(
                 status="online", capabilities=["docker.resources.read"], metrics={"cpuPercent": 12}
             ),
-            5,
+            10,
         ),
         (IntegrationSnapshot(status="online"), 60),
         (IntegrationSnapshot(status="rate_limited", retry_after=120), 120),

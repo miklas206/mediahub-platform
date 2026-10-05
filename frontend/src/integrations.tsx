@@ -19,6 +19,7 @@ import "./integrations.css";
 import { FjordHubTokenGuide, fjordHubLink } from "./fjordhub-token-guide";
 import { ServiceIcon } from "./service-icon";
 import { ArrowUpRight } from "lucide-react";
+import { FjordFlix, type FjordFlixData } from "./fjordflix";
 
 type Row = Record<string, string | number>;
 type Snapshot = {
@@ -33,6 +34,7 @@ type Snapshot = {
   metrics?: Record<string, number>;
   events?: Row[];
   warnings?: string[];
+  fjordflix?: FjordFlixData | null;
 };
 export type Integration = {
   id: string;
@@ -93,7 +95,7 @@ export function useIntegrations(): IntegrationState {
     [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
     if (sharedReload) return sharedReload();
-    request.current?.abort();
+    if (request.current && !request.current.signal.aborted) return;
     const controller = new AbortController();
     request.current = controller;
     try {
@@ -108,22 +110,47 @@ export function useIntegrations(): IntegrationState {
         setError("");
       }
     } catch (e) {
-      if (!controller.signal.aborted) setError((e as Error).message);
+      if (!controller.signal.aborted) {
+        setError((e as Error).message);
+        setItems((previous) =>
+          previous.map((row) => ({
+            ...row,
+            snapshot: {
+              ...row.snapshot,
+              stale: true,
+              fjordflix: row.snapshot.fjordflix?.ok
+                ? {
+                    ...row.snapshot.fjordflix,
+                    stale: true,
+                    error: "MediaHub connection interrupted.",
+                  }
+                : row.snapshot.fjordflix,
+            },
+          })),
+        );
+      }
     } finally {
       if (!controller.signal.aborted) setLoading(false);
+      if (request.current === controller) request.current = null;
     }
   }, [sharedReload]);
   useEffect(() => {
     if (!ownsRequests) return;
-    void reload();
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (!document.hidden) await reload();
+      if (!stopped) timer = setTimeout(() => void poll(), 10000);
+    };
+    void poll();
     const refresh = () => {
       if (!document.hidden) void reload();
     };
-    const timer = setInterval(refresh, 15000);
     window.addEventListener("integrations-changed", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
-      clearInterval(timer);
+      stopped = true;
+      clearTimeout(timer);
       window.removeEventListener("integrations-changed", refresh);
       document.removeEventListener("visibilitychange", refresh);
       request.current?.abort();
@@ -196,6 +223,7 @@ export function IntegrationAppCard({
           </a>
         ))}
       </div>
+      <FjordFlix integration={row.id} data={row.snapshot.fjordflix} />
     </section>
   );
 }
@@ -583,7 +611,7 @@ export function IntegrationsPage({
                   ? t(
                       "Connection interrupted. Showing the last measurements while retrying automatically.",
                     )
-                  : t("Live resource updates approximately every 5 seconds.")
+                  : t("Live resource updates approximately every 10 seconds.")
                 : t("Status updates automatically.")}{" "}
               {t("Provider retry delays are respected.")}
             </small>
@@ -671,6 +699,7 @@ export function IntegrationsPage({
                 </dl>
               </>
             )}
+            <FjordFlix integration={row.id} data={row.snapshot.fjordflix} />
             {!!row.snapshot.events?.length && (
               <>
                 <h3>{t("FjordHub events")}</h3>

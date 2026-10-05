@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field, SecretStr, field_validator
 from sqlalchemy import select
 
@@ -93,6 +93,20 @@ async def save(body: IntegrationInput, request: Request, user=Depends(authentica
     require_admin(user)
     require_https(request)
     return result(services(request).integrations.save(body))
+
+
+@router.get("/{identifier}/fjordflix/posters/{movie_id}")
+async def poster(identifier: str, movie_id: str, request: Request, user=Depends(authenticated)):
+    data, content_type = await services(request).integrations.poster(identifier, movie_id)
+    return Response(
+        data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin",
+        },
+    )
 
 
 @router.post("/{identifier}/refresh")
