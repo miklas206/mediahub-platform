@@ -1,7 +1,7 @@
-"""Read-only FjordHub Access Token adapter; current resources API and legacy catalog.
+"""FjordHub token resources, app metadata and explicit permitted update actions.
 
-Contract verified against qlerup/fjordhub app.py and README, September 2026.
-Never probes session-only administrative endpoints or controls FjordHub containers.
+Contract verified against qlerup/fjordhub app.py and integration docs, October 2026.
+Never probes session-only administrative endpoints or sends arbitrary commands.
 """
 
 import asyncio
@@ -60,7 +60,7 @@ def retry_seconds(value):
 
 
 class FjordHubClient:
-    """Only GET requests, fixed paths and bounded typed data. Test transport is injected."""
+    """Fixed paths and bounded typed data; updates require explicit service authorization."""
 
     def __init__(self, base_url, access_token, *, allow_http=False, transport=None):
         self.base_url = validate_url(base_url, allow_http)
@@ -125,6 +125,68 @@ class FjordHubClient:
                         row[key] = value
             rows.append(row)
         return rows
+
+    async def integration_request(self, path, method="GET"):
+        import json
+
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            headers={"Authorization": "Bearer " + self._access_token},
+            timeout=95 if path.endswith("/check") else 8,
+            follow_redirects=False,
+            trust_env=False,
+            transport=self._transport,
+        ) as client:
+            async with client.stream(method, path) as response:
+                errors = {
+                    401: "authentication_failed",
+                    403: "lan_access_denied",
+                    404: "api_incompatible",
+                    409: "update_conflict",
+                }
+                if response.status_code not in {200, 202}:
+                    raise ProviderFailure(errors.get(response.status_code, "offline"))
+                data = bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > 1024 * 1024:
+                        raise ProviderFailure("invalid_response")
+                try:
+                    body = json.loads(data)
+                    if not isinstance(body, dict):
+                        raise ValueError()
+                except ValueError:
+                    raise ProviderFailure("invalid_response") from None
+                return body, response.status_code
+
+    async def metadata(self):
+        from mediahub.integrations.fjordhub_metadata import app_info
+
+        body, _ = await self.integration_request("/api/integrations/v1/app-info")
+        if body.get("ok") is not True:
+            raise ProviderFailure("invalid_response")
+        return app_info(self, body.get("app_info"))
+
+    async def update_poll(self):
+        from mediahub.integrations.fjordhub_metadata import updates
+
+        body, _ = await self.integration_request("/api/integrations/v1/updates")
+        if body.get("ok") is not True:
+            raise ProviderFailure("invalid_response")
+        return updates(self, body.get("updates"))
+
+    async def update_action(self, app_id, action):
+        from mediahub.integrations.fjordhub_metadata import APP_ID, update_status
+
+        if not APP_ID.fullmatch(app_id) or action not in {"check", "start"}:
+            raise ProviderFailure("invalid_response")
+        body, code = await self.integration_request(
+            f"/api/integrations/v1/updates/{app_id}/{action}", "POST"
+        )
+        status = update_status(self, body, app_id)
+        if code == 202:
+            status.update(running=True, state="updating", accepted=True)
+        return status
 
     async def test(self):
         return await self.sync(summary_only=True)
@@ -256,6 +318,23 @@ class FjordHubClient:
                         except ProviderFailure as error:
                             snapshot.status = error.status
                         snapshot.fjordflix = app
+                        from mediahub.integrations.fjordhub_metadata import app_info, updates
+
+                        if "app_info" in body:
+                            try:
+                                snapshot.app_info = app_info(self, body["app_info"])
+                            except ProviderFailure:
+                                snapshot.app_info_stale = True
+                        elif not summary_only:
+                            try:
+                                snapshot.app_info = await self.metadata()
+                            except (ProviderFailure, httpx.HTTPError, TimeoutError):
+                                snapshot.app_info_stale = True
+                        if "updates" in body:
+                            try:
+                                snapshot.updates = updates(self, body["updates"])
+                            except ProviderFailure:
+                                pass  # Optional updater errors cannot erase Docker metrics.
                         return snapshot
                     items = body.get("items")
                     if not isinstance(items, list) or any(

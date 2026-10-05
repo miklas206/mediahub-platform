@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Expand the existing FjordHub integration with keyed app-info/permissions, validated installed LAN ports, revision-refreshed protected icon proxying and explicit administrator/CSRF update controls for FjordHub and child apps. Poll statuses sequentially every 45 seconds (5 while running), retain stale in-progress state through restart/timeouts, treat HTTP 202 only as acceptance, and never add remote updates to the automatic global queue. Preserve older resource responses and local launch overrides; use safe icon fallbacks for non-origin artwork.
+
 - Add a configurable Active uploads dashboard card for torrents currently sending data to peers, with count, combined upload speed and the five busiest torrents. Reuse the shared dashboard snapshot, exclude stopped/paused and zero-speed seeds, distinguish unavailable data from zero activity, and retain existing saved layout preferences. Available in Choose cards and Settings; new dashboard defaults place it next to ongoing torrents.
 
 - Keep dashboard card geometry identical when entering and leaving layout editing: original and saved layouts now use the same engine in both modes. Draw both ends of the actual CSS tracks (including gaps) in the edit grid, and keep Choose cards registration/order stable while visibility or asynchronous content changes.

@@ -10,6 +10,35 @@ for (const width of [1440, 390]) {
     page.on("pageerror", (error) => errors.push(error.message));
     let override: string | null = null;
     let viewer = false;
+    let updateRunning = false;
+    let updateFinished = false;
+    let starts = 0;
+    const info = {
+      id: "fjordflix",
+      name: "FjordFlix",
+      port: 9234,
+      installed: true,
+      icon_path: null,
+      permissions: { updates: true, app_data: false },
+    };
+    const updateView = () => ({
+      app_info: {
+        fjordflix: info,
+        fjordhub: { ...info, id: "fjordhub", name: "FjordHub", port: 8443 },
+      },
+      app_info_stale: false,
+      updates: {
+        fjordflix: {
+          app_id: "fjordflix",
+          ok: true,
+          running: updateRunning,
+          update_available: !updateFinished,
+          accepted: updateRunning,
+          current_rev: updateFinished ? "new" : "old",
+          remote_rev: "new",
+        },
+      },
+    });
     const row = () => ({
       id: "hub",
       name: "Fixture FjordHub",
@@ -22,6 +51,8 @@ for (const width of [1440, 390]) {
       appLaunchOverrides: override ? { fjordflix: override } : {},
       snapshot: {
         status: "online",
+        app_info: { fjordflix: info },
+        app_info_stale: false,
         capabilities: ["docker.resources.read"],
         apps: [
           {
@@ -68,6 +99,18 @@ for (const width of [1440, 390]) {
         };
       else if (path === "/updates/summary") data = { count: 0 };
       else if (path === "/fjordhub/deployment") data = null;
+      else if (path === "/integrations/hub/updates/fjordflix/start") {
+        expect(route.request().method()).toBe("POST");
+        expect(route.request().headers()["x-mediahub-csrf"]).toBe("fixture");
+        starts += 1;
+        updateRunning = true;
+        await route.fulfill({
+          status: 202,
+          json: { data: updateView(), error: null },
+        });
+        return;
+      } else if (path.endsWith("/updates") && path.startsWith("/integrations/"))
+        data = updateView();
       else if (path === "/integrations")
         data = [
           row(),
@@ -177,6 +220,28 @@ for (const width of [1440, 390]) {
         .locator(".workspace")
         .getByRole("link", { name: "Open app", exact: true }),
     ).toHaveAttribute("href", "https://192.168.50.20:9234/");
+    const updates = page.getByRole("region", { name: "FjordHub-opdateringer" });
+    const childUpdate = updates
+      .locator("article")
+      .filter({ has: page.getByText("FjordFlix", { exact: true }) });
+    await expect(
+      childUpdate.getByRole("button", { name: "Opdatér app" }),
+    ).toBeEnabled();
+    expect(starts).toBe(0);
+    page.once("dialog", (dialog) => dialog.accept());
+    await childUpdate.getByRole("button", { name: "Opdatér app" }).click();
+    await expect(childUpdate.getByRole("status")).toContainText(
+      "Start accepteret (202)",
+    );
+    await expect(
+      childUpdate.getByRole("button", { name: "Opdatér app" }),
+    ).toBeDisabled();
+    updateRunning = false;
+    updateFinished = true;
+    await expect(
+      childUpdate.getByText("Ingen opdatering tilgængelig", { exact: true }),
+    ).toBeVisible({ timeout: 10000 });
+    expect(starts).toBe(1);
     await page.screenshot({
       path: `test-results/fjordhub-home-${width}.png`,
       fullPage: true,
@@ -192,6 +257,7 @@ for (const width of [1440, 390]) {
       page.getByText("Only administrators can change app launch URLs."),
     ).toBeVisible();
     await expect(input).toHaveCount(0);
+    await expect(updates.getByRole("button")).toHaveCount(0);
     await page.goto("/integrations/missing");
     await expect(page.getByText("Integration not found")).toBeVisible();
     expect(writes).toHaveLength(3);

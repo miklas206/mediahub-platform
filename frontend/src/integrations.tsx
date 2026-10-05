@@ -22,6 +22,12 @@ import { ServiceIcon } from "./service-icon";
 import { ArrowUpRight } from "lucide-react";
 import { FjordFlix, type FjordFlixData } from "./fjordflix";
 import { fjordHubAppLink } from "./fjordhub-app-link";
+import {
+  FjordHubUpdates,
+  FjordHubIcon,
+  type AppInfo,
+  type UpdateStatus,
+} from "./fjordhub-updates";
 
 type Row = Record<string, string | number>;
 type Snapshot = {
@@ -37,6 +43,9 @@ type Snapshot = {
   events?: Row[];
   warnings?: string[];
   fjordflix?: FjordFlixData | null;
+  app_info?: Record<string, AppInfo> | null;
+  app_info_stale?: boolean;
+  updates?: Record<string, UpdateStatus> | null;
 };
 export type Integration = {
   id: string;
@@ -163,17 +172,29 @@ export function useIntegrations(): IntegrationState {
   return shared ?? { items, error, loading, reload };
 }
 
+export function fjordHubApps(row: Integration): Row[] {
+  const apps = new Map(
+    (row.snapshot.apps || []).map((app) => [String(app.id), app]),
+  );
+  for (const info of Object.values(row.snapshot.app_info || {})) {
+    apps.set(info.id, {
+      ...apps.get(info.id),
+      id: info.id,
+      name: info.name,
+      ...(info.installed && info.port ? { port: info.port } : {}),
+    });
+  }
+  return [...apps.values()];
+}
+
 export function installedFjordHubApps(row: Integration) {
-  if (
-    !row.enabled ||
-    !row.tokenConfigured ||
-    !row.snapshot.capabilities?.includes("docker.resources.read")
-  )
-    return [];
-  return (row.snapshot.apps || []).filter(
+  if (!row.enabled || !row.tokenConfigured) return [];
+  return fjordHubApps(row).filter(
     (app) =>
       /^[a-zA-Z0-9_-]{1,100}$/.test(String(app.id)) &&
-      Number(app.container_count) > 0,
+      (row.snapshot.app_info?.[String(app.id)]?.installed ??
+        (row.snapshot.capabilities?.includes("docker.resources.read") &&
+          Number(app.container_count) > 0)),
   );
 }
 
@@ -190,7 +211,7 @@ export function IntegrationAppCard({
     <section className="panel app-detail" aria-label={title}>
       <div className="panel-heading">
         <div className="app-icon">
-          <ServiceIcon packageId="org.mediahub.fjordhub" />
+          <FjordHubIcon row={row} appId="fjordhub" />
         </div>
         <span
           className={`badge ${!row.snapshot.stale && row.snapshot.status === "online" ? "healthy" : row.snapshot.status === "degraded" ? "degraded" : "unknown"}`}
@@ -269,7 +290,7 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
                 to={`/integrations/${encodeURIComponent(row.id)}`}
                 title={t("FjordHub overview")}
               >
-                <ServiceIcon packageId="org.mediahub.fjordhub" size={18} />
+                <FjordHubIcon row={row} appId="fjordhub" size={18} />
                 <span
                   className={`app-shortcut-dot ${healthy ? "healthy" : "unknown"}`}
                 />
@@ -300,7 +321,7 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
                         : t("Open app")
                     }
                   >
-                    <ServiceIcon packageId={String(app.id)} size={16} />
+                    <FjordHubIcon row={row} appId={String(app.id)} size={16} />
                     <span>{String(app.name)}</span>
                     <ArrowUpRight size={12} aria-hidden="true" />
                     <span
@@ -498,7 +519,11 @@ export function IntegrationsPage({
       {notice && <p role="status">{translateText(notice)}</p>}
       {integrationId && (
         <header className="fjordhub-home-heading">
-          <ServiceIcon packageId="fjordhub" size={48} />
+          {visibleItems[0] ? (
+            <FjordHubIcon row={visibleItems[0]} appId="fjordhub" size={48} />
+          ) : (
+            <ServiceIcon packageId="fjordhub" size={48} />
+          )}
           <div>
             <h1>{visibleItems[0]?.name || "FjordHub"}</h1>
             <p className="muted">{t("Overview · Apps · Docker resources")}</p>
@@ -807,12 +832,12 @@ export function IntegrationsPage({
                 ? t("Installed app groups")
                 : t("Installable app catalog")}
             </h3>
-            {!row.snapshot.apps?.length ? (
+            {!fjordHubApps(row).length ? (
               <p>{t("No apps reported by the API.")}</p>
             ) : (
-              row.snapshot.apps.map((app, i) => (
+              fjordHubApps(row).map((app, i) => (
                 <div className="app-row" key={String(app.id ?? i)}>
-                  <ServiceIcon packageId={String(app.id)} size={30} />
+                  <FjordHubIcon row={row} appId={String(app.id)} size={30} />
                   <div className="app-row-name">
                     <strong>{app.name || app.id || t("Unnamed app")}</strong>
                     <small>
@@ -825,7 +850,9 @@ export function IntegrationsPage({
                           t("No description provided")}
                     </small>
                   </div>
-                  {installedFjordHubApps(row).includes(app) &&
+                  {installedFjordHubApps(row).some(
+                    (item) => item.id === app.id,
+                  ) &&
                     fjordHubAppLink(
                       row.baseUrl,
                       app,
@@ -913,6 +940,7 @@ export function IntegrationsPage({
               </>
             )}
             <FjordFlix integration={row.id} data={row.snapshot.fjordflix} />
+            <FjordHubUpdates row={row} administrator={administrator} />
             <AppLaunchSettings
               row={row}
               administrator={administrator}

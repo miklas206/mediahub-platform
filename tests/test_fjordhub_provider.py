@@ -110,7 +110,7 @@ def test_current_resource_contract_and_allowlisted_fields():
         )
 
     snapshot = asyncio.run(provider(handler).sync())
-    assert paths == ["/api/integrations/v1/resources"]
+    assert paths == ["/api/integrations/v1/resources", "/api/integrations/v1/app-info"]
     assert snapshot.status == "online"
     assert snapshot.capabilities == ["docker.resources.read"]
     assert snapshot.metrics["cpuPercent"] == 25

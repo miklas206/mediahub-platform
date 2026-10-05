@@ -152,3 +152,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.fjordhub-update-panel,
+.fjordhub-update-row {
+  min-width: 0;
+}
+.fjordhub-update-row {
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.fjordhub-update-row small {
+  overflow-wrap: anywhere;
+}

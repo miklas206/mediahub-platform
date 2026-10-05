@@ -90,6 +90,7 @@ class IntegrationService:
                 for app in (row.snapshot or {}).get("apps", [])
                 if isinstance(app, dict)
             )
+            known = known or app_id in ((row.snapshot or {}).get("app_info") or {})
             if value is not None:
                 if not known:
                     raise DomainError("not_found", "Integration app not found", 404)
@@ -375,6 +376,25 @@ class IntegrationService:
                     snapshot.status = "pending_setup"
                 success = snapshot.status in {"online", "degraded"}
                 row.snapshot = asdict(snapshot)
+                if snapshot.app_info is None:
+                    row.snapshot["app_info"] = previous.get("app_info")
+                    row.snapshot["app_info_stale"] = True
+                if snapshot.updates is None:
+                    row.snapshot["updates"] = previous.get("updates")
+                else:
+                    row.snapshot["updates"] = {
+                        **{
+                            key: {**value, "stale": True}
+                            for key, value in (previous.get("updates") or {}).items()
+                            if key not in snapshot.updates
+                        },
+                        **snapshot.updates,
+                    }
+                # Dedicated update polling owns its schedule; resource refreshes
+                # cannot erase accepted starts or turn stale status into success.
+                for key in ("updates_error", "updates_polled_at", "updates_next_poll"):
+                    if key in previous:
+                        row.snapshot[key] = previous[key]
                 if snapshot.status == "pending_setup":
                     row.snapshot["pairingPending"] = True
                     row.snapshot["pairingDeadline"] = previous["pairingDeadline"]
@@ -434,6 +454,202 @@ class IntegrationService:
                         else "info",
                     )
             return output
+
+    def update_view(self, row):
+        snapshot = row.snapshot or {}
+        return {
+            "app_info": snapshot.get("app_info") or {},
+            "app_info_stale": snapshot.get("app_info_stale", True),
+            "updates": snapshot.get("updates") or {},
+            "error": snapshot.get("updates_error"),
+            "polled_at": snapshot.get("updates_polled_at"),
+        }
+
+    async def updates(self, identifier, app_id=None, action=None):
+        from mediahub.integrations.fjordhub import ProviderFailure
+        from mediahub.integrations.fjordhub_metadata import APP_ID
+
+        if app_id is not None and not APP_ID.fullmatch(app_id):
+            raise DomainError("invalid_app_id", "Ugyldigt app-ID", 422)
+        if self.lock.locked():
+            if action:
+                raise DomainError(
+                    "integration_busy", "FjordHub behandles allerede. Prøv igen.", 409
+                )
+            with self.sessions() as db:
+                row = db.get(ExternalIntegration, identifier)
+                if row is None:
+                    raise DomainError("not_found", "Integration ikke fundet", 404)
+                return self.update_view(row)
+        async with self.lock:
+            with self.sessions() as db:
+                row = db.get(ExternalIntegration, identifier)
+                if row is None or not row.enabled or not row.secret_reference:
+                    raise DomainError("not_found", "Integration er ikke tilsluttet", 404)
+                reference, origin, allow_http = row.secret_reference, row.base_url, row.allow_http
+                previous = dict(row.snapshot or {})
+                running = any(s.get("running") for s in (previous.get("updates") or {}).values())
+                if not action and time.time() < previous.get("updates_next_poll", 0):
+                    return self.update_view(row)
+            client = self.provider_factory(
+                origin, self.store.get(reference).decode(), allow_http=allow_http
+            )
+            output = dict(previous)
+            error = None
+            try:
+                info = await client.metadata()
+                output.update(app_info=info, app_info_stale=False)
+                statuses = await client.update_poll()
+                # An omitted app is not a confirmed update outcome (for example
+                # token permissions changed while its updater was restarting).
+                statuses = {
+                    **{
+                        key: {**value, "stale": True}
+                        for key, value in (previous.get("updates") or {}).items()
+                        if key not in statuses
+                    },
+                    **statuses,
+                }
+                output.update(updates=statuses, updates_error=None, updates_polled_at=now())
+                if action:
+                    item = info.get(app_id)
+                    if not item or not item.get("installed"):
+                        raise DomainError(
+                            "not_found", "Appen er ikke installeret eller delt med tokenet", 404
+                        )
+                    if not item["permissions"]["updates"]:
+                        raise DomainError(
+                            "missing_permission",
+                            "Tokenet har ikke opdateringsadgang til appen",
+                            403,
+                        )
+                    status = statuses.get(app_id)
+                    if action == "start" and (
+                        not status or not status.get("ok") or status.get("stale")
+                    ):
+                        raise DomainError(
+                            "unknown_update_status", "Opdateringsstatus er ikke bekræftet", 409
+                        )
+                    if (status and status.get("running")) or (
+                        action == "start" and not status.get("update_available")
+                    ):
+                        raise DomainError(
+                            "update_conflict",
+                            "Appen opdateres allerede eller har ingen bekræftet opdatering",
+                            409,
+                        )
+                    # Persist uncertain in-progress state before sending start: a restart or
+                    # timeout after acceptance must never invite an automatic retry.
+                    if action == "start":
+                        pending = {**status, "running": True, "state": "updating", "stale": True}
+                        with self.persistence_lock, self.sessions.begin() as db:
+                            row = db.get(ExternalIntegration, identifier)
+                            if row is None or not row.enabled or row.secret_reference != reference:
+                                raise DomainError(
+                                    "integration_changed", "Integrationen blev ændret", 409
+                                )
+                            row.snapshot = {**output, "updates": {**statuses, app_id: pending}}
+                        output["updates"] = {**statuses, app_id: pending}
+                    result = await client.update_action(app_id, action)
+                    output["updates"] = {**statuses, app_id: result}
+            except (ProviderFailure, httpx.HTTPError, TimeoutError) as exc:
+                code = exc.status if isinstance(exc, ProviderFailure) else "timeout"
+                messages = {
+                    "authentication_failed": "Ugyldigt eller udløbet FjordHub-token (401).",
+                    "lan_access_denied": "FjordHub afviste adgang eller rettighed (403).",
+                    "api_incompatible": "App eller API findes ikke; ældre FjordHub kan mangle støtte (404).",
+                    "update_conflict": "FjordHub er optaget eller blokeret af filflytning (409).",
+                }
+                output["updates_error"] = messages.get(
+                    code,
+                    "FjordHub svarer ikke. Sidste status bevares; en start er ikke bekræftet færdig.",
+                )
+                output["app_info_stale"] = True
+                output["updates"] = {
+                    key: {**value, "stale": True}
+                    for key, value in (output.get("updates") or {}).items()
+                }
+                if action:
+                    error = DomainError(
+                        code,
+                        output["updates_error"],
+                        {
+                            "authentication_failed": 401,
+                            "lan_access_denied": 403,
+                            "api_incompatible": 404,
+                            "update_conflict": 409,
+                        }.get(code, 503),
+                    )
+            except DomainError as exc:
+                error = exc
+            running = any(s.get("running") for s in (output.get("updates") or {}).values())
+            output["updates_next_poll"] = time.time() + (5 if running else 45)
+            with self.persistence_lock, self.sessions.begin() as db:
+                row = db.get(ExternalIntegration, identifier)
+                if row is None or not row.enabled or row.secret_reference != reference:
+                    raise DomainError("integration_changed", "Integrationen blev ændret", 409)
+                row.snapshot = output
+                view = self.update_view(row)
+            self.events.publish("integration.updated", {"id": identifier})
+            if error:
+                raise error
+            return view
+
+    async def icon(self, identifier, app_id):
+        from mediahub.integrations.fjordhub import ProviderFailure
+        from mediahub.integrations.fjordhub_metadata import APP_ID, icon_path
+
+        if not APP_ID.fullmatch(app_id):
+            raise DomainError("not_found", "Ikon ikke fundet", 404)
+        with self.sessions() as db:
+            row = db.get(ExternalIntegration, identifier)
+            if row is None or not row.enabled or not row.secret_reference:
+                raise DomainError("not_found", "Ikon ikke fundet", 404)
+            path = (row.snapshot.get("app_info") or {}).get(app_id, {}).get("icon_path")
+            reference, origin, allow_http = row.secret_reference, row.base_url, row.allow_http
+        if not path:
+            raise DomainError("not_found", "Ikon ikke fundet", 404)
+        try:
+            client = self.provider_factory(
+                origin, self.store.get(reference).decode(), allow_http=allow_http
+            )
+            if icon_path(origin + path, client) != path:
+                raise ProviderFailure("invalid_response")
+            async with httpx.AsyncClient(
+                base_url=origin,
+                headers={"Authorization": "Bearer " + client._access_token},
+                timeout=5,
+                follow_redirects=False,
+                trust_env=False,
+                transport=client._transport,
+            ) as transport:
+                async with transport.stream("GET", path) as response:
+                    kind = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                    if response.status_code != 200 or kind not in {
+                        "image/png",
+                        "image/jpeg",
+                        "image/webp",
+                    }:
+                        raise ProviderFailure("invalid_response")
+                    data = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        data.extend(chunk)
+                        if len(data) > 2 * 1024 * 1024:
+                            raise ProviderFailure("invalid_response")
+                    signatures = {
+                        "image/png": data.startswith(b"\x89PNG\r\n\x1a\n"),
+                        "image/jpeg": data.startswith(b"\xff\xd8\xff"),
+                        "image/webp": data.startswith(b"RIFF") and data[8:12] == b"WEBP",
+                    }
+                    if not signatures[kind]:
+                        raise ProviderFailure("invalid_response")
+            with self.sessions() as db:
+                row = db.get(ExternalIntegration, identifier)
+                if row is None or not row.enabled or row.secret_reference != reference:
+                    raise ProviderFailure("invalid_response")
+            return bytes(data), kind
+        except (ProviderFailure, httpx.HTTPError, TimeoutError, DomainError, ValueError):
+            raise DomainError("not_found", "Ikon ikke tilgængeligt", 404) from None
 
     async def poster(self, identifier, movie_id):
         from mediahub.integrations.fjordflix import fetch_poster

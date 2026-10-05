@@ -19,6 +19,9 @@ class IntegrationSnapshot:
     failed_endpoint: str | None = None
     stale: bool = False
     fjordflix: dict | None = None
+    app_info: dict | None = None
+    app_info_stale: bool = False
+    updates: dict | None = None
 
 
 class IntegrationProvider(Protocol):

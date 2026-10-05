@@ -32,6 +32,16 @@ export function fjordHubAppLink(
       /* Invalid persisted metadata falls back to explicit API links. */
     }
   }
+  if (
+    typeof app.port === "number" &&
+    Number.isInteger(app.port) &&
+    app.port >= 1 &&
+    app.port <= 65535
+  ) {
+    const url = new URL(base.origin);
+    url.port = String(app.port);
+    return { href: url.href, management: false };
+  }
   for (const field of ["url", "local_url", "external_url"]) {
     const value = app[field];
     if (typeof value !== "string" || /[\s\\%]/.test(value)) continue;

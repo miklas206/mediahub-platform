@@ -113,6 +113,39 @@ async def poster(identifier: str, movie_id: str, request: Request, user=Depends(
     )
 
 
+@router.get("/{identifier}/updates")
+async def updates(identifier: str, request: Request, user=Depends(authenticated)):
+    return result(await services(request).integrations.updates(identifier))
+
+
+@router.post("/{identifier}/updates/{app_id}/{action}")
+async def update_action(
+    identifier: str, app_id: str, action: str, request: Request, user=Depends(authenticated)
+):
+    require_admin(user)
+    if action not in {"check", "start"}:
+        raise DomainError("invalid_action", "Ugyldig opdateringshandling", 422)
+    data = await services(request).integrations.updates(identifier, app_id, action)
+    from fastapi.responses import JSONResponse
+
+    accepted = data["updates"].get(app_id, {}).get("accepted") is True
+    return JSONResponse(result(data), status_code=202 if accepted else 200)
+
+
+@router.get("/{identifier}/apps/{app_id}/icon")
+async def app_icon(identifier: str, app_id: str, request: Request, user=Depends(authenticated)):
+    data, content_type = await services(request).integrations.icon(identifier, app_id)
+    return Response(
+        data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "same-origin",
+        },
+    )
+
+
 @router.put("/{identifier}/apps/{app_id}/launch-url")
 async def app_launch_url(
     identifier: str,
