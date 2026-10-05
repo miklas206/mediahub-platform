@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -296,18 +295,33 @@ def test_cleanup_requires_capable_agent_and_is_forwarded_to_new_downloads(client
     asyncio.run(run())
 
 
-def test_backdated_changed_id_and_unknown_dates_never_auto_download(client):
+@pytest.mark.parametrize(
+    "published",
+    [
+        "Sun, 22 Feb 2026 08:31:39 +0100",
+        "",
+        "2999-01-01T00:00:00Z",
+        "yesterday",
+        "2026-10-01T12:00:00",
+    ],
+)
+def test_discovery_not_publication_date_controls_all_automatic_feeds(client, published):
     async def run():
         service, agent = setup(client)
+        baseline = dict(entry("a"), published=published)
+        service.fetch.return_value = [baseline]
         identifier = (await service.create(body(), agent))["feeds"][0]["id"]
-        old = dict(entry("b"), published="Sun, 22 Feb 2026 08:31:39 +0100")
-        missing = dict(entry("c"), published="")
-        future = dict(entry("d"), published="2999-01-01T00:00:00Z")
-        valid = entry("e")
-        service.fetch.return_value = [old, missing, future, valid]
+        discovered = dict(entry("b"), published=published)
+        service.fetch.return_value = [discovered, baseline]
         await service.check(identifier, force=True)
         assert service.add_item.await_count == 1
-        assert service.add_item.call_args.args[2]["id"] == "e"
+        assert service.add_item.call_args.args[2]["id"] == "b"
+        # A tracker changing dates or temporarily rotating IDs out does not replay them.
+        service.fetch.return_value = []
+        await service.check(identifier, force=True)
+        service.fetch.return_value = [entry("b"), entry("a")]
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 1
 
     asyncio.run(run())
 
@@ -331,24 +345,70 @@ def test_legacy_feed_discards_old_pending_and_rebaselines(client):
     asyncio.run(run())
 
 
-def test_publication_timezone_and_invalid_dates():
-    from mediahub.seedbox_rss_feeds import published_after
-
-    assert published_after({"published": "2026-10-01T12:00:00Z"}, 1790855999, 1790856001)
-    assert not published_after({"published": "2026-10-01T12:00:00"}, 0, time.time())
-    assert not published_after({"published": "yesterday"}, 0, time.time())
-
-
-def test_saved_pending_is_rechecked_against_activation_time(client):
+def test_saved_pending_retries_after_restart_regardless_of_publication_date(client):
     async def run():
         service, agent = setup(client)
         identifier = (await service.create(body(), agent))["feeds"][0]["id"]
         feeds = service.load()
+        feeds[0]["seen"].append("b")
         feeds[0]["pending"] = [dict(entry("b"), published="2020-01-01T00:00:00Z")]
         service.save(feeds)
+        service.add_item.side_effect = ValueError("private")
+        await service.check(identifier, force=True)
+        assert service.load()[0]["pending"][0]["id"] == "b"
+        restarted = module.RSSFeeds(service.svc)
+        restarted.fetch = AsyncMock(return_value=[])
+        restarted.client = service.client
+        restarted.add_item = AsyncMock(return_value={"state": "added"})
+        await restarted.check(identifier, force=True)
+        assert restarted.add_item.call_args.args[2]["id"] == "b"
+        assert restarted.load()[0]["pending"] == []
+        assert restarted.load()[0]["automaticHistory"][0]["id"] == "b"
+        await restarted.check(identifier, force=True)
+        assert restarted.add_item.await_count == 1
+
+    asyncio.run(run())
+
+
+def test_previously_skipped_seen_ids_are_not_replayed(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0]["seen"].append("b")
+        service.save(feeds)
+        service.fetch.return_value = [dict(entry("b"), published="2020-01-01T00:00:00Z")]
         await service.check(identifier, force=True)
         service.add_item.assert_not_awaited()
         assert service.load()[0]["pending"] == []
+
+    asyncio.run(run())
+
+
+def test_discovered_queue_is_durable_and_bounded_to_twenty_per_poll(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        rows = [dict(entry(str(i)), published="") for i in range(25)]
+        service.fetch.return_value = rows
+
+        async def add(client, feed, row, start):
+            saved = service.load()[0]
+            assert row["id"] in saved["seen"]
+            assert row["id"] in {item["id"] for item in saved["pending"]}
+            return {"state": "added"}
+
+        service.add_item.side_effect = add
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 20
+        assert len(service.load()[0]["pending"]) == 5
+        service.fetch.return_value = []
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 25
+        assert service.load()[0]["pending"] == []
+        service.fetch.return_value = rows
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 25
 
     asyncio.run(run())
 

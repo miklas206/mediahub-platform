@@ -14,6 +14,15 @@ describe("account language", () => {
     expect(t("User.Show.S01E01.mkv")).toBe("User.Show.S01E01.mkv");
     expect(t("Loading torrents…")).toBe("Indlæser torrents…");
   });
+  it("explains global RSS discovery and no replay in both languages", () => {
+    const help =
+      "All automatic feeds download newly discovered entry IDs, regardless of publication date. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Previously seen IDs, including entries skipped by the old date rule, are not replayed; select them manually.";
+    expect(t(help)).toBe(help);
+    setLanguage("da");
+    expect(t(help)).toContain("Alle automatiske feeds");
+    expect(t(help)).toContain("uanset udgivelsesdato");
+    expect(t(help)).toContain("downloades ikke automatisk igen");
+  });
   it("switches back to English without retaining previous translations", () => {
     setLanguage("da");
     expect(t("Customize layout")).toBe("Tilpas layout");

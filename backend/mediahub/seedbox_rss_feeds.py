@@ -6,8 +6,6 @@ import json
 import logging
 import re
 import time
-from datetime import datetime
-from email.utils import parsedate_to_datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -40,21 +38,6 @@ def history_hash(value):
 
 class FeedSettings(StrictModel):
     intervalSeconds: int = Field(default=INTERVAL, ge=60, le=86400, strict=True)
-
-
-def published_after(row, cutoff, now):
-    """Undated, ambiguous and backdated entries require manual selection."""
-    raw = row.get("published", "")
-    try:
-        try:
-            date = parsedate_to_datetime(raw)
-        except (ValueError, TypeError, IndexError):
-            date = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if date.tzinfo is None:
-            return False
-        return cutoff < date.timestamp() <= now
-    except (ValueError, TypeError, OverflowError):
-        return False
 
 
 class FeedOptions(StrictModel):
@@ -322,13 +305,9 @@ class RSSFeeds:
                         # Establish a fresh baseline; never replay their old queue.
                         feed["automaticSince"] = now
                         feed["pending"] = []
-                    cutoff = feed["automaticSince"]
-                    feed["pending"] = [
-                        r for r in feed["pending"] if published_after(r, cutoff, now)
-                    ]
-                    feed["pending"].extend(
-                        r for r in reversed(new) if published_after(r, cutoff, now)
-                    )
+                    else:
+                        # Discovery identity, not publication time, determines new work.
+                        feed["pending"].extend(reversed(new))
                 feed["error"] = ""
                 feed["checkedAt"] = time.time()
                 self.save(feeds)  # Persist discovery before any external side effect.

@@ -153,7 +153,7 @@ export function SeedboxRSS(
       <Panel key="add-feed" title={t("Add feed")}>
         <div className="notice">
           {t(
-            "Only future entries download automatically. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Older entries and entries without a valid publication date require manual selection.",
+            "All automatic feeds download newly discovered entry IDs, regardless of publication date. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Previously seen IDs, including entries skipped by the old date rule, are not replayed; select them manually.",
           )}
         </div>
         <form

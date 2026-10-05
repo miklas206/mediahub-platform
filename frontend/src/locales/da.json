@@ -130,7 +130,7 @@
   "Not verified": "Ikke verificeret",
   "Once a day ? fewer interruptions": "Én gang dagligt – færre afbrydelser",
   "Only completed downloads are eligible. Time means accumulated seeding time. Ratio 2.0 means 200 MB uploaded for 100 MB of content. Checked every minute.": "Kun færdige downloads kan ryddes op. Tid er den samlede seedingtid. Ratio 2,0 betyder 200 MB uploadet for 100 MB indhold. Kontrolleres hvert minut.",
-  "Only future entries download automatically. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Older entries and entries without a valid publication date require manual selection.": "Kun fremtidigt indhold downloades automatisk. Eksisterende indhold registreres og springes over, når du tilføjer et feed eller aktiverer automatiske downloads. Ældre indhold og indhold uden en gyldig udgivelsesdato skal vælges manuelt.",
+  "All automatic feeds download newly discovered entry IDs, regardless of publication date. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Previously seen IDs, including entries skipped by the old date rule, are not replayed; select them manually.": "Alle automatiske feeds downloader nyopdagede indholds-ID'er uanset udgivelsesdato. Eksisterende indhold registreres og springes over, når du tilføjer et feed eller aktiverer automatiske downloads. Tidligere registrerede ID'er, herunder indhold sprunget over af den gamle datoregel, downloades ikke automatisk igen; vælg dem manuelt.",
   "Only when I select automatic manually": "Kun når jeg selv vælger automatisk",
   "Original layout": "Oprindeligt layout",
   "Pause": "Pause",

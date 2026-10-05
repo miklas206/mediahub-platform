@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Make every automatic RSS feed use newly discovered entry IDs regardless of publication date, including older torrents exposed by rotating feeds and undated/future-dated entries. Preserve creation/activation baselines, durable retries and the 20-item per-poll limit. Previously seen IDs, including entries skipped by the former date rule, are not automatically replayed; manual selection remains available.
+
 - Add an explicit `--refresh-helper` migration for the privileged host updater while preserving existing source trust or image-only update policy. Explain that updating Core alone does not enable host cleanup, and publish capabilities only after replacing the real helper.
 - Keep maintenance app-health counts consistent with the badge: unknown reports are not counted as healthy, and an empty installation list is explicitly unknown. Disable cleanup submission while its status is unavailable or still loading.
 

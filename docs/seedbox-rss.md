@@ -10,12 +10,14 @@ and skip existing entries**. Saving first reads the complete supported feed and
 persists all current entry IDs as a baseline. None of these entries are submitted
 automatically. If that first fetch fails, no feed is created and nothing starts.
 
-Automatic downloads also require a timezone-qualified publication date newer
-than the saved activation time and no later than the current check. Old entries
-are skipped even when their IDs change or the tracker later exposes older pages.
-Missing, invalid or timezone-less dates require manual selection. Existing feeds
-without a saved activation time establish a fresh baseline on their next check
-and discard their old pending queue, rather than replaying uncertain history.
+All automatic feeds use newly discovered entry IDs, not publication dates.
+Older torrents newly exposed by a rotating tracker feed are eligible, as are
+entries with missing, invalid, timezone-less or future publication dates. This
+behavior is global; there is no per-feed date-filter setting. Recorded IDs are
+never replayed, including entries previously skipped by the old publication-date
+rule; select those entries manually if wanted. Existing feeds without a saved
+activation time still establish a fresh baseline on their next check and discard
+their old pending queue, rather than replaying uncertain history.
 
 Core checks automatic feeds every five minutes, even with the browser closed.
 Newly discovered entries are persisted in a queue before being added through the
