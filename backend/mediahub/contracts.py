@@ -72,6 +72,7 @@ class PlatformSettings(StrictModel):
     dashboard_sections: list[
         Literal[
             "torrents",
+            "uploads",
             "system",
             "storage",
             "apps",
@@ -82,7 +83,7 @@ class PlatformSettings(StrictModel):
             "integrations",
             "cloudflare",
         ]
-    ] = ["storage", "torrents", "apps", "system"]
+    ] = ["storage", "torrents", "uploads", "apps", "system"]
 
     @field_validator("visible_navigation")
     @classmethod

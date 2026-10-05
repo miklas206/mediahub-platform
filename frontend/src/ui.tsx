@@ -19,6 +19,7 @@ import { useDashboardData } from "./dashboard-data";
 import { DashboardUpdates } from "./dashboard-updates";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
+import { DashboardUploads } from "./dashboard-uploads";
 import { appStatusLabel } from "./seedbox-status";
 import {
   seedboxSections,
@@ -189,6 +190,7 @@ const detailedNavigation: NavigationPath[] = navigation.map(([path]) => path);
 const simpleDashboard: DashboardSection[] = [
   "storage",
   "torrents",
+  "uploads",
   "apps",
   "system",
 ];
@@ -203,6 +205,7 @@ const detailedDashboard: DashboardSection[] = [
   "integrations",
   "cloudflare",
   "torrents",
+  "uploads",
 ];
 
 function Notice({
@@ -1204,6 +1207,10 @@ function Dashboard({
       content: <DashboardTorrents apps={apps} data={dashboardData} />,
     },
     {
+      id: "uploads",
+      content: <DashboardUploads apps={apps} data={dashboardData} />,
+    },
+    {
       id: "apps",
       content: (
         <Section
@@ -1310,6 +1317,7 @@ function Dashboard({
     "updates",
     "activity",
     "torrents",
+    "uploads",
     "storage",
     "network",
     "core",
@@ -2463,6 +2471,7 @@ const dashboardChoices: [DashboardSection, string, string][] = [
     "Ongoing torrents",
     "Torrent progress, transfer speeds and time remaining",
   ],
+  ["uploads", "Active uploads", "Torrents currently uploading to peers"],
   ["system", "System resources", "Live CPU, memory and network measurements"],
   ["storage", "Storage", "Your configured disks and available space"],
   ["apps", "Apps", "Status for Plex, Seedbox and other apps"],

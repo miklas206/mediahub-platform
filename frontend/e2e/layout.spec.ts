@@ -1935,3 +1935,118 @@ test("asynchronous FjordFlix cards retain geometry and picker identity through e
     for (let j = 0; j < 4; j++)
       expect(reentered[i][j]).toBeCloseTo(editing[i][j], 0);
 });
+
+test("Active uploads can be selected, persists across reload and remains readable on mobile", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  let torrentRequests = 0;
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/seedbox/torrents"))
+      torrentRequests++;
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Ongoing torrents", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  await page.getByText("Choose cards", { exact: true }).click();
+  const choice = page
+    .locator(".layout-card-picker")
+    .getByRole("checkbox", { name: "Active uploads", exact: true });
+  await expect(choice).not.toBeChecked();
+  await choice.check();
+  await page.getByText("Choose cards", { exact: true }).click();
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  const card = page.locator(".dashboard-uploads");
+  await expect(card.getByText("2 uploading", { exact: true })).toBeVisible();
+  await expect(card.getByText("550 B/s", { exact: true })).toBeVisible();
+  await expect(card.locator(".dashboard-torrent > strong").first()).toHaveText(
+    "Completed torrent",
+  );
+  await expect(
+    card.getByRole("link", { name: "View torrents" }),
+  ).toHaveAttribute("href", "/apps/seedbox?section=torrents");
+  expect(torrentRequests).toBe(1);
+  const desktop = await card.boundingBox();
+  await page.reload();
+  await expect(card.getByText("2 uploading", { exact: true })).toBeVisible();
+  expect((await card.boundingBox())!.width).toBeCloseTo(desktop!.width, 0);
+  await page.getByRole("button", { name: "Customize layout" }).click();
+  expect((await card.boundingBox())!.width).toBeCloseTo(desktop!.width, 0);
+  await page.getByText("Choose cards", { exact: true }).click();
+  await page
+    .locator(".layout-card-picker")
+    .getByRole("checkbox", { name: "Active uploads", exact: true })
+    .uncheck();
+  await expect(card).toHaveCount(0);
+  await page
+    .locator(".layout-card-picker")
+    .getByRole("checkbox", { name: "Active uploads", exact: true })
+    .check();
+  await page.getByText("Choose cards", { exact: true }).click();
+  await page.getByRole("button", { name: "Done arranging" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(card.getByText("2 uploading", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    await card.evaluate((node) => node.scrollWidth <= node.clientWidth),
+  ).toBe(true);
+  await page.screenshot({
+    path: "../.qa/active-uploads-mobile.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({
+    path: "../.qa/active-uploads-desktop.png",
+    fullPage: true,
+  });
+  expect(errors).toEqual([]);
+});
+
+for (const state of ["empty", "missing", "failed"] as const) {
+  test(`Active uploads distinguishes ${state} snapshots from false zero`, async ({
+    page,
+  }) => {
+    await page.route("**/api/**/seedbox/torrents", async (route) => {
+      await route.fulfill(
+        state === "failed"
+          ? { status: 503, json: { error: { message: "Unavailable" } } }
+          : { json: { data: state === "empty" ? { items: [] } : {} } },
+      );
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Customize layout" }).click();
+    await page.getByText("Choose cards", { exact: true }).click();
+    await page
+      .locator(".layout-card-picker")
+      .getByRole("checkbox", { name: "Active uploads", exact: true })
+      .check();
+    await page.getByText("Choose cards", { exact: true }).click();
+    await page.getByRole("button", { name: "Done arranging" }).click();
+    const card = page.locator(".dashboard-uploads");
+    await expect(
+      card.getByText(state === "empty" ? "0 uploading" : "\u2014 uploading", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      card.getByText(
+        state === "empty"
+          ? "No active uploads."
+          : state === "missing"
+            ? "Loading torrents\u2026"
+            : "Torrent information is unavailable.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    if (state !== "empty")
+      await expect(card.getByText("No active uploads.")).toHaveCount(0);
+  });
+}

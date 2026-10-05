@@ -102,6 +102,7 @@ export type NavigationPath =
   | "/settings";
 export type DashboardSection =
   | "torrents"
+  | "uploads"
   | "system"
   | "storage"
   | "apps"

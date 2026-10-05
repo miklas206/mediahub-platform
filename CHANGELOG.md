@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a configurable Active uploads dashboard card for torrents currently sending data to peers, with count, combined upload speed and the five busiest torrents. Reuse the shared dashboard snapshot, exclude stopped/paused and zero-speed seeds, distinguish unavailable data from zero activity, and retain existing saved layout preferences. Available in Choose cards and Settings; new dashboard defaults place it next to ongoing torrents.
+
 - Keep dashboard card geometry identical when entering and leaving layout editing: original and saved layouts now use the same engine in both modes. Draw both ends of the actual CSS tracks (including gaps) in the edit grid, and keep Choose cards registration/order stable while visibility or asynchronous content changes.
 
 - Add authenticated per-integration FjordHub home pages with internal sidebar navigation, an explicit external Open FjordHub action, Docker/app/FjordFlix overview and administrator-only local app launch URL settings. Persist same-host, explicit-port overrides with session/CSRF checks and consistent sidebar/card/dashboard links; clearing restores API/management fallback, and removal cleans up scoped settings. Bundle verified MIT Fjord3D artwork with its copyright/license; use clearly documented ordinary interface-icon fallbacks where official artwork has no verified redistribution license, rather than copying screenshots or inventing replacement logos.

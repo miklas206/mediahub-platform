@@ -1,4 +1,9 @@
 {
+  "Active uploads": "Aktive uploads",
+  "Torrents currently uploading to peers": "Torrents, der uploader til andre brugere lige nu",
+  "{count} uploading": "{count} uploader",
+  "No active uploads.": "Ingen aktive uploads.",
+  "Install Seedbox to see active uploads here.": "Installer Seedbox for at se aktive uploads her.",
   "MediaHub checks the LinuxServer publisher image digest, not Plex's in-server updater. An image release may leave the Plex server version unchanged. A configuration rollback snapshot is created before replacing the runtime. Media files stay separate.": "MediaHub kontrollerer LinuxServer-udgiverens image-digest, ikke Plex-serverens interne opdateringsfunktion. En image-udgivelse kan lade Plex-serverversionen være uændret. Der oprettes et snapshot til gendannelse af konfigurationen, før driftsmiljøet udskiftes. Mediefiler holdes adskilt.",
   "Update check deferred": "Opdateringskontrol udskudt",
   "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected.": "Nogle opdateringskontroller er udskudt af GitHubs forespørgselsgrænse; tunnelen fungerer uændret.",
