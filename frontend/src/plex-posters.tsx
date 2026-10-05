@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Film } from "lucide-react";
-import { api } from "./api";
+import { useServiceSnapshot } from "./use-service-snapshot";
 import { t } from "./i18n";
 
 type Media = {
@@ -43,8 +43,12 @@ function Poster({ item, appId }: { item: Media; appId: string }) {
 }
 
 export function PlexPosters({ appId }: { appId: string }) {
-  const [data, setData] = useState<RecentMedia>();
-  const [failed, setFailed] = useState(false);
+  const { data, error, stale, refreshing } = useServiceSnapshot<RecentMedia>(
+    "recent",
+    appId,
+    60000,
+  );
+  const failed = !!error;
   const [overflow, setOverflow] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
   const items = data?.items || [];
@@ -58,34 +62,17 @@ export function PlexPosters({ appId }: { appId: string }) {
     update();
     return () => observer.disconnect();
   }, [items.length]);
-  useEffect(() => {
-    const controller = new AbortController();
-    async function refresh() {
-      if (document.hidden) return;
-      try {
-        const result = await api<RecentMedia>(
-          `/apps/${encodeURIComponent(appId)}/plex/recent-media`,
-          "GET",
-          undefined,
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setData(result);
-          setFailed(false);
-        }
-      } catch {
-        if (!controller.signal.aborted) setFailed(true);
-      }
-    }
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 60000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [appId]);
   return (
     <div className="plex-recent-media">
+      {data && stale && (
+        <small className="plex-posters-observation" role="status">
+          {t(
+            refreshing
+              ? "Stale observation - refreshing"
+              : "Stale observation - temporarily unavailable",
+          )}
+        </small>
+      )}
       {items.length ? (
         <>
           <div

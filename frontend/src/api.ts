@@ -1,5 +1,8 @@
+import { serviceSnapshots } from "./service-snapshots";
+
 let csrf = "";
 export const setCsrf = (value: string) => {
+  serviceSnapshots.clear();
   csrf = value;
 };
 
@@ -71,13 +74,16 @@ export async function api<T>(
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const payload = await readApiPayload(response);
+  signal?.throwIfAborted();
   if (!response.ok) {
     if (
       response.status === 401 &&
       path !== "/auth/login" &&
       payload.error?.code === "unauthorized"
-    )
+    ) {
+      serviceSnapshots.clear();
       window.dispatchEvent(new Event("session-expired"));
+    }
     throw new Error(
       payload.error?.message || "MediaHub is temporarily unavailable",
     );

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Publish each dashboard runtime observation independently so a slow Seedbox cannot delay Plex or Cloudflare. Retain last-good runtime data and Plex covers across navigation within the current signed-in session; label aged/failed observations stale rather than healthy. Share non-overlapping 10-second runtime and 60-second cover polling, pause hidden-page requests, abort abandoned work and clear private cached data on authentication transitions and app deletion. Existing settings, dashboard layout and FjordFlix polling remain unchanged.
+
 - Expand the existing FjordHub integration with keyed app-info/permissions, validated installed LAN ports, revision-refreshed protected icon proxying and explicit administrator/CSRF update controls for FjordHub and child apps. Poll statuses sequentially every 45 seconds (5 while running), retain stale in-progress state through restart/timeouts, treat HTTP 202 only as acceptance, and never add remote updates to the automatic global queue. Preserve older resource responses and local launch overrides; use safe icon fallbacks for non-origin artwork.
 
 - Add a configurable Active uploads dashboard card for torrents currently sending data to peers, with count, combined upload speed and the five busiest torrents. Reuse the shared dashboard snapshot, exclude stopped/paused and zero-speed seeds, distinguish unavailable data from zero activity, and retain existing saved layout preferences. Available in Choose cards and Settings; new dashboard defaults place it next to ongoing torrents.

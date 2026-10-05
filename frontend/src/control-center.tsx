@@ -1,4 +1,10 @@
-import { useEffect, useId, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -22,6 +28,8 @@ import { FjordFlixDashboardCard } from "./fjordflix-dashboard";
 import { ongoingTorrents } from "./dashboard-torrents";
 import { mediaCapacity, type DashboardData } from "./dashboard-data";
 import { api } from "./api";
+import { serviceSnapshots } from "./service-snapshots";
+import type { RuntimeSnapshot } from "./use-service-snapshot";
 import { bytes, uptime } from "./format";
 import { getLocale, t } from "./i18n";
 import { LayoutGroup } from "./page-layout";
@@ -31,11 +39,11 @@ import type { AppInfo, Health, Metrics } from "./contracts";
 import type { Runtime } from "./runtime";
 import "./control-center.css";
 
-type Report = { report?: Runtime; failed: boolean };
+type Report = { report?: Runtime; failed: boolean; stale?: boolean };
 export type Reports = Record<string, Report>;
 
 export function useServiceReports(apps?: AppInfo[]) {
-  const [reports, setReports] = useState<Reports>({});
+  useSyncExternalStore(serviceSnapshots.subscribe, serviceSnapshots.getVersion);
   const ids = (apps || [])
     .filter(
       (a) =>
@@ -46,47 +54,42 @@ export function useServiceReports(apps?: AppInfo[]) {
     .sort()
     .join(",");
   useEffect(() => {
-    if (!ids) return;
-    const controller = new AbortController();
-    let loading = false;
-    async function refresh() {
-      if (loading || document.hidden) return;
-      loading = true;
-      const entries = await Promise.all(
-        ids.split(",").map(async (id) => {
-          try {
-            const data = await api<{ report: Runtime }>(
+    const releases = ids
+      ? ids.split(",").map((id) =>
+          serviceSnapshots.acquire(`runtime:${id}`, 10000, async (signal) => {
+            const data = await api<RuntimeSnapshot>(
               `/apps/${encodeURIComponent(id)}/runtime`,
               "GET",
               undefined,
-              controller.signal,
+              signal,
             );
-            return [id, { report: data.report, failed: !data.report }] as const;
-          } catch {
-            return [id, { failed: true }] as const;
-          }
-        }),
-      );
-      if (!controller.signal.aborted) setReports(Object.fromEntries(entries));
-      loading = false;
-    }
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 10000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
+            if (!data.report)
+              throw new Error("Service temporarily unavailable");
+            return data;
+          }),
+        )
+      : [];
+    return () => releases.forEach((release) => release());
   }, [ids]);
-  return reports;
+  return Object.fromEntries(
+    (ids ? ids.split(",") : []).map((id) => {
+      const snapshot = serviceSnapshots.get<RuntimeSnapshot>(`runtime:${id}`);
+      return [
+        id,
+        {
+          report: snapshot.data?.report,
+          failed: !!snapshot.error,
+          stale:
+            snapshot.stale ||
+            Date.now() - (snapshot.updatedAt ?? -Infinity) >= 10000,
+        },
+      ];
+    }),
+  ) as Reports;
 }
-
 function currentReport(entry?: Report) {
   const report = entry?.report;
-  return !entry?.failed &&
-    report?.available &&
-    (report.cloudflare || report.agentOnline)
+  return report?.available && (report.cloudflare || report.agentOnline)
     ? report
     : undefined;
 }
@@ -97,7 +100,7 @@ export function effectiveServiceStatus(
   live: boolean,
   failed = false,
 ): Health["status"] {
-  if (!live || failed || entry?.failed) return "unknown";
+  if (!live || failed || entry?.failed || entry?.stale) return "unknown";
   if (!entry) return app.health.status;
   const report = currentReport(entry);
   if (!report) return "unknown";
@@ -282,9 +285,20 @@ export function ControlStatus({
   );
 }
 
+function staleServiceLabel(entry?: Report) {
+  return entry?.report && entry.stale ? "Stale" : undefined;
+}
+
 function StatusBadge({ status, label }: { status: string; label?: string }) {
   return (
-    <span className={`badge ${status}`}>
+    <span
+      className={`badge ${status}`}
+      title={
+        label === "Stale"
+          ? t("Last-good observation; waiting for a fresh update.")
+          : undefined
+      }
+    >
       <span aria-hidden="true" />
       {t(label || appStatusLabel(status))}
     </span>
@@ -315,7 +329,12 @@ export function ServiceOverview({
   const report =
     live && !failed && seedbox ? currentReport(reports[seedbox.id]) : undefined;
   const vpn = report?.vpn;
-  const vpnStatus = !vpn ? "unknown" : vpn.verified ? "healthy" : "unhealthy";
+  const vpnStatus =
+    !vpn || (seedbox && reports[seedbox.id]?.stale)
+      ? "unknown"
+      : vpn.verified
+        ? "healthy"
+        : "unhealthy";
   const country = vpn?.verified
     ? dashboard.country || vpn.countryCode || ""
     : "";
@@ -351,6 +370,7 @@ export function ServiceOverview({
               <ServiceIcon packageId={plex.packageId} size={32} />
               <h3>Plex</h3>
               <StatusBadge
+                label={staleServiceLabel(reports[plex.id])}
                 status={effectiveServiceStatus(
                   plex,
                   reports[plex.id],
@@ -391,10 +411,11 @@ export function ServiceOverview({
               <StatusBadge
                 status={downloadStatus}
                 label={
-                  downloadStatus === "healthy" &&
+                  staleServiceLabel(reports[seedbox.id]) ||
+                  (downloadStatus === "healthy" &&
                   (report?.qBittorrent?.downloading || 0) > 0
                     ? "Downloading"
-                    : undefined
+                    : undefined)
                 }
               />
             </div>
@@ -478,11 +499,12 @@ export function ServiceOverview({
               <StatusBadge
                 status={vpnStatus}
                 label={
-                  vpnStatus === "healthy"
+                  staleServiceLabel(reports[seedbox.id]) ||
+                  (vpnStatus === "healthy"
                     ? "Connected"
                     : vpnStatus === "unknown"
                       ? "Unknown"
-                      : "Not verified"
+                      : "Not verified")
                 }
               />
             </div>
@@ -589,6 +611,7 @@ export function ServiceOverview({
               <ServiceIcon packageId={app.packageId} size={18} />
               <span>{app.name}</span>
               <StatusBadge
+                label={staleServiceLabel(reports[app.id])}
                 status={effectiveServiceStatus(
                   app,
                   reports[app.id],

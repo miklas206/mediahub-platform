@@ -1,5 +1,22 @@
 # Application runtime and future apps
 
+## Browser observations
+
+Dashboard runtime results are published per app as soon as they arrive, independently
+of slower services. Runtime pages share those observations instead of starting a second
+poller. Runtime snapshots poll every 10 seconds; Plex recently-added covers poll every
+60 seconds. Each endpoint allows one in-flight request; hidden pages do not start new
+requests and visibility return refreshes expired observations immediately.
+
+Last-good data is retained in browser memory across navigation in the same signed-in
+session. Fresh data is shown immediately without a duplicate navigation fetch. Expired
+or failed observations remain visible with a stale notice, and their overall health is
+unknown until a successful refresh. These observations are not persisted in browser
+storage. Authentication transitions clear data and abort outstanding requests; app
+removal prunes its observations. Inactive retained snapshots are limited to 64 entries;
+currently mounted consumers keep their own observations until they unmount.
+
+
 Docker is the primary manifest runtime; metadata does not assume a VM or LXC.
 The Core app manager selects a registered host, checks Docker/capability readiness
 and resolves storage slots through that host's logical mappings. Plans are preview

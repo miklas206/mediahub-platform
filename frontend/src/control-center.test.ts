@@ -52,6 +52,9 @@ describe("control center service status", () => {
     expect(effectiveServiceStatus(app, undefined, true)).toBe("healthy");
   });
   it("never presents failed, disconnected or unavailable observations as healthy", () => {
+    expect(
+      effectiveServiceStatus(app, { failed: false, stale: true, report }, true),
+    ).toBe("unknown");
     expect(effectiveServiceStatus(app, { failed: true, report }, true)).toBe(
       "unknown",
     );

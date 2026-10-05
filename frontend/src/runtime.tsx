@@ -1,4 +1,5 @@
 import { translateText, getLocale, t } from "./i18n";
+import { useRuntimeSnapshot } from "./use-service-snapshot";
 
 import { LayoutGroup } from "./page-layout";
 import { runtimeIssues } from "./runtime-issues";
@@ -961,15 +962,9 @@ export function AppRuntimePage() {
   const { appId } = useParams();
   const [searchParams] = useSearchParams();
   const section = seedboxSection(searchParams.get("section"));
-  const { data, error, reload } = useLoad<{
-    view: string;
-    report: Runtime;
-    operatorUrl?: string;
-  }>(`/apps/${appId}/runtime`);
-  useEffect(() => {
-    const timer = setInterval(reload, 10000);
-    return () => clearInterval(timer);
-  }, [reload]);
+  const { data, error, reload, stale, refreshing } = useRuntimeSnapshot(
+    appId || "",
+  );
   const View = data && views[data.view];
   const [busy, setBusy] = useState(false),
     [actionError, setActionError] = useState("");
@@ -1259,6 +1254,15 @@ export function AppRuntimePage() {
         )}
       </div>
       <ErrorBox error={error} />
+      {data && stale && (
+        <p role="status">
+          {t(
+            refreshing
+              ? "Stale observation - refreshing"
+              : "Stale observation - temporarily unavailable",
+          )}
+        </p>
+      )}
       {data?.view === "seedbox" && (
         <nav className="seedbox-sections" aria-label={t("Seedbox sections")}>
           {seedboxSections.map(([key, label]) => (
@@ -1284,13 +1288,8 @@ export function AppRuntimePage() {
           extraCards={extraCards}
           section={section}
           report={
-            error
-              ? {
-                  health: "offline",
-                  available: false,
-                  agentOnline: false,
-                  cached: false,
-                }
+            stale
+              ? { ...data.report, health: "unknown", cached: true }
               : data.report
           }
         />
@@ -1299,13 +1298,8 @@ export function AppRuntimePage() {
           extraCards={extraCards}
           appId={appId}
           report={
-            error
-              ? {
-                  health: "offline",
-                  available: false,
-                  agentOnline: false,
-                  cached: false,
-                }
+            stale
+              ? { ...data.report, health: "unknown", cached: true }
               : data.report
           }
         />

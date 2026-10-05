@@ -1,4 +1,8 @@
 {
+  "Stale": "Forældet",
+  "Last-good observation; waiting for a fresh update.": "Seneste gyldige observation; venter på en ny opdatering.",
+  "Stale observation - refreshing": "Forældet observation - opdaterer",
+  "Stale observation - temporarily unavailable": "Forældet observation - midlertidigt utilgængelig",
   "Active uploads": "Aktive uploads",
   "Torrents currently uploading to peers": "Torrents, der uploader til andre brugere lige nu",
   "{count} uploading": "{count} uploader",

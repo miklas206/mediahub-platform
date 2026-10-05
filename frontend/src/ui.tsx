@@ -1,3 +1,4 @@
+import { serviceSnapshots } from "./service-snapshots";
 import { fjordHubLink } from "./fjordhub-token-guide";
 import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
@@ -350,6 +351,7 @@ export function Application() {
     );
   return (
     <Shell
+      key={user.id}
       user={user}
       onLogout={async () => {
         await api("/auth/logout", "POST");
@@ -512,6 +514,11 @@ function Shell({
     count: number;
   }>("/updates/summary");
   const location = useLocation();
+  useEffect(() => {
+    if (navigationApps && !navigationAppsError)
+      serviceSnapshots.prune(navigationApps.map((app) => app.id));
+  }, [navigationApps, navigationAppsError]);
+  useEffect(() => () => serviceSnapshots.clear(), []);
   useEffect(() => {
     setOpen(false);
   }, [location]);
