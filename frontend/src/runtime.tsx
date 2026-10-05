@@ -18,6 +18,7 @@ import { bytes, uptime } from "./format";
 import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
 import { SeedboxRSSSettings } from "./seedbox-rss-settings";
+import { SeedboxWebUI } from "./seedbox-webui";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
@@ -1104,6 +1105,9 @@ export function AppRuntimePage() {
           </p>
         </Panel>
       )}
+      {data?.view === "seedbox" && section === "settings" && (
+        <SeedboxWebUI operatorUrl={data.operatorUrl} />
+      )}
       {data &&
         data.view !== "cloudflare" &&
         (data.view !== "seedbox" || section === "settings") && (
@@ -1194,19 +1198,6 @@ export function AppRuntimePage() {
             <button onClick={() => setShowLogs(!showLogs)}>
               {showLogs ? t("Hide logs") : t("View logs")}
             </button>
-            {operatorUrl && data.view !== "plex" && (
-              <p>
-                <a href={operatorUrl} rel="noreferrer">
-                  {data.view === "plex"
-                    ? t("Open Plex")
-                    : t("Open qBittorrent")}
-                </a>
-                {data.view === "seedbox" &&
-                  t(
-                    " · Requires the SSH tunnel on this Windows PC. Existing qBittorrent login remains enabled.",
-                  )}
-              </p>
-            )}
             {showLogs && data.view === "plex" && appId && (
               <RemoteRuntimeLogs appId={appId} />
             )}

@@ -60,11 +60,67 @@ seeds/peers, seeding time and category where returned by qBittorrent.
 Remove job always sends `deleteFiles=false`; there is no file-deletion control.
 An explicit browser confirmation states that downloaded files are retained.
 
-Advanced WebUI is a configurable localhost-only SSH-tunnel URL. It works only on
-the client running an authorized tunnel; it is not a LAN/public service. Existing
-qBittorrent authentication remains enabled. A reboot can end the tunnel; it must
-then be restarted using an authorized SSH account. Normal torrent management
-does not depend on this tunnel.
-No new firewall rule, reverse proxy, public endpoint or Cloudflare setup is used.
+## Advanced qBittorrent WebUI access
+
+Seedbox **Settings → qBittorrent WebUI** always shows the access control. It is
+disabled until Core has an explicit `MEDIAHUB_OPERATOR_APP_URLS` entry for
+`seedbox`. A configured link is **not** evidence of a working connection. There
+is no general child-app/browser proxy through Core or the paired Agent; the
+Agent's HTTPS port (18767) is not qBittorrent's WebUI port.
+
+The reviewed installer publishes the WebUI **only on the Seedbox host's
+127.0.0.1 address**, on `webPort` from the approved installation (default 18080).
+Do not assume a LAN port such as 8080 is published. Preserve qBittorrent login,
+localhost authentication, CSRF protection and host-header validation, as well
+as VPN fail-closed checks.
+
+### Opt-in SSH tunnel (recommended)
+
+1. Check the approved Seedbox installation's `webPort` and the existing runtime
+   port mapping on that host. An adopted runtime may differ; a configuration
+   default is not proof that its listener exists. If it is not loopback-bound,
+   stop and review its setup rather than opening a firewall or disabling checks.
+2. On the **client where the browser runs**, use an already authorized SSH
+   account on the **Seedbox Docker host**, not the Core host or Agent container.
+   Windows OpenSSH example, **only if the reviewed host WebUI port is 18080**:
+
+   ```powershell
+   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18081:127.0.0.1:18080 SSH_USER@SEEDBOX_HOST
+   ```
+
+   Replace `SSH_USER` and `SEEDBOX_HOST` with the authorized account and host.
+   Replace the final `18080` with the actual reviewed WebUI port. The first
+   `18081` is an unused client-only port. Keep SSH running; no new host listener,
+   firewall change or VPN egress exception is required. Verify the SSH host key
+   normally; do not disable host-key checks.
+3. Open `http://127.0.0.1:18081/` on that same client and verify the existing
+   qBittorrent login. Authentication remains separate from MediaHub; credentials
+   must not be embedded in the URL. If connection/login fails, inspect the
+   authorized tunnel and the existing runtime; the button cannot repair either.
+4. Configure **Core's environment** (not the Agent's) with:
+
+   ```dotenv
+   MEDIAHUB_OPERATOR_APP_URLS={"seedbox":"http://127.0.0.1:18081/"}
+   ```
+
+   The repository `compose.production.yaml` forwards this variable from its
+   Compose environment. Native Core reads it from its process environment or
+   `.env`. For an `install.sh` installation using generated `compose.json`,
+   add the entry explicitly to `services.core.environment` in the operator's
+   maintained Compose configuration; a project `.env` alone does not pass new
+   variables into an existing container. Merge other app entries if present.
+   Applying the changed Core environment is a separate, explicit operator
+   action; updating source does not enable it or restart services automatically.
+5. After the operator applies that configuration, the Settings button opens
+   the configured WebUI in a new tab. Its localhost URL refers to the browser
+   device, not Core or the remote server. A phone or another PC needs its own
+   authorized tunnel; it does not inherit this Windows client's connection.
+   Restart the tunnel after a client reboot or SSH disconnect.
+
+An already operator-managed authenticated HTTPS endpoint may be configured
+instead; MediaHub does not create or test one, forward WebUI sessions, or relax
+its TLS/authentication/CSRF safeguards. Do not publish the WebUI unauthenticated
+or expose its port to the Internet. Normal MediaHub torrent management continues
+to use the authenticated Agent API and does not depend on the WebUI tunnel.
 
 Reference: [qBittorrent WebUI API v5](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-5.0)).

@@ -1,4 +1,10 @@
 {
+  "qBittorrent WebUI": "qBittorrent WebUI",
+  "Open qBittorrent WebUI": "Åbn qBittorrent WebUI",
+  "Advanced qBittorrent settings use a separate WebUI login. MediaHub does not expose the WebUI or create a connection automatically.": "Avancerede qBittorrent-indstillinger bruger et separat WebUI-login. MediaHub eksponerer ikke WebUI eller opretter automatisk en forbindelse.",
+  "A link is configured, not connection-tested. For localhost access, first start your authorized SSH tunnel on this device and keep it running.": "Et link er konfigureret, men forbindelsen er ikke testet. Ved localhost-adgang skal du først starte din autoriserede SSH-tunnel på denne enhed og holde den kørende.",
+  "WebUI access is not configured. An operator must set MEDIAHUB_OPERATOR_APP_URLS with a seedbox URL after setting up an authorized SSH tunnel or an existing authenticated HTTPS endpoint.": "WebUI-adgang er ikke konfigureret. En operatør skal sætte MEDIAHUB_OPERATOR_APP_URLS med en seedbox-URL efter opsætning af en autoriseret SSH-tunnel eller et eksisterende autentificeret HTTPS-endpoint.",
+  "The reviewed installation binds the WebUI only to the Seedbox host's loopback address. Use its reviewed WebUI port, not the Agent port. Never disable qBittorrent authentication, CSRF protection or host validation.": "Den gennemgåede installation binder kun WebUI til Seedbox-værtens loopback-adresse. Brug den gennemgåede WebUI-port, ikke Agent-porten. Deaktivér aldrig qBittorrent-login, CSRF-beskyttelse eller værtsvalidering.",
   "A timeline of changes": "En tidslinje over ændringer",
   "Live CPU, memory and network measurements": "Live-målinger af CPU, hukommelse og netværk",
   "Installed services": "Installerede services",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a dedicated qBittorrent WebUI control under Seedbox Settings, including an explicit unconfigured state and Danish access guidance. Document opt-in authorized client SSH tunneling to the reviewed loopback WebUI port and Core operator-link configuration; preserve qBittorrent login, CSRF/host validation and VPN fail-closed behavior. No endpoint is exposed or live deployment performed.
+
 - Make every automatic RSS feed use newly discovered entry IDs regardless of publication date, including older torrents exposed by rotating feeds and undated/future-dated entries. Preserve creation/activation baselines, durable retries and the 20-item per-poll limit. Previously seen IDs, including entries skipped by the former date rule, are not automatically replayed; manual selection remains available.
 
 - Add an explicit `--refresh-helper` migration for the privileged host updater while preserving existing source trust or image-only update policy. Explain that updating Core alone does not enable host cleanup, and publish capabilities only after replacing the real helper.
