@@ -43,6 +43,7 @@ export type Integration = {
   allowHttp: boolean;
   tokenConfigured: boolean;
   enabled: boolean;
+  managedByEnvironment?: boolean;
   snapshot: Snapshot;
   lastSuccessfulSync: string | null;
   nextSync: number;
@@ -332,6 +333,35 @@ export function IntegrationsPage({
     [failure, setFailure] = useState(""),
     [test, setTest] = useState<Snapshot | null>(null),
     [notice, setNotice] = useState("");
+  const [removing, setRemoving] = useState<Integration | null>(null);
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const removalDialog = useRef<HTMLDialogElement>(null);
+  const visibleItems = items.filter((row) => !removedIds.includes(row.id));
+  useEffect(() => {
+    const dialog = removalDialog.current;
+    if (removing && dialog && !dialog.open) dialog.showModal();
+    if (!removing && dialog?.open) dialog.close();
+  }, [removing]);
+  async function removeIntegration() {
+    if (!removing || busy) return;
+    setBusy(true);
+    setFailure("");
+    setNotice("");
+    try {
+      await api(`/integrations/${encodeURIComponent(removing.id)}`, "DELETE");
+      setRemovedIds((previous) => [...previous, removing.id]);
+      setRemoving(null);
+      setNotice(
+        "Integration permanently removed from MediaHub. FjordHub and its apps are unchanged.",
+      );
+      await reload();
+      window.dispatchEvent(new Event("integrations-changed"));
+    } catch (e) {
+      setFailure((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     onUrlChange?.(baseUrl);
   }, [baseUrl, onUrlChange]);
@@ -531,7 +561,7 @@ export function IntegrationsPage({
         </form>
       </Panel>
       {loading && <p role="status">{t("Loading configured integrations…")}</p>}
-      {!loading && !items.length && (
+      {!loading && !visibleItems.length && (
         <Panel title={t("No integrations yet")}>
           <p>
             {t(
@@ -540,7 +570,53 @@ export function IntegrationsPage({
           </p>
         </Panel>
       )}
-      {items.map((row) => (
+      <dialog
+        ref={removalDialog}
+        className="integration-removal-dialog"
+        aria-labelledby="integration-removal-title"
+        aria-describedby="integration-removal-description"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+          else setRemoving(null);
+        }}
+        onClose={() => setRemoving(null)}
+      >
+        <div className="stack">
+          <h2 id="integration-removal-title">
+            {t("Permanently remove integration?")}
+          </h2>
+          <p>
+            <strong>{removing?.name}</strong>
+            <br />
+            {removing?.baseUrl}
+          </p>
+          <p id="integration-removal-description">
+            {t(
+              "Only this MediaHub integration, its stored token and cached resources, appdata and gallery are removed. FjordHub, its apps and remote files are not uninstalled or changed. You can connect it again manually later.",
+            )}
+          </p>
+          <ErrorBox error={failure} />
+          <div className="button-row">
+            <button
+              type="button"
+              autoFocus
+              disabled={busy}
+              onClick={() => setRemoving(null)}
+            >
+              {t("Cancel")}
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={busy}
+              onClick={() => void removeIntegration()}
+            >
+              {busy ? t("Working…") : t("Permanently remove integration")}
+            </button>
+          </div>
+        </div>
+      </dialog>
+      {visibleItems.map((row) => (
         <Panel key={row.id} title={row.name}>
           <div className="stack integration-details">
             <div>
@@ -603,7 +679,31 @@ export function IntegrationsPage({
               >
                 {t("Disconnect")}
               </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={busy || row.enabled || row.managedByEnvironment}
+                onClick={() => {
+                  setFailure("");
+                  setRemoving(row);
+                }}
+              >
+                {t("Permanently remove integration")}
+              </button>
             </div>
+            <small className="muted">
+              {row.managedByEnvironment
+                ? t(
+                    "Configured by the server environment. Remove FJORDHUB_BASE_URL and FJORDHUB_ACCESS_TOKEN (including MEDIAHUB_ aliases) and restart MediaHub before removing this entry.",
+                  )
+                : row.enabled
+                  ? t(
+                      "Disconnect first to permanently remove this entry from MediaHub. FjordHub and its apps will not be changed.",
+                    )
+                  : t(
+                      "Disconnect keeps this entry. Permanent removal only clears its local MediaHub data.",
+                    )}
+            </small>
             <small className="muted">
               {row.enabled &&
               row.snapshot.capabilities?.includes("docker.resources.read")

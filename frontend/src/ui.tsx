@@ -549,6 +549,7 @@ function Shell({
       "integration.updated",
       "integration.configured",
       "integration.disconnected",
+      "integration.removed",
     ]) {
       source.addEventListener(event, () =>
         window.dispatchEvent(new Event("integrations-changed")),

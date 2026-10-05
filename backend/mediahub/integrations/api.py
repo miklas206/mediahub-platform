@@ -115,6 +115,12 @@ async def refresh(identifier: str, request: Request, user=Depends(authenticated)
     return result(await services(request).integrations.refresh(identifier))
 
 
+@router.delete("/{identifier}")
+async def remove(identifier: str, request: Request, user=Depends(authenticated)):
+    require_admin(user)
+    return result(services(request).integrations.remove(identifier))
+
+
 @router.post("/{identifier}/disconnect")
 async def disconnect(identifier: str, request: Request, user=Depends(authenticated)):
     require_admin(user)

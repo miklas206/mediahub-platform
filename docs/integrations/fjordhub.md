@@ -14,6 +14,14 @@ Posters use only authenticated local `/api/v1/integrations/{id}/fjordflix/poster
 
 Local fixtures cover legacy/empty/Unicode/metadata, independent stale/recovery, image authentication/SSRF/redirect/type/size and responsive browser rendering. No live token or deployment is claimed.
 
+## Removing an unused integration (local only)
+
+**Disconnect** stops polling, deletes MediaHub's encrypted token and cached snapshot, but keeps the integration entry for manual reconnection. To clean up an unused entry, disconnect it first and choose **Permanently remove integration** (**Fjern integration permanent** in Danish). The confirmation names the selected integration and URL; Cancel makes no changes.
+
+Permanent removal uses administrator/session/CSRF-protected `DELETE /api/v1/integrations/{id}`. Only that local integration record and any remaining owned token/snapshot (resources, appdata and gallery) are deleted. Posters are not stored in a separate cache. No request uninstalls FjordHub, revokes its remote token, deletes remote files, or changes apps, hosts or deployment jobs. A durable local discovery opt-out prevents this address returning automatically, including late detection/refresh results and restarts. Explicit detection/reconnection or saving that address again clears the opt-out.
+
+Active entries return `409 integration_active` until disconnected. Entries provisioned by `FJORDHUB_BASE_URL` plus `FJORDHUB_ACCESS_TOKEN` cannot be permanently removed while those variables remain configured (`409 integration_environment_managed`). An operator must remove both variables and any `MEDIAHUB_` aliases from server configuration and restart MediaHub first; the disabled action explains this. Disconnect remains effective across restarts even with those variables present.
+
 ## HISTORICAL September 2026 catalog-only correction
 
 The historical proposal below is **superseded**. The adapter now calls only
@@ -79,8 +87,9 @@ Settings → Integrations → FjordHub, or the Integrations navigation entry:
    Seedbox adapter. The database contains only its opaque reference. The browser
    clears the token field and only receives `tokenConfigured` after saving.
 4. Refresh reads actual API data. Provider rate limits/backoff are respected.
-5. Disconnect stops polling and removes the active reference. Historical encrypted
-   records are retained for explicit future backup/retention management, not reused.
+5. Disconnect stops polling, deletes the active encrypted token and clears the
+   cached snapshot, while preserving the integration entry for manual reconnection.
+6. Permanently remove a disconnected entry using the confirmed local-only flow above.
 
 Credential submission requires HTTPS outside development mode. Mutations require
 an administrator, a valid session and CSRF token. No browser local/session storage

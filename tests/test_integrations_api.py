@@ -1,3 +1,4 @@
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -7,6 +8,7 @@ import pytest
 from mediahub.db import ExternalIntegration, User
 from mediahub.integrations.fjordhub import FjordHubClient
 from mediahub.integrations.provider import IntegrationSnapshot
+from pydantic import SecretStr
 from sqlalchemy import select
 
 
@@ -230,3 +232,177 @@ def test_detection_rejects_ordinary_health_page(logged_in, monkeypatch):
     )
     assert response.status_code == 422
     assert logged_in.app.state.services.integrations.list() == []
+
+
+def test_remove_requires_authentication_admin_csrf_and_disconnected(logged_in):
+    svc = logged_in.app.state.services
+    identifier = logged_in.post("/api/v1/integrations/fjordhub", json=body()).json()["data"]["id"]
+    url = f"/api/v1/integrations/{identifier}"
+    assert logged_in.delete(url).status_code == 409
+    assert logged_in.post(url + "/disconnect", json={}).status_code == 200
+    csrf = logged_in.headers.pop("X-MediaHub-CSRF")
+    assert logged_in.delete(url).status_code == 403
+    logged_in.headers["X-MediaHub-CSRF"] = csrf
+    with svc.sessions.begin() as db:
+        db.scalar(select(User)).role = "viewer"
+    assert logged_in.delete(url).status_code == 403
+    with svc.sessions.begin() as db:
+        db.scalar(select(User)).role = "administrator"
+    cookies = dict(logged_in.cookies)
+    logged_in.cookies.clear()
+    assert logged_in.delete(url).status_code == 401
+    logged_in.cookies.update(cookies)
+    assert logged_in.delete(url).status_code == 200
+    assert logged_in.delete(url).status_code == 404
+    assert logged_in.delete("/api/v1/integrations/unknown-id").status_code == 404
+
+
+def test_remove_only_selected_record_secret_and_snapshots(logged_in):
+    svc = logged_in.app.state.services
+    service = svc.integrations
+    selected = logged_in.post("/api/v1/integrations/fjordhub", json=body()).json()["data"]["id"]
+    other = logged_in.post(
+        "/api/v1/integrations/fjordhub", json={**body(), "baseUrl": "https://192.168.50.21:8443"}
+    ).json()["data"]["id"]
+    with svc.sessions.begin() as db:
+        row = db.get(ExternalIntegration, selected)
+        reference = row.secret_reference
+        row.enabled = False
+        row.snapshot = {
+            "status": "disconnected",
+            "apps": [{"id": "cached"}],
+            "metrics": {"cpuPercent": 12},
+            "fjordflix": {"ok": True, "recent": [{"id": "movie"}]},
+        }
+        other_reference = db.get(ExternalIntegration, other).secret_reference
+    service.provider_factory = lambda *args, **kwargs: pytest.fail(
+        "Removal must never call FjordHub"
+    )
+    response = logged_in.delete(f"/api/v1/integrations/{selected}")
+    assert response.json()["data"] == {"id": selected, "removed": True}
+    with svc.sessions() as db:
+        assert db.get(ExternalIntegration, selected) is None
+        assert db.get(ExternalIntegration, other).secret_reference == other_reference
+    assert not (service.store.directory / f"{reference}.sealed").exists()
+    assert service.store.get(other_reference).decode() == body()["accessToken"]
+    assert [row["id"] for row in service.list()] == [other]
+    assert (
+        logged_in.get(f"/api/v1/integrations/{selected}/fjordflix/posters/movie").status_code == 404
+    )
+
+
+def test_remove_persists_discovery_opt_out_and_manual_reconnect(logged_in):
+    from mediahub.errors import DomainError
+    from mediahub.integrations.service import IntegrationService
+
+    svc = logged_in.app.state.services
+    service = svc.integrations
+    identifier = service.save(
+        SimpleNamespace(
+            **{
+                "name": body()["name"],
+                "baseUrl": body()["baseUrl"],
+                "allowHttp": False,
+                "accessToken": SecretStr(body()["accessToken"]),
+            }
+        )
+    )["id"]
+    service.disconnect(identifier)
+    service.remove(identifier)
+    restarted = IntegrationService(svc.config, svc.sessions, svc.events)
+    restarted.default_origin = body()["baseUrl"]
+    restarted.detect = AsyncMock(side_effect=AssertionError("Removed origins must not be probed"))
+    asyncio.run(restarted.discover_known())
+    restarted.detect.assert_not_awaited()
+    with pytest.raises(DomainError, match="permanently removed"):
+        restarted.register_detected(body()["baseUrl"], False)
+    row = restarted.register_detected(body()["baseUrl"], False, reconnect=True)
+    assert row["id"] != identifier and row["enabled"]
+    assert not row["tokenConfigured"]
+
+
+def test_late_refresh_cannot_restore_removed_integration(logged_in):
+    from mediahub.errors import DomainError
+
+    service = logged_in.app.state.services.integrations
+    identifier = logged_in.post("/api/v1/integrations/fjordhub", json=body()).json()["data"]["id"]
+
+    async def scenario():
+        started, finish = asyncio.Event(), asyncio.Event()
+
+        async def sync(**kwargs):
+            started.set()
+            await finish.wait()
+            return IntegrationSnapshot(status="online", apps=[{"id": "late"}])
+
+        service.provider_factory = lambda *args, **kwargs: SimpleNamespace(sync=sync)
+        task = asyncio.create_task(service.refresh(identifier))
+        await started.wait()
+        service.disconnect(identifier)
+        service.remove(identifier)
+        finish.set()
+        with pytest.raises(DomainError, match="Integration not found"):
+            await task
+        assert service.list() == []
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("reconnect", [False, True])
+def test_late_detection_cannot_recreate_removed_entry(logged_in, monkeypatch, reconnect):
+    from mediahub.errors import DomainError
+
+    service = logged_in.app.state.services.integrations
+    row = service.register_detected(body()["baseUrl"], False)
+    service.disconnect(row["id"])
+    real_client = httpx.AsyncClient
+
+    async def scenario():
+        started, finish = asyncio.Event(), asyncio.Event()
+
+        async def handler(request):
+            if request.url.path == "/api/health":
+                started.set()
+                await finish.wait()
+                return httpx.Response(200, json={"status": "ok", "docker": True})
+            return httpx.Response(401, headers={"WWW-Authenticate": "Bearer"})
+
+        monkeypatch.setattr(
+            "mediahub.integrations.service.httpx.AsyncClient",
+            lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
+        )
+        task = asyncio.create_task(
+            service.detect(
+                SimpleNamespace(baseUrl=body()["baseUrl"], allowHttp=False), reconnect=reconnect
+            )
+        )
+        await started.wait()
+        service.remove(row["id"])
+        finish.set()
+        with pytest.raises(DomainError, match="permanently removed"):
+            await task
+        assert service.list() == []
+
+    asyncio.run(scenario())
+
+
+def test_environment_managed_removal_is_blocked_until_configuration_changes(logged_in):
+    from mediahub.errors import DomainError
+    from mediahub.integrations.service import IntegrationService
+
+    svc = logged_in.app.state.services
+    svc.config.fjordhub_base_url = body()["baseUrl"]
+    svc.config.fjordhub_access_token = SecretStr(body()["accessToken"])
+    service = IntegrationService(svc.config, svc.sessions, svc.events)
+    row = service.list()[0]
+    assert row["managedByEnvironment"]
+    service.disconnect(row["id"])
+    with pytest.raises(DomainError, match="server environment"):
+        service.remove(row["id"])
+    restarted = IntegrationService(svc.config, svc.sessions, svc.events)
+    assert restarted.list()[0]["enabled"] is False
+    svc.config.fjordhub_base_url = None
+    svc.config.fjordhub_access_token = None
+    restarted = IntegrationService(svc.config, svc.sessions, svc.events)
+    assert restarted.remove(row["id"])["removed"]
+    assert restarted.list() == []

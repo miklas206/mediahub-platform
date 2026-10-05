@@ -4,6 +4,7 @@ import asyncio
 import threading
 import time
 from dataclasses import asdict
+from hashlib import sha256
 from uuid import uuid4
 
 import httpx
@@ -24,6 +25,11 @@ class IntegrationService:
         self.lock = asyncio.Lock()
         self.test_lock = asyncio.Lock()
         self.default_origin = config.fjordhub_url
+        self.environment_origin = (
+            config.fjordhub_base_url
+            if config.fjordhub_base_url and config.fjordhub_access_token
+            else None
+        )
         self.persistence_lock = threading.RLock()
         if config.fjordhub_base_url and config.fjordhub_access_token:
             from types import SimpleNamespace
@@ -56,7 +62,10 @@ class IntegrationService:
                 )
 
     @staticmethod
-    def public(row):
+    def removal_key(origin):
+        return "integration.removed." + sha256(origin.encode()).hexdigest()
+
+    def public(self, row):
         return {
             "id": row.id,
             "provider": row.provider,
@@ -65,6 +74,7 @@ class IntegrationService:
             "allowHttp": row.allow_http,
             "tokenConfigured": bool(row.secret_reference),
             "enabled": row.enabled,
+            "managedByEnvironment": row.base_url == self.environment_origin,
             "snapshot": row.snapshot,
             "lastSuccessfulSync": row.last_success,
             "nextSync": row.next_sync,
@@ -133,6 +143,9 @@ class IntegrationService:
                     reference,
                 )
                 row.enabled, row.snapshot, row.next_sync = True, {"status": "not_checked"}, 0
+            marker = db.scalar(select(Setting).where(Setting.key == self.removal_key(origin)))
+            if marker:
+                db.delete(marker)
             db.add(row)
             db.flush()
             output = self.public(row)
@@ -143,6 +156,13 @@ class IntegrationService:
 
     def register_detected(self, origin, allow_http, name="FjordHub", *, reconnect=False):
         with self.persistence_lock, self.sessions.begin() as db:
+            marker = db.scalar(select(Setting).where(Setting.key == self.removal_key(origin)))
+            if marker:
+                if not reconnect:
+                    raise DomainError(
+                        "integration_removed", "Integration was permanently removed", 409
+                    )
+                db.delete(marker)
             row = db.scalar(
                 select(ExternalIntegration).where(
                     ExternalIntegration.provider == "fjordhub",
@@ -172,6 +192,10 @@ class IntegrationService:
 
     async def detect(self, body, *, reconnect=False):
         origin = self.origin(body.baseUrl, body.allowHttp)
+        with self.sessions() as db:
+            removed_at_start = db.scalar(
+                select(Setting.id).where(Setting.key == self.removal_key(origin))
+            )
         try:
             async with (
                 asyncio.timeout(15),
@@ -210,9 +234,16 @@ class IntegrationService:
             raise DomainError(
                 "fjordhub_not_detected", "FjordHub could not be verified at this LAN address", 422
             ) from None
-        return self.register_detected(
-            origin, body.allowHttp, getattr(body, "name", "FjordHub"), reconnect=reconnect
-        )
+        with self.persistence_lock:
+            with self.sessions() as db:
+                removed = db.scalar(
+                    select(Setting.id).where(Setting.key == self.removal_key(origin))
+                )
+            if removed and removed != removed_at_start:
+                raise DomainError("integration_removed", "Integration was permanently removed", 409)
+            return self.register_detected(
+                origin, body.allowHttp, getattr(body, "name", "FjordHub"), reconnect=reconnect
+            )
 
     async def discover_known(self):
         origins = [self.default_origin] if self.default_origin else []
@@ -235,6 +266,12 @@ class IntegrationService:
         for origin in origins:
             if origin not in known:
                 try:
+                    normalized = self.origin(origin, origin.startswith("http://"))
+                    with self.sessions() as db:
+                        if db.scalar(
+                            select(Setting).where(Setting.key == self.removal_key(normalized))
+                        ):
+                            continue
                     await self.detect(
                         SimpleNamespace(baseUrl=origin, allowHttp=origin.startswith("http://"))
                     )
@@ -265,9 +302,11 @@ class IntegrationService:
                 snapshot = IntegrationSnapshot(status="credentials_unavailable")
             except Exception:
                 snapshot = IntegrationSnapshot(status="invalid_response")
-            with self.sessions.begin() as db:
+            with self.persistence_lock, self.sessions.begin() as db:
                 row = db.get(ExternalIntegration, identifier)
-                # A disconnect during the network await must never re-enable access.
+                # Removal/disconnect during the network await wins over late snapshots.
+                if row is None:
+                    raise DomainError("not_found", "Integration not found", 404)
                 if not row.enabled or row.secret_reference != reference:
                     return self.public(row)
                 if (
@@ -360,9 +399,49 @@ class IntegrationService:
         except (ProviderFailure, httpx.HTTPError, TimeoutError, DomainError, ValueError):
             raise DomainError("poster_unavailable", "Poster unavailable", 404) from None
 
+    def remove(self, identifier):
+        with self.persistence_lock, self.sessions.begin() as db:
+            row = db.get(ExternalIntegration, identifier)
+            if row is None:
+                raise DomainError("not_found", "Integration not found", 404)
+            if row.enabled:
+                raise DomainError(
+                    "integration_active",
+                    "Disconnect the integration before permanently removing it.",
+                    409,
+                )
+            if row.base_url == self.environment_origin:
+                raise DomainError(
+                    "integration_environment_managed",
+                    "Remove FJORDHUB_BASE_URL and FJORDHUB_ACCESS_TOKEN (including MEDIAHUB_ aliases) from the server environment and restart MediaHub before removing this integration.",
+                    409,
+                )
+            reference = row.secret_reference
+            if reference:
+                shared = db.scalar(
+                    select(ExternalIntegration.id).where(
+                        ExternalIntegration.id != identifier,
+                        ExternalIntegration.secret_reference == reference,
+                    )
+                )
+                if not shared and reference.startswith("external-"):
+                    self.store.delete(reference)
+            key = self.removal_key(row.base_url)
+            if db.scalar(select(Setting).where(Setting.key == key)) is None:
+                # Durable opt-out also fences discovery already awaiting the network.
+                db.add(Setting(key=key, value={}))
+            db.delete(row)
+        self.events.publish("integration.removed", {"id": identifier})
+        self.events.record(
+            "integration.removed",
+            "FjordHub",
+            "External integration permanently removed from MediaHub",
+        )
+        return {"id": identifier, "removed": True}
+
     def disconnect(self, identifier):
         reference = None
-        with self.sessions.begin() as db:
+        with self.persistence_lock, self.sessions.begin() as db:
             row = db.get(ExternalIntegration, identifier)
             if row is None:
                 raise DomainError("not_found", "Integration not found", 404)
