@@ -14,14 +14,14 @@ describe("account language", () => {
     expect(t("User.Show.S01E01.mkv")).toBe("User.Show.S01E01.mkv");
     expect(t("Loading torrents…")).toBe("Indlæser torrents…");
   });
-  it("explains global RSS discovery and no replay in both languages", () => {
+  it("explains safe RSS dates and tracker-age uncertainty in both languages", () => {
     const help =
-      "All automatic feeds download newly discovered entry IDs, regardless of publication date. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Previously seen IDs, including entries skipped by the old date rule, are not replayed; select them manually.";
+      "By default, automatic downloads require a valid publication date after activation and not in the future. Existing entries and previously seen IDs are skipped. RSS dates are supplied by the tracker and do not prove the original torrent age; use manual downloads if uncertain.";
     expect(t(help)).toBe(help);
     setLanguage("da");
-    expect(t(help)).toContain("Alle automatiske feeds");
-    expect(t(help)).toContain("uanset udgivelsesdato");
-    expect(t(help)).toContain("downloades ikke automatisk igen");
+    expect(t(help)).toContain("Som standard");
+    expect(t(help)).toContain("gyldig udgivelsesdato");
+    expect(t(help)).toContain("oprindelige alder");
   });
   it("switches back to English without retaining previous translations", () => {
     setLanguage("da");

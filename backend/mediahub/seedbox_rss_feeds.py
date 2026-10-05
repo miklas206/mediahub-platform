@@ -4,8 +4,11 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import re
 import time
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -36,6 +39,30 @@ def history_hash(value):
     return None
 
 
+def valid_activation(value, now):
+    return type(value) in (int, float) and math.isfinite(value) and 0 < value <= now
+
+
+def automatic_eligible(feed, row, now):
+    if not valid_activation(feed.get("automaticSince"), now):
+        return False
+    if feed.get("allowOlderItems") is True:
+        return True
+    published = row.get("published")
+    if not isinstance(published, str) or not published.strip():
+        return False
+    try:
+        try:
+            date = datetime.fromisoformat(published.strip().replace("Z", "+00:00"))
+        except ValueError:
+            date = parsedate_to_datetime(published)
+        if date.tzinfo is None or date.utcoffset() is None:
+            return False
+        return feed["automaticSince"] <= date.timestamp() <= now
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
 class FeedSettings(StrictModel):
     intervalSeconds: int = Field(default=INTERVAL, ge=60, le=86400, strict=True)
 
@@ -43,6 +70,7 @@ class FeedSettings(StrictModel):
 class FeedOptions(StrictModel):
     name: str = Field(min_length=1, max_length=100)
     automatic: bool = False
+    allowOlderItems: bool = Field(default=False, strict=True)
     retention: RetentionRule = Field(default_factory=RetentionRule)
     storageId: str = Field(min_length=1, max_length=128)
     downloadLocationId: str = Field(default="root", pattern=r"^(?:root|location-[a-f0-9]{64})$")
@@ -66,7 +94,10 @@ class RSSFeeds:
         with self.svc.sessions() as db:
             row = db.scalar(select(Setting).where(Setting.key == KEY))
             if row:
-                return json.loads(self.svc.catalog.cipher.decrypt(row.value["sealed"].encode()))
+                feeds = json.loads(self.svc.catalog.cipher.decrypt(row.value["sealed"].encode()))
+                for feed in feeds:
+                    feed.setdefault("allowOlderItems", False)
+                return feeds
         old = read_feed(self.svc)
         feeds = []
         if old:
@@ -77,6 +108,7 @@ class RSSFeeds:
                     name="Saved RSS feed",
                     url=old["url"],
                     automatic=False,
+                    allowOlderItems=False,
                     storageId="",
                     downloadLocationId="root",
                     items=old["items"],
@@ -135,6 +167,7 @@ class RSSFeeds:
                             "added",
                         )
                     },
+                    "allowOlderItems": f.get("allowOlderItems", False) is True,
                     "pending": len(f["pending"]),
                     "automaticHistory": [
                         {
@@ -234,8 +267,9 @@ class RSSFeeds:
             feeds = self.load()
             feed = self.find(feeds, identifier)
             await self.validate_destination(body, client)
-            if body.automatic and not feed["automatic"]:
-                # Enabling after a pause starts from NOW, never from stale cached items.
+            policy_changed = body.allowOlderItems != (feed.get("allowOlderItems") is True)
+            if policy_changed or (body.automatic and not feed["automatic"]):
+                # Policy changes and reactivation never replay cached or pending work.
                 automatic_since = time.time()
                 items = await self.fetch(feed["url"])
                 seen = set(feed["seen"]) | {r["id"] for r in items}
@@ -285,13 +319,24 @@ class RSSFeeds:
                 or time.time() - (feed["checkedAt"] or 0) < self.settings().intervalSeconds
             ):
                 return self.public(feeds)
+            now = time.time()
+            activation_valid = valid_activation(feed.get("automaticSince"), now)
+            # Sanitize persisted work even if the subsequent feed request fails.
+            feed["pending"] = [
+                row
+                for row in feed["pending"]
+                if feed["automatic"] and automatic_eligible(feed, row, now)
+            ]
+            self.save(feeds)
             try:
                 items = await self.fetch(feed["url"])
+                now = time.time()
                 seen = set(feed["seen"])
                 new = [r for r in items if r["id"] not in seen]
+                eligible = [r for r in new if automatic_eligible(feed, r, now)]
                 if (
                     len(seen) + len(new) > 100000
-                    or len(feed["pending"]) + (len(new) if feed["automatic"] else 0) > 1000
+                    or len(feed["pending"]) + (len(eligible) if feed["automatic"] else 0) > 1000
                 ):
                     raise DomainError(
                         "rss_history_limit", "RSS history or queue limit reached", 409
@@ -299,15 +344,13 @@ class RSSFeeds:
                 feed["seen"] = sorted(seen | {r["id"] for r in new})
                 feed["items"] = items
                 if feed["automatic"]:
-                    now = time.time()
-                    if not isinstance(feed.get("automaticSince"), (int, float)):
+                    if not activation_valid:
                         # Old installations have no reliable activation timestamp.
                         # Establish a fresh baseline; never replay their old queue.
                         feed["automaticSince"] = now
                         feed["pending"] = []
                     else:
-                        # Discovery identity, not publication time, determines new work.
-                        feed["pending"].extend(reversed(new))
+                        feed["pending"].extend(reversed(eligible))
                 feed["error"] = ""
                 feed["checkedAt"] = time.time()
                 self.save(feeds)  # Persist discovery before any external side effect.

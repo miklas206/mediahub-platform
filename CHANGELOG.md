@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restore strict RSS publication-date protection by default for new and existing feeds: reject old, undated, invalid, timezone-less and future-dated automatic work, including persisted queues. Add an explicit default-off per-feed discovery-only opt-in with a mass-backfill warning. Policy changes fetch a fresh baseline and clear pending work without enabling automation or replaying history. RSS dates cannot prove original tracker age; existing torrents and cleanup rules are unchanged.
+
 - Publish each dashboard runtime observation independently so a slow Seedbox cannot delay Plex or Cloudflare. Retain last-good runtime data and Plex covers across navigation within the current signed-in session; label aged/failed observations stale rather than healthy. Share non-overlapping 10-second runtime and 60-second cover polling, pause hidden-page requests, abort abandoned work and clear private cached data on authentication transitions and app deletion. Existing settings, dashboard layout and FjordFlix polling remain unchanged.
 
 - Expand the existing FjordHub integration with keyed app-info/permissions, validated installed LAN ports, revision-refreshed protected icon proxying and explicit administrator/CSRF update controls for FjordHub and child apps. Poll statuses sequentially every 45 seconds (5 while running), retain stale in-progress state through restart/timeouts, treat HTTP 202 only as acceptance, and never add remote updates to the automatic global queue. Preserve older resource responses and local launch overrides; use safe icon fallbacks for non-origin artwork.

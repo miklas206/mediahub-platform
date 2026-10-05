@@ -19,6 +19,7 @@ type Feed = {
   id: string;
   name: string;
   automatic: boolean;
+  allowOlderItems?: boolean;
   storageId: string;
   downloadLocationId: string;
   checkedAt: number | null;
@@ -60,6 +61,7 @@ export function SeedboxRSS(
   const [url, setUrl] = useState("");
   const [destination, setDestination] = useState("root");
   const [automatic, setAutomatic] = useState(false);
+  const [allowOlderItems, setAllowOlderItems] = useState(false);
   const [retention, setRetention] = useState<RetentionRule>(defaultRetention);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,7 +155,7 @@ export function SeedboxRSS(
       <Panel key="add-feed" title={t("Add feed")}>
         <div className="notice">
           {t(
-            "All automatic feeds download newly discovered entry IDs, regardless of publication date. Entries already present when you add a feed or enable automatic downloads are recorded and skipped. Previously seen IDs, including entries skipped by the old date rule, are not replayed; select them manually.",
+            "By default, automatic downloads require a valid publication date after activation and not in the future. Existing entries and previously seen IDs are skipped. RSS dates are supplied by the tracker and do not prove the original torrent age; use manual downloads if uncertain.",
           )}
         </div>
         <form
@@ -163,6 +165,7 @@ export function SeedboxRSS(
               name,
               url,
               automatic,
+              allowOlderItems,
               retention,
               storageId: props.storageId,
               downloadLocationId: destination,
@@ -171,6 +174,7 @@ export function SeedboxRSS(
                 setName("");
                 setUrl("");
                 setAutomatic(false);
+                setAllowOlderItems(false);
                 setRetention(defaultRetention);
               }
             });
@@ -220,6 +224,11 @@ export function SeedboxRSS(
             />
             {t("Automatically download new entries to this destination")}
           </label>
+          <AutomaticDatePolicy
+            value={allowOlderItems}
+            onChange={setAllowOlderItems}
+            disabled={busy}
+          />
           <TorrentRetention
             value={retention}
             onChange={setRetention}
@@ -265,6 +274,9 @@ function FeedCard({
   const [name, setName] = useState(feed.name);
   const [destination, setDestination] = useState(feed.downloadLocationId);
   const [automatic, setAutomatic] = useState(feed.automatic);
+  const [allowOlderItems, setAllowOlderItems] = useState(
+    feed.allowOlderItems === true,
+  );
   const [retention, setRetention] = useState<RetentionRule>(
     feed.retention || defaultRetention,
   );
@@ -413,6 +425,7 @@ function FeedCard({
             void change(path, "PUT", {
               name,
               automatic,
+              allowOlderItems,
               retention,
               storageId,
               downloadLocationId: destination,
@@ -454,6 +467,11 @@ function FeedCard({
               "Enabling automatic downloads skips everything currently in the feed. Disabling clears pending automatic entries; torrents already added keep running.",
             )}
           </p>
+          <AutomaticDatePolicy
+            value={allowOlderItems}
+            onChange={setAllowOlderItems}
+            disabled={busy}
+          />
           <TorrentRetention
             value={retention}
             onChange={setRetention}
@@ -545,5 +563,34 @@ function FeedCard({
         </button>
       </details>
     </section>
+  );
+}
+
+function AutomaticDatePolicy({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+  disabled: boolean;
+}) {
+  return (
+    <>
+      <label>
+        <input
+          type="checkbox"
+          checked={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        {t("Allow older or undated newly discovered entries (this feed only)")}
+      </label>
+      <p className="notice">
+        {t(
+          "Warning: ignoring publication dates can automatically download large amounts of old torrents from rotating or Freeleech feeds. Leave this off for date protection. Changing this policy fetches a fresh baseline and clears pending entries; it never enables automatic downloads or replays history.",
+        )}
+      </p>
+    </>
   );
 }

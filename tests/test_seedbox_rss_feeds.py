@@ -12,11 +12,24 @@ from mediahub.seedbox_rss import parse_feed
 from sqlalchemy import delete, select
 
 
+@pytest.fixture(autouse=True)
+def rss_clock(monkeypatch):
+    # Windows wall-clock ticks can round ISO microseconds below the activation time.
+    current = int(datetime.now(timezone.utc).timestamp())
+
+    def tick():
+        nonlocal current
+        current += 1
+        return current
+
+    monkeypatch.setattr(module, "time", SimpleNamespace(time=tick))
+
+
 def entry(identifier):
     return {
         "id": identifier,
         "title": identifier,
-        "published": datetime.now(timezone.utc).isoformat(),
+        "published": datetime.fromtimestamp(module.time.time(), timezone.utc).isoformat(),
         "url": "magnet:?xt=urn:btih:" + identifier * 40,
     }
 
@@ -37,11 +50,12 @@ def setup(client):
     return service, agent
 
 
-def body(name="Movies", automatic=True, destination="root"):
+def body(name="Movies", automatic=True, destination="root", allow_older=False):
     return module.NewFeed(
         name=name,
         url="https://tracker.example/" + name + "?key=private",
         automatic=automatic,
+        allowOlderItems=allow_older,
         storageId="downloads",
         downloadLocationId=destination,
     )
@@ -305,12 +319,12 @@ def test_cleanup_requires_capable_agent_and_is_forwarded_to_new_downloads(client
         "2026-10-01T12:00:00",
     ],
 )
-def test_discovery_not_publication_date_controls_all_automatic_feeds(client, published):
+def test_explicit_discovery_opt_in_accepts_any_publication_date(client, published):
     async def run():
         service, agent = setup(client)
         baseline = dict(entry("a"), published=published)
         service.fetch.return_value = [baseline]
-        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        identifier = (await service.create(body(allow_older=True), agent))["feeds"][0]["id"]
         discovered = dict(entry("b"), published=published)
         service.fetch.return_value = [discovered, baseline]
         await service.check(identifier, force=True)
@@ -348,7 +362,7 @@ def test_legacy_feed_discards_old_pending_and_rebaselines(client):
 def test_saved_pending_retries_after_restart_regardless_of_publication_date(client):
     async def run():
         service, agent = setup(client)
-        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        identifier = (await service.create(body(allow_older=True), agent))["feeds"][0]["id"]
         feeds = service.load()
         feeds[0]["seen"].append("b")
         feeds[0]["pending"] = [dict(entry("b"), published="2020-01-01T00:00:00Z")]
@@ -389,7 +403,7 @@ def test_discovered_queue_is_durable_and_bounded_to_twenty_per_poll(client):
     async def run():
         service, agent = setup(client)
         identifier = (await service.create(body(), agent))["feeds"][0]["id"]
-        rows = [dict(entry(str(i)), published="") for i in range(25)]
+        rows = [entry(str(i)) for i in range(25)]
         service.fetch.return_value = rows
 
         async def add(client, feed, row, start):
@@ -495,3 +509,140 @@ def test_history_handles_legacy_counts_and_keeps_latest_200(client):
         assert len(service.load()[0]["automaticHistory"]) == 200
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "published",
+    [
+        "2020-01-01T00:00:00Z",
+        "Sun, 22 Feb 2026 08:31:39 +0100",
+        "",
+        "2999-01-01T00:00:00Z",
+        "yesterday",
+        "2026-10-01T12:00:00",
+    ],
+)
+@pytest.mark.parametrize("missing_policy", [False, True])
+def test_strict_default_blocks_unsafe_new_and_persisted_items(client, published, missing_policy):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        if missing_policy:
+            feeds[0].pop("allowOlderItems")
+        feeds[0]["seen"].append("queued")
+        feeds[0]["pending"] = [dict(entry("queued"), published=published)]
+        service.save(feeds)
+        service.fetch.return_value = [dict(entry("b"), published=published), entry("fresh")]
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 1
+        assert service.add_item.call_args.args[2]["id"] == "fresh"
+        saved = service.load()[0]
+        assert saved["allowOlderItems"] is False
+        assert saved["automatic"] is True
+        assert saved["pending"] == []
+        assert {"b", "queued", "fresh"} <= set(saved["seen"])
+        # Rewriting a previously skipped date must not replay its identity.
+        service.fetch.return_value = [entry("b")]
+        await service.check(identifier, force=True)
+        assert service.add_item.await_count == 1
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("allow_older", [False, True])
+def test_policy_changes_fetch_baseline_clear_queue_and_never_replay(client, allow_older):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(allow_older=allow_older), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0]["pending"] = [entry("queued")]
+        feeds[0]["seen"].append("queued")
+        service.save(feeds)
+        service.fetch.return_value = [entry("baseline")]
+        options = module.FeedOptions(
+            name="Movies", automatic=True, allowOlderItems=not allow_older, storageId="downloads"
+        )
+        service.fetch.side_effect = ValueError("private")
+        with pytest.raises(ValueError):
+            await service.configure(identifier, options, agent)
+        assert service.load()[0]["pending"][0]["id"] == "queued"
+        assert service.load()[0]["allowOlderItems"] is allow_older
+        service.fetch.side_effect = None
+        await service.configure(identifier, options, agent)
+        assert service.load()[0]["pending"] == []
+        await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+        service.fetch.return_value = [entry("fresh")]
+        await service.check(identifier, force=True)
+        assert service.add_item.call_args.args[2]["id"] == "fresh"
+
+    asyncio.run(run())
+
+
+def test_policy_change_while_manual_does_not_activate(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(automatic=False), agent))["feeds"][0]["id"]
+        service.fetch.return_value = [entry("baseline")]
+        options = module.FeedOptions(
+            name="Movies", automatic=False, allowOlderItems=True, storageId="downloads"
+        )
+        await service.configure(identifier, options, agent)
+        assert service.load()[0]["automatic"] is False
+        await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_failed_fetch_filters_unsafe_saved_queue_and_preserves_eligible_retry(client):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        fresh = entry("fresh")
+        feeds[0]["pending"] = [dict(entry("old"), published="2020-01-01T00:00:00Z"), fresh]
+        feeds[0]["seen"].extend(["old", "fresh"])
+        service.save(feeds)
+        service.fetch.side_effect = ValueError("private")
+        failed = await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+        assert service.load()[0]["pending"] == [fresh]
+        assert failed["feeds"][0]["error"]
+        assert failed["feeds"][0]["checkedAt"] >= feeds[0]["checkedAt"]
+        service.fetch.side_effect = None
+        service.fetch.return_value = []
+        await service.check(identifier, force=True)
+        assert service.add_item.call_args.args[2]["id"] == "fresh"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("activation", [True, float("nan"), float("inf"), 0, 999999999999])
+def test_unreliable_activation_rebaselines_without_downloading(client, activation):
+    async def run():
+        service, agent = setup(client)
+        identifier = (await service.create(body(), agent))["feeds"][0]["id"]
+        feeds = service.load()
+        feeds[0]["automaticSince"] = activation
+        feeds[0]["pending"] = [entry("queued")]
+        service.save(feeds)
+        service.fetch.return_value = [entry("baseline")]
+        await service.check(identifier, force=True)
+        service.add_item.assert_not_awaited()
+        assert service.load()[0]["pending"] == []
+
+    asyncio.run(run())
+
+
+def test_date_boundaries_and_timezone_aware_formats():
+    since = datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp()
+    feed = {"automaticSince": since}
+    for published in ("2026-10-01T00:00:00Z", "Thu, 01 Oct 2026 02:00:00 +0200"):
+        assert module.automatic_eligible(feed, {"published": published}, since)
+    assert not module.automatic_eligible(feed, {"published": "2026-10-01T00:00:01Z"}, since)
+    assert not module.automatic_eligible(feed, {"published": "2026-09-30T23:59:59Z"}, since)
+    for invalid in ("true", 1, None):
+        with pytest.raises(ValueError):
+            module.FeedOptions(name="Movies", storageId="downloads", allowOlderItems=invalid)

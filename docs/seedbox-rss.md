@@ -10,14 +10,26 @@ and skip existing entries**. Saving first reads the complete supported feed and
 persists all current entry IDs as a baseline. None of these entries are submitted
 automatically. If that first fetch fails, no feed is created and nothing starts.
 
-All automatic feeds use newly discovered entry IDs, not publication dates.
-Older torrents newly exposed by a rotating tracker feed are eligible, as are
-entries with missing, invalid, timezone-less or future publication dates. This
-behavior is global; there is no per-feed date-filter setting. Recorded IDs are
-never replayed, including entries previously skipped by the old publication-date
-rule; select those entries manually if wanted. Existing feeds without a saved
-activation time still establish a fresh baseline on their next check and discard
-their old pending queue, rather than replaying uncertain history.
+Automatic feeds default to strict publication-date protection, including existing
+feeds with no saved policy. Only unseen IDs with a valid timezone-aware RSS/Atom
+date at or after automatic activation and no later than the current check are
+eligible. Older, missing, invalid, timezone-less and future dates are skipped and
+recorded as seen; use manual selection if wanted. Persisted pending work is also
+filtered before any submissions, even when a feed request fails.
+
+**Allow older or undated newly discovered entries (this feed only)** is an explicit,
+default-off opt-in to discovery-only downloads. Warning: rotating or Freeleech
+feeds can expose large amounts of old torrents and cause mass backfill with this
+option enabled. It never enables automation itself. Changing either policy
+fetches a fresh baseline and clears pending work; failed fetching leaves the
+previous configuration unchanged. Previously seen IDs are never replayed.
+
+Publication dates are supplied by the tracker and may themselves change. A new
+RSS date or ID does not prove a torrent was originally uploaded recently. If that
+certainty matters, keep automation off and select manually. The deleted incident
+feeds cannot establish which specific tracker IDs or dates caused the downloads.
+Existing feeds without a reliable activation time establish a fresh baseline
+on their next successful check and discard their old pending queue.
 
 Core checks automatic feeds every five minutes, even with the browser closed.
 Newly discovered entries are persisted in a queue before being added through the
@@ -28,8 +40,9 @@ already present are not restarted or moved to another feed's destination.
 
 Each feed displays its automatic/manual state, saved destination, last check,
 pending count and failure message. **Check feed now** runs the same discovery
-and automatic-download process immediately. Failures preserve the queue and
-history for retry. Up to 20 pending items per feed are processed per pass.
+and automatic-download process immediately. Failures preserve eligible queued work and
+history for retry. Up to 20 pending items per feed are processed per pass; this
+is not a limit on total running torrents.
 
 Under **Feed settings**, change the destination or turn automation on/off.
 Enabling it establishes a fresh baseline: current entries, including ones added
