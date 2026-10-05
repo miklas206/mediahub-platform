@@ -2,11 +2,14 @@ import { getLocale, translateText, t } from "./i18n";
 
 import { LayoutGroup } from "./page-layout";
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
@@ -62,12 +65,34 @@ const statusLabels: Record<string, string> = {
 };
 const label = (s: string) => t(statusLabels[s] || s);
 
-export function useIntegrations() {
+type IntegrationState = {
+  items: Integration[];
+  error: string;
+  loading: boolean;
+  reload: () => Promise<void>;
+};
+const IntegrationContext = createContext<IntegrationState | null>(null);
+
+export function IntegrationProvider({
+  value,
+  children,
+}: {
+  value: IntegrationState;
+  children: ReactNode;
+}) {
+  return <IntegrationContext value={value}>{children}</IntegrationContext>;
+}
+
+export function useIntegrations(): IntegrationState {
+  const shared = useContext(IntegrationContext);
+  const sharedReload = shared?.reload;
+  const ownsRequests = shared === null;
   const request = useRef<AbortController | null>(null);
   const [items, setItems] = useState<Integration[]>([]),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
+    if (sharedReload) return sharedReload();
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
@@ -87,19 +112,24 @@ export function useIntegrations() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [sharedReload]);
   useEffect(() => {
+    if (!ownsRequests) return;
     void reload();
-    const timer = setInterval(() => void reload(), 15000);
-    const refresh = () => void reload();
+    const refresh = () => {
+      if (!document.hidden) void reload();
+    };
+    const timer = setInterval(refresh, 15000);
     window.addEventListener("integrations-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       clearInterval(timer);
       window.removeEventListener("integrations-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
       request.current?.abort();
     };
-  }, [reload]);
-  return { items, error, loading, reload };
+  }, [reload, ownsRequests]);
+  return shared ?? { items, error, loading, reload };
 }
 
 export function installedFjordHubApps(row: Integration) {

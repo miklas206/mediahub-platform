@@ -125,15 +125,19 @@ async def cloudflare_status(
     return result(await services(request).cloudflare_tunnel.status(force=refresh))
 
 
+async def _apps_with_health(svc):
+    slots = asyncio.Semaphore(8)
+
+    async def with_health(app):
+        async with slots:
+            return {**app, "health": (await svc.apps.health(app["id"])).model_dump()}
+
+    return await asyncio.gather(*(with_health(app) for app in svc.apps.list()))
+
+
 @router.get("/apps")
 async def apps(request: Request, user=Depends(authenticated)):
-    svc = services(request)
-    return result(
-        [
-            {**app, "health": (await svc.apps.health(app["id"])).model_dump()}
-            for app in svc.apps.list()
-        ]
-    )
+    return result(await _apps_with_health(services(request)))
 
 
 @router.get("/apps/{app_id}")
@@ -370,14 +374,11 @@ async def stream(request: Request, user=Depends(authenticated)):
         try:
             yield "retry: 5000\n\n"
             yield svc.events.encode({"type": "system.status", "data": svc.snapshot})
-            for app in svc.apps.list():
+            for app in await _apps_with_health(svc):
                 yield svc.events.encode(
                     {
                         "type": "app.health.changed",
-                        "data": {
-                            "id": app["id"],
-                            "health": (await svc.apps.health(app["id"])).model_dump(),
-                        },
+                        "data": {"id": app["id"], "health": app["health"]},
                     }
                 )
             while not svc.events.stopping and not await request.is_disconnected():

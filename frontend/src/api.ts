@@ -1,5 +1,3 @@
-import { Upload } from "tus-js-client";
-
 let csrf = "";
 export const setCsrf = (value: string) => {
   csrf = value;
@@ -94,12 +92,14 @@ type UploadSession = {
   complete: boolean;
 };
 
-function uploadWithTus(
+async function uploadWithTus(
   endpoint: string,
   file: File,
   onProgress: (percent: number) => void,
   signal: AbortSignal,
 ): Promise<void> {
+  signal.throwIfAborted();
+  const { Upload } = await import("tus-js-client");
   return new Promise((resolve, reject) => {
     signal.throwIfAborted();
     const cleanup = () => signal.removeEventListener("abort", abort);

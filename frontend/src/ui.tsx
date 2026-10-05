@@ -25,6 +25,8 @@ import {
   runtimeLayoutSection,
 } from "./seedbox-sections";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useState,
@@ -69,31 +71,24 @@ import {
 } from "lucide-react";
 import { api, setCsrf } from "./api";
 import { bytes, uptime } from "./format";
-import { SetupWizard } from "./wizard";
 import { PlatformVersion } from "./platform-version";
 import { SidebarClock } from "./sidebar-clock";
-import { BackupsPage } from "./backups";
-import { UpdatesPage } from "./updates";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
   RemoteRuntimeLogs,
   type Runtime,
 } from "./runtime";
-import { SeedboxInstallPage } from "./seedbox-install";
-import { PlexInstallPage } from "./plex-install";
-import { SecuritySettings } from "./security";
 import {
   IntegrationsCard,
   IntegrationsPage,
   IntegrationAppLinks,
   IntegrationAppCard,
   useIntegrations,
+  IntegrationProvider,
+  type Integration,
 } from "./integrations";
 import { CloudflareTunnelCard } from "./cloudflare";
-import { AppStorePage, CloudflareStorePage, FjordHubStorePage } from "./store";
-import { WindowsSharePage } from "./windows-share";
-import { FjordHubUninstallPage } from "./fjordhub-uninstall";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   OperationProgress,
@@ -119,6 +114,51 @@ import type {
   User,
 } from "./contracts";
 import type { AgentStatus } from "./phase2-types";
+
+import { useData } from "./use-data";
+import { batchAppHealthRefresh } from "./app-events";
+
+const SetupWizard = lazy(() =>
+  import("./wizard").then((module) => ({ default: module.SetupWizard })),
+);
+const BackupsPage = lazy(() =>
+  import("./backups").then((module) => ({ default: module.BackupsPage })),
+);
+const UpdatesPage = lazy(() =>
+  import("./updates").then((module) => ({ default: module.UpdatesPage })),
+);
+const SeedboxInstallPage = lazy(() =>
+  import("./seedbox-install").then((module) => ({
+    default: module.SeedboxInstallPage,
+  })),
+);
+const PlexInstallPage = lazy(() =>
+  import("./plex-install").then((module) => ({
+    default: module.PlexInstallPage,
+  })),
+);
+const SecuritySettings = lazy(() =>
+  import("./security").then((module) => ({ default: module.SecuritySettings })),
+);
+const AppStorePage = lazy(() =>
+  import("./store").then((module) => ({ default: module.AppStorePage })),
+);
+const CloudflareStorePage = lazy(() =>
+  import("./store").then((module) => ({ default: module.CloudflareStorePage })),
+);
+const FjordHubStorePage = lazy(() =>
+  import("./store").then((module) => ({ default: module.FjordHubStorePage })),
+);
+const WindowsSharePage = lazy(() =>
+  import("./windows-share").then((module) => ({
+    default: module.WindowsSharePage,
+  })),
+);
+const FjordHubUninstallPage = lazy(() =>
+  import("./fjordhub-uninstall").then((module) => ({
+    default: module.FjordHubUninstallPage,
+  })),
+);
 
 const navigation = [
   ["/", "Dashboard", LayoutDashboard],
@@ -162,29 +202,6 @@ const detailedDashboard: DashboardSection[] = [
   "cloudflare",
   "torrents",
 ];
-
-function useData<T>(path: string) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState("");
-  const reload = useCallback(() => {
-    setError("");
-    const attempt = (number: number) => {
-      api<T>(path)
-        .then((value) => {
-          setData(value);
-          setError("");
-        })
-        .catch((e) => {
-          if (number < 2)
-            window.setTimeout(() => attempt(number + 1), 900 * (number + 1));
-          else setError(e.message);
-        });
-    };
-    attempt(0);
-  }, [path]);
-  useEffect(reload, [reload]);
-  return { data, error, reload };
-}
 
 function Notice({
   children,
@@ -254,10 +271,10 @@ export function Application() {
   const [connectionError, setConnectionError] = useState("");
   const refresh = useCallback(async () => {
     try {
-      const status = await api<{ needsSetup: boolean }>("/auth/status");
-      const installation = await api<{ setup_required: boolean }>(
-        "/setup/status",
-      );
+      const [status, installation] = await Promise.all([
+        api<{ needsSetup: boolean }>("/auth/status"),
+        api<{ setup_required: boolean }>("/setup/status"),
+      ]);
       setSetupRequired(installation.setup_required);
       setNeedsSetup(status.needsSetup);
       if (!status.needsSetup) {
@@ -297,18 +314,20 @@ export function Application() {
   if (!ready) return <Loading />;
   if (setupRequired)
     return (
-      <SetupWizard
-        user={user}
-        hasAdmin={!needsSetup}
-        onSignedIn={(value) => {
-          setCsrf(value.csrf);
-          setLanguage(value.language || "en");
-          setAccountAppearance(value.appearance);
-          setUser(value);
-          setNeedsSetup(false);
-        }}
-        onComplete={() => setSetupRequired(false)}
-      />
+      <Suspense fallback={<Loading />}>
+        <SetupWizard
+          user={user}
+          hasAdmin={!needsSetup}
+          onSignedIn={(value) => {
+            setCsrf(value.csrf);
+            setLanguage(value.language || "en");
+            setAccountAppearance(value.appearance);
+            setUser(value);
+            setNeedsSetup(false);
+          }}
+          onComplete={() => setSetupRequired(false)}
+        />
+      </Suspense>
     );
   if (!user)
     return (
@@ -477,7 +496,8 @@ function Shell({
   const [dashboardSections, setDashboardSections] =
     useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
-  const { items: navigationIntegrations } = useIntegrations();
+  const navigationIntegrationState = useIntegrations();
+  const { items: navigationIntegrations } = navigationIntegrationState;
   const {
     data: navigationApps,
     error: navigationAppsError,
@@ -518,10 +538,11 @@ function Shell({
       setMetrics(JSON.parse((event as MessageEvent).data));
       setLive(true);
     });
-    source.addEventListener("app.health.changed", () => {
+    const appHealth = batchAppHealthRefresh(() => {
       setRevision((n) => n + 1);
       reloadNavigationApps();
     });
+    source.addEventListener("app.health.changed", appHealth.changed);
     source.addEventListener("updates.changed", () => reloadUpdateSummary());
     for (const event of [
       "integration.updated",
@@ -536,7 +557,10 @@ function Shell({
       source.close();
       window.dispatchEvent(new Event("session-expired"));
     });
-    return () => source.close();
+    return () => {
+      appHealth.dispose();
+      source.close();
+    };
   }, [reloadNavigationApps, reloadUpdateSummary]);
   useEffect(() => {
     const refresh = () => {
@@ -897,175 +921,196 @@ function Shell({
             key={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
             storageKey={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
           >
-            <Routes>
-              <Route path="/apps/install/plex" element={<PlexInstallPage />} />
-              <Route
-                path="/apps/install/seedbox"
-                element={<SeedboxInstallPage />}
-              />
-              <Route
-                path="/apps/:appId/install"
-                element={<SeedboxInstallPage />}
-              />
-              <Route path="/apps/:appId" element={<AppRuntimePage />} />
-              <Route
-                path="/apps/windows-share"
-                element={<WindowsSharePage />}
-              />
-              <Route
-                path="/store/windows-share"
-                element={<WindowsSharePage />}
-              />
-              <Route
-                path="/store/cloudflare"
-                element={<CloudflareStorePage />}
-              />
-              <Route path="/store/fjordhub" element={<FjordHubStorePage />} />
-              <Route
-                path="/store/fjordhub/uninstall"
-                element={<FjordHubUninstallPage />}
-              />
-              <Route path="/store" element={<AppStorePage />} />
-              <Route
-                path="/"
-                element={
-                  <Dashboard
-                    metrics={metrics}
-                    revision={revision}
-                    live={live}
-                    sections={dashboardSections}
+            <IntegrationProvider value={navigationIntegrationState}>
+              <Suspense fallback={<Loading />}>
+                <Routes>
+                  <Route
+                    path="/apps/install/plex"
+                    element={<PlexInstallPage />}
                   />
-                }
-              />
-              <Route
-                path="/apps"
-                element={
-                  <Apps
-                    revision={revision}
-                    extraCards={
-                      <section className="store-callout">
-                        <div>
-                          <strong>{t("Looking for another app?")}</strong>
-                          <p>
-                            {t(
-                              "Browse guided installations without mixing them into the apps you already run.",
-                            )}
-                          </p>
-                        </div>
-                        <NavLink className="primary" to="/store">
-                          {t("Open App Store →")}
-                        </NavLink>
-                      </section>
+                  <Route
+                    path="/apps/install/seedbox"
+                    element={<SeedboxInstallPage />}
+                  />
+                  <Route
+                    path="/apps/:appId/install"
+                    element={<SeedboxInstallPage />}
+                  />
+                  <Route path="/apps/:appId" element={<AppRuntimePage />} />
+                  <Route
+                    path="/apps/windows-share"
+                    element={<WindowsSharePage />}
+                  />
+                  <Route
+                    path="/store/windows-share"
+                    element={<WindowsSharePage />}
+                  />
+                  <Route
+                    path="/store/cloudflare"
+                    element={<CloudflareStorePage />}
+                  />
+                  <Route
+                    path="/store/fjordhub"
+                    element={<FjordHubStorePage />}
+                  />
+                  <Route
+                    path="/store/fjordhub/uninstall"
+                    element={<FjordHubUninstallPage />}
+                  />
+                  <Route path="/store" element={<AppStorePage />} />
+                  <Route
+                    path="/"
+                    element={
+                      <Dashboard
+                        metrics={metrics}
+                        apps={navigationApps}
+                        error={navigationAppsError}
+                        revision={revision}
+                        live={live}
+                        sections={dashboardSections}
+                      />
                     }
                   />
-                }
-              />
-              <Route
-                path="/storage"
-                element={
-                  <LayoutGroup id="ui-Shell-2" className="stack">
-                    <div
-                      className="layout-card"
-                      data-layout-title="Media files"
-                    >
-                      <MediaFiles />
-                    </div>
-                    <div className="layout-card" data-layout-title="Storage">
-                      <StorageSummary />
-                    </div>
-                    {advancedMode && (
-                      <details className="technical-disclosure">
-                        <summary>{t("Technical storage mappings")}</summary>
-                        <LayoutGroup id="ui-Shell-3" className="stack">
-                          <div
-                            className="layout-card"
-                            data-layout-title="Storage mappings"
-                          >
-                            <LogicalStoragePanel />
-                          </div>
-                          <StorageWorkspace />
-                        </LayoutGroup>
-                      </details>
-                    )}
-                  </LayoutGroup>
-                }
-              />
-              <Route path="/hosts" element={<HostsPage />} />
-              <Route path="/integrations" element={<IntegrationsPage />} />
-              <Route
-                path="/activity"
-                element={
-                  <LayoutGroup id="activity-cards">
-                    <div
-                      className="dashboard-card"
-                      data-layout-title="Event timeline"
-                    >
-                      <ActivityPage revision={revision} />
-                    </div>
-                  </LayoutGroup>
-                }
-              />
-              <Route
-                path="/logs"
-                element={
-                  <LayoutGroup id="logs-cards">
-                    <div className="dashboard-card" data-layout-title="Logs">
-                      <Logs />
-                    </div>
-                  </LayoutGroup>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <SettingsExtensions
-                    general={
-                      <LayoutGroup id="settings-general-layout">
-                        <LayoutGroup
-                          id="settings-appearance-cards"
-                          className="settings-appearance-group stack"
+                  <Route
+                    path="/apps"
+                    element={
+                      <Apps
+                        data={navigationApps}
+                        error={navigationAppsError}
+                        reload={reloadNavigationApps}
+                        integrations={navigationIntegrations}
+                        extraCards={
+                          <section className="store-callout">
+                            <div>
+                              <strong>{t("Looking for another app?")}</strong>
+                              <p>
+                                {t(
+                                  "Browse guided installations without mixing them into the apps you already run.",
+                                )}
+                              </p>
+                            </div>
+                            <NavLink className="primary" to="/store">
+                              {t("Open App Store →")}
+                            </NavLink>
+                          </section>
+                        }
+                      />
+                    }
+                  />
+                  <Route
+                    path="/storage"
+                    element={
+                      <LayoutGroup id="ui-Shell-2" className="stack">
+                        <div
+                          className="layout-card"
+                          data-layout-title="Media files"
                         >
-                          <div
-                            className="dashboard-card"
-                            data-layout-title="Colors and shades"
-                          >
-                            <AppearanceSettings />
-                          </div>
-                        </LayoutGroup>
-                        <LayoutGroup id="settings-general-cards">
-                          <div
-                            className="dashboard-card"
-                            data-layout-title="Language"
-                          >
-                            <LanguageSettings />
-                          </div>
-                          <div
-                            className="dashboard-card"
-                            data-layout-title="Workspace preferences"
-                          >
-                            <SettingsPage />
-                          </div>
-                        </LayoutGroup>
+                          <MediaFiles />
+                        </div>
+                        <div
+                          className="layout-card"
+                          data-layout-title="Storage"
+                        >
+                          <StorageSummary />
+                        </div>
+                        {advancedMode && (
+                          <details className="technical-disclosure">
+                            <summary>{t("Technical storage mappings")}</summary>
+                            <LayoutGroup id="ui-Shell-3" className="stack">
+                              <div
+                                className="layout-card"
+                                data-layout-title="Storage mappings"
+                              >
+                                <LogicalStoragePanel />
+                              </div>
+                              <StorageWorkspace />
+                            </LayoutGroup>
+                          </details>
+                        )}
                       </LayoutGroup>
                     }
-                    maintenance={<MaintenancePage />}
-                    security={<SecuritySettings />}
-                    advanced={advancedMode}
                   />
-                }
-              />
-              <Route
-                path="/updates"
-                element={
-                  <UpdatesPage
-                    apps={navigationApps}
-                    appsError={navigationAppsError}
+                  <Route path="/hosts" element={<HostsPage />} />
+                  <Route path="/integrations" element={<IntegrationsPage />} />
+                  <Route
+                    path="/activity"
+                    element={
+                      <LayoutGroup id="activity-cards">
+                        <div
+                          className="dashboard-card"
+                          data-layout-title="Event timeline"
+                        >
+                          <ActivityPage revision={revision} />
+                        </div>
+                      </LayoutGroup>
+                    }
                   />
-                }
-              />
-              <Route path="/backups" element={<BackupsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                  <Route
+                    path="/logs"
+                    element={
+                      <LayoutGroup id="logs-cards">
+                        <div
+                          className="dashboard-card"
+                          data-layout-title="Logs"
+                        >
+                          <Logs />
+                        </div>
+                      </LayoutGroup>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <SettingsExtensions
+                        general={
+                          <LayoutGroup id="settings-general-layout">
+                            <LayoutGroup
+                              id="settings-appearance-cards"
+                              className="settings-appearance-group stack"
+                            >
+                              <div
+                                className="dashboard-card"
+                                data-layout-title="Colors and shades"
+                              >
+                                <AppearanceSettings />
+                              </div>
+                            </LayoutGroup>
+                            <LayoutGroup id="settings-general-cards">
+                              <div
+                                className="dashboard-card"
+                                data-layout-title="Language"
+                              >
+                                <LanguageSettings />
+                              </div>
+                              <div
+                                className="dashboard-card"
+                                data-layout-title="Workspace preferences"
+                              >
+                                <SettingsPage />
+                              </div>
+                            </LayoutGroup>
+                          </LayoutGroup>
+                        }
+                        maintenance={<MaintenancePage />}
+                        security={<SecuritySettings />}
+                        advanced={advancedMode}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/updates"
+                    element={
+                      <UpdatesPage
+                        apps={navigationApps}
+                        appsError={navigationAppsError}
+                      />
+                    }
+                  />
+                  <Route path="/backups" element={<BackupsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </IntegrationProvider>
           </PageLayout>
           <footer className="footer">
             <span>
@@ -1117,17 +1162,19 @@ function pageDescription(title: string) {
 
 function Dashboard({
   metrics: m,
+  apps,
+  error,
   revision,
   live,
   sections,
 }: {
   metrics?: Metrics;
+  apps?: AppInfo[];
+  error: string;
   revision: number;
   live: boolean;
   sections: DashboardSection[];
 }) {
-  const { data: apps, error, reload } = useData<AppInfo[]>("/apps");
-  useEffect(reload, [revision, reload]);
   const {
     data: recentActivity,
     error: activityError,
@@ -1387,21 +1434,24 @@ function ActivityList({ items }: { items: Activity[] }) {
   );
 }
 
-function Apps({
-  revision,
+export function Apps({
+  data,
+  error,
+  reload,
+  integrations,
   extraCards,
 }: {
-  revision: number;
+  data?: AppInfo[];
+  error: string;
+  reload: () => void;
+  integrations: Integration[];
   extraCards?: ReactNode;
 }) {
-  const { data, error, reload } = useData<AppInfo[]>("/apps");
-  const { items: integrations } = useIntegrations();
   const externalApps = integrations.filter(
     (row) => row.enabled && fjordHubLink(row.baseUrl),
   );
   const [actionError, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(reload, [revision, reload]);
   const act = async (id: string, action: string) => {
     setBusy(true);
     setError("");

@@ -156,25 +156,27 @@ class AppManager:
             app = db.get(InstalledApp, app_id)
             if app is None:
                 raise DomainError("app_not_found", "App not found", 404)
-            return {
-                "id": app.id,
-                "packageId": app.package_id,
-                "name": app.name,
-                "version": app.version,
-                "state": app.state,
-                "isMock": app.is_mock,
-                "detailPath": f"/apps/{app.id}"
-                if hasattr(self.adapters.get(app.id), "definition")
-                else None,
-            }
+            return self._serialize(app)
+
+    def _serialize(self, app):
+        return {
+            "id": app.id,
+            "packageId": app.package_id,
+            "name": app.name,
+            "version": app.version,
+            "state": app.state,
+            "isMock": app.is_mock,
+            "detailPath": f"/apps/{app.id}"
+            if hasattr(self.adapters.get(app.id), "definition")
+            else None,
+        }
 
     def list(self):
         with self.sessions() as db:
-            query = select(InstalledApp.id).where(InstalledApp.state != "uninstalled")
+            query = select(InstalledApp).where(InstalledApp.state != "uninstalled")
             if not (self.config.dev_mode and self.config.mock_app):
                 query = query.where(InstalledApp.is_mock.is_(False))
-            ids = db.scalars(query).all()
-        return [self.get(app_id) for app_id in ids]
+            return [self._serialize(app) for app in db.scalars(query).all()]
 
     def adapter(self, app_id):
         self.get(app_id)
