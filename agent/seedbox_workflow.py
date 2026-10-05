@@ -144,6 +144,15 @@ class SeedboxWorkflow:
         ):
             self.ledger("ManualIntervention")
             state = read_json(ledger)
+        rotation_path = self.root / "credential-rotation.json"
+        rotation = read_json(rotation_path) if rotation_path.exists() else None
+        if (
+            rotation
+            and rotation["state"] == "Applying"
+            and not (self.control.job and not self.control.job.done())
+        ):
+            rotation["state"] = "ManualIntervention"
+            save_json(rotation_path, rotation)
         # Only named public fields. Vault records and import payloads never leave Agent.
         return {
             key: self.draft[key]
@@ -182,6 +191,14 @@ class SeedboxWorkflow:
                 )
             ),
             "runtimeCredentialConfigured": self.store.status("seedbox-runtime")["configured"],
+            "rotation": {
+                "state": rotation["state"],
+                "kind": rotation["kind"],
+                "failedStep": rotation.get("failedStep"),
+            }
+            if rotation
+            else None,
+            "operation": getattr(self.control, "operation", {"state": "idle", "action": None}),
         }
 
     async def rotation(self, body, kind):
@@ -202,9 +219,10 @@ class SeedboxWorkflow:
                     webPassword=body.webPassword,
                 )
 
+            self.control.operation = {"state": "running", "action": "rotate-" + kind}
+
             async def run():
                 async with self.control.lifecycle.lock:
-                    self.control.operation = {"state": "running", "action": "rotate-" + kind}
                     try:
                         await rotate(self.control, self.store, updated, kind)
                     except Exception:

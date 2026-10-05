@@ -108,6 +108,82 @@ def test_interrupted_install_blocks_blind_retry(tmp_path):
         item.check(0)
 
 
+def test_rotation_failure_is_public_without_private_recovery_reference(tmp_path):
+    item = workflow(tmp_path)
+    item.ledger("Healthy")
+    save_json(
+        tmp_path / "credential-rotation.json",
+        {
+            "state": "ManualIntervention",
+            "kind": "client",
+            "failedStep": "verify_new_client_credential",
+            "stagedReference": "private-recovery-reference",
+        },
+    )
+    public = item.public()
+    assert public["transaction"]["state"] == "Healthy"
+    assert public["rotation"] == {
+        "state": "ManualIntervention",
+        "kind": "client",
+        "failedStep": "verify_new_client_credential",
+    }
+    assert "private-recovery-reference" not in json.dumps(public)
+
+
+def test_early_rotation_failure_is_public_and_redacted(tmp_path, monkeypatch):
+    async def run():
+        item = workflow(tmp_path)
+        item.control.status = SimpleNamespace(cached="stale")
+        item.store.stage(
+            "seedbox-runtime",
+            SeedboxCredentials(
+                vpnConfig="test-profile", webUsername="tester", webPassword="old-test-password-123"
+            ),
+        )
+        monkeypatch.setattr(
+            "agent.seedbox_workflow.rotate",
+            AsyncMock(side_effect=ValueError("SECRET_SENTINEL")),
+        )
+        assert await item.rotation(
+            ClientImport(revision=0, webUsername="tester", webPassword="new-test-password-123"),
+            "client",
+        ) == {"state": "accepted"}
+        assert item.public()["operation"]["state"] == "running"
+        await item.control.job
+        public = item.public()
+        assert public["operation"]["state"] == "failed"
+        assert "SECRET_SENTINEL" not in json.dumps(public)
+        assert item.control.status.cached is None
+
+    asyncio.run(run())
+
+
+def test_active_rotation_is_not_marked_interrupted(tmp_path):
+    async def run():
+        item = workflow(tmp_path)
+        save_json(
+            tmp_path / "credential-rotation.json",
+            {"state": "Applying", "kind": "client", "stagedReference": "private-reference"},
+        )
+        item.control.job = asyncio.create_task(asyncio.sleep(0))
+        assert item.public()["rotation"]["state"] == "Applying"
+        await item.control.job
+
+    asyncio.run(run())
+
+
+def test_interrupted_rotation_is_reported_as_manual_intervention(tmp_path):
+    item = workflow(tmp_path)
+    save_json(
+        tmp_path / "credential-rotation.json",
+        {"state": "Applying", "kind": "client", "stagedReference": "private-reference"},
+    )
+    assert item.public()["rotation"]["state"] == "ManualIntervention"
+    assert json.loads((tmp_path / "credential-rotation.json").read_text())["state"] == (
+        "ManualIntervention"
+    )
+
+
 def test_client_archive_contains_verifier_not_password_and_no_paths_outside_config(profile):  # noqa: F811
     import io
     import tarfile

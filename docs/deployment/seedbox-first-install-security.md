@@ -25,7 +25,16 @@ VPN runtime configuration is materialized on the destination into protected,
 non-swappable tmpfs with restrictive ownership and read-only VPN runtime mounts.
 The secret store does not itself start services. Serialized rotation stages an
 encrypted candidate, blocks automatic restart until verification, and retains
-encrypted recovery information on failure. VPN rotation stops the torrent client
+encrypted recovery information on failure. Wizard status reports credential rotation
+separately from the original installation transaction: an installation may remain
+Healthy while a later rotation requires ManualIntervention. Rotation reports expose
+only state, kind and a fixed failed-step identifier, never the encrypted candidate's
+private reference or exception text. The one-time MediaHub login form polls the
+rotation result; accepted means queued, not verified. After a MediaHub password
+change, sign in again (existing MediaHub sessions are revoked), then enter the new
+password. Passwords shorter than Seedbox's 16-character minimum must use separate
+qBittorrent credentials. Interrupted rotations remain an operator recovery task;
+no automatic retry or password reset is performed. VPN rotation stops the torrent client
 before applying the new profile; tunnel, NAT-PMP, storage and egress are rechecked.
 No default qBittorrent password is supplied. WireGuard import accepts a restricted
 data-only profile; hooks, extra sections, script directives and non-default

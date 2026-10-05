@@ -36,6 +36,12 @@ type Wizard = {
   clientConfigured: boolean;
   runtimeCredentialConfigured: boolean;
   preflight: { state: string; digest?: string; message?: string } | null;
+  rotation?: {
+    state: string;
+    kind: string;
+    failedStep?: string | null;
+  } | null;
+  operation?: { state: string; action: string | null; message?: string };
   transaction: {
     state: string;
     failedStep?: string;
@@ -553,6 +559,34 @@ export function SeedboxInstallPage() {
                 </Link>
               </>
             )}
+            {data.rotation?.state === "ManualIntervention" && (
+              <p role="alert">
+                {t(
+                  "Credential rotation failed or was interrupted. Automatic restart is blocked; an operator must inspect the retained encrypted recovery state before retrying.",
+                )}
+                {data.rotation.failedStep && (
+                  <>
+                    {" "}
+                    {t("Failed step")}:{" "}
+                    {data.rotation.failedStep.replaceAll("_", " ")}
+                  </>
+                )}
+              </p>
+            )}
+            {!data.busy && data.operation?.state === "failed" && (
+              <ErrorBox
+                error={
+                  data.operation.message || t("Credential rotation failed.")
+                }
+              />
+            )}
+            {data.rotation?.state === "Healthy" &&
+              !data.busy &&
+              data.operation?.state !== "failed" && (
+                <p role="status">
+                  {t("Credential rotation and runtime health verified.")}
+                </p>
+              )}
             {data.step === 12 && (
               <details>
                 <summary>{t("Rotate private credentials")}</summary>

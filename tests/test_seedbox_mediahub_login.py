@@ -42,6 +42,39 @@ def test_copy_uses_verified_account_and_existing_secure_path(shared_login, opera
         assert db.scalar(select(User)).username == "tester"
 
 
+def test_changed_password_requires_sign_in_again_and_copies_new_password(shared_login):
+    client, svc, agent = shared_login
+    updated_password = "synthetic-changed-password-123!"
+    response = client.post(
+        "/api/v1/security/password",
+        json={"password": PASSWORD, "newPassword": updated_password},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["signInAgain"]
+    assert (
+        client.post(URL, json=payload(operation="rotate", password=updated_password)).status_code
+        == 401
+    )
+    agent.request.assert_not_awaited()
+    client.base_url = svc.config.base_url
+    response = client.post(
+        "/api/auth/login", json={"username": "tester", "password": updated_password}
+    )
+    assert response.status_code == 200, response.text
+    client.headers["X-MediaHub-CSRF"] = response.json()["data"]["csrf"]
+    client.base_url = "https://127.0.0.1:18765"
+    assert client.post(URL, json=payload(operation="rotate")).status_code == 401
+    assert (
+        client.post(URL, json=payload(operation="rotate", password=updated_password)).status_code
+        == 202
+    )
+    agent.request.assert_awaited_once_with(
+        "POST",
+        "/v1/seedbox/wizard/rotate/client",
+        {"revision": 3, "webUsername": "tester", "webPassword": updated_password},
+    )
+
+
 def test_password_reauthentication_and_throttling(shared_login):
     client, _, agent = shared_login
     for _ in range(5):

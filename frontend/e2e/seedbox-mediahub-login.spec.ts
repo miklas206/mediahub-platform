@@ -1,5 +1,156 @@
 import { expect, test } from "@playwright/test";
 
+for (const surface of ["installation", "settings"] as const) {
+  for (const outcome of ["Healthy", "ManualIntervention"] as const) {
+    test(`${surface}: accepted rotation reports its actual ${outcome} result`, async ({
+      page,
+    }) => {
+      let submitted = false;
+      await page.route("**/api/**", async (route) => {
+        const path = new URL(route.request().url()).pathname.replace(
+          /^\/api(?:\/v1)?/,
+          "",
+        );
+        let data: unknown = [];
+        if (path === "/auth/status") data = { needsSetup: false };
+        else if (path === "/setup/status") data = { setup_required: false };
+        else if (path === "/auth/me")
+          data = {
+            id: "test",
+            username: "synthetic-admin",
+            role: "administrator",
+            csrf: "test",
+            language: "en",
+            totpEnabled: false,
+          };
+        else if (path === "/settings")
+          data = {
+            display_name: "MediaHub",
+            advanced_mode: false,
+            visible_navigation: ["/", "/apps", "/store", "/settings"],
+            dashboard_sections: [],
+            theme: "dark",
+          };
+        else if (path === "/apps/synthetic-seedbox/runtime")
+          data = {
+            view: "seedbox",
+            report: {
+              health: "unknown",
+              available: true,
+              cached: false,
+              agentOnline: true,
+              checks: [],
+            },
+          };
+        else if (path === "/seedbox/wizard/targets")
+          data = { bound: true, hosts: [] };
+        else if (path === "/seedbox/wizard")
+          data = {
+            revision: 7,
+            step: 12,
+            steps: [],
+            busy: false,
+            installation: {
+              hostId: "test",
+              downloadsStorageId: "downloads",
+              provider: "test",
+              protocol: "wireguard",
+              uid: 1000,
+              gid: 1000,
+              webPort: 8080,
+              torrentMemoryMiB: 1024,
+              installationId: "test",
+            },
+            qBittorrent: {},
+            vpnConfigured: true,
+            clientConfigured: true,
+            transaction: { state: "Healthy", steps: [] },
+            operation: {
+              state: submitted
+                ? outcome === "Healthy"
+                  ? "succeeded"
+                  : "failed"
+                : "idle",
+              action: submitted ? "rotate-client" : null,
+            },
+            rotation: submitted
+              ? {
+                  state: outcome,
+                  kind: "client",
+                  failedStep:
+                    outcome === "ManualIntervention"
+                      ? "verify_new_client_credential"
+                      : null,
+                }
+              : null,
+          };
+        else if (path === "/seedbox/wizard/client/mediahub") {
+          submitted = true;
+          data = { state: "accepted" };
+        } else if (path === "/events/stream") {
+          await route.fulfill({
+            contentType: "text/event-stream",
+            body: "retry: 60000\n\n",
+          });
+          return;
+        }
+        await route.fulfill({
+          json: { data, error: null, metadata: { version: "test" } },
+        });
+      });
+      await page.goto(
+        surface === "settings"
+          ? "/apps/synthetic-seedbox?section=settings"
+          : "/apps/install/seedbox",
+      );
+      if (surface === "installation")
+        await page
+          .getByText("Rotate private credentials", { exact: true })
+          .click();
+      await page.getByText("Use my MediaHub login", { exact: true }).click();
+      await page
+        .getByLabel("Current MediaHub password", { exact: true })
+        .fill("synthetic-new-password-123!");
+      await page
+        .getByRole("button", {
+          name: "Copy login & rotate qBittorrent credentials",
+          exact: true,
+        })
+        .click();
+      if (outcome === "Healthy") {
+        await expect(
+          page
+            .getByText("Credential rotation and runtime health verified.", {
+              exact: true,
+            })
+            .first(),
+        ).toBeVisible();
+      } else {
+        await expect(
+          page.getByText(
+            "Credential rotation failed. Inspect Seedbox installation status before retrying.",
+            { exact: false },
+          ),
+        ).toBeVisible();
+        await expect(
+          page
+            .getByRole("alert")
+            .filter({ hasText: "verify new client credential" })
+            .first(),
+        ).toBeVisible();
+        await expect(
+          page.getByText("Credential rotation and runtime health verified.", {
+            exact: true,
+          }),
+        ).toHaveCount(0);
+      }
+      await expect(
+        page.getByLabel("Current MediaHub password", { exact: true }),
+      ).toHaveValue("");
+    });
+  }
+}
+
 for (const width of [1440, 390]) {
   for (const operation of ["install", "rotate"] as const) {
     test(`one-time ${operation} login copying (${width}px)`, async ({

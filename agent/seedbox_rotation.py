@@ -102,7 +102,9 @@ async def rotate(control, store, credentials, kind):
             stage = "persist_verified_client_credential"
             store.replace("seedbox-runtime", private_record(credentials))
             RuntimeSecrets(root).materialize()
+            stage = "verify_updated_client_runtime"
             await driver.verify_torrent(ip)
+            stage = "verify_forwarding_after_rotation"
             if (await driver.forwarding.renew())["status"] != "healthy":
                 raise ValueError("Forwarding not verified after rotation")
         else:

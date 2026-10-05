@@ -21,6 +21,52 @@ export function SeedboxMediaHubLogin({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [accepted, setAccepted] = useState(false);
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (!accepted || operation !== "rotate" || verified) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const status = await api<{
+          busy: boolean;
+          operation?: { state: string; message?: string };
+          rotation?: { state: string; failedStep?: string | null } | null;
+        }>("/seedbox/wizard");
+        if (!active || status.busy) return;
+        if (
+          status.operation?.state === "failed" ||
+          status.rotation?.state === "ManualIntervention"
+        ) {
+          setAccepted(false);
+          setFailure(
+            [
+              t(
+                "Credential rotation failed. Inspect Seedbox installation status before retrying.",
+              ),
+              status.rotation?.failedStep?.replaceAll("_", " "),
+            ]
+              .filter(Boolean)
+              .join(" "),
+          );
+        } else if (
+          (status.operation?.state === "succeeded" ||
+            status.operation?.state === "idle") &&
+          status.rotation?.state === "Healthy"
+        ) {
+          setFailure("");
+          setVerified(true);
+        }
+      } catch (error) {
+        if (active) setFailure((error as Error).message);
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2500);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [accepted, operation, verified]);
   useEffect(() => {
     let active = true;
     void api<{ username: string; totpEnabled: boolean }>("/auth/me")
@@ -59,6 +105,7 @@ export function SeedboxMediaHubLogin({
             form.reset();
             setBusy(true);
             setAccepted(false);
+            setVerified(false);
             setFailure("");
             try {
               const current =
@@ -138,7 +185,9 @@ export function SeedboxMediaHubLogin({
         <p role="status">
           {t(
             operation === "rotate"
-              ? "Credential rotation accepted. Check Seedbox installation status for verification or recovery before using the new login."
+              ? verified
+                ? "Credential rotation and runtime health verified."
+                : "Credential rotation accepted. Check Seedbox installation status for verification or recovery before using the new login."
               : "Encrypted client credentials saved for installation.",
           )}
         </p>

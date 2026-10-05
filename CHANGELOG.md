@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Report asynchronous Seedbox credential rotation separately from installation health, including a sanitized failed step and interrupted-operation recovery state. Poll the result in **Use my MediaHub login** so an accepted request cannot hide a later failure; keep encrypted recovery references private. No live password changes or deployment are performed.
+
 - Add opt-in **Use my MediaHub login** to Seedbox installation and existing Seedbox Settings. Reauthenticate the administrator's entered password and enabled MFA with session/CSRF checks; copy the server-side account username through existing encrypted credential import/client rotation without changing VPN or WebUI protections. Clearly reject logins incompatible with Seedbox's existing policy and explain one-time copying, not continuous password synchronization. Existing users must opt in after updating; no live rotation or deployment is automatic.
 
 - Add regression checks confirming fast/full MediaHub platform updates target only Core/Agent, use dependency-isolated starts, and leave managed Plex/VPN running during Agent shutdown. Document the difference between platform updates and Plex/VPN updates or safety failures.
