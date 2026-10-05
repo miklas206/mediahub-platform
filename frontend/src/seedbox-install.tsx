@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
+import { SeedboxMediaHubLogin } from "./seedbox-mediahub-login";
 
 type Settings = {
   incompleteDownloads: boolean;
@@ -392,6 +393,14 @@ export function SeedboxInstallPage() {
               </form>
             )}
             {data.step === 7 && (
+              <SeedboxMediaHubLogin
+                operation="install"
+                revision={data.revision}
+                disabled={!!running || !!locked}
+                onSaved={refresh}
+              />
+            )}
+            {data.step === 7 && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -547,6 +556,12 @@ export function SeedboxInstallPage() {
             {data.step === 12 && (
               <details>
                 <summary>{t("Rotate private credentials")}</summary>
+                <SeedboxMediaHubLogin
+                  operation="rotate"
+                  revision={data.revision}
+                  disabled={!!running || !!locked}
+                  onSaved={refresh}
+                />
                 <p>
                   {t(
                     "VPN rotation stops qBittorrent until the new tunnel, forwarding and storage pass all guards. A failed rotation blocks automatic restart.",

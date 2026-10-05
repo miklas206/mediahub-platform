@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in **Use my MediaHub login** to Seedbox installation and existing Seedbox Settings. Reauthenticate the administrator's entered password and enabled MFA with session/CSRF checks; copy the server-side account username through existing encrypted credential import/client rotation without changing VPN or WebUI protections. Clearly reject logins incompatible with Seedbox's existing policy and explain one-time copying, not continuous password synchronization. Existing users must opt in after updating; no live rotation or deployment is automatic.
+
 - Add regression checks confirming fast/full MediaHub platform updates target only Core/Agent, use dependency-isolated starts, and leave managed Plex/VPN running during Agent shutdown. Document the difference between platform updates and Plex/VPN updates or safety failures.
 
 - Add a dedicated qBittorrent WebUI control under Seedbox Settings, including an explicit unconfigured state and Danish access guidance. Document opt-in authorized client SSH tunneling to the reviewed loopback WebUI port and Core operator-link configuration; preserve qBittorrent login, CSRF/host validation and VPN fail-closed behavior. No endpoint is exposed or live deployment performed.

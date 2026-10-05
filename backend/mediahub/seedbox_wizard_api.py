@@ -1,9 +1,11 @@
 """Authenticated HTTPS-only forwarding. Core never persists credential import bodies."""
 
+import re
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import Field
+from pydantic import ConfigDict, Field, SecretStr
 from sqlalchemy import select
 
 from mediahub.api import administrator, result, services
@@ -128,6 +130,51 @@ async def advance(body: WizardAdvance, request: Request):
 async def vpn(body: VPNImport, request: Request):
     return await forward(
         request, "/vpn", {"revision": body.revision, "vpnConfig": body.vpnConfig.get_secret_value()}
+    )
+
+
+class MediaHubClientImport(StrictModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    revision: int = Field(ge=0)
+    operation: Literal["install", "rotate"]
+    password: SecretStr = Field(exclude=True, min_length=1, max_length=256)
+    secondFactor: SecretStr = Field(
+        default_factory=lambda: SecretStr(""), exclude=True, max_length=32
+    )
+
+
+@router.post("/client/mediahub", status_code=202)
+async def mediahub_client(
+    body: MediaHubClientImport, request: Request, user=Depends(administrator)
+):
+    # Resolve the verified HTTPS target before consuming a recovery code.
+    agent = target(request)
+    svc = services(request)
+    password = body.password.get_secret_value()
+    with svc.sessions.begin() as db:
+        account = svc.auth.reauthenticate(
+            db, user["id"], password, body.secondFactor.get_secret_value()
+        )
+        if account.role != "administrator":
+            raise DomainError("administrator_required", "Administrator access is required", 403)
+        username = account.username
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", username) or not (
+        16 <= len(password) <= 256 and all(ord(char) >= 32 for char in password)
+    ):
+        raise DomainError(
+            "seedbox_login_incompatible",
+            "Your MediaHub login is incompatible: qBittorrent requires a username of "
+            "1–64 letters, digits, dots, underscores or hyphens and a 16–256 character "
+            "password without control characters. Use separate credentials instead.",
+            422,
+        )
+    path = "/rotate/client" if body.operation == "rotate" else "/client"
+    return result(
+        await agent.request(
+            "POST",
+            "/v1/seedbox/wizard" + path,
+            {"revision": body.revision, "webUsername": username, "webPassword": password},
+        )
     )
 
 

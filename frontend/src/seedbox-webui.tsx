@@ -1,5 +1,6 @@
 import { Panel } from "./phase2";
 import { t } from "./i18n";
+import { SeedboxMediaHubLogin } from "./seedbox-mediahub-login";
 
 export function seedboxWebUIUrl(value?: string | null): string | null {
   if (
@@ -62,6 +63,7 @@ export function SeedboxWebUI({ operatorUrl }: { operatorUrl?: string | null }) {
           "The reviewed installation binds the WebUI only to the Seedbox host's loopback address. Use its reviewed WebUI port, not the Agent port. Never disable qBittorrent authentication, CSRF protection or host validation.",
         )}
       </p>
+      <SeedboxMediaHubLogin operation="rotate" />
     </Panel>
   );
 }
