@@ -22,6 +22,11 @@ from mediahub.platform_source import SHA, download_source, normalize_source
 
 IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 RUNNING = {"downloading", "staged", "building", "installing", "verifying", "rolling_back"}
+MAINTENANCE_UNAVAILABLE = (
+    "An administrator must refresh the root-owned host updater from a reviewed checkout "
+    "using scripts/enable_source_updates.py --refresh-helper on the host. "
+    "Updating MediaHub alone does not enable system cleanup."
+)
 
 SOURCE_ASSETS = {"mediahub-source-release.json", "mediahub-source.tar.gz"}
 IMAGE_ASSETS = {
@@ -409,7 +414,7 @@ class PlatformUpdateRuntime:
         if not self._host_capability("maintenance"):
             return {
                 "state": "unavailable",
-                "message": "Refresh the host updater to enable system cleanup.",
+                "message": MAINTENANCE_UNAVAILABLE,
             }
         path = self.root / "maintenance-status.json"
         if not path.exists():
@@ -431,7 +436,7 @@ class PlatformUpdateRuntime:
     def start_maintenance(self):
         if not self._host_capability("maintenance"):
             raise DomainError(
-                "maintenance_unavailable", "Refresh the host updater to enable system cleanup.", 409
+                "maintenance_unavailable", MAINTENANCE_UNAVAILABLE, 409
             )
         if (
             self.status()["state"] in RUNNING

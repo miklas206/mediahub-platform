@@ -1,4 +1,5 @@
 import { fjordHubLink } from "./fjordhub-token-guide";
+import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
@@ -2064,8 +2065,6 @@ function SettingsPage() {
   );
 }
 
-type MaintenanceState = "healthy" | "degraded" | "unknown";
-
 function MaintenanceCard({
   icon,
   title,
@@ -2159,17 +2158,7 @@ function MaintenancePage() {
         storageData.every((location) => location.exists && location.readable)
       ? "healthy"
       : "degraded";
-  const appProblems =
-    appsData?.filter((app) =>
-      ["degraded", "unhealthy"].includes(app.health.status),
-    ) || [];
-  const appsState: MaintenanceState = !appsData
-    ? "unknown"
-    : appProblems.length === 0
-      ? appsData.every((app) => app.health.status === "healthy")
-        ? "healthy"
-        : "unknown"
-      : "degraded";
+  const appHealth = installedAppsHealth(appsData);
   const failure =
     core.error || runtime.error || storage.error || apps.error || "";
   const seedboxApp = appsData?.find(
@@ -2327,11 +2316,7 @@ function MaintenancePage() {
             className="maintenance-check"
             type="button"
             onClick={() => void runCheck()}
-            disabled={
-              checking ||
-              cleanup.data?.state === "queued" ||
-              cleanup.data?.state === "running"
-            }
+            disabled={!canRunMaintenance(cleanup.data, cleanup.error, checking)}
           >
             <RefreshCw size={15} className={checking ? "spin" : ""} />
             {checking ? t("Running…") : t("Run maintenance")}
@@ -2403,14 +2388,8 @@ function MaintenancePage() {
           <MaintenanceCard
             icon={<Box size={19} />}
             title={t("Installed apps")}
-            state={appsState}
-            detail={
-              appsData
-                ? appProblems.length
-                  ? `${appProblems.length} app${appProblems.length === 1 ? " needs" : "s need"} attention.`
-                  : `${appsData.length} app${appsData.length === 1 ? " is" : "s are"} healthy.`
-                : "Waiting for the app health check."
-            }
+            state={appHealth.state}
+            detail={appHealth.detail}
           />
         </div>
       </Section>

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an explicit `--refresh-helper` migration for the privileged host updater while preserving existing source trust or image-only update policy. Explain that updating Core alone does not enable host cleanup, and publish capabilities only after replacing the real helper.
+- Keep maintenance app-health counts consistent with the badge: unknown reports are not counted as healthy, and an empty installation list is explicitly unknown. Disable cleanup submission while its status is unavailable or still loading.
+
 - Show qBittorrent's accumulated seeding time directly below each torrent name on desktop and mobile, including zero and unavailable values; keep the existing seeding-time sort and expanded details.
 
 - Load App Store installation badges and setup selections from lightweight installed-app metadata (`GET /apps?include_health=false`) without waiting for remote health checks. The default app listing still includes health, and store controls still wait for installation and integration metadata.

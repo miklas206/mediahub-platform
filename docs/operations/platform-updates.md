@@ -237,17 +237,27 @@ It never prunes volumes or containers, scans media folders, or deletes app data,
 configuration, rollback backups or unknown files. Failed recovery directories
 remain available for investigation.
 
-Existing installations require a one-time refresh of the host helper from a
-checkout containing the maintenance implementation, as root on the MediaHub host:
+Existing installations require an explicit administrator refresh of the host helper
+from a reviewed checkout containing the maintenance implementation, as root on the
+MediaHub host. Adjust `--root` if the installation is not at `/opt/mediahub`:
 
 ```sh
-sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository miklas206/mediahub-platform
+sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --refresh-helper
 ```
 
+This mode preserves existing repository trust. Source-enabled hosts retain source
+updates; image-only hosts gain maintenance without enabling source updates or
+changing the updater's network restrictions. Use the existing `--repository
+OWNER/REPOSITORY` mode only when deliberately enabling source updates; it is not
+required for this refresh and cannot be combined with `--refresh-helper`.
+
 Do this while no update or maintenance operation is active. Updating Core alone
-does not replace the root-owned host helper. The UI reports missing support until
-the helper advertises its maintenance capability. This refresh does not run cleanup
-or restart app containers. New installations include the capability automatically.
+only replaces application images, not the root-owned host helper. The UI reports
+missing support until the real helper is installed and advertises its maintenance
+capability; editing the capability file alone is not a supported migration.
+The refresh retains the first helper/policy backups for administrator rollback,
+does not run cleanup, and does not restart app containers. New installations
+include the capability automatically.
 
 The standard system disk allocation is 64 GiB, separate from media storage.
 Existing guests must be expanded in Proxmox; installing code does not resize them.

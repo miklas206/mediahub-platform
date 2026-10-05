@@ -42,6 +42,35 @@ def test_maintenance_requires_capability_and_refuses_active_update(tmp_path, mon
         updater.start_maintenance()
 
 
+def test_source_capabilities_do_not_imply_maintenance_support(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    path = spool / "host-capabilities.json"
+    old_capabilities = {
+        "sourceBuild": True,
+        "automaticFastUpdate": True,
+        "mainBranchUpdates": True,
+    }
+    path.write_text(json.dumps(old_capabilities))
+    original = Path.lstat
+
+    def metadata(candidate):
+        result = original(candidate)
+        if candidate == path:
+            return SimpleNamespace(st_mode=0o100644, st_size=result.st_size, st_uid=0)
+        return result
+
+    monkeypatch.setattr(Path, "lstat", metadata)
+    assert updater.source_available is True
+    assert updater.maintenance_status()["state"] == "unavailable"
+    assert "--refresh-helper" in updater.maintenance_status()["message"]
+    with pytest.raises(DomainError) as failure:
+        updater.start_maintenance()
+    assert failure.value.status == 409
+    assert failure.value.code == "maintenance_unavailable"
+    assert json.loads(path.read_text()) == old_capabilities
+    assert not (spool / "request.json").exists()
+
+
 def test_maintenance_routes_require_admin(client):
     assert client.get("/api/v1/maintenance").status_code == 401
     assert client.post("/api/v1/maintenance").status_code in (401, 403)
