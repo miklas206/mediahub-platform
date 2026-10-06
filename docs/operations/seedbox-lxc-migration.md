@@ -19,6 +19,45 @@ Use separate new app-state storage for tests on the existing host, with no
 production writer or copied live torrent state. The production switch still
 requires explicit approval for a download pause and a verified state backup.
 
+### Read-only inspection of the revised target
+
+On 2026-10-06, LXC 102 and VM 104 were both running; trial LXC 103 was stopped.
+LXC 102 already runs Core, Agent, Plex and Plex's VPN as Docker services.
+Its existing `/mnt/mediahub-storage` mount exposes the complete host mergerfs
+storage. Do not rebuild that pool or change its underlying disks for migration.
+The LXC system disk had about 36 GiB available, and the Proxmox thin-pool was
+64.02% used. These figures change; recheck before copying state or building images.
+
+VM 104's live Docker mounts identify these paths that must be preserved:
+
+| Existing host path | Torrent/VPN container path | Purpose |
+| --- | --- | --- |
+| `/opt/mediahub-seedbox/qbit` | `/config` | qBittorrent settings and retained torrent/resume state |
+| `/data/downloads` | `/downloads` | Existing downloads, read/write |
+| `/data/movies` | `/media/movies` | Existing films, currently read/write |
+| `/data/tv` | `/media/tv` | Existing TV, currently read/write |
+| `/data/other` | `/media/other` | Other existing media, currently read/write |
+| `/opt/mediahub-seedbox/vpn` | `/gluetun` | VPN state |
+| `/opt/mediahub-seedbox/secrets/vpn.conf` | `/gluetun/wireguard/wg0.conf` | Private WireGuard configuration |
+| `/opt/mediahub-seedbox/dns.conf` | `/etc/resolv.conf` | Existing resolver configuration |
+
+The Agent installation is under `/opt/mediahub-agent`. Inspection reported
+approximately 7.3 MiB there and 28 MiB under `/opt/mediahub-seedbox`; these are
+directory-size observations, not verified backups. Private configuration and
+keys were not printed, copied or committed.
+
+The local Seedbox policy code currently verifies NFSv4 mount identity; it cannot
+simply accept LXC 102's mergerfs bind mount. A local-storage policy must verify
+the actual mount source, root, fresh host evidence and authorized paths rather
+than treating directory existence as success. The remote-host restriction must
+be changed together with this policy and its tests, not bypassed by itself.
+
+Next gates are local-storage policy tests, reviewed app/VPN runtime plans,
+protected configuration backup and a user-approved pause for a consistent final
+state copy. Preserve the same in-container paths above so retained torrent state
+continues to refer to the same files. Do not run two writers against these paths.
+Do not delete VM 104, LXC 103 or any existing data during these steps.
+
 Read-only inspection on 2026-10-06 found Seedbox in Proxmox VM 104
 (`mediahub-seedbox`, LAN address `192.168.1.148`) and MediaHub in LXC 102.
 VM 104 has one 24 GiB virtual system disk. The Seedbox mounts `/data/downloads`,
