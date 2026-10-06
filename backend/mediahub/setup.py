@@ -30,6 +30,8 @@ class NetworkSettings(StrictModel):
             base_url=self.base_url,
             allowed_origins=self.allowed_origins,
             trusted_proxies=self.trusted_proxies,
+            browser_tls_cert=None,
+            browser_tls_key=None,
             _env_file=None,
         )
         return self
@@ -61,7 +63,12 @@ class SetupService:
         self.bootstrap_attempts = []
         with svc.sessions.begin() as db:
             if db.scalar(select(InstallationState)) is None:
-                db.add(InstallationState(draft=Draft().model_dump()))
+                network = NetworkSettings(
+                    base_url=svc.config.base_url,
+                    allowed_origins=svc.config.allowed_origins,
+                    trusted_proxies=svc.config.trusted_proxies,
+                )
+                db.add(InstallationState(draft=Draft(network=network).model_dump()))
         token = svc.config.data_dir / "bootstrap.token"
         if svc.auth.needs_setup() and not token.exists():
             fd = os.open(token, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -97,7 +104,7 @@ class SetupService:
         self.svc.auth.create_admin(username, password)
         with self.svc.sessions.begin() as db:
             row = db.scalar(select(InstallationState))
-            row.draft = Draft(step=3).model_dump()
+            row.draft = Draft(step=3, network=Draft.model_validate(row.draft).network).model_dump()
             row.revision += 1
 
     def save(self, body: SaveDraft):

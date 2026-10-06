@@ -265,6 +265,22 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
     assert all(a["availability"] in {"coming-soon", "available"} for a in catalog)
 
 
+def test_https_first_setup_preserves_configured_network(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEDIAHUB_BROWSER_TLS_CERT", "/tls/server.pem")
+    monkeypatch.setenv("MEDIAHUB_BROWSER_TLS_KEY", "/tls/server.key")
+    config = Config(
+        data_dir=tmp_path / "core",
+        base_url="https://127.0.0.1:18765",
+        allowed_origins=["https://127.0.0.1:18765"],
+        _env_file=None,
+    )
+    with TestClient(create_app(config), base_url=config.base_url) as client:
+        bootstrap(client)
+        draft = client.get("/api/v1/setup/draft").json()["data"]["draft"]
+        assert draft["network"]["base_url"] == config.base_url
+        assert draft["network"]["allowed_origins"] == config.allowed_origins
+
+
 def test_bootstrap_token_cannot_be_guessed_or_reused(setup_client):
     values = {"username": "owner", "password": secrets.token_urlsafe(24), "token": "x" * 64}
     assert setup_client.post("/api/v1/setup/administrator", json=values).status_code == 403

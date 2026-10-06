@@ -2,6 +2,23 @@
 
 ## Current boundary
 
+## Revised target
+
+The user's revised requirement on 2026-10-06 is to run apps inside the existing
+MediaHub LXC 102 as Docker services, with Cloudflare remaining separate.
+Do not migrate production Seedbox into the separate trial LXC 103. Keep that
+stopped trial intact; its earlier tests are evidence only, not the final target.
+Preserve the entire existing media storage, including downloads, other files
+and directories, not just the movie library. No formatting, pruning, moves or
+recursive permission changes are authorized.
+
+Before any production change, verify local Seedbox Agent policy, dedicated VPN
+networking, existing mount paths and the current remote-host requirement in
+MediaHub. Removing that requirement alone does not provide a safe local install.
+Use separate new app-state storage for tests on the existing host, with no
+production writer or copied live torrent state. The production switch still
+requires explicit approval for a download pause and a verified state backup.
+
 Read-only inspection on 2026-10-06 found Seedbox in Proxmox VM 104
 (`mediahub-seedbox`, LAN address `192.168.1.148`) and MediaHub in LXC 102.
 VM 104 has one 24 GiB virtual system disk. The Seedbox mounts `/data/downloads`,

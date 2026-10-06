@@ -43,15 +43,18 @@ The guide explains where to run commands, what each installer question means,
 how to open MediaHub securely, and what to do when something goes wrong.
 You do not need to write code.
 
-**Before you start:** you need a new, prepared Linux server with Docker and a
-separately mounted data drive. MediaHub does not currently create that server,
-install Docker or connect a drive for you. If you only have Windows, an empty
-Proxmox host or an unprepared server, complete server preparation first.
-The guide includes a checklist; it is not a one-click server setup tool.
+**Choose your platform in the guide:** Windows with Docker Desktop, or Proxmox.
+The Windows script builds and starts Core and Agent using new Docker volumes.
+The Proxmox script creates one new MediaHub LXC and installs Docker inside it.
+Both configure HTTPS and provide the browser address and setup-token command.
+Neither connects, formats or migrates an existing media drive.
 
-The installer creates MediaHub and its local Agent. Plex is optional in the
-browser wizard. Seedbox needs an additional prepared, securely paired host;
-it is not automatically installed in the MediaHub container.
+The guided bootstrap currently installs MediaHub Core and its local Agent;
+app policies and host-driven updating are not configured yet. The intended
+layout runs apps as Docker services on the same MediaHub host, not separate
+Proxmox guests; Cloudflare may remain separate. Local Seedbox support is still
+being prepared, not a completed migration feature. The advanced Linux installer
+retains its existing separate-Seedbox-host requirement.
 
 **Already using MediaHub?** Use its Updates page instead. The new-install guide
 does not upgrade, migrate or replace an existing installation. It does not

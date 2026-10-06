@@ -1,5 +1,145 @@
 # Guided MediaHub Installation
 
+## Choose your platform
+
+Use **one** of the two scripts below for a new installation. They build and start
+the real MediaHub Core and Agent, create new persistent Docker volumes and set
+up HTTPS. No existing media drive is connected, formatted or migrated.
+An existing installation or conflicting volume name causes the scripts to stop.
+Do not delete existing files or volumes to force a retry.
+
+Apps are intended to run as separate Docker services on the **same MediaHub
+host**, inside its single Proxmox LXC when using Proxmox. Cloudflare is the
+exception and may remain on its own host. This bootstrap currently installs
+Core and Agent only: it does **not** yet configure local Seedbox/VPN, Plex
+installation policies, host-driven updates or existing media mounts. Do not
+mistake a working dashboard for a completed app installation.
+
+### Windows with Docker Desktop
+
+1. Install and start Docker Desktop using Linux containers. Windows PowerShell
+	5.1 or newer is required. Keep Docker Desktop running while using MediaHub.
+2. Open **PowerShell**, not a terminal inside a container.
+3. Download the installer from this repository. Review it before executing it:
+
+```powershell
+$installer = Join-Path $env:TEMP 'mediahub-install-docker.ps1'
+Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/install-docker.ps1' -OutFile $installer
+notepad $installer
+```
+
+4. Run the downloaded script:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\mediahub-install-docker.ps1"
+```
+
+5. Read the summary and type `INSTALL` to accept. The default output folder is
+	`MediaHub-Guided` in your Windows user folder. Images may take several minutes
+	to build. Wait for both HTTPS health checks to pass.
+6. The script prints the new public CA fingerprint and asks whether to trust its
+	certificate. Type `TRUST` only if you approve this installation's local CA.
+	It imports only the public certificate into your current Windows user's
+	trusted roots, not a private key. Otherwise import the verified public
+	`ca.pem` manually before opening the browser.
+7. Open **https://127.0.0.1:18765** on this computer. Do not use `localhost`:
+	the configured browser origin is `127.0.0.1`. Do not bypass TLS warnings.
+8. Run the private setup-token command printed by the script and enter the
+	token in the browser's **Installation token** field. It is not a password
+	to share in an issue, screenshot or chat.
+9. Choose an administrator username and a unique password of at least 12
+	characters. Confirm the password. Save any two-factor recovery codes.
+	Use the new `/storage` folders for testing, and skip Plex until its host
+	policy is prepared. Do not point this test at your only copy of media.
+
+The address is local to this computer, not exposed to the LAN or internet.
+The script downloads the default branch; it is not a pinned stable release.
+You need Docker Desktop installed, but not Git, Python or OpenSSL on Windows.
+
+To stop or start later, replace the folder below if you chose a different one:
+
+```powershell
+docker compose -f "$HOME\MediaHub-Guided\compose.json" stop
+docker compose -f "$HOME\MediaHub-Guided\compose.json" start
+docker compose -f "$HOME\MediaHub-Guided\compose.json" ps
+```
+
+Keep the installation folder and its Docker volumes. **Never use `down -v`,
+`volume prune` or factory reset to update this installation.** Stopping the
+containers keeps their data. This script is not an update or repair command.
+
+### Proxmox
+
+This path creates **one new MediaHub LXC**, not one LXC per app. It never
+replaces LXC 102 or any other existing guest. The script currently supports
+amd64 Proxmox, a Debian 13 template and a DHCP-enabled local network.
+It installs Docker inside the new guest, not on the Proxmox hypervisor.
+
+1. In the Proxmox web interface select your **node**, then **Shell**.
+2. Download and review the installer:
+
+```sh
+curl -fL https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/install-proxmox.sh -o /root/mediahub-install-proxmox.sh
+less /root/mediahub-install-proxmox.sh
+```
+
+Press `q` to close the reader, then start:
+
+```sh
+bash /root/mediahub-install-proxmox.sh
+```
+
+3. Answer the questions below. Press Enter only when the displayed default
+	actually matches your host. If unsure about storage, stop before confirming.
+
+| Question | Meaning |
+| --- | --- |
+| New container ID | A free ID, or Enter for Proxmox's next free ID. Existing guests are rejected. |
+| Container storage | Storage for the new 64 GiB system disk, normally `local-lvm`. |
+| Template storage | Storage for the downloaded Debian template, normally `local`. |
+| Network bridge | Your LAN bridge, normally `vmbr0`. |
+| Type INSTALL | Confirm the new guest with 6 CPU cores, 16384 MiB RAM and no swap. |
+
+Review free storage and RAM before confirming. Thin-provisioned storage may be
+overbooked even if creating the disk succeeds. The script does not change host
+storage settings, extend pools or remove old guests to make room.
+
+4. Wait for the new LXC, Docker, image builds and both HTTPS health checks.
+	The final output shows your new guest's HTTPS address and CT ID.
+5. Use the printed `pct pull` command to retrieve only the public CA. Transfer
+	it to the browser computer, verify the printed fingerprint and import it as
+	described in the certificate section below. Never transfer private keys.
+6. Read the private setup token using the printed `pct exec` command, open the
+	printed HTTPS address and create the administrator as in the Windows steps.
+
+The new Docker volumes initially live on the **new system disk**, not your
+existing media drives. This makes a new trial independent of existing media;
+it is not a recommendation to fill the system disk with a production library.
+Adding existing media needs an explicit mount/access plan. Do not attach a raw
+disk twice or recursively change its permissions.
+
+Proxmox status: shell syntax is checked; **this new end-to-end Proxmox installer
+has not been run on a live host**. A failure retains the new guest and data for
+inspection; no automatic destructive cleanup runs.
+
+### If either script fails
+
+Stop at the error. Keep the new installation folder, guest and volumes. Record
+the failed stage and inspect status/logs locally before attempting repair.
+Never share credentials, setup tokens or full configuration backups.
+The script refuses existing volumes intentionally: this protects data, but
+means a failed install cannot simply be restarted as a new installation.
+
+Server certificates expire after **90 days**. Renewal is still operator-managed;
+see [certificate renewal](certificates.md). The scripts do not yet provide
+automatic renewal or a complete beginner-friendly app/update lifecycle.
+
+## Advanced: prepared Linux host installation
+
+The remainder describes the older `install.sh` path with explicit storage policy
+and systemd host updating. It is **not** the Docker Desktop bootstrap. Do not
+mix its paths or commands with the guided scripts above.
+
 This guide is for a **new installation**. You do not need to write code, but you
 do need a prepared Linux server. Follow the steps in order. If a check fails,
 stop at that step instead of guessing or deleting files to try again.
