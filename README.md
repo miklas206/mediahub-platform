@@ -37,24 +37,26 @@ claims of working installers. The first supported app workflows are Plex and See
 
 ## Install
 
-Use a **new** Debian/Ubuntu Docker host with Compose v2, Python 3, OpenSSL,
-systemd/cgroup v2 and a separately mounted data filesystem. On Proxmox, use a
-guest; never install this stack directly on the hypervisor.
+**Start here: [Guided installation, step by step](docs/install.md).**
 
-```sh
-sudo sh install.sh
-```
+The guide explains where to run commands, what each installer question means,
+how to open MediaHub securely, and what to do when something goes wrong.
+You do not need to write code.
 
-The interactive installer creates a new deployment, builds pinned source images,
-creates private HTTPS identities and prints the browser URL and local setup-token
-command. It never formats disks or changes existing media permissions. Import
-only the generated public CA on your client; never bypass certificate validation.
-Complete the browser wizard and optionally install Plex. Seedbox requires a
-separate prepared and securely paired host with approved Downloads storage.
+**Before you start:** you need a new, prepared Linux server with Docker and a
+separately mounted data drive. MediaHub does not currently create that server,
+install Docker or connect a drive for you. If you only have Windows, an empty
+Proxmox host or an unprepared server, complete server preparation first.
+The guide includes a checklist; it is not a one-click server setup tool.
 
-See [installation prerequisites and procedure](docs/install.md). The installer
-does not provision a Proxmox VM, install Docker, or automatically migrate an old
-server. Those host-level steps require deliberate administration.
+The installer creates MediaHub and its local Agent. Plex is optional in the
+browser wizard. Seedbox needs an additional prepared, securely paired host;
+it is not automatically installed in the MediaHub container.
+
+**Already using MediaHub?** Use its Updates page instead. The new-install guide
+does not upgrade, migrate or replace an existing installation. It does not
+format media drives or change existing media-folder permissions, but it does
+create installation files and new data folders. Back up irreplaceable media.
 
 ## Phone home-screen app
 
