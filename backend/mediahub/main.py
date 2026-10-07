@@ -32,6 +32,7 @@ from mediahub.backups_api import router as backups_router
 from mediahub.catalog import Catalog
 from mediahub.cloudflare_tunnel import CloudflareTunnelMonitor
 from mediahub.config import Config
+from mediahub.container_apps_api import router as container_apps_router
 from mediahub.db import connect, migrate
 from mediahub.errors import DomainError
 from mediahub.events import EventBus
@@ -257,6 +258,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app.include_router(router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
+    app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
     app.include_router(agent_updates_router, prefix="/api/v1")
     app.include_router(fjordhub_router, prefix="/api/v1")

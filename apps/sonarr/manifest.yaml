@@ -1,0 +1,34 @@
+schemaVersion: 1
+id: org.mediahub.sonarr
+name: Sonarr
+description: Manage TV searches and imports using your existing download client.
+category: automation
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: sonarr
+homepage: https://sonarr.tv
+repository: https://github.com/Sonarr/Sonarr
+availability: available
+requiredRuntime: docker
+images:
+  sonarr: {repository: linuxserver/sonarr, digest: "sha256:f247545d23ba8b233d6604575347e48a623fe6ad75dda02348bf81917f3b5c06"}
+services:
+  sonarr:
+    image: sonarr
+    resources: {memoryMiB: 1024}
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 8989, exposure: lan}]
+    volumes:
+      - {slot: appdata, target: /config, access: rw}
+      - {slot: tv, target: /tv, access: rw}
+      - {slot: downloads, target: /downloads, access: rw}
+storageRequirements:
+  - {id: appdata, type: appdata, access: rw, required: true}
+  - {id: tv, type: tv, access: rw, required: true}
+  - {id: downloads, type: downloads, access: rw, required: true}
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: [storage.mapped.read, storage.mapped.write]
+updateSource: {type: none}
+adapter: {id: org.mediahub.sonarr, protocolVersion: 1}

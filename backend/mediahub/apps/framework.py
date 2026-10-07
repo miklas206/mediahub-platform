@@ -166,7 +166,11 @@ class AppManager:
             "version": app.version,
             "state": app.state,
             "isMock": app.is_mock,
-            "detailPath": f"/apps/{app.id}"
+            "detailPath": (
+                "/apps/install/" + app.package_id.removeprefix("org.mediahub.")
+                if getattr(getattr(self.adapters.get(app.id), "definition", None), "view_id", None) == "container"
+                else f"/apps/{app.id}"
+            )
             if hasattr(self.adapters.get(app.id), "definition")
             else None,
         }

@@ -16,6 +16,11 @@ import psutil
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from mediahub.apps.containers import (
+    ContainerInstallation,
+    ContainerInstallRequest,
+    ContainerRemoval,
+)
 from mediahub.apps.manifest import DeviceRequirement
 from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
 from mediahub.apps.seedbox import SeedboxInstallation
@@ -34,6 +39,7 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from agent.app_backups import AppBackups
+from agent.container_apps import ContainerApps
 from agent.devices import device_report
 from agent.discovery import discovery_report
 from agent.fixtures import containers
@@ -71,6 +77,7 @@ class AgentConfig(BaseSettings):
     seedbox_policy_file: Path | None = None
     plex_policy_file: Path | None = None
     plex_install_policy_file: Path | None = None
+    container_apps_policy_file: Path | None = None
 
     @model_validator(mode="after")
     def validate_tls(self):
@@ -230,10 +237,14 @@ def create_agent(config: AgentConfig | None = None):
     if config.plex_install_policy_file:
         plex.runtime = plex_runtime
     backups = AppBackups(plex, control)
+    container_apps = ContainerApps(config.container_apps_policy_file, config.docker_socket, config.state_dir)
 
     @asynccontextmanager
     async def lifespan(app):
         cleanup = asyncio.create_task(uploads.cleanup())
+        container_monitor = (
+            asyncio.create_task(container_apps.monitor()) if config.container_apps_policy_file else None
+        )
         torrent_cleanup = (
             asyncio.create_task(torrents.retention.poll()) if config.seedbox_policy_file else None
         )
@@ -246,6 +257,11 @@ def create_agent(config: AgentConfig | None = None):
         if config.plex_policy_file:
             plex.monitor_task = asyncio.create_task(plex.monitor())
         yield
+        if container_monitor:
+            container_monitor.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await container_monitor
+        await container_apps.close()
         if torrent_cleanup:
             torrent_cleanup.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -378,6 +394,42 @@ def create_agent(config: AgentConfig | None = None):
             raise DomainError(
                 "https_required", "Installation and credentials require verified HTTPS", 403
             )
+
+    @app.get("/v1/container-apps/{app_id}/install-options")
+    async def container_options(app_id: str):
+        return await container_apps.options(app_id)
+
+    @app.post("/v1/container-apps/install-plan", dependencies=[Depends(secure_workflow)])
+    async def container_plan(body: ContainerInstallation):
+        return await container_apps.plan(body)
+
+    @app.post("/v1/container-apps/install", dependencies=[Depends(secure_workflow)], status_code=202)
+    async def container_install(body: ContainerInstallRequest):
+        return await container_apps.install(body)
+
+    @app.get("/v1/container-apps/{app_id}/status")
+    async def container_status(app_id: str):
+        return await container_apps.status(app_id)
+
+    @app.get("/v1/container-apps/{app_id}/uninstall-status")
+    async def container_uninstall_status(app_id: str):
+        report = await container_apps.status(app_id)
+        return {"state": "succeeded" if report["state"] in {"removed", "not-installed"} else "ready",
+                "installationId": report["installationId"], "dataPreserved": True}
+
+    @app.post("/v1/container-apps/{app_id}/uninstall", dependencies=[Depends(secure_workflow)])
+    async def container_uninstall(app_id: str, body: ContainerRemoval):
+        response = await container_apps.action(app_id, "uninstall", body.confirmedInstallationId)
+        return {**response, "state": "accepted"}
+
+    @app.post("/v1/container-apps/{app_id}/actions/{action}", dependencies=[Depends(secure_workflow)])
+    async def container_action(app_id: str, action: str):
+        return await container_apps.action(app_id, action)
+
+    @app.get("/v1/container-apps/{app_id}/logs")
+    async def container_logs(app_id: str):
+        container_apps.app(app_id)
+        return []
 
     @app.get("/v1/seedbox/wizard")
     async def wizard_status():

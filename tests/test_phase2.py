@@ -260,6 +260,11 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
         "Plex",
         "Seedbox",
         "Windows folder access",
+        "Jellyfin",
+        "Prowlarr",
+        "Radarr",
+        "Sonarr",
+        "autobrr",
     }
     assert next(a for a in catalog if a["id"] == "org.mediahub.plex")["availability"] == "available"
     assert all(a["availability"] in {"coming-soon", "available"} for a in catalog)

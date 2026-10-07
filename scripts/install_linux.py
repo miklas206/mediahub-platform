@@ -324,6 +324,19 @@ def main():
         },
     }
     new_file(root / "agent/plex-install.json", json.dumps(policy), 0o600, 10001, 10001)
+    container_policy = {
+        key: policy[key] for key in (
+            "hostId", "bindAddress", "uid", "gid", "hostMountSnapshot",
+            "requiredFilesystemUuids", "storageMarkers",
+        )
+    }
+    container_policy["uid"] = 10001
+    container_policy["gid"] = 1000
+    container_policy["storage"] = {
+        kind: {"label": kind.title(), "kind": kind, "path": str(path)}
+        for kind, path in folders.items() if kind in {"appdata", "movies", "tv", "downloads"}
+    }
+    new_file(root / "agent/container-apps.json", json.dumps(container_policy), 0o600, 10001, 10001)
     common = {
         "restart": "unless-stopped",
         "cap_drop": ["ALL"],
@@ -358,6 +371,7 @@ def main():
             "MEDIAHUB_AGENT_DEVICE_SNAPSHOT_FILE": "/host-evidence/" + evidence.name,
             "MEDIAHUB_AGENT_PLEX_INSTALL_POLICY_FILE": "/state/plex-install.json",
             "MEDIAHUB_AGENT_PLEX_POLICY_FILE": "/state/plex-managed.json",
+            "MEDIAHUB_AGENT_CONTAINER_APPS_POLICY_FILE": "/state/container-apps.json",
         },
         "healthcheck": {"disable": True},
     }

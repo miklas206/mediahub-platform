@@ -1,6 +1,7 @@
 import { isFjordHubInstalled, type FjordHubInstallation } from "./fjordhub-status";
 import { getLocale, translateText, t } from "./i18n";
 import { ServiceIcon } from "./service-icon";
+import { containerAppNames } from "./container-apps";
 
 import { LayoutGroup } from "./page-layout";
 import { AppUninstall } from "./app-uninstall";
@@ -1440,6 +1441,10 @@ export function CatalogPage({
                   ) : deployed ? (
                     <Link className="primary" to="/store/fjordhub">
                       {t("Manage FjordHub →")}
+                    </Link>
+                  ) : Object.hasOwn(containerAppNames, app.id.replace("org.mediahub.", "")) ? (
+                    <Link className="primary" to={"/apps/install/" + app.id.replace("org.mediahub.", "")}>
+                      {t("Install ")}{app.name} →
                     </Link>
                   ) : app.id === "org.mediahub.plex" ? (
                     <Link className="primary" to="/apps/install/plex">

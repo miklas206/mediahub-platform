@@ -2,6 +2,7 @@
 
 from sqlalchemy import select
 
+from mediahub.apps.containers import CONTAINER_APPS
 from mediahub.apps.remote_adapter import RemoteAppAdapter, RemoteAppDefinition
 from mediahub.apps.remote_status import RemoteStatusCache
 from mediahub.db import InstalledApp, Setting
@@ -20,6 +21,11 @@ DEFINITIONS = (
         "/v1/seedbox",
         ("restart-vpn", "restart-qbittorrent", "test-vpn"),
     ),
+) + tuple(
+    RemoteAppDefinition(
+        "org.mediahub." + app, "container_installation_" + app,
+        "/v1/container-apps/" + app, view_id="container",
+    ) for app in CONTAINER_APPS
 )
 
 

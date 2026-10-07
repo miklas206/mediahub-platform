@@ -1,0 +1,28 @@
+schemaVersion: 1
+id: org.mediahub.autobrr
+name: autobrr
+description: Detect new releases through supported announces and configurable filters.
+category: automation
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: autobrr
+homepage: https://autobrr.com
+repository: https://github.com/autobrr/autobrr
+availability: available
+requiredRuntime: docker
+images:
+  autobrr: {repository: ghcr.io/autobrr/autobrr, digest: "sha256:e200008d43fe6cd2d944c9bcf20900cfb8ba8a8e509625bb78ee51910b994005"}
+services:
+  autobrr:
+    image: autobrr
+    resources: {memoryMiB: 1024}
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 7474, exposure: lan}]
+    volumes: [{slot: appdata, target: /config, access: rw}]
+storageRequirements: [{id: appdata, type: appdata, access: rw, required: true}]
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: []
+updateSource: {type: none}
+adapter: {id: org.mediahub.autobrr, protocolVersion: 1}

@@ -1,0 +1,34 @@
+schemaVersion: 1
+id: org.mediahub.jellyfin
+name: Jellyfin
+description: Stream your media with persistent configuration and read-only library access.
+category: media
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: jellyfin
+homepage: https://jellyfin.org
+repository: https://github.com/jellyfin/jellyfin
+availability: available
+requiredRuntime: docker
+images:
+  jellyfin: {repository: jellyfin/jellyfin, digest: "sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037"}
+services:
+  jellyfin:
+    image: jellyfin
+    resources: {memoryMiB: 2048}
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 8096, exposure: lan}]
+    volumes:
+      - {slot: appdata, target: /config, access: rw}
+      - {slot: movies, target: /movies, access: ro}
+      - {slot: tv, target: /tv, access: ro}
+storageRequirements:
+  - {id: appdata, type: appdata, access: rw, required: true}
+  - {id: movies, type: movies, access: ro, required: false}
+  - {id: tv, type: tv, access: ro, required: false}
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: [storage.mapped.read]
+updateSource: {type: none}
+adapter: {id: org.mediahub.jellyfin, protocolVersion: 1}

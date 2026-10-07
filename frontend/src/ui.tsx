@@ -141,6 +141,9 @@ const PlexInstallPage = lazy(() =>
     default: module.PlexInstallPage,
   })),
 );
+const ContainerAppPage = lazy(() =>
+  import("./container-apps").then((module) => ({ default: module.ContainerAppPage })),
+);
 const SecuritySettings = lazy(() =>
   import("./security").then((module) => ({ default: module.SecuritySettings })),
 );
@@ -947,6 +950,7 @@ function Shell({
                     path="/apps/install/seedbox"
                     element={<SeedboxInstallPage />}
                   />
+                  <Route path="/apps/install/:containerApp" element={<ContainerAppPage />} />
                   <Route
                     path="/apps/:appId/install"
                     element={<SeedboxInstallPage />}

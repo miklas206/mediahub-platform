@@ -90,7 +90,9 @@ class AgentClient:
                         "/v1/seedbox/torrents/add",
                         "/v1/seedbox/torrents/action",
                         "/v1/plex/install",
+                        "/v1/container-apps/install",
                     }
+                    or path.startswith("/v1/container-apps/") and method != "GET"
                     else 8
                 ),
                 trust_env=False,

@@ -9,6 +9,9 @@ import {
   Package,
   Globe,
   ChartNoAxesCombined,
+  Tv,
+  Search,
+  Radio,
   type LucideProps,
 } from "lucide-react";
 
@@ -24,6 +27,11 @@ const fjordFallbacks = {
   fjordparcel: Package,
   orbitmap: Globe,
   fjordbudget: ChartNoAxesCombined,
+  jellyfin: Film,
+  prowlarr: Search,
+  radarr: Film,
+  sonarr: Tv,
+  autobrr: Radio,
 };
 
 /** Product marks identify services; interface actions still use the Lucide line family. */
