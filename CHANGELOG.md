@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show official Jellyfin, Prowlarr, Radarr, Sonarr and autobrr artwork with retained licenses. Accept FjordHub's token-granted, app-specific public registry icons through the bounded local proxy without forwarding Bearer credentials to GitHub; share proxy icons on the FjordFlix dashboard and preserve safe fallbacks.
+
 - Add Jellyfin, Prowlarr, Radarr, Sonarr and optional autobrr to the App Store with a shared HTTPS/admin/CSRF-protected container installation page. Use immutable images, operator-approved host/storage policy, reviewed plan digests, non-root containers, private LAN ports, persistent configuration, ownership-checked actions and data-preserving removal. Generate policy for new Linux installs; existing hosts need explicit operator preparation. Container state is not application health. Tracker configuration, external-client integration and the proposed automatic download queue remain separate and disabled.
 
 - Restore strict RSS publication-date protection by default for new and existing feeds: reject old, undated, invalid, timezone-less and future-dated automatic work, including persisted queues. Add an explicit default-off per-feed discovery-only opt-in with a mass-backfill warning. Policy changes fetch a fresh baseline and clear pending work without enabling automation or replaying history. RSS dates cannot prove original tracker age; existing torrents and cleanup rules are unchanged.

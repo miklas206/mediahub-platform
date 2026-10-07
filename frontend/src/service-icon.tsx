@@ -9,9 +9,6 @@ import {
   Package,
   Globe,
   ChartNoAxesCombined,
-  Tv,
-  Search,
-  Radio,
   type LucideProps,
 } from "lucide-react";
 
@@ -27,11 +24,6 @@ const fjordFallbacks = {
   fjordparcel: Package,
   orbitmap: Globe,
   fjordbudget: ChartNoAxesCombined,
-  jellyfin: Film,
-  prowlarr: Search,
-  radarr: Film,
-  sonarr: Tv,
-  autobrr: Radio,
 };
 
 /** Product marks identify services; interface actions still use the Lucide line family. */
@@ -53,7 +45,7 @@ export function ServiceIcon({
         {...props}
       />
     );
-  if (appId === "fjord3d")
+  if (["fjord3d", "jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"].includes(appId))
     return (
       <svg
         width={size}
@@ -63,7 +55,7 @@ export function ServiceIcon({
         aria-hidden={props["aria-label"] ? undefined : true}
         {...props}
       >
-        <image href="/assets/services/fjord3d.png" width="32" height="32" />
+        <image href={`/assets/services/${appId}.png`} width="32" height="32" />
       </svg>
     );
   if (id === "org.mediahub.windows-share")

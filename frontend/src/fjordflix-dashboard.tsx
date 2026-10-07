@@ -5,7 +5,7 @@ import type { Integration } from "./integrations";
 import { fjordHubAppLink } from "./fjordhub-app-link";
 import { FjordFlixPoster } from "./fjordflix";
 import { t } from "./i18n";
-import { ServiceIcon } from "./service-icon";
+import { FjordHubIcon } from "./fjordhub-updates";
 
 export function FjordFlixDashboardCard({
   row,
@@ -40,7 +40,7 @@ export function FjordFlixDashboardCard({
       aria-label={`FjordFlix · ${row.name}`}
     >
       <div className="service-tile-title">
-        <ServiceIcon packageId="fjordflix" size={32} />
+        <FjordHubIcon row={row} appId="fjordflix" size={32} />
         <h3>FjordFlix</h3>
         <span
           className={`badge ${stale ? "degraded" : data.ok ? "healthy" : "unknown"}`}

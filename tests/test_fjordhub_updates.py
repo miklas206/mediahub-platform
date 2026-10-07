@@ -88,6 +88,12 @@ def test_unsafe_icons(url):
     assert icon_path(url, FjordHubClient(ORIGIN, TOKEN)) is None
 
 
+def test_relative_icons_use_the_configured_fjordhub_origin():
+    path = "/static/logos/icons/fjordflix.png?v=brand-1"
+    assert icon_path(path, FjordHubClient(ORIGIN, TOKEN)) == path
+    assert icon_path("//evil.example/static/logos/icon.png", FjordHubClient(ORIGIN, TOKEN)) is None
+
+
 def test_metadata_resource_and_fallback():
     paths = []
 
@@ -273,6 +279,44 @@ def test_bounded_icon_proxy(logged_in, kind, payload, code):
     assert response.status_code == code
     assert TOKEN not in response.text
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("code", [200, 302, 403])
+def test_registry_icon_proxy_never_forwards_access_token(logged_in, code):
+    url = "https://raw.githubusercontent.com/qlerup/fjordflix/main/app/static/logos/icons/fjordflix-mark-transparent-512.png?v=brand-20261005"
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        assert "authorization" not in request.headers
+        return httpx.Response(
+            code,
+            content=b"\x89PNG\r\n\x1a\nfixture",
+            headers={"Content-Type": "image/png", "Location": "https://evil.example/icon.png"},
+        )
+
+    service, key, path = setup(logged_in, handler)
+    with service.sessions.begin() as db:
+        db.get(ExternalIntegration, key).snapshot = {
+            "app_info": app_info(FjordHubClient(ORIGIN, TOKEN), metadata(icon=url))
+        }
+    response = logged_in.get(path + "/apps/fjordflix/icon")
+    assert response.status_code == (200 if code == 200 else 404)
+    assert calls == [url]
+    assert TOKEN not in response.text
+
+
+def test_registry_icons_are_exact_and_app_specific():
+    from mediahub.integrations.fjordhub_metadata import REGISTRY_ICONS
+
+    client = FjordHubClient(ORIGIN, TOKEN)
+    for identifier, path in REGISTRY_ICONS.items():
+        url = "https://raw.githubusercontent.com" + path
+        assert icon_path(url, client, identifier) == url
+        assert icon_path(url, client, "unknown") is None
+        assert icon_path(url.replace("/qlerup/", "/attacker/"), client, identifier) is None
+        assert icon_path(url + "?token=secret", client, identifier) is None
+        assert icon_path(url.replace("https:", "http:"), client, identifier) is None
 
 
 def test_check_is_explicit_and_not_installation(logged_in):

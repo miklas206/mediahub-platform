@@ -123,6 +123,16 @@ for (const width of [1440, 390]) {
       });
     });
     await page.goto("/store");
+    for (const id of ["jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"]) {
+      await expect(page.locator(`image[href="/assets/services/${id}.png"]`)).toBeVisible();
+      expect(await page.evaluate(async (name) => {
+        const image = new Image();
+        image.src = `/assets/services/${name}.png`;
+        await image.decode();
+        return image.naturalWidth > 0 && image.naturalHeight > 0;
+      }, id)).toBe(true);
+    }
+    await page.screenshot({ path: `../.qa/app-icons-${width}.png`, fullPage: true });
     for (const name of ["Jellyfin", "Prowlarr", "Radarr", "Sonarr", "autobrr"])
       await expect(
         page.getByRole("link", { name: `Install ${name} →`, exact: true }),

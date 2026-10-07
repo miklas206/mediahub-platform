@@ -44,6 +44,23 @@ const render = (value: Integration) =>
       <FjordFlixDashboardCard row={value} />
     </MemoryRouter>,
   );
+it("uses the local icon proxy for token-granted FjordFlix metadata", () => {
+  const html = render({
+    ...row,
+    snapshot: {
+      ...row.snapshot,
+      app_info: {
+        fjordflix: {
+          id: "fjordflix", name: "FjordFlix", installed: true, port: 9234,
+          icon_path: "https://raw.githubusercontent.com/qlerup/fjordflix/main/app/static/logos/icons/fjordflix-mark-transparent-512.png",
+          permissions: { app_data: true, updates: false },
+        },
+      },
+    },
+  });
+  expect(html).toContain("/api/v1/integrations/hub/apps/fjordflix/icon?v=");
+  expect(html).not.toContain('src="https://raw.githubusercontent.com');
+});
 it("renders a Plex-style dashboard card independent of Docker status with counts, ordered protected posters and stale state", () => {
   const html = render(row);
   expect(html).toContain("plex-service-tile");

@@ -613,11 +613,12 @@ class IntegrationService:
             client = self.provider_factory(
                 origin, self.store.get(reference).decode(), allow_http=allow_http
             )
-            if icon_path(origin + path, client) != path:
+            external = path.startswith("https://raw.githubusercontent.com/")
+            if icon_path(path if external else origin + path, client, app_id) != path:
                 raise ProviderFailure("invalid_response")
             async with httpx.AsyncClient(
                 base_url=origin,
-                headers={"Authorization": "Bearer " + client._access_token},
+                headers={} if external else {"Authorization": "Bearer " + client._access_token},
                 timeout=5,
                 follow_redirects=False,
                 trust_env=False,

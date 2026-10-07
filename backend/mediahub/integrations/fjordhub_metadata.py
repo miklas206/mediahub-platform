@@ -8,20 +8,33 @@ from mediahub.integrations.fjordhub import ProviderFailure
 
 APP_ID = re.compile(r"[A-Za-z0-9_-]{1,100}\Z")
 ICON_PATH = re.compile(r"/static/logos/(?:icons/)?[A-Za-z0-9_.-]+\.(?:png|jpg|jpeg|webp)\Z")
+REGISTRY_ICONS = {
+    "fjordflix": "/qlerup/fjordflix/main/app/static/logos/icons/fjordflix-mark-transparent-512.png",
+    "fjordlens": "/qlerup/fjordlens/main/static/logos/icons/fjordlens-mark-transparent-512.png",
+    "fjord3d": "/qlerup/fjord3d/main/static/logos/icons/fjord3D-mark-transparent-512.png",
+    "fjordparcel": "/qlerup/fjordparcel/main/static/logos/icons/fjordparcel-mark-transparent-512.png",
+    "orbitmap": "/qlerup/orbitmap/main/app/public/hub-icon.png",
+    "urban-explorer": "/qlerup/urban-explorer/main/app/public/hub-icon.png",
+    "fjordbudget": "/qlerup/fjordbudget/main/static/logos/icon-512.png",
+    "fjordvpn": "/qlerup/fjordvpn/main/static/brand/fjordvpn-icon-512.png",
+}
 
 
-def icon_path(value, client):
+def icon_path(value, client, app_id=None):
     if not isinstance(value, str) or len(value) > 500 or any(c in value for c in "%\\"):
         return None
     if any(ord(c) < 33 for c in value) or (client._access_token and client._access_token in value):
         return None
     try:
         url, base = urlsplit(value), urlsplit(client.base_url)
-        if (url.scheme, url.netloc) != (base.scheme, base.netloc) or url.fragment:
+        if not url.scheme and not url.netloc and value.startswith("/") and not value.startswith("//"):
+            url = urlsplit(client.base_url + value)
+        if url.fragment or (url.query and not re.fullmatch(r"v=[A-Za-z0-9_.-]{1,80}", url.query)):
             return None
-        if not ICON_PATH.fullmatch(url.path) or (
-            url.query and not re.fullmatch(r"v=[A-Za-z0-9_.-]{1,80}", url.query)
-        ):
+        if (url.scheme, url.netloc) == ("https", "raw.githubusercontent.com"):
+            paths = [REGISTRY_ICONS.get(app_id)] if app_id else REGISTRY_ICONS.values()
+            return value if url.path in paths else None
+        if (url.scheme, url.netloc) != (base.scheme, base.netloc) or not ICON_PATH.fullmatch(url.path):
             return None
         return url.path + ("?" + url.query if url.query else "")
     except ValueError:
@@ -46,7 +59,7 @@ def app_info(client, body):
             "name": client.text(item.get("name")) or key,
             "installed": item.get("installed") is True,
             "port": port if type(port) is int and 1 <= port <= 65535 else None,
-            "icon_path": icon_path(item.get("icon_url"), client),
+            "icon_path": icon_path(item.get("icon_url"), client, key),
             "permissions": {
                 "updates": permissions.get("updates") is True,
                 "app_data": permissions.get("app_data") is True,
