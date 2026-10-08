@@ -3,6 +3,7 @@ import os
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
+from mediahub.apps.containers import CONTAINER_APPS, INSTALLABLE_CONTAINER_APPS
 from mediahub.apps.manifest import parse_manifest
 from mediahub.db import AppConfiguration
 from mediahub.errors import DomainError
@@ -30,7 +31,8 @@ class Catalog:
         return self.manifests[package_id]
 
     def list(self):
-        return [m.model_dump() for m in self.manifests.values()]
+        retired = {"org.mediahub." + app for app in CONTAINER_APPS if app not in INSTALLABLE_CONTAINER_APPS}
+        return [m.model_dump() for m in self.manifests.values() if m.id not in retired]
 
     def configuration(self, package_id):
         manifest = self.get(package_id)

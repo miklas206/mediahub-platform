@@ -39,6 +39,9 @@ CONTAINER_APPS = {
 }
 
 
+INSTALLABLE_CONTAINER_APPS = frozenset({"jellyfin"})
+
+
 def container_slots(app):
     slots = {"appdata": ("/config", False, True)}
     if app in {"jellyfin", "radarr"}:

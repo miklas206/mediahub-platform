@@ -145,7 +145,7 @@ def test_plan_rejects_unverified_storage_wrong_host_and_mapping(tmp_path):
 
 
 def test_changed_plan_and_foreign_container_are_not_modified(tmp_path):
-    runtime, spec = runtime_and_spec(tmp_path)
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
     runtime.request = AsyncMock(return_value={"Config": {"Labels": {}}})
     plan = asyncio.run(runtime.build_plan(spec))
     with pytest.raises(DomainError, match="updated plan"):
@@ -208,13 +208,13 @@ def test_uninstall_failed_installation_only_forgets_registration(tmp_path):
 
 
 def test_owned_existing_container_can_resume_after_failed_install(tmp_path):
-    runtime, spec = runtime_and_spec(tmp_path)
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
     plan = asyncio.run(runtime.build_plan(spec))
     plan["imageId"] = "sha256:" + "a" * 64
     inspected = inspected_container(plan)
     inspected["State"]["Running"] = False
-    save_json(runtime.record_path("radarr"), plan)
-    runtime.operations["radarr"] = {"state": "failed"}
+    save_json(runtime.record_path("jellyfin"), plan)
+    runtime.operations["jellyfin"] = {"state": "failed"}
     runtime.request = AsyncMock(return_value=inspected)
     result = asyncio.run(
         runtime.install(
@@ -222,8 +222,8 @@ def test_owned_existing_container_can_resume_after_failed_install(tmp_path):
         )
     )
     assert result["state"] == "installed"
-    assert runtime.request.call_args_list[-1].args == ("POST", "/containers/mediahub-radarr/start")
-    assert "radarr" not in runtime.operations
+    assert runtime.request.call_args_list[-1].args == ("POST", "/containers/mediahub-jellyfin/start")
+    assert "jellyfin" not in runtime.operations
 
 
 def test_provision_records_ownership_before_creating_and_starting(tmp_path):
@@ -277,18 +277,18 @@ def test_container_api_install_registers_owning_host_and_adapter(logged_in):
         request=AsyncMock(return_value={"state": "accepted"}),
     )
     svc.hosts.client = lambda host: agent
-    spec = {"app": "prowlarr", "hostId": "approved", "storageIds": {"appdata": "config"}}
+    spec = {"app": "jellyfin", "hostId": "approved", "storageIds": {"appdata": "config"}}
     response = logged_in.post(
         "https://127.0.0.1:18765/api/v1/container-apps/install",
         json={"installation": spec, "confirmedPlanDigest": "a" * 64},
     )
     assert response.status_code == 202
-    installed = next(app for app in svc.apps.list() if app["packageId"] == "org.mediahub.prowlarr")
-    assert installed["detailPath"] == "/apps/install/prowlarr"
+    installed = next(app for app in svc.apps.list() if app["packageId"] == "org.mediahub.jellyfin")
+    assert installed["detailPath"] == "/apps/install/jellyfin"
     assert svc.apps.adapter(installed["id"]).host_id == "approved"
     register_remote_apps(svc)
     assert (
-        svc.apps.adapter(installed["id"]).definition.agent_prefix == "/v1/container-apps/prowlarr"
+        svc.apps.adapter(installed["id"]).definition.agent_prefix == "/v1/container-apps/jellyfin"
     )
     response = logged_in.post(
         "https://127.0.0.1:18765/api/v1/container-apps/install",
@@ -296,6 +296,38 @@ def test_container_api_install_registers_owning_host_and_adapter(logged_in):
     )
     assert response.status_code == 409
     assert agent.request.call_count == 1
+
+
+@pytest.mark.parametrize("app", ["prowlarr", "radarr", "sonarr", "autobrr"])
+def test_retired_apps_hidden_and_installation_rejected(logged_in, app):
+    svc = logged_in.app.state.services
+    assert "org.mediahub." + app not in {item["id"] for item in svc.catalog.list()}
+    assert "org.mediahub.jellyfin" in {item["id"] for item in svc.catalog.list()}
+    agent = SimpleNamespace(
+        config=SimpleNamespace(agent_url="https://192.168.1.110:18767"),
+        request=AsyncMock(),
+    )
+    svc.hosts.client = lambda host: agent
+    response = logged_in.post(
+        "https://127.0.0.1:18765/api/v1/container-apps/install",
+        json={"installation": {"app": app, "hostId": "local"}, "confirmedPlanDigest": "a" * 64},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "app_retired"
+    agent.request.assert_not_called()
+
+
+@pytest.mark.parametrize("app", ["prowlarr", "radarr", "sonarr", "autobrr"])
+def test_agent_rejects_retired_installations(tmp_path, app):
+    runtime, spec = runtime_and_spec(tmp_path, app)
+    runtime.request = AsyncMock()
+    with pytest.raises(DomainError, match="no longer available"):
+        asyncio.run(runtime.plan(spec))
+    with pytest.raises(DomainError, match="no longer available"):
+        asyncio.run(runtime.install(ContainerInstallRequest(
+            installation=spec, confirmedPlanDigest="a" * 64,
+        )))
+    runtime.request.assert_not_called()
 
 
 def test_container_api_unauthenticated(client):

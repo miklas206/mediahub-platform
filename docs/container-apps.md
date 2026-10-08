@@ -1,5 +1,11 @@
 # Container apps in the App Store
 
+Only Jellyfin remains available for new App Store installations. Prowlarr,
+Radarr, Sonarr and autobrr are retired from the catalog and installation APIs.
+Existing installations retain status and data-preserving removal controls;
+updating MediaHub does not automatically uninstall them. The technical details
+below also describe these legacy installations.
+
 Jellyfin, Prowlarr, Radarr, Sonarr and optional autobrr use a shared guided
 installation page. Each runs in its own digest-pinned container. This change
 does not install, update or restart anything until an administrator explicitly

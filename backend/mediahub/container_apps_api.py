@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
 from mediahub.api import administrator, result, services
-from mediahub.apps.containers import CONTAINER_APPS, ContainerInstallation, ContainerInstallRequest
+from mediahub.apps.containers import (
+    CONTAINER_APPS,
+    INSTALLABLE_CONTAINER_APPS,
+    ContainerInstallation,
+    ContainerInstallRequest,
+)
 from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
@@ -26,9 +31,16 @@ def known_app(app):
         raise DomainError("not_found", "Container app not found", 404)
 
 
+def installable_app(app):
+    known_app(app)
+    if app not in INSTALLABLE_CONTAINER_APPS:
+        raise DomainError("app_retired", "This app is no longer available for installation", 409)
+
+
 @router.get("/{app}/install-options")
 async def options(app: str, request: Request, host: str = "local"):
-    known_app(app)
+    target(request, host)
+    installable_app(app)
     return result(
         await target(request, host).request("GET", f"/v1/container-apps/{app}/install-options")
     )
@@ -36,6 +48,8 @@ async def options(app: str, request: Request, host: str = "local"):
 
 @router.post("/install-plan")
 async def plan(body: ContainerInstallation, request: Request):
+    target(request, body.hostId)
+    installable_app(body.app)
     return result(
         await target(request, body.hostId).request(
             "POST", "/v1/container-apps/install-plan", body.model_dump()
@@ -46,6 +60,8 @@ async def plan(body: ContainerInstallation, request: Request):
 @router.post("/install", status_code=202)
 async def install(body: ContainerInstallRequest, request: Request):
     svc, spec = services(request), body.installation
+    target(request, spec.hostId)
+    installable_app(spec.app)
     with svc.sessions() as db:
         existing = db.scalar(
             select(Setting).where(Setting.key == "container_installation_" + spec.app)

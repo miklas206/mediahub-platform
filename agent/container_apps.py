@@ -9,7 +9,12 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx
-from mediahub.apps.containers import CONTAINER_APPS, ContainerInstallation, container_slots
+from mediahub.apps.containers import (
+    CONTAINER_APPS,
+    INSTALLABLE_CONTAINER_APPS,
+    ContainerInstallation,
+    container_slots,
+)
 from mediahub.contracts import StrictModel
 from mediahub.errors import DomainError
 from pydantic import Field, field_validator
@@ -263,6 +268,8 @@ class ContainerApps:
         }
 
     async def plan(self, spec):
+        if spec.app not in INSTALLABLE_CONTAINER_APPS:
+            raise DomainError("app_retired", "This app is no longer available for installation", 409)
         plan = await self.build_plan(spec)
         return {
             "planDigest": plan["planDigest"],
@@ -277,6 +284,8 @@ class ContainerApps:
 
     async def install(self, body):
         app = body.installation.app
+        if app not in INSTALLABLE_CONTAINER_APPS:
+            raise DomainError("app_retired", "This app is no longer available for installation", 409)
         if self.locks[app].locked():
             raise DomainError("operation_busy", "A container operation is running", 409)
         async with self.locks[app]:
