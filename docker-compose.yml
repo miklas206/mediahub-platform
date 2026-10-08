@@ -2,7 +2,7 @@ name: fjordcopy
 
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7.14
     container_name: fjordhub-traefik
     command:
       - "--providers.docker=true"
