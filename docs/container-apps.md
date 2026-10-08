@@ -11,8 +11,20 @@ New installations made with `scripts/install_linux.py` generate
 `agent/container-apps.json` and configure
 `MEDIAHUB_AGENT_CONTAINER_APPS_POLICY_FILE=/state/container-apps.json`.
 
-Existing installations and separately paired Agents require an operator-owned
-policy file and this environment variable on the chosen Agent. Core and Agent
+Existing installations can reuse the validated operator-owned host approval
+configured by `MEDIAHUB_AGENT_PLEX_INSTALL_POLICY_FILE` when no explicit
+container-app policy is configured. This does not require Plex to be installed
+and does not change its configuration. Only approved app-data, movie and TV
+directories are reused; download paths are not invented. Apps requiring downloads
+still need an explicit container-app policy with an approved download directory.
+An invalid explicit container-app policy is never bypassed by this compatibility
+path. Storage verification and the app monitor remain enabled.
+With a non-root Agent, the reused policy runs apps as the Agent UID so newly
+created configuration directories remain writable. Explicit app policies retain
+their configured UID.
+
+Agents without existing host approval require an operator-owned policy file and
+`MEDIAHUB_AGENT_CONTAINER_APPS_POLICY_FILE` on the chosen Agent. Core and Agent
 must both be updated. Configure this on the Docker guest, never on the Proxmox
 hypervisor. The installer deliberately does not invent or modify host trust.
 

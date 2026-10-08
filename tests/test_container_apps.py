@@ -18,6 +18,40 @@ def test_container_app_allowlist_and_ports():
     assert len({app["port"] for app in CONTAINER_APPS.values()}) == 5
 
 
+def test_prowlarr_reuses_approved_host_without_installed_plex(tmp_path, monkeypatch):
+    runtime, spec = runtime_and_spec(tmp_path, "prowlarr")
+    approved = json.loads(runtime.policy_file.read_text())
+    approved.update(
+        image="lscr.io/linuxserver/plex@sha256:" + "a" * 64,
+        initImage="sha256:" + "b" * 64,
+        requiredFilesystemUuids={},
+    )
+    approved["storage"].pop("downloads")
+    approved["storage"]["other"] = {
+        "label": "Other", "kind": "other", "path": str(tmp_path / "other")
+    }
+    runtime.policy_file.write_text(json.dumps(approved))
+    runtime.approved_host_policy_file = runtime.policy_file
+    runtime.policy_file = None
+    options = asyncio.run(runtime.options("prowlarr"))
+    assert options["hostId"] == "test"
+    assert "other" not in {choice["id"] for choice in options["storage"]}
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "agent.container_apps.os", SimpleNamespace(name="posix", geteuid=lambda: 10001)
+        )
+        assert runtime.policy().uid == 10001
+    plan = asyncio.run(runtime.build_plan(spec))
+    assert plan["container"]["HostConfig"]["PortBindings"]["9696/tcp"][0]["HostIp"] == "192.168.1.110"
+    runtime.policy_file = tmp_path / "missing-explicit-policy.json"
+    with pytest.raises(DomainError, match="not been configured"):
+        runtime.policy()
+    runtime.policy_file = None
+    runtime.approved_host_policy_file.write_text("{}")
+    with pytest.raises(DomainError, match="not been configured"):
+        runtime.policy()
+
+
 def test_installation_rejects_arbitrary_apps_fields_and_timezones():
     for values in (
         {"app": "untrusted", "hostId": "local"},

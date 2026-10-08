@@ -16,6 +16,7 @@ from pydantic import Field, field_validator
 
 from agent.install_files import read_json, save_json
 from agent.plex_control import PlexControl
+from agent.plex_install import PlexInstallPolicy
 
 
 class ContainerStorage(StrictModel):
@@ -60,8 +61,9 @@ class ContainerPolicy(StrictModel):
 
 
 class ContainerApps:
-    def __init__(self, policy_file, socket, state_dir):
+    def __init__(self, policy_file, socket, state_dir, approved_host_policy_file=None):
         self.policy_file, self.socket = policy_file, socket
+        self.approved_host_policy_file = approved_host_policy_file
         self.state_dir = Path(state_dir)
         self.locks = {app: asyncio.Lock() for app in CONTAINER_APPS}
         self.network_lock = asyncio.Lock()
@@ -71,9 +73,21 @@ class ContainerApps:
 
     def policy(self):
         try:
-            if not self.policy_file:
+            if self.policy_file:
+                return ContainerPolicy.model_validate(read_json(Path(self.policy_file)))
+            if not self.approved_host_policy_file:
                 raise ValueError()
-            return ContainerPolicy.model_validate(read_json(Path(self.policy_file)))
+            approved = PlexInstallPolicy.model_validate(
+                read_json(Path(self.approved_host_policy_file))
+            ).model_dump()
+            values = {key: approved[key] for key in ContainerPolicy.model_fields}
+            if os.name == "posix" and os.geteuid() != 0:
+                values["uid"] = os.geteuid()
+            values["storage"] = {
+                key: choice for key, choice in approved["storage"].items()
+                if choice["kind"] in {"appdata", "movies", "tv", "downloads"}
+            }
+            return ContainerPolicy.model_validate(values)
         except (OSError, ValueError, TypeError):
             raise DomainError(
                 "container_install_disabled",

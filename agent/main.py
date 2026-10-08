@@ -237,13 +237,17 @@ def create_agent(config: AgentConfig | None = None):
     if config.plex_install_policy_file:
         plex.runtime = plex_runtime
     backups = AppBackups(plex, control)
-    container_apps = ContainerApps(config.container_apps_policy_file, config.docker_socket, config.state_dir)
+    container_apps = ContainerApps(
+        config.container_apps_policy_file, config.docker_socket, config.state_dir,
+        approved_host_policy_file=config.plex_install_policy_file,
+    )
 
     @asynccontextmanager
     async def lifespan(app):
         cleanup = asyncio.create_task(uploads.cleanup())
         container_monitor = (
-            asyncio.create_task(container_apps.monitor()) if config.container_apps_policy_file else None
+            asyncio.create_task(container_apps.monitor())
+            if config.container_apps_policy_file or config.plex_install_policy_file else None
         )
         torrent_cleanup = (
             asyncio.create_task(torrents.retention.poll()) if config.seedbox_policy_file else None
