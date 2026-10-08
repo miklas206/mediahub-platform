@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}FjordHub - Ressourcer{% endblock %}
+{% block title %}MediaHub - Ressourcer{% endblock %}
 
 {% block topbar_right %}
   <button class="btn-refresh" id="resources-refresh-btn" onclick="refreshResources()" title="Opdater ressourceforbrug">
@@ -24,7 +24,7 @@
         <span class="reg-time" id="resource-updated">Henter...</span>
       </div>
     </div>
-    <p class="dashboard-sub">CPU, RAM, netværk og disk I/O for FjordHub og installerede apps.</p>
+    <p class="dashboard-sub">CPU, RAM, netværk og disk I/O for MediaHub og installerede apps.</p>
   </div>
 
   <div class="resource-view-switch" role="group" aria-label="Ressourcevisning">
@@ -85,7 +85,7 @@
 
       <section class="resource-section" id="resource-core-section">
         <div class="app-section-header">
-          <h2>FjordHub core</h2>
+          <h2>MediaHub core</h2>
           <span class="section-count" id="resource-core-count">0</span>
         </div>
         <div class="resource-core-card" id="resource-core">
@@ -327,7 +327,7 @@ function renderSummary(data) {
 
   if (currentResourceView === 'lxc') {
     setText('resource-scope-title', 'LXC fra Proxmox');
-    setText('resource-scope-subtitle', 'Hele FjordHub-containeren');
+    setText('resource-scope-subtitle', 'Hele MediaHub-containeren');
     if (system.available) {
       const cpuCount = system.cpu_count || capacity.cpus || 1;
       setText('resource-cpu', system.cpu_capacity_percent_label || '0.0%');
@@ -352,7 +352,7 @@ function renderSummary(data) {
     setText('resource-disk-detail', 'Docker læst / skrevet');
   } else {
     setText('resource-scope-title', 'Docker-containere');
-    setText('resource-scope-subtitle', 'FjordHub core og apps');
+    setText('resource-scope-subtitle', 'MediaHub core og apps');
     setText('resource-cpu', hub.cpu_percent_label || '0.0%');
     setText('resource-cpu-detail', `${capacity.cpus || 1} CPU-tråde i Docker`);
     setBar('resource-cpu-bar', hub.cpu_capacity_percent);
@@ -471,7 +471,7 @@ async function refreshResources() {
   } catch (_) {
     const error = document.getElementById('resource-error');
     if (error) {
-      error.textContent = 'Kunne ikke nå FjordHub API.';
+      error.textContent = 'Kunne ikke nå MediaHub API.';
       error.style.display = '';
     }
   } finally {

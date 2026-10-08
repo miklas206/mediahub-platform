@@ -761,6 +761,6 @@ class ResourceMonitor:
         for container in containers:
             name = _container_name(container)
             project = _compose_project(container)
-            if name in core_names or (project == "fjordhub" and name.startswith("fjordhub")):
+            if name in core_names or (project == os.environ.get("COMPOSE_PROJECT_NAME", "fjordcopy") and name.startswith("fjordhub")):
                 matched.append(container)
         return sorted({container.id: container for container in matched}.values(), key=_container_name)

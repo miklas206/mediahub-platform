@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -55,8 +56,12 @@ class UpdateManagerPackageOnlyTests(unittest.TestCase):
 
     def test_package_only_changes_do_not_require_update(self):
         diff = "packages_catalog.json\npackages_src/notepad/app.js\npackages_src/calendar/styles.css\n"
-        with patch.object(self.manager, "_git_output", return_value=diff):
+        with patch.dict(os.environ, {"PACKAGES_URL": "https://example.test/packages.json"}), patch.object(self.manager, "_git_output", return_value=diff):
             self.assertTrue(self.manager._package_only_update(self.root, "a1", "b2"))
+
+    def test_bundled_catalog_changes_require_hub_update(self):
+        with patch.dict(os.environ, {"PACKAGES_URL": "/app/packages_catalog.json"}), patch.object(self.manager, "_git_output", return_value="packages_catalog.json\n"):
+            self.assertFalse(self.manager._package_only_update(self.root, "a1", "b2"))
 
     def test_app_code_changes_require_update(self):
         diff = "packages_catalog.json\napp.py\n"

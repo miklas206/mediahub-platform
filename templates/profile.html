@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Profil — FjordHub{% endblock %}
+{% block title %}Profil — MediaHub{% endblock %}
 
 {% block topbar_right %}
   <span class="topbar-status" id="hub-docker-status" title="Docker-forbindelse"></span>
@@ -70,7 +70,7 @@
   <h2 style="font-size:1rem;font-weight:700;margin:28px 0 14px;">Skift adgangskode</h2>
 
   {% if force_password_change %}
-    <div class="auth-error" style="margin-bottom:14px;">Du skal vælge en ny personlig adgangskode, før du kan bruge FjordHub.</div>
+    <div class="auth-error" style="margin-bottom:14px;">Du skal vælge en ny personlig adgangskode, før du kan bruge MediaHub.</div>
   {% endif %}
   {% if pw_error %}
     <div class="auth-error" style="margin-bottom:14px;">{{ pw_error }}</div>

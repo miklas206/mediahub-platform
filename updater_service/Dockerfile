@@ -5,8 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apk add --no-cache \
     docker-cli \
+    docker-cli-buildx \
     docker-cli-compose \
-    git
+    git \
+    openssh-client
 
 WORKDIR /service
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}FjordHub — Dashboard{% endblock %}
+{% block title %}App-hub — MediaHub beta{% endblock %}
 
 {% block topbar_right %}
   {% if current_user.is_admin %}
@@ -15,7 +15,7 @@
     <span class="refresh-label" id="cleanup-label">Ryd op</span>
   </button>
   {% endif %}
-  <button class="btn-refresh" id="refresh-btn" onclick="refreshRegistry()" title="Opdatér app-listen fra GitHub og tjek for opdateringer til installerede apps">
+  <button class="btn-refresh" id="refresh-btn" onclick="refreshRegistry()" title="Opdatér app-listen fra GitHub og tjek for opdateringer til installerede apps" {% if not current_user.is_admin %}hidden{% endif %}>
     <svg id="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="23 4 23 10 17 10"/>
       <polyline points="1 20 1 14 7 14"/>
@@ -28,50 +28,97 @@
 
 {% block content %}
 <div class="dashboard">
-  <div class="dashboard-header">
+  <div class="dashboard-header hub-header">
     <div class="dashboard-header-top">
-      <h1>Apps</h1>
-      <div class="registry-meta" id="registry-meta">
+      <div>
+        <p class="hub-eyebrow">DIT SAMLEDE OVERBLIK</p>
+        <h1>Din app-hub</h1>
+        <p class="dashboard-sub">Ét sted til dine apps, værktøjer og fælles login.</p>
+      </div>
+      <a href="{{ url_for('app_store') }}" class="btn hub-store-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Find apps
+      </a>
+    </div>
+    <div class="hub-overview">
+      <span id="hub-app-summary" aria-live="polite">Henter appstatus…</span>
+      <details class="hub-registry-details">
+        <summary>Appkatalog</summary>
+        <div class="registry-meta" id="registry-meta">
         {% if reg_status.configured %}
           {% if reg_status.last_refresh %}
-            <span class="reg-ok">● Registry synkroniseret</span>
+            <span class="reg-ok">● Katalog synkroniseret</span>
             <span class="reg-time" id="reg-time" data-seconds="{{ reg_status.last_refresh_ago }}"></span>
           {% elif reg_status.error %}
-            <span class="reg-err" title="{{ reg_status.error }}">● Registry fejl</span>
+            <span class="reg-err" title="{{ reg_status.error }}">● Katalog kunne ikke hentes</span>
           {% else %}
-            <span class="reg-pending">● Henter registry…</span>
+            <span class="reg-pending">● Henter katalog…</span>
           {% endif %}
         {% else %}
-          <span class="reg-warn" title="Sæt REGISTRY_URL miljøvariablen">⚠ Registry ikke konfigureret — viser lokale apps</span>
+          <span class="reg-warn">Viser det lokale appkatalog.</span>
         {% endif %}
-      </div>
+        </div>
+      </details>
     </div>
-    <p class="dashboard-sub">Klik på en app for at åbne den, eller styr den herunder.</p>
+    <div class="hub-search-wrap" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+      <label class="sr-only" for="hub-search">Søg i dine apps og værktøjer</label>
+      <input id="hub-search" type="search" placeholder="Find en app eller et værktøj…" autocomplete="off" aria-controls="app-sections">
+      <button id="hub-search-clear" type="button" hidden>Ryd</button>
+    </div>
   </div>
 
   <div id="toast" class="toast" aria-live="polite"></div>
+  <div id="package-toast" class="toast" aria-live="polite"></div>
+  <div id="hub-search-empty" class="hub-empty" hidden role="status">
+    <h2>Ingen apps matcher din søgning</h2>
+    <p>Prøv et andet navn, eller ryd søgningen for at se alle apps.</p>
+  </div>
+  <div id="hub-getting-started" class="hub-empty hub-welcome" hidden>
+    <h2>Gør hubben til din egen</h2>
+    <p>{% if current_user.is_admin %}Installér din første app herunder, eller find små værktøjer i App Store.{% else %}Din administrator kan installere apps og give dig adgang her.{% endif %}</p>
+  </div>
 
   <div class="app-sections" id="app-sections">
     <section class="app-section" id="installed-section" style="display:none;">
       <div class="app-section-header">
-        <h2>Installeret</h2>
+        <h2>Dine apps</h2>
         <span class="section-count" id="installed-count"></span>
         {% if current_user.is_admin %}
-        <button class="btn btn-update-all" id="update-all-btn" type="button" onclick="startAllUpdates()" disabled title="Opdater højst to apps ad gangen. FjordHub er ikke med.">Opdater alle</button>
+        <button class="btn btn-update-all" id="update-all-btn" type="button" onclick="startAllUpdates()" disabled title="Opdater højst to apps ad gangen. MediaHub er ikke med.">Opdater alle</button>
         <button class="btn btn-open" id="update-all-log-btn" type="button" onclick="openBatchUpdateModal()" hidden>Vis log</button>
         {% endif %}
       </div>
       <div class="app-grid" id="installed-grid"></div>
     </section>
 
+    {% if hub_packages %}
+    <section class="app-section" id="hub-tools-section">
+      <div class="app-section-header">
+        <h2>Dine værktøjer</h2>
+        <span class="section-count">{{ hub_packages|length }}</span>
+        <a class="hub-section-link" href="{{ url_for('packages') }}">Administrer værktøjer →</a>
+      </div>
+      <div class="hub-tools-grid">
+        {% for package in hub_packages %}
+        <article class="app-row" data-hub-search="{{ package.name }} {{ package.tagline }}" style="--package-accent:{{ package.accent }}">
+          <div class="package-icon">{% include 'package_icon.html' %}</div>
+          <div class="app-row-body"><h3>{{ package.name }}</h3><p>{{ package.tagline }}</p></div>
+          <a href="{{ url_for('open_package', package_id=package.id) }}" class="btn package-open app-row-open" aria-label="Åbn {{ package.name }}">Åbn</a>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
     <section class="app-section" id="available-section">
       <div class="app-section-header">
-        <h2>Ikke installeret</h2>
+        <h2>Flere apps</h2>
         <span class="section-count" id="available-count"></span>
       </div>
       <div class="app-grid" id="available-grid">
     {% for app in apps %}
-    <div class="app-card" id="card-{{ app.id }}" data-app-id="{{ app.id }}" data-default-port="{{ app.default_port }}" data-sort-order="{{ loop.index0 }}">
+    <div class="app-card" id="card-{{ app.id }}" data-app-id="{{ app.id }}" data-default-port="{{ app.default_port }}" data-sort-order="{{ loop.index0 }}" data-hub-search="{{ app.name }} {{ app.tagline }}">
       <div class="card-accent" style="--accent: {{ app.accent }};"></div>
       <div class="card-body">
         <div class="card-icon-wrap{% if app.icon_url %} has-image{% endif %}" style="--accent: {{ app.accent }};">
@@ -124,10 +171,10 @@
             <span class="status-label">Henter status…</span>
             <span class="uptime-label"></span>
           </div>
-          <div class="card-update-row" style="display:none;">
+          <div class="card-update-row" style="display:none;" {% if not current_user.is_admin %}hidden{% endif %}>
             <span class="update-dot" data-update-status="idle"></span>
             <span class="update-label">Tjekker opdateringer...</span>
-            <button class="btn btn-update" data-action="update" style="display:none;">Opdater</button>
+            <button class="btn btn-update" data-action="update" style="display:none;" {% if not current_user.is_admin %}hidden{% endif %}>Opdater</button>
           </div>
         </div>
       </div>
@@ -140,8 +187,8 @@
             <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
           </svg>
         </a>
-        <button class="btn btn-toggle" data-action="start">Start</button>
-        <button class="btn btn-link-hub" style="display:none;" title="Aktiver SSO-login til denne app">Link FjordHub</button>
+        <button class="btn btn-toggle" data-action="start" {% if not current_user.is_admin %}hidden{% endif %}>Start</button>
+        <button class="btn btn-link-hub" style="display:none;" title="Aktiver SSO-login til denne app" {% if not current_user.is_admin %}hidden{% endif %}>Link MediaHub</button>
         {% if current_user.is_admin %}
         <button class="btn-app-settings" style="display:none;" title="App-indstillinger" aria-label="App-indstillinger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -150,7 +197,7 @@
           </svg>
         </button>
         {% endif %}
-        <button class="btn btn-delete" data-action="delete" style="display:none;" title="Afinstallér">
+        <button class="btn btn-delete" data-action="delete" style="display:none;" title="Afinstallér" {% if not current_user.is_admin %}hidden{% endif %}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
           </svg>
@@ -200,7 +247,7 @@
         <div id="app-storage-pool-fields">
         <div class="form-field"><label for="app-storage-pool">Proxmox-lager</label><select id="app-storage-pool" required><option value="">Henter lagre…</option></select><p id="app-storage-pool-hint" class="field-hint" aria-live="polite"></p></div>
         <button type="button" id="app-storage-access" class="btn btn-open" hidden>Giv læseadgang til lagerlisten</button>
-        <div class="form-field"><label for="app-storage-folder">Mappenavn</label><input type="text" id="app-storage-folder" placeholder="fjordflix-film" maxlength="100" autocomplete="off" required><p class="field-hint">FjordHub finder stien på det valgte lager og opretter mappen. En eksisterende mappe skal være tom.</p></div>
+        <div class="form-field"><label for="app-storage-folder">Mappenavn</label><input type="text" id="app-storage-folder" placeholder="fjordflix-film" maxlength="100" autocomplete="off" required><p class="field-hint">MediaHub finder stien på det valgte lager og opretter mappen. En eksisterende mappe skal være tom.</p></div>
         <div class="form-field" id="app-storage-size-field" hidden><label for="app-storage-size">Containerdiskens størrelse (GiB)</label><input type="number" id="app-storage-size" value="100" min="1" max="1048576"><p class="field-hint">Bruges ved oprettelse af en ny containerdisk på fx local-lvm. En allerede tilsluttet disk genbruges.</p></div>
         </div>
         <div class="form-field"><label for="app-storage-mode">Hvad skal der ske med filerne?</label><select id="app-storage-mode"><option value="copy">Kopiér — behold filerne på den gamle placering</option><option value="move">Flyt — slet filerne fra den gamle placering</option></select></div>
@@ -220,11 +267,11 @@
 
 <div class="modal-overlay" id="storage-mount-modal" style="z-index:350;">
   <div class="modal storage-mount-dialog" role="dialog" aria-modal="true" aria-labelledby="storage-mount-title">
-    <div class="modal-header"><h2 id="storage-mount-title">Tilslut drevet til FjordHub</h2><button type="button" class="modal-close" id="storage-mount-close" aria-label="Luk">×</button></div>
-    <p id="storage-mount-description">Lageret skal tilsluttes FjordHubs LXC. Kør kommandoerne som root i PVE → Shell.</p>
+    <div class="modal-header"><h2 id="storage-mount-title">Tilslut drevet til MediaHub</h2><button type="button" class="modal-close" id="storage-mount-close" aria-label="Luk">×</button></div>
+    <p id="storage-mount-description">Lageret skal tilsluttes MediaHubs LXC. Kør kommandoerne som root i PVE → Shell.</p>
     <p id="storage-mount-destination" style="overflow-wrap:anywhere;"></p>
     <p id="storage-mount-context" class="field-hint"></p>
-    <p id="storage-mount-restart"><strong>Afslut uploads først.</strong> Kommandoerne genstarter LXC’en og dens apps. FjordHub er kortvarigt utilgængelig; kontrollen fortsætter automatisk bagefter.</p>
+    <p id="storage-mount-restart"><strong>Afslut uploads først.</strong> Kommandoerne genstarter LXC’en og dens apps. MediaHub er kortvarigt utilgængelig; kontrollen fortsætter automatisk bagefter.</p>
     <textarea id="storage-mount-commands" readonly aria-label="Kommandoer til PVE" rows="10"></textarea>
     <button type="button" id="storage-mount-copy" class="btn btn-open">Kopiér kommandoer</button>
     <p id="storage-mount-status" role="status" aria-live="polite"></p>

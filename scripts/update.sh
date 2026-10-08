@@ -10,13 +10,14 @@ if [ -z "${APP_DIR:-}" ]; then
 	elif [ -f "./docker-compose.yml" ]; then
 		APP_DIR="$(pwd)"
 	else
-		APP_DIR="/opt/fjordhub"
+		APP_DIR="/opt/fjordcopy"
 	fi
 fi
 
 SERVICE_NAME="${SERVICE_NAME:-fjordhub}"
 UPDATER_SERVICE_NAME="${UPDATER_SERVICE_NAME:-fjordhub-updater}"
 REPO_BRANCH="${REPO_BRANCH:-}"
+FJORDCOPY_REPOSITORY="${FJORDCOPY_REPOSITORY:-miklas206/fjordcopy}"
 DO_BUILD=1
 NO_CACHE=0
 SHOW_LOGS=1
@@ -29,15 +30,15 @@ usage() {
 	cat <<EOF
 Usage: $0 [options]
 
-Normal FjordHub update:
+Normal MediaHub update:
   - backs up .env and hub.db when possible
   - pulls the current Git branch with --ff-only
   - appends new active .env.example variables to .env without overwriting values
-  - runs docker compose up -d --build for the FjordHub web service
-  - prints recent FjordHub container logs
+  - runs docker compose up -d --build for the MediaHub web service
+  - prints recent MediaHub container logs
 
 Options:
-  --app-dir DIR        FjordHub app directory (default: auto, then /opt/fjordhub)
+  --app-dir DIR        MediaHub app directory (default: auto, then /opt/fjordcopy)
   --branch BRANCH      Git branch to pull (default: current branch, then main)
   --no-build           Do not build images; only docker compose up -d
   --no-cache           Rebuild images without Docker cache
@@ -321,7 +322,7 @@ ensure_env_value() {
 }
 
 backup_env_file() {
-	data_dir="${DATA_DIR:-$(resolve_dir_from_env_or_mount DATA_DIR "$SERVICE_NAME" /data "$APP_DIR/data")}"
+	data_dir="${FJORDCOPY_DATA_MOUNT:-${DATA_DIR:-$(resolve_dir_from_env_or_mount DATA_DIR "$SERVICE_NAME" /data "$APP_DIR/data")}}"
 	backup_dir="$data_dir/backups"
 	if [ ! -f "$APP_DIR/.env" ]; then
 		return 0
@@ -378,7 +379,7 @@ merge_env_example_new_keys() {
 }
 
 backup_database() {
-	data_dir="${DATA_DIR:-$(resolve_dir_from_env_or_mount DATA_DIR "$SERVICE_NAME" /data "$APP_DIR/data")}"
+	data_dir="${FJORDCOPY_DATA_MOUNT:-${DATA_DIR:-$(resolve_dir_from_env_or_mount DATA_DIR "$SERVICE_NAME" /data "$APP_DIR/data")}}"
 	db_path="$data_dir/hub.db"
 	backup_dir="$data_dir/backups"
 	if [ ! -f "$db_path" ]; then
@@ -387,7 +388,19 @@ backup_database() {
 	fi
 	mkdir -p "$backup_dir"
 	backup_path="$backup_dir/hub.db.$TS.bak"
-	cp -p "$db_path" "$backup_path"
+	# SQLite's backup API includes committed WAL data and produces a consistent
+	# snapshot while the web service continues to run.
+	need_cmd python3
+	python3 - "$db_path" "$backup_path" <<'PY'
+import sqlite3
+import sys
+from contextlib import closing
+from pathlib import Path
+
+with closing(sqlite3.connect(Path(sys.argv[1]).resolve().as_uri() + "?mode=ro", uri=True)) as source:
+    with closing(sqlite3.connect(sys.argv[2])) as destination:
+        source.backup(destination)
+PY
 	echo "==> Database backup: $backup_path"
 }
 
@@ -435,9 +448,18 @@ docker_compose config >/dev/null
 
 if [ ! -d .git ]; then
 	echo "Fejl: $APP_DIR er ikke et git repository."
-	echo "Tip: kontroller APP_DIR, eller klon FjordHub repoet igen i denne mappe."
+	echo "Tip: kontroller APP_DIR, eller klon fjordcopy repoet igen i denne mappe."
 	exit 1
 fi
+
+origin_url="$(git remote get-url origin)"
+case "$origin_url" in
+	"https://github.com/$FJORDCOPY_REPOSITORY"|"https://github.com/$FJORDCOPY_REPOSITORY.git"|"git@github.com:$FJORDCOPY_REPOSITORY.git"|"ssh://git@github.com/$FJORDCOPY_REPOSITORY.git") ;;
+	*)
+		echo "Fejl: origin skal pege paa github.com/$FJORDCOPY_REPOSITORY. Opdatering afvist."
+		exit 1
+		;;
+esac
 
 sync_gitlinks_to_head
 GITLINK_PATHS="$(git ls-files -s | awk '$1=="160000" {print $4}')"
@@ -510,13 +532,13 @@ run_optional_cleanup
 if [ "$NO_CACHE" = "1" ]; then
 	echo "==> Bygger uden Docker cache"
 	compose_build_no_cache
-	echo "==> Starter FjordHub"
+	echo "==> Starter MediaHub"
 	compose_up
 elif [ "$DO_BUILD" = "1" ]; then
-	echo "==> Bygger og starter FjordHub"
+	echo "==> Bygger og starter MediaHub"
 	compose_up_build
 else
-	echo "==> Starter FjordHub uden build"
+	echo "==> Starter MediaHub uden build"
 	compose_up
 fi
 

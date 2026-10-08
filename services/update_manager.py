@@ -445,6 +445,9 @@ class UpdateManager:
 
     def _package_only_update(self, install_dir: Path, current: str, remote: str) -> bool:
         """True hvis alle ændringer mellem current og remote kun rører pakkefiler."""
+        # Bundled catalogs ship in the hub image, so their changes need a build.
+        if not str(os.environ.get("PACKAGES_URL", "")).startswith("https://"):
+            return False
         try:
             diff = self._git_output(
                 install_dir,

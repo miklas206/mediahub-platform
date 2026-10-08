@@ -25,7 +25,7 @@ def run(args, input=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('ctid')
-    parser.add_argument('--directory', default='/opt/fjordhub')
+    parser.add_argument('--directory', default='/opt/fjordcopy')
     parser.add_argument('--host', required=True, help='Proxmox IP reachable from the LXC')
     args = parser.parse_args()
     if os.geteuid() != 0 or not Path('/etc/pve').is_dir():

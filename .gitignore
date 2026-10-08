@@ -8,3 +8,10 @@ apps/*
 !apps/.gitkeep
 packages_src/dist/
 test-results/
+.pytest_cache/
+.venv/
+.qa/
+*.db
+*.db-wal
+*.db-shm
+git-ssh/

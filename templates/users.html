@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Brugere — FjordHub{% endblock %}
+{% block title %}Brugere — MediaHub{% endblock %}
 
 {% block topbar_right %}
   <span class="topbar-status" id="hub-docker-status" title="Docker-forbindelse"></span>
@@ -11,7 +11,7 @@
   <div class="dashboard-header" style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;">
     <div>
       <h1>Brugere</h1>
-      <p class="dashboard-sub">Administrer adgang til FjordHub og apps.</p>
+      <p class="dashboard-sub">Administrer adgang til MediaHub og apps.</p>
     </div>
     <div class="users-header-actions" style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
       {% if current_user.is_admin %}

@@ -35,7 +35,7 @@ try:
             page.locator('#' + field).fill(value)
         page.locator('button[type=submit]').click()
         expect(page).to_have_url(base + '/setup/preferences')
-        expect(page.get_by_role('heading', name='Gør FjordHub klar')).to_be_visible()
+        expect(page.get_by_role('heading', name='Gør MediaHub klar')).to_be_visible()
         page.screenshot(path=str(out / 'onboarding-choice.png'))
         page.locator('summary').click()
         for field, value in {'smtp_from': 'noreply@example.com', 'smtp_user': 'resend',

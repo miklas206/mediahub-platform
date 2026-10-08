@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Indstillinger — FjordHub{% endblock %}
+{% block title %}Indstillinger — MediaHub{% endblock %}
 
 {% block topbar_right %}
   <span class="topbar-status" id="hub-docker-status" title="Docker-forbindelse"></span>
@@ -10,7 +10,7 @@
 <div class="settings-page">
   <div class="dashboard-header">
     <h1>Indstillinger</h1>
-    <p class="dashboard-sub">FjordHub-konfiguration.</p>
+    <p class="dashboard-sub">MediaHub-konfiguration.</p>
   </div>
 
   <nav class="settings-tabs">
@@ -30,14 +30,14 @@
     </div>
     <div class="settings-card">
       <div class="settings-card-head"><h2>Email til glemt adgangskode</h2></div>
-      <p style="color:var(--text-muted);font-size:.86rem;margin-bottom:18px">Fx Gmail eller Resend. FjordHub bruger opsætningen for både hubben og hub-styrede apps.</p>
+      <p style="color:var(--text-muted);font-size:.86rem;margin-bottom:18px">Fx Gmail eller Resend. MediaHub bruger opsætningen for både hubben og hub-styrede apps.</p>
 
       <form method="post" action="{{ url_for('toggle_forgot_password') }}" style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border,#2a2f3a);">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
           <input type="checkbox" name="enabled" value="1" onchange="this.form.requestSubmit()" {% if forgot_password_enabled %}checked{% endif %}>
-          <span>Tillad "Glemt adgangskode?" på FjordHub's login-side</span>
+          <span>Tillad "Glemt adgangskode?" på MediaHub's login-side</span>
         </label>
-        <p style="color:var(--text-muted);font-size:.8rem;margin:4px 0 0 26px;">Slår kun FjordHub's egen glemt-kode-side til/fra. Apps som Urban Explorer og FjordLens har hver deres egen tilsvarende indstilling.</p>
+        <p style="color:var(--text-muted);font-size:.8rem;margin:4px 0 0 26px;">Slår kun MediaHub's egen glemt-kode-side til/fra. Apps som Urban Explorer og FjordLens har hver deres egen tilsvarende indstilling.</p>
       </form>
 
       {% if mail_saved %}<div class="auth-ok">Forbindelsen virker, og mailopsætningen er gemt.</div>{% endif %}
@@ -50,12 +50,12 @@
     <div class="settings-card">
       <div class="settings-card-head"><h2>Adgangstokens</h2></div>
       <div class="token-intro">
-        <p>Følg FjordHubs Docker-ressourcer og valgte appdata fra en anden app.</p>
-        <p class="token-intro-note">Tokenet giver læseadgang til CPU, RAM, netværk, disk-I/O og containerstatus for FjordHub og installerede apps samt FjordHubs adresse, så du kan åbne den fra den anden app. Adgangen virker kun på dit lokale netværk (LAN).</p>
+        <p>Følg MediaHubs Docker-ressourcer og valgte appdata fra en anden app.</p>
+        <p class="token-intro-note">Tokenet giver læseadgang til CPU, RAM, netværk, disk-I/O og containerstatus for MediaHub og installerede apps samt MediaHubs adresse, så du kan åbne den fra den anden app. Adgangen virker kun på dit lokale netværk (LAN).</p>
         <details class="token-guide">
           <summary>Sådan henter du målingerne</summary>
           <div class="token-guide-content">
-            <p>Brug FjordHubs lokale adresse, og send dit token med i headeren.</p>
+            <p>Brug MediaHubs lokale adresse, og send dit token med i headeren.</p>
             <span class="token-guide-label">Forespørgsel</span>
             <code>GET {{ url_for('api_integration_resources', _external=True) }}</code>
             <span class="token-guide-label">Header</span>
@@ -95,7 +95,7 @@
         </fieldset>
         <fieldset class="token-apps">
           <legend>Opdateringsadgang</legend>
-          <p class="field-hint">Tokenet må se opdateringsstatus og starte opdateringer for de valgte apps. FjordHub kan vælges separat.</p>
+          <p class="field-hint">Tokenet må se opdateringsstatus og starte opdateringer for de valgte apps. MediaHub kan vælges separat.</p>
           {% for target in update_apps %}
           <label class="token-app-choice"><input type="checkbox" name="update_apps" value="{{ target.id }}" {% if not target.installed %}disabled{% endif %}><span><strong>{{ target.name }}</strong><small>Se og start opdateringer{% if not target.installed %} · Ikke installeret{% endif %}</small></span></label>
           {% endfor %}
@@ -163,14 +163,14 @@
   <div id="pane-update" {% if section != 'update' %}hidden{% endif %}>
     <div class="settings-card">
       <div class="settings-card-head">
-        <h2>FjordHub opdatering</h2>
+        <h2>MediaHub opdatering</h2>
         <span class="badge" id="hubUpdateBadge">Klar</span>
       </div>
 
       {% if not hub_src_configured %}
       <div style="background:color-mix(in srgb,var(--yellow) 8%,var(--surface-2));border:1px solid color-mix(in srgb,var(--yellow) 25%,var(--border));border-radius:7px;padding:10px 14px;margin-bottom:16px;font-size:.86rem">
         <strong style="color:var(--text)">Selvoppdatering er ikke aktiveret.</strong><br>
-        <span style="color:var(--text-muted)">Tilføj <code>FJORDHUB_HOST_DIR=/opt/fjordhub</code> til din <code>.env</code> og genstart containeren.</span>
+        <span style="color:var(--text-muted)">Tilføj <code>FJORDHUB_HOST_DIR=/opt/fjordcopy</code> til din <code>.env</code> og genstart containeren.</span>
       </div>
       {% endif %}
 
@@ -419,7 +419,7 @@
           clearInterval(healthTimer);
           healthTimer = null;
           statusEl.hidden = false;
-          statusEl.textContent = 'FjordHub er opdateret! Siden genindlæses...';
+          statusEl.textContent = 'MediaHub er opdateret! Siden genindlæses...';
           statusEl.style.background = 'color-mix(in srgb,var(--green) 10%,var(--surface-2))';
           statusEl.style.color = 'var(--green)';
           statusEl.style.borderColor = 'color-mix(in srgb,var(--green) 30%,var(--border))';
@@ -454,7 +454,7 @@
 
     if (restarting) {
       statusEl.hidden = false;
-      statusEl.textContent = 'FjordHub genstarter med ny version — venter...';
+      statusEl.textContent = 'MediaHub genstarter med ny version — venter...';
       statusEl.style.background = 'color-mix(in srgb,var(--accent) 10%,var(--surface-2))';
       statusEl.style.color = 'var(--accent)';
       statusEl.style.borderColor = 'color-mix(in srgb,var(--accent) 30%,var(--border))';
@@ -466,7 +466,7 @@
     if (updateRunning && !running && data.state === 'up_to_date' && !data.update_available && !data.error) {
       updateRunning = false;
       statusEl.hidden = false;
-      statusEl.textContent = 'FjordHub er opdateret! Siden genindlæses...';
+      statusEl.textContent = 'MediaHub er opdateret! Siden genindlæses...';
       statusEl.style.background = 'color-mix(in srgb,var(--green) 10%,var(--surface-2))';
       statusEl.style.color = 'var(--green)';
       statusEl.style.borderColor = 'color-mix(in srgb,var(--green) 30%,var(--border))';
@@ -503,7 +503,7 @@
     checkBtn.disabled = true;
     updBtn.disabled = true;
     statusEl.hidden = false;
-    statusEl.textContent = 'FjordHub genstarter med ny version — venter...';
+    statusEl.textContent = 'MediaHub genstarter med ny version — venter...';
     statusEl.style.background = 'color-mix(in srgb,var(--accent) 10%,var(--surface-2))';
     statusEl.style.color = 'var(--accent)';
     statusEl.style.borderColor = 'color-mix(in srgb,var(--accent) 30%,var(--border))';
@@ -550,7 +550,7 @@
   });
 
   updBtn.addEventListener('click', function () {
-    if (!confirm('Start opdatering af FjordHub?\n\nContaineren genstartes automatisk efter opdatering er færdig.')) return;
+    if (!confirm('Start opdatering af MediaHub?\n\nContaineren genstartes automatisk efter opdatering er færdig.')) return;
     logEl.hidden = true;
     logEl.textContent = '';
     updBtn.disabled = true;

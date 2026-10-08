@@ -1,10 +1,10 @@
 {% extends "base_auth.html" %}
-{% block title %}Log ind — FjordHub{% endblock %}
+{% block title %}Log ind — MediaHub{% endblock %}
 {% block content %}
 <div class="auth-card">
-  <img class="auth-logo" src="{{ url_for('static', filename='logos/logos/fjordhub-logo-horizontal-transparent.png', v='brand-20261005') }}" alt="FjordHub">
+  <div class="auth-brand">{% include 'partials/brand.html' %}</div>
   <h1>Log ind</h1>
-  <p class="auth-subtitle">Adgang kræver login.</p>
+  <p class="auth-subtitle">Log ind i din hub for at åbne dine apps og værktøjer.</p>
 
   {% if error %}
     <div class="auth-error">{{ error }}</div>

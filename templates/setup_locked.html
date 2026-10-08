@@ -2,7 +2,7 @@
 {% block title %}Recovery kraeves - {{ app_name }}{% endblock %}
 {% block content %}
 <div class="auth-card">
-  <img class="auth-logo" src="{{ url_for('static', filename='logos/logos/fjordhub-logo-horizontal-transparent.png') }}" alt="FjordHub">
+  <div class="auth-brand">{% include 'partials/brand.html' %}</div>
   <h1>Recovery kraeves</h1>
   <p class="auth-subtitle">{{ app_name }} er allerede initialiseret, men databasen mangler eller er tom.</p>
   <div class="auth-error">

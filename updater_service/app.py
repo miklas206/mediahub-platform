@@ -17,6 +17,7 @@ STATE_DIR = Path(os.environ.get("FJORDHUB_UPDATER_STATE_DIR", "/state")).resolve
 UPDATE_SCRIPT = Path(os.environ.get("FJORDHUB_UPDATE_SCRIPT", str(APP_DIR / "scripts" / "update.sh"))).resolve()
 SERVICE_NAME = str(os.environ.get("SERVICE_NAME", "fjordhub") or "fjordhub").strip()
 DEFAULT_BRANCH = str(os.environ.get("REPO_BRANCH", "") or "").strip()
+EXPECTED_REPOSITORY = str(os.environ.get("FJORDCOPY_REPOSITORY", "miklas206/fjordcopy") or "miklas206/fjordcopy").strip()
 PORT = int(os.environ.get("PORT", "8090") or 8090)
 
 STATE_PATH = STATE_DIR / "update_state.json"
@@ -229,6 +230,20 @@ def current_branch() -> str:
     return branch
 
 
+def validate_origin() -> None:
+    """Fail closed if a copied checkout still points at the upstream hub."""
+    origin = cmd_output(["git", "remote", "get-url", "origin"], timeout=20).rstrip("/")
+    repository = EXPECTED_REPOSITORY.removesuffix(".git").strip("/")
+    allowed = {
+        f"https://github.com/{repository}",
+        f"https://github.com/{repository}.git",
+        f"git@github.com:{repository}.git",
+        f"ssh://git@github.com/{repository}.git",
+    }
+    if origin.lower() not in {url.lower() for url in allowed}:
+        raise RuntimeError(f"Self-update origin must point to github.com/{repository}; update refused")
+
+
 def git_info(fetch: bool = False) -> Dict[str, Any]:
     ensure_git_safe_dir()
     if not APP_DIR.exists():
@@ -239,6 +254,7 @@ def git_info(fetch: bool = False) -> Dict[str, Any]:
         return {"ok": False, "available": False, "error": f"Update script not found: {UPDATE_SCRIPT}"}
 
     try:
+        validate_origin()
         branch = current_branch()
         current = cmd_output(["git", "rev-parse", "HEAD"], timeout=20)
         dirty_raw = cmd_output(["git", "status", "--porcelain", "--untracked-files=no"], timeout=20)
@@ -291,7 +307,7 @@ def run_update_job(job_id: str, cleanup: bool, branch: str) -> None:
     env["CLEANUP_DOCKER"] = "yes" if cleanup else "no"
 
     reset_log()
-    append_log(f"[{now_iso()}] Starting FjordHub update")
+    append_log(f"[{now_iso()}] Starting MediaHub update from {EXPECTED_REPOSITORY}")
     append_log(f"[{now_iso()}] Docker cleanup: {'yes' if cleanup else 'no'}")
     append_log("$ " + " ".join(cmd))
     update_state(

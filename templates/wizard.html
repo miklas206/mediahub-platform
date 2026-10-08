@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ 'GPU-opsætning' if gpu_only else 'Installer' }} {{ app.name }} — FjordHub{% endblock %}
+{% block title %}{{ 'GPU-opsætning' if gpu_only else 'Installer' }} {{ app.name }} — MediaHub{% endblock %}
 
 {% block content %}
 <div class="wizard-page">
@@ -56,7 +56,7 @@
         <div class="info-row"><span>Installationsmappe</span><code>/apps/{{ app.id }}</code></div>
       </div>
       <div class="info-note">
-        Kildekoden klones til <code>/apps/{{ app.id }}</code> inde i FjordHub-containeren.<br>
+        Kildekoden klones til <code>/apps/{{ app.id }}</code> inde i MediaHub-containeren.<br>
         På din host svarer det til <code>APPS_DIR/{{ app.id }}</code> (standard: <code>./apps/{{ app.id }}</code>).<br>
         Data-mapperne (database, uploads osv.) konfigurerer du i næste trin.
       </div>
@@ -219,8 +219,8 @@
   {% endif %}
   <script type="text/plain" id="gpu-sync-script">
 #!/bin/sh
-# FjordHub GPU sync - holder LXC GPU passthrough i sync med hostens NVIDIA-driver.
-# Installeret af FjordHub GPU-helperen. Koerer ved boot, foer containerne starter.
+# MediaHub GPU sync - holder LXC GPU passthrough i sync med hostens NVIDIA-driver.
+# Installeret af MediaHub GPU-helperen. Koerer ved boot, foer containerne starter.
 set -u
 
 CT_LIST_FILE="/etc/fjordhub/gpu-cts"
@@ -335,7 +335,7 @@ exit 0
   <script type="text/plain" id="gpu-opencl-script">{% include 'partials/gpu_opencl.sh' %}</script>
   <script type="text/plain" id="gpu-sync-unit">
 [Unit]
-Description=FjordHub GPU sync (NVIDIA passthrough til LXC containere)
+Description=MediaHub GPU sync (NVIDIA passthrough til LXC containere)
 After=systemd-modules-load.service pve-cluster.service
 Wants=pve-cluster.service
 Before=pve-guests.service
@@ -362,7 +362,7 @@ WantedBy=multi-user.target
         <div class="nfs-code-section"><div class="nfs-section-header"><span>PVE-vært · videotillæg</span><button type="button" class="btn-nfs-copy-section" onclick="copySectionCommands(this)">Kopiér videotillæg</button></div><div class="nfs-code-block" id="gpu-video-code" hidden style="display:none;"></div></div>
         <div class="nfs-code-section"><div class="nfs-section-header"><span>2 · Genstart LXC på PVE-værten</span><button type="button" class="btn-nfs-copy-section" onclick="copySectionCommands(this)">Kopiér genstart</button></div><div class="nfs-code-block" id="gpu-video-restart-block" hidden style="display:none;"></div></div>
         <div class="nfs-code-section"><div class="nfs-section-header"><span>3 · Når LXC’en er startet igen · kør på PVE-værten</span><button type="button" class="btn-nfs-copy-section" onclick="copySectionCommands(this)">Kopiér efter genstart</button></div><div class="nfs-code-block" id="gpu-video-after-block" hidden style="display:none;"></div></div>
-        <p class="field-hint">Kør derefter Docker GPU-testen igen i FjordHub.</p>
+        <p class="field-hint">Kør derefter Docker GPU-testen igen i MediaHub.</p>
       </div>
       <div id="gpu-host-instructions">
       <h4>Fuld GPU-opsætning fra bunden</h4>
@@ -392,7 +392,7 @@ WantedBy=multi-user.target
       <div id="gpu-runtime-instructions">
         <div class="nfs-code-section" style="margin-top:10px;">
           <div class="nfs-section-header">
-            <span class="nfs-block-location">FjordHub-container (automatisk)</span>
+            <span class="nfs-block-location">MediaHub-container (automatisk)</span>
           </div>
           <div style="font-size:.78rem;color:var(--text-muted);padding:8px 0 6px;">
             Hvorfor: Hvis Docker GPU-testen fejler med "no known GPU vendor found" eller "libnvidia-ml.so.1 not found", mangler NVIDIA runtime og/eller NVIDIA userspace-biblioteker i containeren.
@@ -552,7 +552,7 @@ function buildSummary() {
       const display = isSecret ? '••••••••' : v;
       return `<div class="summary-row"><span>${k}</span><code>${display}</code></div>`;
     });
-  rows.push(`<div class="summary-row"><span>Adgangsstyring</span><code>FjordHub styrer login og app-adgang</code></div>`);
+  rows.push(`<div class="summary-row"><span>Adgangsstyring</span><code>MediaHub styrer login og app-adgang</code></div>`);
   list.innerHTML = rows.join('');
 }
 
@@ -673,7 +673,7 @@ function setGpuAutoButtonRunning(running) {
   btn.textContent = running ? 'Koerer...' : '⚡ Installer GPU-forudsætninger automatisk';
 }
 
-// Efter en vellykket auto-opsaetning genstarter Docker (og dermed FjordHub selv).
+// Efter en vellykket auto-opsaetning genstarter Docker (og dermed MediaHub selv).
 // Testknappen laases, indtil /api/health svarer stabilt igen, saa man ikke kan
 // koere testen mens alt er nede.
 let gpuSetupSeenRunning = false;
@@ -714,7 +714,7 @@ async function waitForGpuTestReady() {
   }
   gpuTestWaitActive = false;
   if (okStreak < 2) {
-    if (resultEl) resultEl.textContent = 'FjordHub svarede ikke stabilt efter genstarten. Kontrollér Docker, og kør GPU-testen igen.';
+    if (resultEl) resultEl.textContent = 'MediaHub svarede ikke stabilt efter genstarten. Kontrollér Docker, og kør GPU-testen igen.';
     return;
   }
   if (resultEl) resultEl.innerHTML = '<span style="color:#22c55e">✓ Alt er oppe igen — du kan køre GPU-testen nu.</span>';
@@ -831,7 +831,7 @@ function renderGpuCommands() {
   const syncUnit = (document.getElementById('gpu-sync-unit')?.textContent || '').trim();
   const lines = [
     '(', 'set -e',
-    '# Koer paa PVE-hosten, ikke inde i FjordHub-containeren.',
+    '# Koer paa PVE-hosten, ikke inde i MediaHub-containeren.',
     '# Engangs-opsaetning: installerer en gpu-sync service, der automatisk holder GPU',
     '# passthrough opdateret ved hver boot - ogsaa efter driveropdateringer paa hosten.',
     `ctid="${vmid}"`,
@@ -916,7 +916,7 @@ function renderGpuVideoCommands() {
     "  cat > /usr/local/sbin/fjordhub-gpu-sync <<'FJORDHUB_VIDEO_SYNC'", script, 'FJORDHUB_VIDEO_SYNC', 'fi',
     'echo "Videoadgang tilfoejet. Genstart nu LXC med: pct reboot $ctid"',
     'echo "Naar LXC er startet igen, koer paa PVE: pct exec $ctid -- ldconfig"',
-    'echo "Koer derefter GPU-testen igen i FjordHub."', ')',
+    'echo "Koer derefter GPU-testen igen i MediaHub."', ')',
   ];
   block.textContent = lines.join('\n');
 }
@@ -1185,7 +1185,7 @@ async function _detectLxcType() {
     }
     if (el) {
       if (data.privileged === true) {
-        el.innerHTML = '▶ Kør kommandoerne i <strong>fjordhub-terminalen</strong> (privilegeret LXC)';
+        el.innerHTML = '▶ Kør kommandoerne i <strong>MediaHub-containerens terminal</strong> (privilegeret LXC)';
       } else if (data.privileged === false) {
         el.innerHTML = '▶ Kør kommandoerne på <strong>PVE-hosten</strong> (uprivilegeret LXC)';
       }
@@ -1357,7 +1357,7 @@ function renderNfsCommands() {
         'mount -a',
         ...(subdir ? ['', c('# 4. Opret undermappe'), `mkdir -p ${finalPath}`] : []),
         '',
-        c('# 5. Bind-mount ind i fjordhub LXC'),
+        c('# 5. Bind-mount ind i MediaHub LXC'),
         `pct set ${vmid} -mp0 ${root},mp=${root}`,
         '',
         c('# 6. Genstart LXC for at aktivere mount'),
@@ -1367,7 +1367,7 @@ function renderNfsCommands() {
       ],
     });
   } else {
-    const loc = _nfsLxcPrivileged === true ? 'fjordhub-terminalen (root@fjordhub)' : 'LXC-terminalen';
+    const loc = _nfsLxcPrivileged === true ? 'MediaHub-containerens terminal (root)' : 'LXC-terminalen';
     sections.push({
       location: loc,
       lines: [
@@ -1391,7 +1391,7 @@ function renderNfsCommands() {
     block.innerHTML =
       `<div class="nfs-code-section">
         <div class="nfs-section-header">
-          <span class="nfs-block-location">📍 fjordhub-terminalen (root@fjordhub)</span>
+          <span class="nfs-block-location">📍 MediaHub-containerens terminal (root)</span>
         </div>
         <div style="padding:12px 0 4px;">
           <button type="button" class="btn btn-open" id="nfs-auto-btn" onclick="autoMountNfs()">⚡ Montér automatisk</button>

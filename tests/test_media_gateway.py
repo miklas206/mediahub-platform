@@ -101,7 +101,7 @@ class MediaGatewayTests(unittest.TestCase):
         client=self.manager.client
         client.containers.get.side_effect=docker.errors.NotFound('missing')
         proxy=MagicMock();proxy.name='fjordhub-traefik'
-        proxy.labels={'com.docker.compose.project':'fjordhub','com.docker.compose.service':'traefik'}
+        proxy.labels={'com.docker.compose.project':'fjordcopy','com.docker.compose.service':'traefik'}
         proxy.attrs={'Config':{'Cmd':['--providers.docker=true','--entrypoints.web.address=:80']},'NetworkSettings':{'Networks':{'fjord-net':{}},'Ports':{'80/tcp':[{'HostPort':'80'}]}}}
         client.containers.list.return_value=[proxy]
         self.gateway.ensure_gateway(client,self.app,'media.example.com')

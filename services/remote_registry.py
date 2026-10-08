@@ -23,9 +23,21 @@ _RAW_RE = re.compile(
 
 
 def fetch_json(url: str) -> dict:
-    """Fetch JSON from a URL. Uses the GitHub Contents API for
+    """Read a configured local catalog or fetch JSON from an HTTP URL.
+
+    Bundled catalogs let private forks update their catalog with the hub.
+    Uses the GitHub Contents API for
     raw.githubusercontent.com URLs to bypass CDN caching (raw URLs are cached
     ~5 min); falls back to direct HTTP for other hosts or on API errors."""
+    if "://" not in url:
+        try:
+            data = json.loads(Path(url).read_text(encoding="utf-8"))
+        except OSError as error:
+            raise ValueError(f"Could not read catalog: {url}") from error
+        if not isinstance(data, dict):
+            raise ValueError("Catalog must contain a JSON object")
+        return data
+
     m = _RAW_RE.match(url)
     if m:
         owner, repo, ref, path = m.groups()

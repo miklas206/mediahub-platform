@@ -1,6 +1,7 @@
 """FjordHub-owned Caddy gateway. No host paths or shell scripts required."""
 import io
 import json
+import os
 import re
 import secrets
 import tarfile
@@ -21,7 +22,7 @@ def hub_traefik(container):
     labels = container.labels
     command = container.attrs.get('Config', {}).get('Cmd') or []
     return (container.name == 'fjordhub-traefik'
-            and labels.get('com.docker.compose.project') == 'fjordhub'
+            and labels.get('com.docker.compose.project') == os.environ.get('COMPOSE_PROJECT_NAME', 'fjordcopy')
             and labels.get('com.docker.compose.service') == 'traefik'
             and 'fjord-net' in container.attrs.get('NetworkSettings', {}).get('Networks', {})
             and '--providers.docker=true' in command

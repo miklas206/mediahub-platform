@@ -37,6 +37,7 @@ function applyStatus(card, status) {
   const open   = card.querySelector('.btn-open');
   const port   = parseInt(card.dataset.defaultPort, 10);
   const state  = status.state || 'unknown';
+  card.dataset.state = state;
   const openUrl = status.external_url || status.fallback_url || getAppUrl(port);
 
   dot.dataset.status = state;
@@ -91,14 +92,17 @@ function applyStatus(card, status) {
 async function fetchStatuses() {
   try {
     const res = await fetch('/api/apps-status');
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('Appstatus utilgængelig');
     const data = await res.json();
     document.querySelectorAll('.app-card').forEach(card => {
       const id = card.dataset.appId;
       if (data[id]) applyStatus(card, data[id]);
     });
     organizeAppSections(data);
-  } catch (_) {}
+  } catch (_) {
+    const summary = document.getElementById('hub-app-summary');
+    if (summary) summary.textContent = 'Appstatus kunne ikke hentes. Prøver igen automatisk…';
+  }
 }
 
 function organizeAppSections(statuses) {
@@ -130,7 +134,47 @@ function organizeAppSections(statuses) {
   if (availableSection) availableSection.style.display = available ? '' : 'none';
   if (installedCount) installedCount.textContent = `${installed}`;
   if (availableCount) availableCount.textContent = `${available}`;
+
+  const tools = document.querySelectorAll('#hub-tools-section [data-hub-search]').length;
+  const running = cards.filter(card => card.dataset.state === 'running').length;
+  const summary = document.getElementById('hub-app-summary');
+  if (summary) summary.textContent = `${installed} ${installed === 1 ? 'installeret app' : 'installerede apps'} · ${running} kører · ${tools} ${tools === 1 ? 'værktøj' : 'værktøjer'}`;
+  const sections = document.getElementById('app-sections');
+  if (sections) {
+    sections.dataset.statusReady = 'true';
+    sections.dataset.installedCount = String(installed + tools);
+  }
+  filterHubApps();
 }
+
+// Search only the apps already permitted and rendered by the server.
+function filterHubApps() {
+  const search = document.getElementById('hub-search');
+  if (!search) return;
+  const query = search.value.trim().toLocaleLowerCase('da');
+  const sections = document.getElementById('app-sections');
+  let matches = 0;
+  sections.querySelectorAll('[data-hub-search]').forEach(card => {
+    const visible = !query || card.dataset.hubSearch.toLocaleLowerCase('da').includes(query);
+    card.hidden = !visible;
+    if (visible) matches += 1;
+  });
+  sections.querySelectorAll('.app-section').forEach(section => {
+    section.hidden = ![...section.querySelectorAll('[data-hub-search]')].some(card => !card.hidden);
+  });
+  document.getElementById('hub-search-clear').hidden = !query;
+  document.getElementById('hub-search-empty').hidden = !query || matches > 0;
+  document.getElementById('hub-getting-started').hidden = !!query
+    || sections.dataset.statusReady !== 'true' || sections.dataset.installedCount !== '0';
+}
+
+document.getElementById('hub-search')?.addEventListener('input', filterHubApps);
+document.getElementById('hub-search-clear')?.addEventListener('click', () => {
+  const search = document.getElementById('hub-search');
+  search.value = '';
+  filterHubApps();
+  search.focus();
+});
 
 function hideUpdateRow(card) {
   const row = card.querySelector('.card-update-row');
@@ -436,7 +480,7 @@ async function checkDockerHealth() {
     dot.title = data.docker ? 'Docker: forbundet' : 'Docker: ikke forbundet';
   } catch (_) {
     dot.className = 'topbar-status err';
-    dot.title = 'Kunne ikke nå FjordHub API';
+    dot.title = 'Kunne ikke nå MediaHub API';
   }
 }
 
@@ -753,13 +797,13 @@ document.getElementById('app-settings-modal')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) closeAppSettings();
 });
 
-// ── Link FjordHub integration ────────────────────────────────────────────────
+// ── Link MediaHub integration ────────────────────────────────────────────────
 
 async function linkHubIntegration(card) {
   const id   = card.dataset.appId;
   const name = card.querySelector('.card-name')?.textContent || id;
   const linkBtn = card.querySelector('.btn-link-hub');
-  if (!confirm(`Aktiver FjordHub-integration til ${name}?\n\nDette opdaterer appens konfiguration og genstarter containeren.`)) return;
+  if (!confirm(`Aktiver MediaHub-integration til ${name}?\n\nDette opdaterer appens konfiguration og genstarter containeren.`)) return;
   if (linkBtn) { linkBtn.disabled = true; linkBtn.textContent = 'Tilslutter…'; }
   try {
     const res  = await fetch(`/api/apps/${encodeURIComponent(id)}/link-hub`, { method: 'POST' });
@@ -770,11 +814,11 @@ async function linkHubIntegration(card) {
       setTimeout(fetchStatuses, 4000);
     } else {
       showToast(`✗ ${data.error || 'Tilslutning fejlede'}`, 'err');
-      if (linkBtn) { linkBtn.disabled = false; linkBtn.textContent = 'Link FjordHub'; }
+      if (linkBtn) { linkBtn.disabled = false; linkBtn.textContent = 'Link MediaHub'; }
     }
   } catch (_) {
     showToast('✗ Netværksfejl', 'err');
-    if (linkBtn) { linkBtn.disabled = false; linkBtn.textContent = 'Link FjordHub'; }
+    if (linkBtn) { linkBtn.disabled = false; linkBtn.textContent = 'Link MediaHub'; }
   }
 }
 
@@ -836,14 +880,14 @@ async function openWithSso(appId, appUrl, local = false) {
       return;
     }
     if (popup) popup.close();
-    if (data.error && data.error.includes('FjordHub-integration')) {
-      showToast('✗ SSO kræver FjordHub-integration — klik "Link FjordHub" på app-kortet', 'err');
+    if (data.error && (data.error.includes('FjordHub-integration') || data.error.includes('MediaHub-integration'))) {
+      showToast('✗ SSO kræver MediaHub-integration — klik "Link MediaHub" på app-kortet', 'err');
     } else {
       showToast(`✗ SSO fejlede: ${data.error || 'ukendt fejl'}`, 'err');
     }
   } catch (_) {
     if (popup) popup.close();
-    showToast('✗ SSO fejlede: kunne ikke nå FjordHub', 'err');
+    showToast('✗ SSO fejlede: kunne ikke nå MediaHub', 'err');
   }
 }
 
@@ -994,7 +1038,7 @@ function updateMediaRoute() {
   for(const id of ['media-proton-settings','media-proton-instructions']) document.getElementById(id).hidden=!proton;
   for(const id of ['media-router-instructions','media-router-mode']) document.getElementById(id).hidden=proton;
   document.getElementById('media-dns-ip-help').textContent=proton?'Proton VPN-forbindelsens aktuelle offentlige IPv4-adresse':'Din offentlige WAN-IP';
-  document.getElementById('media-mode-help').textContent=proton?'FjordHub tester din eksisterende HTTPS-gateway gennem Proton på den angivne port. Gateway og certifikat skal være sat op i VPN-containeren.':'FjordHub kan installere Caddy på port 80/443, eller teste din eksisterende HTTPS-indgang.';
+  document.getElementById('media-mode-help').textContent=proton?'MediaHub tester din eksisterende HTTPS-gateway gennem Proton på den angivne port. Gateway og certifikat skal være sat op i VPN-containeren.':'MediaHub kan installere Caddy på port 80/443, eller teste din eksisterende HTTPS-indgang.';
   const host=document.getElementById('media-dns-name').textContent;
   const url=host && host!=='—' ? `https://${host}${proton && data.port && data.port!=='443'?':'+data.port:''}` : '—';
   document.getElementById('media-url-preview').textContent=url;
@@ -1116,7 +1160,7 @@ function selectStoragePool() {
   document.getElementById('app-storage-size-field').hidden = !pool?.needs_size;
   document.getElementById('app-storage-size').required = document.getElementById('app-storage-target-type').value === 'pool' && !!pool?.needs_size;
   document.getElementById('app-storage-pool-hint').textContent = pool
-    ? `${(pool.free_bytes / 1073741824).toFixed(1)} GiB ledig. ${pool.system_pool ? 'Samme lager som systemdisken. Flytning hertil frigiver ikke plads i dette lager.' : 'FjordHub beregner filplaceringen ud fra dette lager.'}`
+    ? `${(pool.free_bytes / 1073741824).toFixed(1)} GiB ledig. ${pool.system_pool ? 'Samme lager som systemdisken. Flytning hertil frigiver ikke plads i dette lager.' : 'MediaHub beregner filplaceringen ud fra dette lager.'}`
     : (_storageAccess?.message || 'Vælg et tilgængeligt lager.');
 }
 async function loadProxmoxStorages(appId, generation) {
@@ -1157,9 +1201,9 @@ function closeStorageMount() {
 function openStorageMount(pending, data) {
   closeStorageMount(); _mountPending = pending;
   const inventory = pending.kind === 'inventory';
-  document.getElementById('storage-mount-title').textContent = inventory ? 'Giv læseadgang til lagerlisten' : 'Tilslut lageret til FjordHub';
+  document.getElementById('storage-mount-title').textContent = inventory ? 'Giv læseadgang til lagerlisten' : 'Tilslut lageret til MediaHub';
   document.getElementById('storage-mount-description').textContent = inventory
-    ? 'Kør kommandoerne som root i PVE → Shell. De giver FjordHubs API-adgang mulighed for at læse lagrene.'
+    ? 'Kør kommandoerne som root i PVE → Shell. De giver MediaHubs API-adgang mulighed for at læse lagrene.'
     : 'Kør kommandoerne som root i PVE → Shell for at tilslutte det valgte lager.';
   document.getElementById('storage-mount-restart').hidden = inventory;
   document.getElementById('storage-mount-destination').textContent = inventory ? '' : `Filplacering: ${data.destination || ''}`;
@@ -1182,7 +1226,7 @@ async function mountStatus(pending) {
   try {
     const response = await fetch(`/api/apps/${encodeURIComponent(pending.appId)}/storage?${params}`, {signal:controller.signal});
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || 'Venter på forbindelse til FjordHub…');
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Venter på forbindelse til MediaHub…');
     return data;
   } finally { clearTimeout(timeout); }
 }
@@ -1205,7 +1249,7 @@ async function pollStorageMount() {
     document.getElementById('storage-mount-start').disabled = !data.ready;
   } catch (error) {
     if (_mountPending !== pending || request !== _mountRequest) return;
-    status.textContent = error.name === 'AbortError' ? 'Venter på FjordHub efter genstart…' : error.message;
+    status.textContent = error.name === 'AbortError' ? 'Venter på MediaHub efter genstart…' : error.message;
     status.className = 'app-settings-status warn';
   }
   if (_mountPending === pending && request === _mountRequest) _mountTimer = setTimeout(pollStorageMount, 5000);

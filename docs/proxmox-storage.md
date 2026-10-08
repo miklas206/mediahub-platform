@@ -1,71 +1,27 @@
-# FjordHub og Proxmox-lager
+# MediaHub beta og Proxmox-lager
 
-Førstegangsopsætningen har tre trin: konto, valgfri email og valgfri lageradgang.
-**Spring over** afslutter lagertrinnet uden at tilslutte mapper. Det kan åbnes igen
-under **Indstillinger → Lageradgang**. Eksisterende brugere bliver ikke tvunget
-gennem førstegangsopsætningen igen.
+MediaHub installeres på en eksisterende, udtrykkeligt valgt beta-LXC som beskrevet i [README](../README.md). Projektet opretter ikke automatisk en ny LXC og installerer ikke den oprindelige FjordHub. Det gamle `install-proxmox.sh` stopper derfor før nogen ændringer.
 
-## Ny installation på Proxmox
+Førstegangsopsætningen har tre trin: konto, valgfri email og valgfri lageradgang. **Spring over** afslutter lagertrinnet uden at tilslutte mapper. Det kan åbnes igen under **Indstillinger → Lageradgang**.
 
-Kør på Proxmox-værten som root (amd64). Scriptet opretter en ny Debian 13 LXC med
-Docker og FjordHub samt automatisk, begrænset lageradgang:
+## Valgfri Proxmox-forbindelse til en eksisterende installation
 
-```bash
-setup_dir=$(mktemp -d /tmp/fjordhub-setup.XXXXXX)
-git clone --depth 1 https://github.com/qlerup/fjordhub.git "$setup_dir"
-bash "$setup_dir/scripts/install-proxmox.sh"
+En almindelig app-opdatering tildeler ikke nye Proxmox-rettigheder. Hubben skal allerede køre med persistent `/data`. Brug en betroet kopi af netop dette private repository på Proxmox-værten; brug ikke instruktioner fra det oprindelige FjordHub til at opdatere beta-kopien.
+
+Kør kun følgende, når Proxmox-adgang ønskes. Erstat `CTID` og `PVE_IP` med de verificerede værdier for den relevante installation:
+
+```sh
+python3 scripts/configure_proxmox.py CTID --host PVE_IP --directory /opt/fjordcopy
 ```
 
-Standarder: ledigt CTID, `local-lvm`, templates på `local`, bro `vmbr0`, DHCP,
-24 GiB disk, 2 CPU og 2 GiB RAM. Kan ændres via `CTID`, `STORAGE`,
-`TEMPLATE_STORAGE`, `BRIDGE`, `DISK_GIB` og `HOST_IP`. Webadressen er LXC'ens IP,
-port 8091. Scriptet ændrer ingen eksisterende VPN- eller app-containere.
-Hvis installationen fejler efter oprettelse, behold det viste CTID og undersøg
-fejlen; kør ikke blindt installeren igen og opret endnu en LXC.
+Kommandoen køres som root på Proxmox-værten. Den opretter en særskilt read-only PVEAuditor-token og en SSH-nøgle med en fast forced command for den valgte CTID. Den genopretter hub-containeren med forbindelsen. Repositoryets deploy key genbruges ikke. Det er en særskilt ændring fra installation af selve hubben.
 
-## Eksisterende FjordHub, også installeret gennem MediaHub
+Den kopierede storage-helper bruger de eksisterende FjordHub-protokolnavne. På en vært med en eksisterende FjordHub skal eventuelle delte helper-filer gennemgås før konfiguration; den første beta-installation konfigurerer dem ikke.
 
-En almindelig app-opdatering kan ikke give sig selv nye Proxmox-rettigheder.
-Opdatér FjordHub først. Kør derefter følgende engangsopsætning på Proxmox-værten.
-Erstat `1000`, IP-adressen og eventuelt `/opt/fjordhub` med din installation:
+## Vælg mediefiler
 
-```bash
-setup_dir=$(mktemp -d /tmp/fjordhub-setup.XXXXXX)
-git clone --depth 1 https://github.com/qlerup/fjordhub.git "$setup_dir"
-python3 "$setup_dir/scripts/configure_proxmox.py" 1000 --host 192.168.1.250 --directory /opt/fjordhub
-```
+Proxmox-inventory er et overblik over lagre, ikke adgang til deres filer. Medier kræver en eksplicit mount til LXC'en og den relevante app. Virtuelle diske på `local-lvm` er ikke browsbare mediemapper.
 
-Dette genopretter FjordHub-containeren med den nye forbindelse og erstatter dens
-Proxmox-inventory-login med en separat read-only PVEAuditor-token. Credentials
-lagres privat; de vises ikke i guiden. Scriptet kræver en eksisterende FjordHub
-med persistent `/data` bind-mount. Proxmox' SSH-port skal kunne nås fra LXC'en.
-MediaHubs egen installer bruger endnu ikke denne FjordHub-installer automatisk.
+Start med de nødvendige mapper og read-only adgang. Brug ikke en produktionsdatabases eller apps private datamappe som en delt betamappe. Gennemgå kilde, rettigheder og mount-identitet før tilslutning. Tilslutning via guiden kan genstarte LXC'en og dens apps.
 
-## Vælg medier i FjordFlix
-
-Opdatér også FjordFlix. Åbn **Indstillinger → Bibliotek → Proxmox-diske og storage**.
-Under **Tilgængelige lagre på Proxmox** vælger du **Tilslut lager**, bekræfter
-genstarten og venter på status. FjordHubs LXC og dens apps kan genstarte. Vælg
-derefter **Vælg mappe** og tilføj mediemappen til biblioteket. Flere lagre og
-mapper kan tilføjes. Filerne indekseres og streames fra kilden uden import/kopi.
-
-Automatisk tilslutning understøtter faktiske mounts under `/mnt`, `/media` og
-`/srv`: mergerfs, ext4, XFS, Btrfs, ZFS, NFS og CIFS. FUSE/mergerfs kræver
-`allow_other`, og filrettigheder skal tillade læsning fra den unprivilegerede LXC.
-Andre Proxmox-storages og rå diske vises fortsat i inventory, men en virtuel
-disk/pool uden et monteret filsystem kan ikke tilsluttes som mediemappe.
-
-Nye mounts oprettes med `ro=1,backup=0` under `/mnt/fjordflix/pool-…`.
-Eksisterende mount-numre overskrives ikke. Jobstatus og konfigurationsbackup
-bevares på værten under `/var/lib/fjordhub-storage/CTID`. Ved fejl kontrolleres
-status og backup før nyt forsøg; en afbrudt operation kan have ændret konfigurationen.
-En systemd-startkontrol og mount-afhængigheder sikrer, at LXC'en ikke starter med
-en tom underliggende mappe, hvis et tilsluttet lager mangler. Sørg for, at
-værtslageret er konfigureret til at blive monteret ved boot.
-
-Forbindelsen bruger en SSH-nøgle med `restrict` og en fast forced command for ét
-CTID samt pinned host key. Appen kan kun liste lagre og anmode om tilslutning af
-et identificeret lager. Den kan ikke sende vilkårlige kommandoer, stier eller
-CTID'er, og kan ikke aktivere skriveadgang. Skriveadgang kræver fortsat den
-separate **Få fuld adgang**-guide, som administratoren selv kører på værten.
-Afinstallation bevarer mountenes filer.
+FjordFlix understøtter valg af mediemapper fra sin biblioteksopsætning. Andre apps har deres egne lagerfelter i installationsguiden. En frisk beta-installation har ingen af dine eksisterende mediemapper monteret automatisk.

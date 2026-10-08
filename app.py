@@ -48,18 +48,18 @@ AUTH_INSTALL_STATE_KEY = "__fjordhub_auth__"
 
 REGISTRY_URL = os.environ.get(
     "REGISTRY_URL",
-    "https://raw.githubusercontent.com/qlerup/fjordhub/main/registry.json",
+    str(Path(__file__).parent / "registry.json"),
 )
 
 PACKAGES_URL = os.environ.get(
     "PACKAGES_URL",
-    "https://raw.githubusercontent.com/qlerup/fjordhub/main/packages_catalog.json",
+    str(Path(__file__).parent / "packages_catalog.json"),
 )
 
 FJORDHUB_SRC_DIR = os.environ.get("FJORDHUB_SRC_DIR", "")
 FJORDHUB_UPDATER_URL = str(os.environ.get("FJORDHUB_UPDATER_URL", "") or "").strip().rstrip("/")
-FJORDHUB_IMAGE = str(os.environ.get("FJORDHUB_IMAGE", "fjordhub-fjordhub:latest") or "").strip() or "fjordhub-fjordhub:latest"
-_FJORDHUB_APP_DEF = {"id": "fjordhub", "name": "FjordHub"}
+FJORDHUB_IMAGE = str(os.environ.get("FJORDHUB_IMAGE", "fjordcopy-fjordhub:latest") or "").strip() or "fjordcopy-fjordhub:latest"
+_FJORDHUB_APP_DEF = {"id": "fjordhub", "name": "MediaHub"}
 LANGUAGE_OPTIONS = [
     {"value": "da", "label": "Dansk"},
     {"value": "en", "label": "English"},
@@ -75,7 +75,7 @@ def _normalize_language(value: str) -> str:
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 app.config.update(
-    SESSION_COOKIE_NAME=os.environ.get("SESSION_COOKIE_NAME", "fjordhub_session"),
+    SESSION_COOKIE_NAME=os.environ.get("SESSION_COOKIE_NAME", "fjordcopy_session"),
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     SESSION_REFRESH_EACH_REQUEST=False,
 )
@@ -205,6 +205,13 @@ _AUTH_EXEMPT = {
 
 _sso_tokens: dict = {}
 
+# Opening an app never grants control of its Docker lifecycle or install logs.
+_APP_ADMIN_ENDPOINTS = {
+    "start_app", "stop_app", "check_app_update", "start_app_update",
+    "uninstall_app", "install_wizard", "install_app", "install_status",
+    "api_registry_refresh",
+}
+
 
 def _install_state_exists() -> bool:
     return _install_state.is_initialized(AUTH_INSTALL_STATE_KEY)
@@ -228,12 +235,12 @@ def _ensure_install_state_for_existing_users() -> None:
 
 
 def _setup_locked_response():
-    message = "FjordHub er allerede initialiseret, men databasen mangler eller er tom."
+    message = "MediaHub er allerede initialiseret, men databasen mangler eller er tom."
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "error": message, "recovery_required": True}), 503
     return render_template(
         "setup_locked.html",
-        app_name="FjordHub",
+        app_name="MediaHub",
         db_path=str(AUTH_DB_PATH),
     ), 503
 
@@ -277,6 +284,8 @@ def _auth_gate():
         if request.path.startswith("/api/"):
             return jsonify({"ok": False, "error": "Adgangskoden skal ændres først.", "password_change_required": True}), 403
         return redirect(url_for("profile", force_password_change="1"))
+    if request.endpoint in _APP_ADMIN_ENDPOINTS and not current_user.is_admin:
+        return jsonify(ok=False, error="Kræver administratoradgang."), 403
     return None
 
 
@@ -348,7 +357,7 @@ def _candidate_app_dirs(app_def: dict) -> list[Path]:
             candidates.append(APPS_BASE / 'fjordshare')
 
     # Discover manually installed apps from their Compose working directory.
-    # Translate the host path through FjordHub's real bind mounts rather than
+    # Translate the host path through MediaHub's real bind mounts rather than
     # guessing /opt paths that may not be visible inside this container.
     if docker_mgr.client:
         names = [app_def.get('container_name'), *app_def.get('legacy_container_names', [])]
@@ -405,7 +414,7 @@ def _ensure_install_state_for_existing_apps(apps: list[dict]) -> None:
 
 @app.context_processor
 def inject_globals():
-    return {"app_name": "FjordHub", "active_page": "", "forgot_password_enabled": _password_reset.is_enabled()}
+    return {"app_name": "MediaHub", "active_page": "", "forgot_password_enabled": _password_reset.is_enabled()}
 
 
 # ── Auth routes ──────────────────────────────────────────────────────────────
@@ -563,10 +572,7 @@ def logout():
 
 @app.route("/")
 def dashboard():
-    all_apps = _get_apps()
-    if not current_user.is_admin:
-        user_app_ids = {a["app_id"] for a in _auth.get_user_app_access(current_user.id)}
-        all_apps = [a for a in all_apps if a.get("id") in user_app_ids]
+    all_apps = _visible_apps()
     dashboard_apps = []
     for app_def in all_apps:
         app_copy = copy.deepcopy(app_def)
@@ -577,9 +583,18 @@ def dashboard():
     return render_template(
         "dashboard.html",
         apps=dashboard_apps,
+        hub_packages=_installed_packages(),
         reg_status=_remote_registry.get_status(),
         active_page="apps",
     )
+
+
+def _visible_apps() -> list[dict]:
+    apps = _get_apps()
+    if current_user.is_admin:
+        return apps
+    allowed = {entry["app_id"] for entry in _auth.get_user_app_access(current_user.id)}
+    return [entry for entry in apps if entry.get("id") in allowed]
 
 
 BUILTIN_PACKAGES = [
@@ -633,9 +648,8 @@ def _package_state_key(package_id: str) -> str:
     return f"__package__{package_id}"
 
 
-@app.route("/packages")
-def packages():
-    _package_catalog.refresh_if_stale()
+def _installed_packages() -> list[dict]:
+    """Shared installed package metadata for the hub and package library."""
     installed = []
     for package in _get_package_defs():
         if package_manager.is_installed(package["id"]):
@@ -649,7 +663,13 @@ def packages():
             package_copy["installed_version"] = installed_version
             package_copy["update_available"] = installed_version != catalog_version
             installed.append(package_copy)
-    return render_template("packages.html", packages=installed, active_page="packages")
+    return installed
+
+
+@app.route("/packages")
+def packages():
+    _package_catalog.refresh_if_stale()
+    return render_template("packages.html", packages=_installed_packages(), active_page="packages")
 
 
 @app.route("/store")
@@ -755,7 +775,7 @@ def api_fjordlens_memory_budget():
     if not _auth.verify_hub_key('fjordlens', request.headers.get('X-Hub-Key', '')):
         return jsonify(ok=False, error='Invalid FjordLens key'), 403
     if not _install_state.get_install_dir('fjordlens'):
-        return jsonify(ok=False, error='FjordLens is not installed through FjordHub'), 404
+        return jsonify(ok=False, error='FjordLens is not installed through MediaHub'), 404
     from services.fjordlens_memory import budget_from_resources
     try:
         snapshot = resource_monitor.collect(_apps_with_install_dirs())
@@ -812,7 +832,7 @@ def _integration_app_connection(app_id):
         raise app_integration.AppDataError('Appen er ikke installeret.', 404)
     key = _installed_env_value(app_id, 'FJORDHUB_API_KEY')
     if not key or not _auth.verify_hub_key(app_id, key):
-        raise app_integration.AppDataError('Opdater appens FjordHub-forbindelse.')
+        raise app_integration.AppDataError('Opdater appens MediaHub-forbindelse.')
     app_def = _get_app(app_id)
     if not app_def:
         raise app_integration.AppDataError('Appen findes ikke.', 404)
@@ -883,7 +903,7 @@ def _integration_update_public(app_id, status):
     result = {key: status[key] for key in fields if key in status}
     result.update(app_id=app_id, ok=bool(status.get('ok', status.get('state') not in {'error', 'failed', 'not_installed'})))
     if not result['ok']:
-        result['error'] = 'Opdateringen kunne ikke udføres. Se status i FjordHub.'
+        result['error'] = 'Opdateringen kunne ikke udføres. Se status i MediaHub.'
     return result
 
 
@@ -897,7 +917,7 @@ def _integration_app_info(grant):
     result = {}
     for app_id in sorted(selected):
         if app_id == 'fjordhub':
-            name, icon, port = 'FjordHub', url_for('static', filename='logos/icons/fjordhub-mark-transparent-512.png', v='brand-20261005'), APP_PORT
+            name, icon, port = 'MediaHub', url_for('static', filename='logos/mediahub-mark.svg', v=STATIC_VERSION), APP_PORT
             installed = True
         else:
             definition = _get_app(app_id)
@@ -1160,7 +1180,7 @@ def settings():
         access_token_csrf=session["access_token_csrf"],
         integration_apps=[{'id': app_id, **info, 'installed': bool(_install_state.get_install_dir(app_id))}
                           for app_id, info in app_integration.SUPPORTED_APPS.items()],
-        update_apps=[{'id': 'fjordhub', 'name': 'FjordHub', 'installed': bool(FJORDHUB_SRC_DIR or FJORDHUB_UPDATER_URL)}]
+        update_apps=[{'id': 'fjordhub', 'name': 'MediaHub', 'installed': bool(FJORDHUB_SRC_DIR or FJORDHUB_UPDATER_URL)}]
                     + [{'id': a['id'], 'name': a['name'], 'installed': bool(_install_state.get_install_dir(a['id']))}
                        for a in _get_apps()],
         hub_src_configured=bool(FJORDHUB_SRC_DIR or FJORDHUB_UPDATER_URL),
@@ -1387,7 +1407,7 @@ def _normalize_hub_update_payload(data: dict) -> dict:
 
 def _hub_update_proxy(path: str, method: str = "GET", payload: dict | None = None, timeout: int = 10) -> tuple[dict, int]:
     if not FJORDHUB_UPDATER_URL:
-        return {"ok": False, "available": False, "error": "FjordHub updater-service er ikke konfigureret."}, 503
+        return {"ok": False, "available": False, "error": "MediaHub updater-service er ikke konfigureret."}, 503
 
     url = f"{FJORDHUB_UPDATER_URL}/{str(path or '').strip('/')}"
     try:
@@ -1410,7 +1430,7 @@ def _hub_update_proxy(path: str, method: str = "GET", payload: dict | None = Non
                 "available": False,
                 "service_reachable": False,
                 "updater_url": FJORDHUB_UPDATER_URL,
-                "error": "FjordHub updater-service er ikke tilgaengelig.",
+                "error": "MediaHub updater-service er ikke tilgaengelig.",
                 "detail": str(error),
             }
         ), 503
@@ -1505,7 +1525,7 @@ def profile_info():
 
 
 def _installed_hub_apps() -> list[dict]:
-    """Return app definitions for apps that were installed via FjordHub (have a hub key)."""
+    """Return app definitions for apps that were installed via MediaHub (have a hub key)."""
     managed_ids = set(_auth.get_apps_with_keys())
     return [a for a in _get_apps() if a.get("id") in managed_ids]
 
@@ -1797,7 +1817,7 @@ def api_fjordflix_library_connect():
             for u in _auth.list_app_users(app_id)):
         return jsonify(ok=False, error='Kræver administratoradgang til FjordFlix.'), 403
     if data.get('confirm_restart') is not True:
-        return jsonify(ok=False, error='Bekræft genstart af FjordHubs container.'), 400
+        return jsonify(ok=False, error='Bekræft genstart af MediaHubs container.'), 400
     try:
         result = HostStorage().connect(data.get('pool_id'))
         return jsonify(ok=True, accepted=True, job=result)
@@ -1972,7 +1992,7 @@ def _create_app_sso_token(app_id: str) -> tuple[str, object | None]:
     if not app_id:
         return "", (jsonify({"ok": False, "error": "App mangler"}), 400)
     if not _auth.get_hub_key(app_id):
-        return "", (jsonify({"ok": False, "error": "Appen mangler FjordHub-integration. Opdater eller geninstaller appen via FjordHub."}), 400)
+        return "", (jsonify({"ok": False, "error": "Appen mangler MediaHub-integration. Opdater eller geninstaller appen via MediaHub."}), 400)
     user = _auth.get_by_id(int(current_user.id)) or current_user
     app_role = _auth.get_user_app_role(int(current_user.id), app_id)
     if not user.is_admin and app_role is None:
@@ -2012,7 +2032,7 @@ def _installed_env_value(app_id: str, key: str) -> str:
 
 
 def _integration_hub_url() -> str:
-    """Browser address using the host's LAN IP and published FjordHub port."""
+    """Browser address using the host's LAN IP and published MediaHub port."""
     lan_ip = _host_lan_ip()
     if lan_ip:
         host = f"[{lan_ip}]" if ":" in lan_ip else lan_ip
@@ -2343,7 +2363,7 @@ def api_link_hub(app_id):
     install_dir = APPS_BASE / app_id
     env_path = install_dir / ".env"
     if not env_path.exists():
-        return jsonify({"ok": False, "error": "Appen er ikke installeret via FjordHub"}), 400
+        return jsonify({"ok": False, "error": "Appen er ikke installeret via MediaHub"}), 400
     hub_key = generate_secret(32)
     _auth.save_hub_key(app_id, hub_key)
     try:
@@ -2373,7 +2393,7 @@ def api_link_hub(app_id):
         return jsonify({"ok": False, "error": "Timeout ved genstart"}), 500
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-    return jsonify({"ok": True, "message": "FjordHub-integration aktiveret — appen genstarter nu."})
+    return jsonify({"ok": True, "message": "MediaHub-integration aktiveret — appen genstarter nu."})
 
 
 @app.route("/api/hub/sso-verify")
@@ -2636,10 +2656,10 @@ def _gpu_setup_worker() -> None:
             return
 
         if os.geteuid() != 0:
-            _gpu_setup_finish(False, "FjordHub-processen skal køre som root for at kunne installere pakker.")
+            _gpu_setup_finish(False, "MediaHub-processen skal køre som root for at kunne installere pakker.")
             return
 
-        _gpu_setup_append("[info] Kører auto-opsætning i LXC-systemet via nsenter (ikke i FjordHub-containerens eget OS).")
+        _gpu_setup_append("[info] Kører auto-opsætning i LXC-systemet via nsenter (ikke i MediaHub-containerens eget OS).")
 
         _, dev_out = _gpu_setup_run_step(
             "ls /dev/nvidia* 2>/dev/null || true",
@@ -2879,7 +2899,7 @@ def _gpu_setup_worker() -> None:
             _gpu_setup_finish(False, "Docker kunne ikke planlægges til genstart efter NVIDIA runtime-konfiguration.", major)
             return
 
-        _gpu_setup_append("[info] Docker genstarter om få sekunder. Vent på at FjordHub kommer tilbage, og kør derefter Docker GPU-testen.")
+        _gpu_setup_append("[info] Docker genstarter om få sekunder. Vent på at MediaHub kommer tilbage, og kør derefter Docker GPU-testen.")
 
         _gpu_setup_finish(True, "", major, restart_scheduled=True)
     except Exception as exc:
@@ -2948,7 +2968,7 @@ def api_mount_nfs():
                 "ok": False,
                 "error": (
                     "Automatisk NFS-mount er kun understoettet i en privilegeret Proxmox LXC. "
-                    "Denne FjordHub koerer paa Docker Desktop/WSL2, saa vaelg 'Windows (Docker Desktop)' "
+                    "Denne MediaHub koerer paa Docker Desktop/WSL2, saa vaelg 'Windows (Docker Desktop)' "
                     "og koer de genererede kommandoer i WSL2-terminalen."
                 ),
             }
@@ -3138,7 +3158,7 @@ def api_check_nfs():
 @app.route("/api/apps-status")
 def api_apps_status():
     result = {}
-    apps = _get_apps()
+    apps = _visible_apps()
     _ensure_install_state_for_existing_apps(apps)
     for a in apps:
         status = docker_mgr.get_status(a)
@@ -3155,6 +3175,8 @@ def api_apps_status():
 
 @app.route("/api/apps-updates")
 def api_apps_updates():
+    if not current_user.is_admin:
+        return jsonify({})
     apps = _get_apps()
     _ensure_install_state_for_existing_apps(apps)
     return jsonify(_update_manager.get_all_statuses(apps))
