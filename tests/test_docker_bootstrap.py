@@ -1,6 +1,8 @@
+import base64
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +16,50 @@ SPEC = importlib.util.spec_from_file_location(
 )
 bootstrap = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(bootstrap)
+
+
+@pytest.mark.skipif(not shutil.which("powershell.exe"), reason="Windows PowerShell required")
+@pytest.mark.parametrize("scenario", ["update", "cancel", "missing-volume"])
+def test_desktop_update_preserves_existing_installation(scenario):
+    script = Path(__file__).resolve().parents[1] / "scripts/install-docker.ps1"
+    command = r"""
+$ErrorActionPreference = 'Stop'
+$scriptPath = '__SCRIPT__'
+$tokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count) { throw 'Invalid PowerShell syntax' }
+$global:desktopUpdateCalls = @()
+function docker {
+    $global:desktopUpdateCalls += ($args -join ' ')
+    $global:LASTEXITCODE = 0
+    if ($args[0] -eq 'info') { return 'linux' }
+    if ('__SCENARIO__' -eq 'missing-volume' -and $args[0] -eq 'volume') { $global:LASTEXITCODE = 1 }
+}
+function Test-Path { param($LiteralPath) return $true }
+function Get-Content { param($LiteralPath, [switch]$Raw) return '{"name":"mediahub-guided","services":{"core":{"image":"mediahub-guided-core:local"},"agent":{"image":"mediahub-guided-agent:local"}}}' }
+function Read-Host { if ('__SCENARIO__' -eq 'cancel') { return 'NO' }; return 'UPDATE' }
+function New-Item { param($ItemType, $Path) }
+function Invoke-WebRequest { param([switch]$UseBasicParsing, $Uri, $OutFile) }
+function Expand-Archive { param($LiteralPath, $DestinationPath) }
+$failed = $false
+try { & $scriptPath -InstallDirectory 'C:\MediaHub-Test' -Update } catch { $failed = $true; $failureMessage = $_.Exception.Message }
+[pscustomobject]@{ calls = $global:desktopUpdateCalls; failed = $failed; message = $failureMessage } | ConvertTo-Json -Compress
+""".replace("__SCRIPT__", str(script).replace("'", "''")).replace("__SCENARIO__", scenario)
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
+         base64.b64encode(command.encode("utf-16le")).decode()],
+        capture_output=True, text=True, timeout=20, check=True,
+    )
+    outcome = json.loads(result.stdout.splitlines()[-1])
+    calls = outcome["calls"]
+    assert not any("volume create" in call or " run " in call for call in calls)
+    assert not any("prune" in call or "down" in call for call in calls)
+    assert outcome["failed"] is (scenario == "missing-volume"), outcome
+    builds = [call for call in calls if call.startswith("build ")]
+    assert len(builds) == (2 if scenario == "update" else 0)
+    if scenario == "update":
+        assert "--force-recreate --wait --wait-timeout 180 core agent" in calls[-1]
 
 
 def empty_installation(tmp_path, monkeypatch):

@@ -20,12 +20,12 @@ mistake a working dashboard for a completed app installation.
 1. Install and start Docker Desktop using Linux containers. Windows PowerShell
 	5.1 or newer is required. Keep Docker Desktop running while using MediaHub.
 2. Open **PowerShell**, not a terminal inside a container.
-3. Download the installer from this repository. Review it before executing it:
+3. Download the installer from this repository. You can review it in an editor
+	before executing it; the command does not open an editor automatically:
 
 ```powershell
 $installer = Join-Path $env:TEMP 'mediahub-install-docker.ps1'
 Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/install-docker.ps1' -OutFile $installer
-notepad $installer
 ```
 
 4. Run the downloaded script:
@@ -54,6 +54,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\mediahub-inst
 The address is local to this computer, not exposed to the LAN or internet.
 The script downloads the default branch; it is not a pinned stable release.
 You need Docker Desktop installed, but not Git, Python or OpenSSL on Windows.
+
+To update an existing Docker Desktop test installation, download the script again
+using step 3, then run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\mediahub-install-docker.ps1" -Update
+```
+
+Type `UPDATE` to confirm. This builds the latest default-branch Core and Agent
+images and restarts their containers. Existing accounts, storage, credentials and
+certificates are retained; setup is not reset. Back up important test data first,
+since database migrations may run. Use `-InstallDirectory` if you originally chose
+a different folder. Do not delete the installation folder or Docker volumes to update.
 
 To stop or start later, replace the folder below if you chose a different one:
 
