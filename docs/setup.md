@@ -19,14 +19,10 @@ Keep Agent in its own terminal, then start Core in another:
 .\.venv\Scripts\python.exe -m mediahub.cli serve
 ```
 
-Open http://127.0.0.1:18765. Read the installation token privately in a third terminal:
-
-```powershell
-.\.venv\Scripts\python.exe -m mediahub.cli bootstrap-token
-```
-
-Do not share tokens in chat or screenshots. Create your administrator using a unique password
-(at least 12 characters). The token is required once; no default account/password exists.
+Open http://127.0.0.1:18765. No installation token is required. Keep the instance private
+until you create the first administrator; the first visitor can claim an unconfigured instance.
+Create your administrator using a unique password (at least 12 characters).
+No default account/password exists.
 An existing Phase 1 administrator signs in and still completes the explicit Phase 2 setup.
 
 Wizard: Welcome, System Check, Administrator, Installation Type, Storage, Network, Apps,

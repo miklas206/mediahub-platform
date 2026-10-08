@@ -118,7 +118,6 @@ export function SetupWizard({
           username: form.get("username"),
           password: form.get("password"),
           ...(hasAdmin ? { secondFactor: form.get("secondFactor") || "" } : {}),
-          ...(!hasAdmin ? { token: form.get("token") } : {}),
         },
       );
       setCsrf(profile.csrf);
@@ -313,26 +312,6 @@ export function SetupWizard({
                 </p>
               ) : (
                 <form className="admin-form" onSubmit={administrator}>
-                  {!hasAdmin && (
-                    <>
-                      <p>
-                        {t("Read your installation token locally with")}{" "}
-                        <code>python -m mediahub.cli bootstrap-token</code>
-                        {t(
-                          ". This prevents someone else from claiming an unconfigured server.",
-                        )}
-                      </p>
-                      <label>
-                        {t("Installation token")}
-                        <input
-                          type="password"
-                          name="token"
-                          required
-                          autoComplete="off"
-                        />
-                      </label>
-                    </>
-                  )}
                   <label>
                     {t("Username")}
                     <input

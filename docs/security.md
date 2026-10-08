@@ -11,8 +11,8 @@ and explicit allowed origins. Loopback HTTP is the development default; TLS is r
 deployments and is provided by the operator's proxy. No reverse proxy, DNS, router or firewall is
 automatically configured. 2FA/SSO is not implemented in the new Core in this phase.
 
-Unclaimed installations require a random local bootstrap token. Do not publish an unconfigured
-instance or share the token. Admin creation is rate-limited. Installation progress is separate from
+Unclaimed installations do not require an installation token. Do not publish an unconfigured
+instance: the first visitor can create its administrator. Admin creation is rate-limited. Installation progress is separate from
 account existence. Authenticated setup revisions prevent silent concurrent draft overwrites.
 
 Manifest secret fields are encrypted with a locally generated Fernet key. Read APIs return only

@@ -87,8 +87,6 @@ try:
     if not node:
         raise SystemExit("Node.js is required for browser tests")
     runner = root / "frontend/node_modules/@playwright/test/cli.js"
-    if phase2:
-        env["MEDIAHUB_QA_TOKEN"] = (data / "bootstrap.token").read_text().strip()
     spec = "setup.spec.ts" if phase2 else "foundation.spec.ts"
     result = subprocess.run([node, str(runner), "test", spec], cwd=root / "frontend", env=env)
     raise SystemExit(result.returncode)

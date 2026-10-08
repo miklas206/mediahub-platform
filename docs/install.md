@@ -44,9 +44,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\mediahub-inst
 	`ca.pem` manually before opening the browser.
 7. Open **https://127.0.0.1:18765** on this computer. Do not use `localhost`:
 	the configured browser origin is `127.0.0.1`. Do not bypass TLS warnings.
-8. Run the private setup-token command printed by the script and enter the
-	token in the browser's **Installation token** field. It is not a password
-	to share in an issue, screenshot or chat.
+8. No installation token is required. Keep the installation private until you
+	create the first administrator: the first visitor can claim an unconfigured server.
 9. Choose an administrator username and a unique password of at least 12
 	characters. Confirm the password. Save any two-factor recovery codes.
 	Use the new `/storage` folders for testing, and skip Plex until its host
@@ -109,8 +108,8 @@ storage settings, extend pools or remove old guests to make room.
 5. Use the printed `pct pull` command to retrieve only the public CA. Transfer
 	it to the browser computer, verify the printed fingerprint and import it as
 	described in the certificate section below. Never transfer private keys.
-6. Read the private setup token using the printed `pct exec` command, open the
-	printed HTTPS address and create the administrator as in the Windows steps.
+6. Open the printed HTTPS address and create the administrator as in the Windows
+	steps. Keep the installation private until the first administrator is created.
 
 The new Docker volumes initially live on the **new system disk**, not your
 existing media drives. This makes a new trial independent of existing media;
@@ -126,7 +125,7 @@ inspection; no automatic destructive cleanup runs.
 
 Stop at the error. Keep the new installation folder, guest and volumes. Record
 the failed stage and inspect status/logs locally before attempting repair.
-Never share credentials, setup tokens or full configuration backups.
+Never share credentials or full configuration backups.
 The script refuses existing volumes intentionally: this protects data, but
 means a failed install cannot simply be restarted as a new installation.
 
@@ -316,23 +315,16 @@ does not yet cover every browser/device. See [certificate safety and renewal](ce
 	the same local network. It has port `18765`, for example
 	`https://192.168.1.50:18765`. Replace the example IP with yours.
 2. Confirm there is no certificate warning. If there is, stop and check step 5.
-3. In the server console, run the setup-token command printed by the installer.
-	For the default installation it is:
-
-```sh
-sudo docker compose -f /opt/mediahub/compose.json exec core mediahub bootstrap-token
-```
-
-4. Enter that one-time setup token in MediaHub's setup page. Treat it like a
-	password; do not post it in an issue or screenshot.
-5. Follow the browser wizard to create the administrator account and register
+3. No installation token is required. Keep the installation private: the first
+	visitor can create the administrator on an unconfigured server.
+4. Follow the browser wizard to create the administrator account and register
 	storage. Use a unique password with at least **12 characters**, and enter it
 	again in **Confirm password**.
-6. If enabling two-factor authentication, scan its QR code with an authenticator
+5. If enabling two-factor authentication, scan its QR code with an authenticator
 	app and keep the recovery codes somewhere safe before continuing. You can
 	also enable it later in **Settings > Security**.
-7. Install Plex if wanted, or leave that optional step for later. A Plex claim
-	token connects the new server to your Plex account; it is not the setup token.
+6. Install Plex if wanted, or leave that optional step for later. A Plex claim
+	token connects the new server to your Plex account; it is separate from MediaHub setup.
 
 **Success means:** you can sign in, open the dashboard and see your registered
 storage. Plex may not be installed yet. No public internet access is configured.

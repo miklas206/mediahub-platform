@@ -481,7 +481,7 @@ def main():
     print(f"Open https://{address}:18765 after importing ONLY {root}/trust/ca.pem on your client.")
     print("Never copy authority/ca.key or disable certificate validation.")
     print(
-        f"Bootstrap token: run docker compose -f {root}/compose.json exec core mediahub bootstrap-token locally."
+        "Create your administrator in the setup wizard. Keep the server private until setup is claimed."
     )
     print(
         "Complete the browser wizard, including optional Plex installation. No public access was configured."

@@ -17,9 +17,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     page.getByRole("heading", { name: "System Check", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page
-    .getByLabel("Installation token")
-    .fill(process.env.MEDIAHUB_QA_TOKEN!);
+  await expect(page.getByLabel("Installation token")).toHaveCount(0);
   await page
     .getByLabel("Username", { exact: true })
     .fill(process.env.MEDIAHUB_QA_USER!);

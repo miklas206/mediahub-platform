@@ -53,7 +53,7 @@ if ((Read-Host 'Trust this new local public certificate for your Windows user? T
     Import-Certificate -FilePath (Join-Path $InstallDirectory 'ca.pem') -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
 }
 Write-Host 'Open https://127.0.0.1:18765 and use the browser setup wizard.'
-Write-Host "Read your private installation token with: docker compose -f `"$compose`" exec core mediahub bootstrap-token"
+Write-Host "Create your administrator in the setup wizard. Keep the server private until setup is claimed."
 Write-Host 'Use at least 12 characters for your administrator password. Skip Plex until its host is prepared.'
 Write-Host 'Certificates expire in 90 days; see the certificate renewal guide.'
 Write-Host 'Keep the installation folder and Docker volumes. Never use down -v or volume prune to update this installation.'

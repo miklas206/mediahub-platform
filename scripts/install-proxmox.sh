@@ -53,4 +53,4 @@ ADDRESS=$(ip -4 -o addr show dev eth0 scope global | awk '{split($4, address, "/
 bash /opt/mediahub-source/scripts/install-docker.sh /opt/mediahub-guided "$ADDRESS"
 MEDIAHUB_GUEST
 printf 'New MediaHub LXC: %s. Public CA: pct pull %s /opt/mediahub-guided/ca.pem /root/mediahub-public-ca.pem\n' "$CTID" "$CTID"
-printf 'Private setup token: pct exec %s -- docker compose -f /opt/mediahub-guided/compose.json exec -T core mediahub bootstrap-token\n' "$CTID"
+printf 'Create your administrator in the setup wizard. Keep the server private until setup is claimed.\n'

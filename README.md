@@ -46,7 +46,8 @@ You do not need to write code.
 **Choose your platform in the guide:** Windows with Docker Desktop, or Proxmox.
 The Windows script builds and starts Core and Agent using new Docker volumes.
 The Proxmox script creates one new MediaHub LXC and installs Docker inside it.
-Both configure HTTPS and provide the browser address and setup-token command.
+Both configure HTTPS and provide the browser address. No installation token is required;
+keep the installation private until you create the first administrator.
 Neither connects, formats or migrates an existing media drive.
 
 The guided bootstrap currently installs MediaHub Core and its local Agent;

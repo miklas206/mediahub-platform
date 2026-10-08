@@ -227,10 +227,9 @@ def setup_client(tmp_path):
 
 
 def bootstrap(client):
-    token = (client.app.state.services.config.data_dir / "bootstrap.token").read_text()
     response = client.post(
         "/api/v1/setup/administrator",
-        json={"username": "owner", "password": secrets.token_urlsafe(24), "token": token},
+        json={"username": "owner", "password": secrets.token_urlsafe(24)},
     )
     assert response.status_code == 200, response.text
     client.headers["X-MediaHub-CSRF"] = response.json()["data"]["csrf"]
@@ -261,10 +260,6 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
         "Seedbox",
         "Windows folder access",
         "Jellyfin",
-        "Prowlarr",
-        "Radarr",
-        "Sonarr",
-        "autobrr",
     }
     assert next(a for a in catalog if a["id"] == "org.mediahub.plex")["availability"] == "available"
     assert all(a["availability"] in {"coming-soon", "available"} for a in catalog)
@@ -286,9 +281,9 @@ def test_https_first_setup_preserves_configured_network(tmp_path, monkeypatch):
         assert draft["network"]["allowed_origins"] == config.allowed_origins
 
 
-def test_bootstrap_token_cannot_be_guessed_or_reused(setup_client):
-    values = {"username": "owner", "password": secrets.token_urlsafe(24), "token": "x" * 64}
-    assert setup_client.post("/api/v1/setup/administrator", json=values).status_code == 403
+def test_administrator_setup_requires_no_token_and_cannot_be_reused(setup_client):
+    values = {"username": "owner", "password": secrets.token_urlsafe(24)}
+    assert not (setup_client.app.state.services.config.data_dir / "bootstrap.token").exists()
     bootstrap(setup_client)
     assert setup_client.post("/api/v1/setup/administrator", json=values).status_code == 409
     assert setup_client.get("/api/v1/setup/status").json()["data"][

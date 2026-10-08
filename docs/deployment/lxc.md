@@ -48,7 +48,8 @@ Docker socket access, which is root-equivalent within the LXC even when mounted 
 Core has no socket or media mount. Agent has no published port. Core binds only the
 explicit LAN IPv4 on18765, not every IPv4/IPv6 interface. No proxy or router changes.
 
-Complete the real wizard using a privately retrieved `mediahub bootstrap-token`.
+Complete the real wizard without an installation token. Keep the instance private
+until the first administrator is created; the first visitor can claim it.
 The operator enters their own admin password. Choose only new appdata/backups/temp
 directories in this phase. Local mappings can reference `/storage/...` inside the
 Agent; metadata is distinct from future Docker host bind-source translation.

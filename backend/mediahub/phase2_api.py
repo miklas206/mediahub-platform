@@ -40,7 +40,6 @@ router.include_router(plex_media_router)
 class Bootstrap(StrictModel):
     username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=12, max_length=256)
-    token: str = Field(min_length=40, max_length=200)
 
 
 class Revision(StrictModel):
@@ -228,7 +227,7 @@ async def public_checks():
 async def setup_admin(body: Bootstrap, request: Request, response: Response):
     svc = services(request)
     cookies = cookie_options(request, svc.config)
-    svc.setup.bootstrap(body.username, body.password, body.token)
+    svc.setup.bootstrap(body.username, body.password)
     token, user = svc.auth.login(body.username, body.password, "bootstrap")
     response.set_cookie(
         COOKIE,

@@ -70,12 +70,7 @@ def main():
         print("Agent trust token and private sandbox initialized. Token was not printed.")
         return
     if args.command == "bootstrap-token":
-        path = config.data_dir / "bootstrap.token"
-        if not path.exists():
-            raise SystemExit(
-                "Start MediaHub once to initialize setup, then run this command locally."
-            )
-        print(path.read_text().strip())
+        print("Installation tokens are no longer used. Create your administrator in the setup wizard.")
         return
     if args.command == "serve":
         import asyncio

@@ -34,6 +34,6 @@ docker compose -f "$INSTALL_ROOT/compose.json" config --quiet
 docker compose -f "$INSTALL_ROOT/compose.json" up -d --wait --wait-timeout 180
 printf 'MediaHub and Agent passed HTTPS health checks. Open https://%s:18765 after importing the public CA.\n' "$ADDRESS"
 printf 'Public CA only: %s/ca.pem (verify the printed SHA-256 fingerprint).\n' "$INSTALL_ROOT"
-printf 'Private setup token: docker compose -f %s/compose.json exec core mediahub bootstrap-token\n' "$INSTALL_ROOT"
+printf 'Create your administrator in the setup wizard. Keep the server private until setup is claimed.\n'
 printf '%s\n' 'Certificates expire in 90 days. Keep all volumes; never use down -v or volume prune.'
 printf '%s\n' 'Core and Agent are installed. Media apps, host updates and production media mappings need separate preparation.'

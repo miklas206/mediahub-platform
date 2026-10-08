@@ -18,8 +18,10 @@ On a NEW Linux development host only, after reviewing the files:
 docker compose -f compose.production.yaml build
 docker compose -f compose.production.yaml run --rm agent python -c 'from agent.main import AgentConfig, initialize; initialize(AgentConfig())'
 docker compose -f compose.production.yaml up -d
-docker compose -f compose.production.yaml exec core mediahub bootstrap-token
 ```
+
+No installation token is required. Keep the instance private until the first
+administrator is created; the first visitor can claim an unconfigured instance.
 
 Use an SSH tunnel for browser access to loopback, or configure your own authenticated TLS proxy
 with exact origins/trusted proxy addresses. Do not expose Agent or bypass authentication.

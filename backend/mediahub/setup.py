@@ -1,8 +1,6 @@
 import asyncio
-import hmac
 import os
 import platform
-import secrets
 import time
 from ipaddress import ip_address
 from typing import Literal
@@ -69,11 +67,6 @@ class SetupService:
                     trusted_proxies=svc.config.trusted_proxies,
                 )
                 db.add(InstallationState(draft=Draft(network=network).model_dump()))
-        token = svc.config.data_dir / "bootstrap.token"
-        if svc.auth.needs_setup() and not token.exists():
-            fd = os.open(token, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "w") as stream:
-                stream.write(secrets.token_urlsafe(48))
 
     def state(self):
         with self.svc.sessions() as db:
@@ -86,7 +79,7 @@ class SetupService:
                 "draft": row.draft,
             }
 
-    def bootstrap(self, username, password, token):
+    def bootstrap(self, username, password):
         clock = time.monotonic()
         self.bootstrap_attempts = [t for t in self.bootstrap_attempts if t > clock - 60]
         if len(self.bootstrap_attempts) >= 5:
@@ -98,9 +91,6 @@ class SetupService:
             raise DomainError(
                 "already_initialized", "Administrator already exists; sign in instead", 409
             )
-        expected = (self.svc.config.data_dir / "bootstrap.token").read_text().strip()
-        if not hmac.compare_digest(token, expected):
-            raise DomainError("bootstrap_rejected", "Enter the local installation token", 403)
         self.svc.auth.create_admin(username, password)
         with self.svc.sessions.begin() as db:
             row = db.scalar(select(InstallationState))
