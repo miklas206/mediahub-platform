@@ -84,6 +84,9 @@ def test_compose_limits_private_access():
     )
     assert all(volume["external"] for volume in config["volumes"].values())
     assert config["networks"]["control"]["internal"] is True
+    storage = json.loads(core["environment"]["MEDIAHUB_SETUP_STORAGE"])
+    assert {item["kind"] for item in storage} == {"appdata", "movies", "tv", "downloads"}
+    assert all(item["path"] == "/storage/" + item["kind"] for item in storage)
 
 
 def test_lan_healthcheck_uses_configured_host_and_verified_local_tls():

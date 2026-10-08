@@ -51,6 +51,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\mediahub-inst
 	Use the new `/storage` folders for testing, and skip Plex until its host
 	policy is prepared. Do not point this test at your only copy of media.
 
+The installer preselects its new Appdata, Movies, TV and Downloads folders in
+the storage plan. Review them before applying; the Agent still checks access.
+These choices do not grant Docker access, create app host policies or pair a
+dedicated Seedbox host. Completing Core setup does not mean app installation is ready.
+
 The address is local to this computer, not exposed to the LAN or internet.
 The script downloads the default branch; it is not a pinned stable release.
 You need Docker Desktop installed, but not Git, Python or OpenSSL on Windows.

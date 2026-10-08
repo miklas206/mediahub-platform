@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from mediahub.contracts import StorageInput
+
 ROOT = Path(os.environ.get("MEDIAHUB_PROJECT_ROOT", str(Path(__file__).resolve().parents[2])))
 
 
@@ -15,6 +17,7 @@ class Config(BaseSettings):
         env_prefix="MEDIAHUB_", env_file=".env", extra="ignore", hide_input_in_errors=True
     )
     base_url: str = "http://127.0.0.1:18765"
+    setup_storage: list[StorageInput] = Field(default_factory=list, max_length=50)
     public_url: str | None = None
     fjordhub_url: str | None = None  # Optional operator-discovered normal LAN URL.
     fjordhub_base_url: str | None = Field(

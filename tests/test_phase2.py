@@ -236,6 +236,19 @@ def bootstrap(client):
     return response
 
 
+def test_installer_storage_is_preselected_and_preserved(tmp_path):
+    storage = [{"name": "Movies", "kind": "movies", "path": str(tmp_path / "movies")}]
+    config = Config(data_dir=tmp_path / "core", setup_storage=storage, _env_file=None)
+    with TestClient(create_app(config), base_url="http://127.0.0.1:18765") as client:
+        initial = client.app.state.services.setup.state()["draft"]["storage"]
+        assert initial == [{**storage[0], "action": "existing", "confirmed_path": None}]
+        bootstrap(client)
+        assert client.get("/api/v1/setup/draft").json()["data"]["draft"]["storage"] == initial
+    config = Config(data_dir=tmp_path / "core", setup_storage=[], _env_file=None)
+    with TestClient(create_app(config), base_url="http://127.0.0.1:18765") as client:
+        assert client.app.state.services.setup.state()["draft"]["storage"] == initial
+
+
 def save(client, draft):
     state = client.get("/api/v1/setup/draft").json()["data"]
     response = client.put(

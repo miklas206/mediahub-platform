@@ -66,7 +66,10 @@ class SetupService:
                     allowed_origins=svc.config.allowed_origins,
                     trusted_proxies=svc.config.trusted_proxies,
                 )
-                db.add(InstallationState(draft=Draft(network=network).model_dump()))
+                storage = [
+                    PlannedStorage(**item.model_dump()) for item in svc.config.setup_storage
+                ]
+                db.add(InstallationState(draft=Draft(network=network, storage=storage).model_dump()))
 
     def state(self):
         with self.svc.sessions() as db:
@@ -94,7 +97,9 @@ class SetupService:
         self.svc.auth.create_admin(username, password)
         with self.svc.sessions.begin() as db:
             row = db.scalar(select(InstallationState))
-            row.draft = Draft(step=3, network=Draft.model_validate(row.draft).network).model_dump()
+            draft = Draft.model_validate(row.draft)
+            draft.step = 3
+            row.draft = draft.model_dump()
             row.revision += 1
 
     def save(self, body: SaveDraft):

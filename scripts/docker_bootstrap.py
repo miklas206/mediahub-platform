@@ -52,6 +52,13 @@ def compose_config(project, address):
             "MEDIAHUB_AGENT_TOKEN_FILE": "/credentials/token",
             "MEDIAHUB_AGENT_CA_FILE": "/trust/ca.pem",
             "MEDIAHUB_STORAGE_ROOTS": '["/storage"]',
+            "MEDIAHUB_SETUP_STORAGE": json.dumps([
+                {"name": name, "kind": kind, "path": f"/storage/{kind}"}
+                for name, kind in (
+                    ("Appdata", "appdata"), ("Movies", "movies"),
+                    ("TV", "tv"), ("Downloads", "downloads"),
+                )
+            ]),
             "MEDIAHUB_DEV_MODE": "false",
             "MEDIAHUB_MOCK_APP": "false",
             "MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST": "true",
