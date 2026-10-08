@@ -61,7 +61,7 @@ def compose_config(project, address):
                 "CMD",
                 "python",
                 "-c",
-                "import ssl,urllib.request;urllib.request.urlopen('https://127.0.0.1:18765/api/health',context=ssl.create_default_context(cafile='/trust/ca.pem'),timeout=4)",
+                f"import ssl,urllib.request;r=urllib.request.Request('https://127.0.0.1:18765/api/health',headers={{'Host':'{ip}:18765'}});urllib.request.urlopen(r,context=ssl.create_default_context(cafile='/trust/ca.pem'),timeout=4)",
             ],
             "interval": "10s",
             "timeout": "5s",

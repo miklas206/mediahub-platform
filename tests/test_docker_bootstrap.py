@@ -86,6 +86,15 @@ def test_compose_limits_private_access():
     assert config["networks"]["control"]["internal"] is True
 
 
+def test_lan_healthcheck_uses_configured_host_and_verified_local_tls():
+    core = bootstrap.compose_config("mediahub-guided", "192.168.1.111")["services"]["core"]
+    check = core["healthcheck"]["test"][-1]
+    assert "'Host':'192.168.1.111:18765'" in check
+    assert "https://127.0.0.1:18765/api/health" in check
+    assert "ssl.create_default_context(cafile='/trust/ca.pem')" in check
+    compile(check, "healthcheck", "exec")
+
+
 @pytest.mark.parametrize("address", ["8.8.8.8", "0.0.0.0", "169.254.1.2", "localhost", "::1"])
 def test_rejects_invalid_address(address):
     with pytest.raises(ValueError):
