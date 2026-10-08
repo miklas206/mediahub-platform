@@ -8,3 +8,7 @@ __pycache__
 *.db
 *.db-wal
 *.db-shm
+.qa
+.venv
+test-results
+git-ssh
