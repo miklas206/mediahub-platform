@@ -1,0 +1,88 @@
+schemaVersion: 1
+id: org.mediahub.cloudflared
+name: Cloudflare Tunnel
+description: Guided, least-privilege setup for Cloudflare Tunnel route health, connector metrics and official release monitoring.
+category: infrastructure
+version: 0.4.0
+maintainer: {name: MediaHub contributors}
+icon: cloudflared.svg
+homepage: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+repository: https://github.com/cloudflare/cloudflared
+availability: available
+requiredRuntime: none
+recommendedIsolation: shared-host
+hostCapabilities: []
+images: {}
+services: {}
+storageRequirements: []
+secrets: []
+dependencies: []
+healthChecks: [{id: tunnel, check: cloudflared.status}]
+capabilities: [metrics.read]
+updateSource: {type: none}
+adapter: {id: org.mediahub.cloudflared, protocolVersion: 1}
+configFields:
+  - name: setup_mode
+    label: Tunnel setup
+    type: select
+    options: [new-tunnel, existing-tunnel]
+    default: existing-tunnel
+    required: true
+    description: Choose whether the guided installer should attach an existing Cloudflare Tunnel or help prepare a new one.
+  - name: tunnel_name
+    label: Tunnel name
+    type: text
+    required: true
+    placeholder: My home tunnel
+    description: A friendly label only. MediaHub does not enumerate or modify the tunnels in your Cloudflare account.
+  - name: public_hostnames
+    label: Published hostnames to monitor
+    type: text
+    required: true
+    placeholder: media.example.com, home.example.com
+    description: Comma or line separated public hostnames. These are routes through one tunnel, not additional tunnels.
+  - name: origin_url
+    label: Internal MediaHub URL
+    type: text
+    required: true
+    placeholder: https://192.168.1.50:18765
+    description: The private HTTPS address cloudflared should reach on your LAN. It is never published as a router port.
+  - name: status_url
+    label: Local cloudflared metrics URL
+    type: text
+    required: false
+    placeholder: http://192.168.1.50:20241/metrics
+    description: Optional private-LAN Prometheus metrics endpoint. It reveals connector health but never a tunnel token.
+  - name: origin_ca_pool
+    label: Public CA certificate path on the connector host
+    type: text
+    required: false
+    default: /etc/cloudflared/mediahub-ca.pem
+    placeholder: /etc/cloudflared/mediahub-ca.pem
+    description: When MediaHub uses an internal CA, copy only its public CA certificate to this path on the cloudflared host. Keep TLS verification enabled.
+  - name: tunnel_profiles
+    label: Saved tunnel profiles
+    type: text
+    required: false
+    default: ""
+    description: MediaHub-managed JSON for multiple non-secret tunnel monitoring profiles. Edit it through the Cloudflare app instead of by hand.
+installGuide:
+  - id: prepare-domain
+    title: Prepare your domain
+    description: Add or select a domain in Cloudflare. MediaHub will not modify nameservers, billing, account permissions or DNS automatically.
+    fields: [public_hostnames]
+    helpUrl: https://developers.cloudflare.com/dns/zone-setups/full-setup/setup/
+  - id: create-tunnel
+    title: Create or select a Tunnel
+    description: In Cloudflare Zero Trust, create a remotely managed Tunnel or select your existing Tunnel. One Tunnel can safely contain several published applications.
+    fields: [setup_mode, tunnel_name]
+    helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/
+  - id: connect-origin
+    title: Connect the private MediaHub origin
+    description: Point the MediaHub hostname at its private HTTPS origin. If it uses an internal CA, configure Origin Server Name and CA Pool while keeping certificate verification enabled.
+    fields: [origin_url, origin_ca_pool]
+    helpUrl: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/ingress/
+  - id: verify-route
+    title: Verify end to end
+    description: MediaHub checks the public routes and can optionally read cloudflared's local Prometheus metrics without receiving a Cloudflare account API token.
+    fields: [status_url]

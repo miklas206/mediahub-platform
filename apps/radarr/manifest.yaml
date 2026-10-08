@@ -1,0 +1,34 @@
+schemaVersion: 1
+id: org.mediahub.radarr
+name: Radarr
+description: Manage movie searches and imports using your existing download client.
+category: automation
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: radarr
+homepage: https://radarr.video
+repository: https://github.com/Radarr/Radarr
+availability: available
+requiredRuntime: docker
+images:
+  radarr: {repository: linuxserver/radarr, digest: "sha256:7dfd049e79c00b16fbc29c3f5d96a9e7b9e73a23930b4c5b3c4541d60b366814"}
+services:
+  radarr:
+    image: radarr
+    resources: {memoryMiB: 1024}
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 7878, exposure: lan}]
+    volumes:
+      - {slot: appdata, target: /config, access: rw}
+      - {slot: movies, target: /movies, access: rw}
+      - {slot: downloads, target: /downloads, access: rw}
+storageRequirements:
+  - {id: appdata, type: appdata, access: rw, required: true}
+  - {id: movies, type: movies, access: rw, required: true}
+  - {id: downloads, type: downloads, access: rw, required: true}
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: [storage.mapped.read, storage.mapped.write]
+updateSource: {type: none}
+adapter: {id: org.mediahub.radarr, protocolVersion: 1}

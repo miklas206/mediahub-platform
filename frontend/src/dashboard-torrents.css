@@ -1,0 +1,62 @@
+.dashboard-torrents > p,
+.dashboard-torrents > .notice {
+  margin: 16px 20px;
+}
+.dashboard-torrent-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--raised) 50%, var(--surface));
+}
+.dashboard-torrent-totals span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dashboard-torrent-totals svg {
+  color: var(--accent);
+}
+.dashboard-torrent {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.dashboard-torrent > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 550;
+}
+.dashboard-torrent-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin: 7px 0;
+}
+.dashboard-torrent progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  accent-color: var(--accent);
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.dashboard-torrent progress::-webkit-progress-bar {
+  background: var(--raised);
+}
+.dashboard-torrent progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: inherit;
+}
+.dashboard-torrent progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: inherit;
+}

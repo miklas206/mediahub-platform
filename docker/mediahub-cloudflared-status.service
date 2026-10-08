@@ -1,0 +1,29 @@
+[Unit]
+Description=MediaHub read-only cloudflared status helper
+After=network-online.target cloudflared.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+EnvironmentFile=/etc/default/mediahub-cloudflared-status
+ExecStart=/usr/bin/python3 /usr/local/lib/mediahub/cloudflared_status_proxy.py
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

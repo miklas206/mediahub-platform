@@ -1,0 +1,41 @@
+name: MediaHub CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - run: pip install -r requirements.lock && pip install --no-deps -e .
+      - run: python -m pytest -q
+      - run: python -m ruff check backend agent tests scripts
+      - run: python -m ruff format --check backend agent tests scripts
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir frontend lint && pnpm --dir frontend typecheck && pnpm --dir frontend test
+      - run: pnpm --dir frontend build
+      - run: python scripts/qa.py
+      - run: python scripts/qa.py --phase2
+      - run: python scripts/export_contracts.py && git diff --exit-code packages/contracts
+      - name: Build both production images from the actual source archive
+        shell: bash
+        run: |
+          source_test="$(mktemp -d)"
+          source_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          python scripts/source_release.py --repository "$GITHUB_REPOSITORY" --commit "$(git rev-parse HEAD)" --version "v$source_version" --output "$source_test"
+          python -c 'import sys; from pathlib import Path; from scripts.platform_update_host import HostUpdater; p=Path(sys.argv[1]); HostUpdater._extract_source(p/"mediahub-source.tar.gz", p/"source")' "$source_test"
+          docker build -f "$source_test/source/docker/Dockerfile" -t mediahub-source-core:ci "$source_test/source"
+          docker build -f "$source_test/source/docker/Agent.Dockerfile" -t mediahub-source-agent:ci "$source_test/source"
+          docker run --rm --entrypoint python mediahub-source-core:ci -c 'import agent, mediahub; import os; assert os.access("/app/backend/migrations/env.py", os.R_OK)'
+          docker run --rm --entrypoint python mediahub-source-agent:ci -c 'import agent, mediahub, os; assert os.geteuid() == 10001; assert os.getegid() == 1000; assert 10001 in os.getgroups()'
+      - run: docker compose -f compose.dev.yaml up --build --wait
+      - run: curl --fail http://127.0.0.1:18765/api/health && curl --fail http://127.0.0.1:18765/
+      - if: always()
+        run: docker compose -f compose.dev.yaml down

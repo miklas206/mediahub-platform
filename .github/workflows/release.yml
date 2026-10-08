@@ -1,0 +1,143 @@
+name: MediaHub release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable version tag to publish
+        required: true
+        type: string
+      legacy_images:
+        description: Also build old image bundles for a one-time migration
+        default: false
+        type: boolean
+
+# Tag pushes and manual runs targeting the same release must not race while
+# creating the release or replacing its assets. Finish an active upload first.
+concurrency:
+  group: mediahub-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - name: Package tracked source, not prebuilt images
+        run: python scripts/source_release.py --repository "$GITHUB_REPOSITORY" --commit "$(git rev-parse HEAD)" --version "$RELEASE_TAG"
+      - name: Publish source release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes
+          gh release upload "$RELEASE_TAG" mediahub-source-release.json mediahub-source.tar.gz --clobber
+
+  legacy-images:
+    # Normal releases publish source without waiting for prebuilt Docker images.
+    if: github.event_name == 'workflow_dispatch' && inputs.legacy_images
+    needs: source
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Resolve lowercase image names
+        id: names
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish Core
+        id: core
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.base }}-core:${{ env.RELEASE_TAG }}
+
+      - name: Build and publish Agent
+        id: agent
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: docker/Agent.Dockerfile
+          push: true
+          tags: ${{ steps.names.outputs.base }}-agent:${{ env.RELEASE_TAG }}
+
+      - name: Attest Core image
+        # GitHub may reject registry attestations for private packages depending on
+        # the account/repository feature set.  The offline release bundles below
+        # remain checksum verified and are the private update channel consumed by
+        # MediaHub, so an unavailable optional registry attestation must not block
+        # publishing those assets.
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.names.outputs.base }}-core
+          subject-digest: ${{ steps.core.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Agent image
+        continue-on-error: true
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.names.outputs.base }}-agent
+          subject-digest: ${{ steps.agent.outputs.digest }}
+          push-to-registry: true
+
+      - name: Export private-repository update bundles
+        env:
+          CORE_IMAGE: ${{ steps.names.outputs.base }}-core@${{ steps.core.outputs.digest }}
+          AGENT_IMAGE: ${{ steps.names.outputs.base }}-agent@${{ steps.agent.outputs.digest }}
+        shell: bash
+        run: |
+          docker pull "$CORE_IMAGE"
+          docker pull "$AGENT_IMAGE"
+          docker save "$CORE_IMAGE" | gzip -9 > mediahub-core-image.tar.gz
+          docker save "$AGENT_IMAGE" | gzip -9 > mediahub-agent-image.tar.gz
+
+      - name: Build release manifest
+        shell: bash
+        run: |
+          python scripts/release_manifest.py \
+            --version "$RELEASE_TAG" \
+            --core "${{ steps.names.outputs.base }}-core@${{ steps.core.outputs.digest }}" \
+            --agent "${{ steps.names.outputs.base }}-agent@${{ steps.agent.outputs.digest }}" \
+            --core-bundle mediahub-core-image.tar.gz \
+            --agent-bundle mediahub-agent-image.tar.gz \
+            --output mediahub-release.json
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            mediahub-release.json \
+            mediahub-core-image.tar.gz \
+            mediahub-agent-image.tar.gz \
+            --clobber

@@ -1,0 +1,35 @@
+schemaVersion: 1
+id: org.mediahub.windows-share
+name: Windows folder access
+description: Connect Windows Explorer to your existing media share, with guided drive mapping and clear diagnostics from your PC.
+category: storage
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: windows-share.svg
+availability: available
+requiredRuntime: none
+recommendedIsolation: shared-host
+hostCapabilities: []
+images: {}
+services: {}
+storageRequirements: []
+secrets: []
+dependencies: []
+healthChecks: [{id: tcp-445, check: windows-share.tcp}]
+capabilities: [metrics.read]
+updateSource: {type: none}
+adapter: {id: org.mediahub.windows-share, protocolVersion: 1}
+configFields: []
+installGuide:
+  - id: existing-share
+    title: Select your media share
+    description: Enter the private LAN address and name of an existing SMB share. MediaHub does not install Samba or change server folders and permissions.
+    fields: []
+  - id: connect-windows
+    title: Connect from Windows
+    description: Open the share in Explorer or download a reviewed helper that asks for your credentials locally on your PC.
+    fields: []
+  - id: verify-windows
+    title: Check access from your PC
+    description: A Core TCP check and a Windows folder-access check are separate. Run the read-only Windows helper to diagnose your own connection.
+    fields: []

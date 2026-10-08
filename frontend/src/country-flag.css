@@ -1,0 +1,25 @@
+.country-flag {
+  display: inline-block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  vertical-align: middle;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgb(157 192 218 / 15%);
+}
+
+.country-flag-unknown {
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.country-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.country-label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

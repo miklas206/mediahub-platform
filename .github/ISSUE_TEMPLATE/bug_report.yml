@@ -1,0 +1,12 @@
+name: Bug report
+description: Report a reproducible MediaHub bug without secrets
+body:
+  - type: textarea
+    attributes:
+      label: Reproduction steps
+      description: Include version and environment. Never paste credentials or production configuration.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected and actual behavior

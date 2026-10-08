@@ -1,0 +1,454 @@
+.windows-share-page {
+  min-width: 0;
+}
+.windows-share-intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 17px;
+}
+.windows-share-app-icon {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  flex: none;
+  border: 1px solid var(--accent-line);
+  border-radius: 11px;
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.windows-share-intro > div {
+  min-width: 0;
+}
+.windows-share-intro p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.windows-share-intro small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.windows-share-intro > .badge {
+  margin-left: auto;
+  flex: none;
+}
+.windows-share-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.windows-share-steps button {
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  text-align: left;
+  background: var(--surface);
+}
+.windows-share-steps button > span {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+}
+.windows-share-steps button > svg {
+  margin-left: auto;
+  color: var(--muted);
+}
+.windows-share-steps button[aria-current="step"] {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-bg);
+}
+.windows-share-steps button[aria-current="step"] > span {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.windows-share-feedback {
+  margin-bottom: 16px;
+  color: var(--accent);
+  font-size: 12px;
+}
+.windows-share-feedback.notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--danger);
+}
+.windows-share-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  --layout-default-span: 6;
+}
+.windows-share-card {
+  min-width: 0;
+}
+.windows-share-card .panel-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  scroll-margin-top: 86px;
+}
+.windows-share-card .panel-heading h2 > svg {
+  color: var(--accent);
+  flex: none;
+}
+.windows-share-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 18px 20px;
+}
+.windows-share-content > p {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.windows-share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.windows-share-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.windows-share-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+}
+.windows-share-form label small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.windows-share-form input,
+.windows-share-form select {
+  width: 100%;
+  min-width: 0;
+  height: 39px;
+}
+.windows-share-form .button-row {
+  align-items: center;
+  gap: 8px;
+}
+.windows-share-content button {
+  align-self: flex-start;
+  font-size: 12px;
+}
+.windows-share-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.windows-share-hint > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+.windows-share-content .windows-share-small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.windows-share-help {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 22%, var(--surface));
+  font-size: 12px;
+}
+.windows-share-help summary,
+.windows-share-troubleshooting summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.windows-share-help :is(ul, ol) {
+  margin: 11px 0 0;
+  padding-left: 19px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.windows-share-help li + li {
+  margin-top: 7px;
+}
+.windows-share-help .text-link {
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 11px;
+}
+.windows-share-manual h3 {
+  font-size: 12px;
+  font-weight: 550;
+}
+.windows-share-manual ol {
+  display: grid;
+  gap: 9px;
+  margin: 11px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.windows-share-manual li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+.windows-share-manual .text-link {
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 10px;
+}
+.windows-share-script p {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.windows-share-script button {
+  margin-top: 12px;
+}
+.windows-share-command {
+  display: block;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.windows-share-path {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.windows-share-path > div {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+.windows-share-path input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  background: var(--bg);
+}
+.windows-share-path button {
+  flex: none;
+  align-self: stretch;
+  padding: 8px 10px;
+}
+.windows-share-target {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+.windows-share-target > svg {
+  color: var(--accent);
+}
+.windows-share-target small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.windows-share-next {
+  color: var(--accent);
+}
+.windows-share-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 210px;
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.windows-share-waiting > svg {
+  color: var(--accent);
+}
+.windows-share-check-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.windows-share-check-heading > svg {
+  color: var(--accent);
+  flex: none;
+}
+.windows-share-check-heading > div {
+  min-width: 0;
+}
+.windows-share-check-heading strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+}
+.windows-share-check-heading small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.windows-share-check-heading > .badge {
+  margin-left: auto;
+  font-size: 10px;
+}
+.windows-share-check-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.windows-share-check-facts dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+.windows-share-check-facts dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.windows-share-local-check {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.windows-share-local-check > p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.windows-share-troubleshooting {
+  gap: 0;
+  padding-top: 4px;
+}
+.windows-share-troubleshooting > details {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.windows-share-troubleshooting > details:last-of-type {
+  border-bottom: 0;
+}
+.windows-share-troubleshooting details p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.windows-share-troubleshooting .text-link {
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 11px;
+}
+.windows-share-troubleshooting > .windows-share-hint {
+  margin-top: 12px;
+  font-size: 10px;
+}
+@container layout-card (max-width: 390px) {
+  .windows-share-content {
+    padding: 15px;
+  }
+  .windows-share-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .windows-share-check-heading > .badge {
+    margin-left: 0;
+  }
+}
+@media (max-width: 760px) {
+  .windows-share-intro {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .windows-share-intro > div {
+    flex: 1;
+    min-width: 180px;
+  }
+  .windows-share-intro > .badge {
+    margin-left: 53px;
+  }
+  .windows-share-steps {
+    gap: 6px;
+  }
+  .windows-share-steps button {
+    flex-direction: column;
+    gap: 6px;
+    padding: 9px 5px;
+    text-align: center;
+    font-size: 10px;
+  }
+  .windows-share-steps button > svg {
+    display: none;
+  }
+  .windows-share-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .windows-share-content {
+    padding: 15px;
+  }
+  .windows-share-waiting {
+    min-height: 150px;
+  }
+  .windows-share-card .panel-heading {
+    padding: 14px 15px;
+  }
+  .windows-share-card .panel-heading h2 {
+    font-size: 13px;
+  }
+}

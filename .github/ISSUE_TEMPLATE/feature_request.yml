@@ -1,0 +1,8 @@
+name: Feature request
+description: Propose a focused platform improvement
+body:
+  - type: textarea
+    attributes:
+      label: Problem and proposed outcome
+    validations:
+      required: true

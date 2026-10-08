@@ -1,0 +1,167 @@
+.integration-removal-dialog {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  color: var(--text);
+  background: var(--surface);
+}
+.integration-removal-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+}
+.integration-removal-dialog p {
+  overflow-wrap: anywhere;
+}
+.integration-removal-dialog .button-row {
+  flex-wrap: wrap;
+}
+.integrations-page .integration-consent {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  line-height: 1.5;
+}
+.integrations-page .integration-consent input {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.integration-details dl {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr);
+  gap: 0.8rem 1.5rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.integration-details dl > div {
+  display: contents;
+}
+.integration-details dt {
+  color: var(--muted);
+  font-weight: 400;
+}
+.integration-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.integration-details progress {
+  display: block;
+  width: 100%;
+  height: 0.5rem;
+  margin-top: 0.8rem;
+  accent-color: var(--accent);
+  border: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.integration-details progress::-webkit-progress-bar {
+  background: var(--raised);
+}
+.integration-details progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.integration-details progress::-moz-progress-bar {
+  background: var(--accent);
+}
+.integration-details p {
+  overflow-wrap: anywhere;
+}
+@container layout-card (max-width: 520px) {
+  .integration-details dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.4rem;
+  }
+  .integration-details dd {
+    margin-bottom: 0.6rem;
+  }
+}
+@media (max-width: 520px) {
+  .integration-details dl {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .integration-details dd {
+    margin-bottom: 0.6rem;
+  }
+}
+
+.fjordhub-app-navigation .app-subnav {
+  display: grid;
+  gap: 2px;
+  margin-left: 20px;
+}
+.fjordhub-app-navigation .app-subnav a {
+  padding-left: 24px;
+  color: var(--muted);
+}
+.fjordhub-app-navigation a span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.app-shortcuts .fjordhub-app-navigation > a {
+  padding-left: 18px;
+}
+
+.fjordhub-home-heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.fjordhub-home-heading h1 {
+  margin: 0;
+}
+.fjordhub-home-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.fjordhub-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.fjordhub-settings summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.5rem 0;
+}
+.fjordhub-launch-form {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  min-width: 0;
+}
+.fjordhub-launch-form input {
+  min-width: 0;
+  width: 100%;
+}
+.fjordhub-launch-form .button-row {
+  flex-wrap: wrap;
+}
+.fjordhub-app-navigation .app-subnav a > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fjordhub-update-panel,
+.fjordhub-update-row {
+  min-width: 0;
+}
+.fjordhub-update-row {
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+}
+.fjordhub-update-row small {
+  overflow-wrap: anywhere;
+}

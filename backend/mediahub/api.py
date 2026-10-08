@@ -1,0 +1,409 @@
+import asyncio
+import secrets
+from typing import Annotated, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import StreamingResponse
+from pydantic import Field
+from sqlalchemy import text
+
+from mediahub import __version__
+from mediahub.auth import COOKIE
+from mediahub.contracts import PlatformSettings, StorageInput, StrictModel, UserPreferences
+from mediahub.errors import DomainError
+from mediahub.logging import recent_logs
+from mediahub.network import cookie_options
+
+router = APIRouter()
+
+
+def result(data):
+    return {"data": data, "error": None, "metadata": {"version": __version__}}
+
+
+def services(request: Request):
+    return request.app.state.services
+
+
+def authenticated(request: Request):
+    svc = services(request)
+    user = svc.auth.authenticate(request.cookies.get(COOKIE))
+    if user.get("totpRequired") and not user.get("totpEnabled"):
+        path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
+        if not (path.startswith("/security") or path in {"/auth/me", "/auth/logout", "/auth/preferences"}):
+            raise DomainError(
+                "enrollment_required", "Set up two-factor authentication to continue", 403
+            )
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        csrf = request.headers.get("x-mediahub-csrf", "")
+        if not secrets.compare_digest(csrf, user["csrf"]):
+            raise DomainError(
+                "csrf_rejected", "Session verification failed. Reload and try again.", 403
+            )
+    return user
+
+
+def administrator(user=Depends(authenticated)):
+    if user.get("role") != "administrator":
+        raise DomainError("administrator_required", "Administrator access is required", 403)
+    return user
+
+
+class Credentials(StrictModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=256)
+    secondFactor: str = Field(default="", max_length=32)
+
+
+class PathRequest(StrictModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
+class GitHubTokenRequest(StrictModel):
+    token: str = Field(min_length=20, max_length=512)
+
+
+class RemoveRuntimeRequest(StrictModel):
+    confirmedInstallationId: str = Field(min_length=1, max_length=80)
+
+
+@router.get("/health")
+async def health(request: Request):
+    with services(request).sessions() as db:
+        db.execute(text("SELECT 1"))
+    return result({"status": "healthy", "version": __version__})
+
+
+@router.get("/auth/status")
+async def auth_status(request: Request):
+    return result({"needsSetup": services(request).auth.needs_setup()})
+
+
+@router.post("/auth/login")
+async def login(body: Credentials, request: Request, response: Response):
+    svc = services(request)
+    cookies = cookie_options(request, svc.config)
+    client = request.client.host if request.client else "local"
+    token, user = svc.auth.login(body.username, body.password, client, body.secondFactor)
+    response.set_cookie(
+        COOKIE,
+        token,
+        **cookies,
+        max_age=svc.config.session_hours * 3600,
+    )
+    return result({**user, **svc.settings.user_preferences(user["id"]).model_dump()})
+
+
+@router.get("/auth/me")
+async def me(request: Request, user=Depends(authenticated)):
+    return result({**user, **services(request).settings.user_preferences(user["id"]).model_dump()})
+
+
+@router.put("/auth/preferences")
+async def save_user_preferences(body: UserPreferences, request: Request, user=Depends(authenticated)):
+    saved = services(request).settings.save_user_preferences(user["id"], body)
+    return result(saved.model_dump())
+
+
+@router.post("/auth/logout")
+async def logout(request: Request, response: Response, user=Depends(authenticated)):
+    services(request).auth.logout(request.cookies[COOKIE])
+    response.delete_cookie(COOKIE, path="/")
+    return result({"signedOut": True})
+
+
+@router.get("/system/status")
+async def system_status(request: Request, user=Depends(authenticated)):
+    return result(services(request).snapshot)
+
+
+@router.get("/cloudflare/status")
+async def cloudflare_status(
+    request: Request, refresh: bool = Query(default=False), user=Depends(authenticated)
+):
+    return result(await services(request).cloudflare_tunnel.status(force=refresh))
+
+
+async def _apps_with_health(svc):
+    slots = asyncio.Semaphore(8)
+
+    async def with_health(app):
+        async with slots:
+            return {**app, "health": (await svc.apps.health(app["id"])).model_dump()}
+
+    return await asyncio.gather(*(with_health(app) for app in svc.apps.list()))
+
+
+@router.get("/apps")
+async def apps(
+    request: Request,
+    include_health: Annotated[bool, Query()] = True,
+    user=Depends(authenticated),
+):
+    svc = services(request)
+    return result(await _apps_with_health(svc) if include_health else svc.apps.list())
+
+
+@router.get("/apps/{app_id}")
+async def app_detail(app_id: str, request: Request, user=Depends(authenticated)):
+    return result(services(request).apps.get(app_id))
+
+
+@router.get("/apps/{app_id}/health")
+async def app_health(app_id: str, request: Request, user=Depends(authenticated)):
+    return result((await services(request).apps.health(app_id)).model_dump())
+
+
+@router.get("/apps/{app_id}/runtime")
+async def app_runtime(app_id: str, request: Request, user=Depends(authenticated)):
+    adapter = services(request).apps.adapter(app_id)
+    if not hasattr(adapter, "definition"):
+        raise DomainError("runtime_unavailable", "This app has no remote runtime view", 404)
+    return result(
+        {
+            "view": adapter.definition.view_id,
+            "report": await adapter.status(),
+            "operatorUrl": services(request).config.operator_app_urls.get(
+                adapter.definition.package_id
+            ),
+        }
+    )
+
+
+@router.post("/apps/{app_id}/actions/{action}")
+async def app_action(
+    app_id: str,
+    action: Literal["start", "stop", "restart", "restart-vpn", "restart-qbittorrent", "test-vpn"],
+    request: Request,
+    user=Depends(administrator),
+):
+    return result({"state": await services(request).apps.action(app_id, action)})
+
+
+@router.get("/apps/{app_id}/logs")
+async def app_logs(app_id: str, request: Request, user=Depends(authenticated)):
+    from mediahub.apps.remote_status import RuntimeEvent
+
+    payload = await services(request).apps.adapter(app_id).logs()
+    return result(
+        {
+            "entries": [
+                RuntimeEvent.model_validate(row).model_dump()
+                for row in payload.get("entries", [])[-100:]
+            ]
+        }
+    )
+
+
+@router.post("/apps/{app_id}/update-check")
+async def app_update_check(app_id: str, request: Request, user=Depends(administrator)):
+    svc = services(request)
+    checked = await svc.apps.adapter(app_id).updateCheck()
+    await svc.updates.record_app(svc.apps.get(app_id), checked)
+    return result(checked)
+
+
+@router.post("/apps/{app_id}/uninstall")
+async def remove_runtime(
+    app_id: str, body: RemoveRuntimeRequest, request: Request, user=Depends(administrator)
+):
+    from mediahub.app_removal import remove_app
+
+    return result(await remove_app(services(request), app_id, body.confirmedInstallationId))
+
+
+@router.get("/apps/{app_id}/uninstall")
+async def uninstall_status(app_id: str, request: Request, user=Depends(administrator)):
+    from mediahub.app_removal import removal_status
+
+    return result(await removal_status(services(request), app_id))
+
+
+@router.get("/storage")
+async def storage(request: Request, user=Depends(authenticated)):
+    return result(services(request).storage.list())
+
+
+@router.post("/storage/validate")
+async def storage_validate(body: PathRequest, request: Request, user=Depends(authenticated)):
+    return result(services(request).storage.validate(body.path))
+
+
+@router.post("/storage", status_code=201)
+async def storage_register(body: StorageInput, request: Request, user=Depends(authenticated)):
+    return result(services(request).storage.register(body))
+
+
+@router.get("/activity", include_in_schema=False)
+@router.get("/events/history")
+async def activity(
+    request: Request, limit: int | None = Query(None, ge=1, le=100), user=Depends(authenticated)
+):
+    svc = services(request)
+    return result(svc.events.activity(limit or svc.settings.get().activity_page_size))
+
+
+@router.get("/settings")
+async def settings(request: Request, user=Depends(authenticated)):
+    return result(services(request).settings.get().model_dump())
+
+
+@router.get("/updates/platform")
+async def platform_update(request: Request, user=Depends(authenticated)):
+    svc = services(request)
+    checked = await svc.updates.check_platform()
+    checked["installReady"] = svc.platform_update.ready(checked)
+    checked["fastUpdateAvailable"] = (
+        checked.get("updateMethod") == "source" and svc.platform_update.fast_available
+    )
+    if checked.get("updateMethod") == "source" and not svc.platform_update.source_available:
+        checked["message"] = (
+            "Source update found. Enable source-build support on the host updater first."
+        )
+    if checked.get("sourceChannel") == "main" and not svc.platform_update.commit_available:
+        checked["message"] = "Main-branch updates need a one-time host updater refresh."
+    await svc.updates.record_platform(checked)
+    return result(checked)
+
+
+@router.post("/updates/platform/install", status_code=202)
+async def install_platform_update(request: Request, user=Depends(administrator)):
+    svc = services(request)
+    checked = await svc.updates.check_platform()
+    return result(await svc.platform_update.install(checked))
+
+
+@router.get("/updates/platform/operation")
+async def platform_update_operation(request: Request, user=Depends(authenticated)):
+    return result(services(request).platform_update.status())
+
+
+@router.get("/updates/summary")
+async def update_summary(request: Request, user=Depends(authenticated)):
+    return result(services(request).updates.summary())
+
+
+@router.get("/maintenance")
+async def maintenance_status(request: Request, user=Depends(administrator)):
+    return result(services(request).platform_update.maintenance_status())
+
+
+@router.post("/maintenance", status_code=202)
+async def run_maintenance(request: Request, user=Depends(administrator)):
+    return result(services(request).platform_update.start_maintenance())
+
+
+@router.post("/updates/check")
+async def check_all_updates(request: Request, user=Depends(administrator)):
+    return result(await services(request).updates.check_all())
+
+
+class StartUpdateQueue(StrictModel):
+    requestId: UUID
+    ids: list[str] = Field(min_length=1, max_length=50)
+
+
+@router.post("/updates/queue", status_code=202)
+async def start_update_queue(body: StartUpdateQueue, request: Request, user=Depends(administrator)):
+    if request.url.scheme != "https":
+        raise DomainError("https_required", "Use HTTPS to start an update queue", 403)
+    return result(await services(request).update_queue.start(body.ids, body.requestId))
+
+
+@router.get("/updates/queue")
+async def update_queue_status(request: Request, user=Depends(authenticated)):
+    return result(services(request).update_queue.status())
+
+
+@router.get("/notifications")
+async def notifications(request: Request, user=Depends(authenticated)):
+    return result({"entries": services(request).events.notifications(limit=25)})
+
+
+@router.post("/notifications/{notification_id}/read")
+async def read_notification(notification_id: str, request: Request, user=Depends(authenticated)):
+    if not services(request).events.read_notification(notification_id):
+        raise DomainError("notification_not_found", "Notification not found", 404)
+    return result({"read": True})
+
+
+@router.get("/updates/platform/credentials")
+async def platform_update_credentials(request: Request, user=Depends(administrator)):
+    return result(services(request).release_credentials.status())
+
+
+@router.put("/updates/platform/credentials")
+async def save_platform_update_credentials(
+    body: GitHubTokenRequest, request: Request, user=Depends(administrator)
+):
+    configured = services(request).release_credentials.save(body.token)
+    services(request).events.record(
+        "updates.credentials.changed", "core", "Private release access was replaced"
+    )
+    return result(configured)
+
+
+@router.delete("/updates/platform/credentials")
+async def remove_platform_update_credentials(request: Request, user=Depends(administrator)):
+    configured = services(request).release_credentials.remove()
+    services(request).events.record(
+        "updates.credentials.removed", "core", "Private release access was removed"
+    )
+    return result(configured)
+
+
+@router.put("/settings")
+async def save_settings(body: PlatformSettings, request: Request, user=Depends(authenticated)):
+    svc = services(request)
+    saved = svc.settings.save(body)
+    svc.events.record("settings.updated", "core", "Platform settings updated")
+    return result(saved.model_dump())
+
+
+@router.get("/logs")
+async def logs(request: Request, user=Depends(authenticated)):
+    return result(list(recent_logs)[-100:])
+
+
+@router.get("/events/stream")
+async def stream(request: Request, user=Depends(authenticated)):
+    svc = services(request)
+    token = request.cookies.get(COOKIE)
+    if len(svc.events.subscribers) >= 32:
+        raise DomainError("stream_limit", "Too many live connections", 429)
+
+    async def generate():
+        queue = asyncio.Queue(maxsize=32)
+        svc.events.subscribers.add(queue)
+        try:
+            yield "retry: 5000\n\n"
+            yield svc.events.encode({"type": "system.status", "data": svc.snapshot})
+            for app in await _apps_with_health(svc):
+                yield svc.events.encode(
+                    {
+                        "type": "app.health.changed",
+                        "data": {"id": app["id"], "health": app["health"]},
+                    }
+                )
+            while not svc.events.stopping and not await request.is_disconnected():
+                try:
+                    svc.auth.authenticate(token)
+                except DomainError:
+                    yield "event: session.expired\ndata: {}\n\n"
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=svc.config.sample_seconds)
+                    if svc.events.stopping:
+                        break
+                    yield svc.events.encode(event)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            svc.events.subscribers.discard(queue)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )

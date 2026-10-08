@@ -1,0 +1,61 @@
+# Unprivileged LXC deployment
+
+Create a new unprivileged Debian LXC with at least **6 vCPU cores and 16 GiB RAM
+(16384 MiB)**, 1 GiB swap and a **64 GiB root disk**. This is the standard minimum
+allocation for MediaHub with local apps, including Plex. Set these resources in
+Proxmox before installation; the installer does not create or resize the guest.
+Existing installations keep their current allocation until changed in Proxmox.
+The root disk needs room for Docker builds, installed images and rollback copies;
+keep at least 8 GiB free before starting an update. Media belongs on separate storage.
+Container memory limits are separate from the guest allocation; increasing the
+guest RAM does not automatically increase an existing Plex container's limit.
+Enable nesting/keyctl for the Docker workload. Do not switch
+to privileged mode or disable AppArmor merely to work around a failure. Stop and
+review isolation changes first. Use a dedicated VM for untrusted workloads.
+
+Install Docker Engine/CLI and Compose from the [official Debian repository](https://docs.docker.com/engine/install/debian/).
+Verify engine, Compose, cgroup version and a harmless test container. No Docker
+installation belongs on the Proxmox host for this deployment.
+
+## New filesystem only
+
+Use an operator-selected root, for example `/opt/mediahub`:
+
+- `releases/<release>`: immutable application source/build inputs
+- `config/production.env`: instance configuration, root-only
+- `data`: Core SQLite database, settings and encryption key, UID/GID10001, mode0700
+- `secrets/agent`: persistent Agent token/identity, UID/GID10001, mode0700
+- `storage/appdata`, `storage/backups`, `storage/temp`: new Agent-approved paths,
+  UID/GID10001, mode0750; no existing media in this phase
+- `logs`: bounded build/diagnostic output; container logs rotate at 10MB x3
+
+Set `MEDIAHUB_ROOT`, explicit private `LAN_IP` and `DOCKER_GID` (from the numeric
+group of `/var/run/docker.sock`) in the environment file. Optional
+`SEEDBOX_REQUIRES_REMOTE_HOST=true` prohibits local Seedbox planning on this installation.
+No user-specific IP, guest ID or media path is a generic default.
+
+From the release directory:
+
+```sh
+docker compose --env-file /opt/mediahub/config/production.env -f compose.production.yaml build
+docker compose --env-file /opt/mediahub/config/production.env -f compose.production.yaml run --rm --no-deps agent python -m mediahub.cli agent-init
+docker compose --env-file /opt/mediahub/config/production.env -f compose.production.yaml up -d
+```
+
+Adjust the example environment-file path for your root. The app runs as10001 with
+all capabilities dropped and no-new-privileges. Agent's supplemental group grants
+Docker socket access, which is root-equivalent within the LXC even when mounted RO.
+Core has no socket or media mount. Agent has no published port. Core binds only the
+explicit LAN IPv4 on18765, not every IPv4/IPv6 interface. No proxy or router changes.
+
+Complete the real wizard without an installation token. Keep the instance private
+until the first administrator is created; the first visitor can claim it.
+The operator enters their own admin password. Choose only new appdata/backups/temp
+directories in this phase. Local mappings can reference `/storage/...` inside the
+Agent; metadata is distinct from future Docker host bind-source translation.
+
+Validate restart/recreate persistence, Agent stop/reconnect, runtime outage and LXC
+reboot before declaring production ready. Never use `down -v`. Back up SQLite with
+its encryption key and Agent identity. Root-disk persistence is not an external backup.
+Reserve the LXC's DHCP address before relying on a stable LAN endpoint; do not guess
+a static address or change the router without authorization.

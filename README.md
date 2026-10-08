@@ -1,70 +1,63 @@
-# MediaHub beta · fjordcopy
+# MediaHub beta — fjordcopy
 
-MediaHub is the primary hub for your self-hosted apps: one start page to open apps, install new ones, manage users and monitor the host. This independent project is based on [qlerup/FjordHub](https://github.com/qlerup/fjordhub).
+MediaHub is the primary hub for the apps and services from the original MediaHub: **Seedbox, Plex, Jellyfin, Cloudflare, FjordHub and Windows folder access**, with **Healthcheck** built into the hub.
 
-The repository is **[miklas206/fjordcopy](https://github.com/miklas206/fjordcopy)**. It is separate from the earlier `mediahub-platform` project and uses a fresh database. Existing MediaHub data is not automatically migrated.
+This beta uses the original MediaHub Core, Agent and React application as its functional foundation. FjordHub is an optional application inside MediaHub. Its own apps stay grouped inside its integration. The hub remains usable independently of FjordHub.
 
-## What the hub does
+## Hub and apps
 
-- **Your apps:** installed Docker apps and built-in packages on the start page, with search, status and launch links.
-- **App catalog:** FjordFlix, FjordLens, Fjord3D, FjordParcel, FjordBudget, FjordVPN, FjordSeed, OrbitMap and Urban Explorer; installation settings are defined by each app's manifest.
-- **App lifecycle:** install, start, stop, update and remove apps using the existing FjordHub mechanisms.
-- **Shared accounts:** administrator and user roles, app access, and the FjordHub-compatible authentication and SSO APIs.
-- **Host management:** resource usage, storage configuration and update status.
-- **Built-in packages:** Calendar and Whiteboard, installed separately from the App Store.
+The home page presents your apps, their real connection/install status, search and the next action. Unconfigured apps have setup actions; they are not labelled as installed.
 
-The product name is MediaHub. Internal `fjordhub` service names, manifest schemas, environment variables and `fjord-net` remain for compatibility with the apps. App repositories remain independent upstream projects.
+| App | What stays available |
+| --- | --- |
+| Seedbox | Torrents, RSS, feeds, VPN and existing Agent workflows |
+| Plex | Installation, libraries, playback, resources and updates |
+| Jellyfin | Existing managed installation and app access |
+| Cloudflare Tunnel | Tunnel profiles, connector health and route monitoring |
+| FjordHub | Separate installation/connection, own dashboard and nested apps |
+| Windows folder access | SMB connection and drive-mapping guidance |
+| Healthcheck | Existing Core, Agent, storage and app diagnostics |
 
-## Install on a dedicated beta Docker host
+Shared storage, updates, backups, accounts, security, activity and host management stay in MediaHub. The previous detailed dashboard remains at `/overview`. Healthcheck is directly available at `/maintenance`; opening that page does not run cleanup.
 
-Requirements: Linux with Git, Docker and the Compose plugin. Use a dedicated host/LXC: this stack retains fixed FjordHub container and network names and controls Docker through its socket.
+## Architecture
 
-```sh
-git clone git@github.com:miklas206/fjordcopy.git /opt/fjordcopy
-cd /opt/fjordcopy
-cp .env.example .env
+```text
+Browser -> HTTPS MediaHub Core (hub, accounts, app pages, integrations)
+                         |
+                         +-> authenticated local/remote Agents
+                         |      +-> Seedbox, Plex, Jellyfin and approved storage
+                         |
+                         +-> Cloudflare monitoring
+                         +-> FjordHub (separate application with its own apps)
 ```
 
-Edit `.env` before starting. Set a strong random `SECRET_KEY`, and use absolute paths for `DATA_DIR`, `APPS_DIR` and `FJORDHUB_HOST_DIR`. The data and apps directories must exist. Example values are `/opt/fjordcopy-data`, `/opt/fjordcopy-apps` and `/opt/fjordcopy` respectively. Keep `.env` readable only by the administrator.
+Core does not receive the Docker socket. The existing Agent policies, verified TLS, encrypted settings and storage boundaries remain in place. Host addresses and app locations are configuration, not hardcoded parts of the product.
 
-```sh
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps
-curl --fail http://127.0.0.1:8091/api/health
-```
+## Beta deployment
 
-Open `http://<beta-host>/` through Traefik, or `http://<beta-host>:8091/` directly. The first visit creates the administrator. SMTP and storage can be configured in the guide or later in Settings. No default administrator password is shipped.
+Repository: [miklas206/fjordcopy](https://github.com/miklas206/fjordcopy), branch `main`.
 
-The copied application catalog and package catalog are loaded from this checkout by default, so a private GitHub repository needs no runtime access token for catalog discovery. App manifests and app/package downloads still use their published upstream locations and need network access. `REGISTRY_URL` and `PACKAGES_URL` can override the catalog sources.
+This is a beta redesign. The current transition reuses the compatible original beta Core/Agent installation and its persistent state. It does not attach production Agents or copy production databases. Preserve the Core database together with its `secrets.key`, TLS trust, Agent credentials, runtime configuration and image references before changing an existing installation.
 
-## Updates from this repository
+The original deployment instructions remain in [docs/install.md](docs/install.md). This repository is private: automated unauthenticated GitHub downloads require repository access to be provisioned first. Use an authenticated checkout for installation; do not use the original MediaHub repository as this beta's update source.
 
-The hub updater follows the checkout's `origin/main` and checks that its origin matches `FJORDCOPY_REPOSITORY` (default `miklas206/fjordcopy`). It must not pull hub code from the original FjordHub repository.
+For private main-branch updates, the beta supports a dedicated **read-only GitHub deploy key**, mounted read-only into Core. Configure `MEDIAHUB_SOURCE_GIT_REPOSITORY` for the exact repository and `MEDIAHUB_SOURCE_GIT_SSH_DIR` for a directory containing `id_ed25519` and verified `known_hosts`. The directory must be readable by the Core user. Git uses strict host verification. Update archives still pass through the existing digest checks, host source policy, backups and rollback workflow. The usual encrypted GitHub-token flow remains available when SSH source access is not configured.
 
-For this private repository, create a dedicated **read-only GitHub deploy key**. Store its private key at `DATA_DIR/git-ssh/id_ed25519` and GitHub's verified host keys at `DATA_DIR/git-ssh/known_hosts`. The updater mounts that directory read-only. Do not use a personal account token or copy a key from another service. Configure the checkout's host-side `core.sshCommand` to use the same key with `BatchMode=yes`, `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`.
+Both the platform's `release_repository` setting and the host updater's `sourceRepository` policy must select the beta repository. Changing a Git remote alone does not update this trust boundary. A source update is separate from updating remotely installed apps and Agents.
 
-The initial installation does not grant Proxmox access or attach media storage. Configure the intended host and permissions explicitly before using infrastructure features.
+## Transition from the first beta attempt
 
-## Persistent state and recovery
+The initial beta accidentally used a renamed FjordHub runtime. That implementation is retained in Git history and branch `archive/fjordhub-based-beta-6dfaca5`, but is no longer the application foundation.
 
-- `DATA_DIR`: authentication database, settings, app installation state, packages, updater logs and deployment key.
-- `APPS_DIR`: managed app checkouts and their local state; apps may use additional configured paths or Docker volumes.
-- `.env`: deployment settings and session secret, outside version control.
+The corrected beta retains the administrator created during that attempt by transferring the validated Argon2 password hash within the beta guest, keeping the original database for recovery. Sessions and application access tokens are not copied. The original MediaHub login normalizes the username; the password remains unchanged. Extra profile fields remain in the preserved source database and migration metadata.
 
-Back up these together before upgrades. For the first beta deployment, take a LXC snapshot before installing. Keep any previous beta application available until the replacement is verified. Stop this stack with `docker compose stop`; do not remove volumes or restore an entire LXC snapshot after accepting new data without first backing up that data.
+## Development
 
-## Development checks
+Use the original project's Python and frontend requirements: [pyproject.toml](pyproject.toml), [requirements.lock](requirements.lock), and [frontend/package.json](frontend/package.json). Build both Core and Agent from this checkout. Keep temporary test state, secrets and media out of the source tree and Docker build contexts.
 
-Use Python 3.11 or newer in an isolated environment. Install `requirements.txt`, `pytest` and `playwright`; install Playwright's Chromium browser for browser checks. Set `DATA_DIR` and `APPS_DIR` to disposable test directories before importing the application. Tests must not connect to a production Docker host.
+Run focused tests for the changed app flows, TypeScript, relevant ESLint and browser checks at desktop/mobile widths before deploying. Mocked browser fixtures prove UI behavior; they do not prove an external app is installed on the beta host.
 
-```sh
-python -m pytest tests/test_mediahub_launcher.py tests/test_device_login.py tests/test_onboarding.py tests/test_packages.py
-git diff --check
-```
+## Origin
 
-## Origin and attribution
-
-Imported from **qlerup/fjordhub**, commit `b63d176985cecdd6a8f88588d62f6d74e197598f`. Original Git history and assets are retained. The original project documentation is preserved in [docs/upstream-fjordhub.md](docs/upstream-fjordhub.md); its upstream installation commands refer to the original project.
-
-The upstream checkout did not include a license file at import. This private beta copy does not add a license grant for the upstream code or assets.
+The functional baseline is [miklas206/mediahub-platform](https://github.com/miklas206/mediahub-platform), commit `98fa2819afafa90bbcda03891acaa753eb35f1c6`. Its history, Apache-2.0 [license](LICENSE), notices and original app functionality are preserved. FjordHub inspired the hub-oriented organization and remains an independently managed app.

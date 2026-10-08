@@ -1,0 +1,28 @@
+schemaVersion: 1
+id: org.mediahub.prowlarr
+name: Prowlarr
+description: Manage your indexers and connect searches to Radarr and Sonarr.
+category: automation
+version: 0.1.0
+maintainer: {name: MediaHub contributors}
+icon: prowlarr
+homepage: https://prowlarr.com
+repository: https://github.com/Prowlarr/Prowlarr
+availability: available
+requiredRuntime: docker
+images:
+  prowlarr: {repository: linuxserver/prowlarr, digest: "sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902"}
+services:
+  prowlarr:
+    image: prowlarr
+    resources: {memoryMiB: 1024}
+    network: {policy: lan}
+    ports: [{id: web, containerPort: 9696, exposure: lan}]
+    volumes: [{slot: appdata, target: /config, access: rw}]
+storageRequirements: [{id: appdata, type: appdata, access: rw, required: true}]
+secrets: []
+dependencies: []
+healthChecks: []
+capabilities: []
+updateSource: {type: none}
+adapter: {id: org.mediahub.prowlarr, protocolVersion: 1}
