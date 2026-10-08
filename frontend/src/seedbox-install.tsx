@@ -98,6 +98,10 @@ export function SeedboxInstallPage() {
     setData(await api<Wizard>("/seedbox/wizard"));
   }, []);
   useEffect(() => {
+    if (!targets?.bound) {
+      setDisconnected(false);
+      return;
+    }
     let active = true;
     const poll = () =>
       api<Wizard>("/seedbox/wizard")
@@ -116,7 +120,7 @@ export function SeedboxInstallPage() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [targets?.bound]);
   async function perform(path: string, body?: unknown) {
     setBusy(true);
     setFailure("");
@@ -212,7 +216,7 @@ export function SeedboxInstallPage() {
         </p>
       </div>
       <ErrorBox error={failure} />
-      {disconnected && (
+      {targets?.bound && disconnected && (
         <ErrorBox error="Agent unavailable. Progress remains on the server; do not start a second installation." />
       )}
       {data && (
