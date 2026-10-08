@@ -52,8 +52,8 @@ def new_file(path, content, mode=0o600, uid=0, gid=0):
     os.chown(path, uid, gid)
 
 
-def choose_directory(label, default, root):
-    raw = input(f"{label} [{default}]: ").strip() or str(default)
+def choose_directory(label, default, root, use_default=False):
+    raw = str(default) if use_default else input(f"{label} [{default}]: ").strip() or str(default)
     path = safe_path(raw)
     if not path.is_absolute() or path.is_symlink() or path.resolve() != path:
         raise ValueError("Use an absolute path without symbolic links")
@@ -74,6 +74,8 @@ def main():
     parser.add_argument("--root", default="/opt/mediahub")
     parser.add_argument("--lan-ip")
     parser.add_argument("--storage")
+    parser.add_argument("--yes", action="store_true", help="Confirm new installation and use default storage folders")
+    parser.add_argument("--storage-identities", type=Path, help="Root-owned Proxmox-generated disk identity file for this LXC")
     parser.add_argument(
         "--release-image-prefix",
         default="ghcr.io/miklas206/mediahub-platform",
@@ -134,12 +136,21 @@ def main():
     mount = json.loads(
         command("findmnt", "--json", "--target", storage, "--output", "TARGET,SOURCE,FSTYPE,UUID")
     )["filesystems"][0]
+    identities = None
+    if args.storage_identities:
+        sys.path.insert(0, str(SOURCE))
+        from agent.device_snapshot import apply_mount_identities
+
+        identities = safe_path(args.storage_identities)
+        observation = {"path": mount["target"], "source": mount["source"], "root": "/", "uuid": mount.get("uuid")}
+        apply_mount_identities([observation], identities)
+        mount["uuid"] = observation["uuid"]
     if Path(mount["target"]) != storage or not mount.get("uuid"):
         raise ValueError("Storage must be its own mounted filesystem with a stable UUID")
     print(
         f"Data filesystem: {mount['fstype']}; UUID: {mount['uuid']}. No formatting or media migration."
     )
-    if input("Create a new MediaHub installation using this disk? Type YES: ").strip() != "YES":
+    if not args.yes and input("Create a new MediaHub installation using this disk? Type YES: ").strip() != "YES":
         return
     # All persistent writes below target this new installation or new subfolders.
     root.mkdir(mode=0o700)
@@ -161,7 +172,7 @@ def main():
     os.chown(update_staging, 10001, 10001)
     (root / "update-backups").mkdir(mode=0o700)
     folders = {
-        kind: choose_directory(kind.replace("_", " ").title(), storage / kind, storage)
+        kind: choose_directory(kind.replace("_", " ").title(), storage / kind, storage, args.yes)
         for kind in ["movies", "tv", "other", "downloads", "appdata"]
     }
     if len(set(folders.values())) != len(folders) or any(
@@ -286,6 +297,8 @@ def main():
         service = "mediahub-" + secrets.token_hex(4)
         new_file(root / "evidence-service", service + "\n")
         collector = [sys.executable, str(root / "device_snapshot.py"), str(evidence)]
+        if identities:
+            collector.extend(["--mount-identities", str(identities)])
         command(*collector)
         unit = (
             "[Unit]\nDescription=MediaHub read-only host metadata\n[Service]\nType=oneshot\nExecStart="
@@ -400,6 +413,10 @@ def main():
             "MEDIAHUB_BROWSER_TLS_CERT": "/tls/server.pem",
             "MEDIAHUB_BROWSER_TLS_KEY": "/tls/server.key",
             "MEDIAHUB_STORAGE_ROOTS": json.dumps([str(storage)]),
+            "MEDIAHUB_SETUP_STORAGE": json.dumps([
+                {"name": kind.title(), "kind": kind, "path": str(path)}
+                for kind, path in folders.items() if kind != "other"
+            ]),
             "MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST": "true",
             "MEDIAHUB_PLATFORM_UPDATE_SPOOL": "/updates",
         },
@@ -408,7 +425,7 @@ def main():
                 "CMD",
                 "python",
                 "-c",
-                "import ssl,urllib.request;urllib.request.urlopen('https://127.0.0.1:18765/api/health',context=ssl.create_default_context(cafile='/trust/ca.pem'),timeout=4)",
+                f"import ssl,urllib.request;r=urllib.request.Request('https://127.0.0.1:18765/api/health',headers={{'Host':'{address}:18765'}});urllib.request.urlopen(r,context=ssl.create_default_context(cafile='/trust/ca.pem'),timeout=4)",
             ],
             "interval": "30s",
             "timeout": "5s",
@@ -477,7 +494,7 @@ def main():
     )
     command("systemctl", "daemon-reload")
     command("systemctl", "enable", "--now", updater_name + ".path")
-    command("docker", "compose", "-f", root / "compose.json", "up", "-d", capture=False)
+    command("docker", "compose", "-f", root / "compose.json", "up", "-d", "--wait", "--wait-timeout", "180", capture=False)
     print(f"Open https://{address}:18765 after importing ONLY {root}/trust/ca.pem on your client.")
     print("Never copy authority/ca.key or disable certificate validation.")
     print(

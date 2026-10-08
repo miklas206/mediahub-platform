@@ -112,9 +112,10 @@ bash /root/mediahub-install-proxmox.sh
 | Question | Meaning |
 | --- | --- |
 | New container ID | A free ID, or Enter for Proxmox's next free ID. Existing guests are rejected. |
-| Container storage | Storage for the new 64 GiB system disk, normally `local-lvm`. |
+| Container storage | Block-backed storage for a new 32 GiB system disk and a separate 32 GiB data disk, normally `local-lvm`. |
 | Template storage | Storage for the downloaded Debian template, normally `local`. |
 | Network bridge | Your LAN bridge, normally `vmbr0`. |
+| Container hostname | Name of the new guest, normally `mediahub`. |
 | Type INSTALL | Confirm the new guest with 6 CPU cores, 16384 MiB RAM and no swap. |
 
 Review free storage and RAM before confirming. Thin-provisioned storage may be
@@ -129,9 +130,14 @@ storage settings, extend pools or remove old guests to make room.
 6. Open the printed HTTPS address and create the administrator as in the Windows
 	steps. Keep the installation private until the first administrator is created.
 
-The new Docker volumes initially live on the **new system disk**, not your
-existing media drives. This makes a new trial independent of existing media;
-it is not a recommendation to fill the system disk with a production library.
+The installer creates a **new data disk mounted at `/storage`** and selects its
+Appdata, Movies, TV and Downloads folders automatically. It prepares approved
+Plex and Jellyfin host policies, Docker access for Agent only, live disk evidence,
+HTTPS and the platform updater. Core never receives the Docker socket.
+The Agent's Docker access is root-equivalent inside this guest; it is not a
+read-only security boundary even though the socket mount is marked read-only.
+No existing media disk is attached. The dedicated Seedbox host and verified NFS
+Downloads storage are still separate prerequisites, not automatically provisioned here.
 Adding existing media needs an explicit mount/access plan. Do not attach a raw
 disk twice or recursively change its permissions.
 

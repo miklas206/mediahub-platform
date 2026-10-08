@@ -1,11 +1,13 @@
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from mediahub.apps.manifest import DeviceRequirement
 from pydantic import ValidationError
 
+from agent.device_snapshot import apply_mount_identities
 from agent.devices import (
     block_inventory,
     device_report,
@@ -13,6 +15,27 @@ from agent.devices import (
     snapshot_inventory,
     usb_inventory,
 )
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_proxmox_mount_identity_requires_matching_live_source(monkeypatch, changed):
+    identity = {"path": "/storage", "source": "/dev/mapper/new-disk", "uuid": "approved-uuid"}
+    monkeypatch.setattr(Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o600, st_size=200))
+    monkeypatch.setattr(Path, "read_text", lambda _: json.dumps([identity]))
+    mount = {**identity, "uuid": None, "root": "/"}
+    if changed:
+        mount["source"] = "/dev/mapper/other-disk"
+        with pytest.raises(ValueError, match="no longer mounted"):
+            apply_mount_identities([mount], Path("identity.json"))
+    else:
+        apply_mount_identities([mount], Path("identity.json"))
+        assert mount["uuid"] == "approved-uuid"
+
+
+def test_proxmox_mount_identity_rejects_writable_identity(monkeypatch):
+    monkeypatch.setattr(Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o666, st_size=200))
+    with pytest.raises(ValueError, match="Untrusted"):
+        apply_mount_identities([], Path("identity.json"))
 
 
 def test_usb_discovery_readonly_and_missing_serial(tmp_path):

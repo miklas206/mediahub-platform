@@ -19,7 +19,24 @@ def unescape(value):
     return value
 
 
-def collect():
+def apply_mount_identities(host_mounts, identity_file):
+    identity_file = Path(identity_file)
+    info = identity_file.stat()
+    if info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 65536:
+        raise ValueError("Untrusted mount identity file")
+    identities = json.loads(identity_file.read_text())
+    for identity in identities:
+        rows = [mount for mount in host_mounts if mount["path"] == identity["path"]]
+        if len(rows) != 1 or rows[0]["source"] != identity["source"] or rows[0]["root"] != "/":
+            raise ValueError("Approved disk is no longer mounted at its expected path")
+        if not isinstance(identity["uuid"], str) or not identity["uuid"]:
+            raise ValueError("Missing approved disk UUID")
+        if rows[0].get("uuid") and rows[0]["uuid"] != identity["uuid"]:
+            raise ValueError("Mounted disk identity changed")
+        rows[0]["uuid"] = identity["uuid"]
+
+
+def collect(mount_identities=None):
     memory = {
         line.split(":")[0]: int(line.split()[1]) * 1024
         for line in Path("/proc/meminfo").read_text().splitlines()
@@ -125,6 +142,8 @@ def collect():
     visit(listing.get("blockdevices", []))
     for mount in host_mounts:
         mount["uuid"] = filesystem_uuids.get(mount["deviceNumber"])
+    if mount_identities is not None:
+        apply_mount_identities(host_mounts, mount_identities)
     return {
         "schemaVersion": 1,
         "observedAt": time.time(),
@@ -148,8 +167,9 @@ def collect():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
+    parser.add_argument("--mount-identities", type=Path)
     args = parser.parse_args()
-    snapshot = collect()  # On failure do not replace prior snapshot; reader rejects stale data.
+    snapshot = collect(args.mount_identities)  # On failure the reader rejects stale data.
     try:
         previous = json.loads(args.output.read_text())
         delta = snapshot["host"]["cpuTotalTicks"] - previous["host"]["cpuTotalTicks"]
