@@ -22,28 +22,32 @@
 }
 .security-card,
 .recovery-panel {
-  padding: 20px;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--surface);
   min-width: 0;
-  box-shadow: 0 4px 16px #00000012;
 }
 .security-card > svg {
   color: var(--accent);
+  float: left;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
 }
 .security-card h3 {
-  margin-top: 10px;
-  margin-bottom: 6px;
+  margin: 0 0 10px;
+  font-size: 14px;
 }
 .security-card p {
   color: var(--muted);
+  font-size: 12px;
   line-height: 1.6;
 }
 .security-card form {
   display: grid;
-  gap: 16px;
-  margin-top: 20px;
+  gap: 12px;
+  margin-top: 14px;
 }
 .security-card label {
   display: grid;
@@ -103,6 +107,6 @@
     flex-wrap: wrap;
   }
   .security-card {
-    padding: 20px;
+    padding: 16px;
   }
 }

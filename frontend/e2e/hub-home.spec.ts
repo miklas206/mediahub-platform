@@ -15,6 +15,8 @@ for (const width of [1440, 390, 320]) {
       if (request.method() !== "GET") mutations.push(path);
       let data: unknown = [];
       if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/security") data = { totpEnabled: false, recoveryCodesRemaining: 0, requireTotp: false };
+      else if (path === "/security/sessions") data = [{ id: "session-test", current: true, createdAt: "2026-10-09T12:00:00Z", expiresAt: 1791633600 }];
       else if (path === "/auth/preferences") data = request.postDataJSON();
       else if (path === "/users") data = [{ id: "test", username: "tester", role: "administrator", createdAt: "2026-10-09T12:00:00Z" }];
       else if (path === "/auth/me")
@@ -238,6 +240,12 @@ for (const width of [1440, 390, 320]) {
     expect(settingsBounds!.width).toBeCloseTo(general!.width, 0);
     for (const tabName of ["Brugere", "Sikkerhed", "Integrationer", "Healthcheck", "Aktivitet", "Logfiler"]) {
       await page.getByRole("tab", { name: tabName, exact: true }).click();
+      if (tabName === "Sikkerhed") {
+        await expect(page.locator(".security-workspace > header")).toHaveCount(0);
+        await expect(page.locator('.security-card form input[name="newPassword"]')).toBeVisible();
+        await expect(page.locator(".session-row")).toHaveCount(1);
+        await page.screenshot({ path: `test-results/settings-security-${width}.png`, fullPage: true });
+      }
       await expect.poll(() => page.locator(".settings-content").evaluate((element, expected) => {
         if (!element.isConnected || !element.parentElement) return null;
         const bounds = element.getBoundingClientRect();

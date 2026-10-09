@@ -2,7 +2,7 @@ import { getLocale, translateText, t } from "./i18n";
 
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
-import { ShieldCheck, KeyRound, Monitor, RefreshCw } from "lucide-react";
+import { ShieldCheck, KeyRound, Monitor } from "lucide-react";
 import { api, setCsrf } from "./api";
 
 type Security = {
@@ -116,18 +116,6 @@ export function SecuritySettings() {
   }
   return (
     <LayoutGroup id="security-extra-1" className="security-workspace">
-      <header>
-        <div>
-          <span className="eyebrow">{t("ACCOUNT PROTECTION")}</span>
-          <h2>
-            <ShieldCheck size={22} />
-            {t(" Security")}
-          </h2>
-        </div>
-        <button onClick={reload} aria-label={t("Refresh security status")}>
-          <RefreshCw size={16} />
-        </button>
-      </header>
       {error && (
         <div className="notice" role="alert">
           {translateText(error)}
