@@ -1,6 +1,48 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390, 320]) {
+  test(`Compact update cards preserve console (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
+      let data: unknown = {};
+      if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/auth/me") data = { id: "test", username: "tester", role: "administrator", csrf: "test", language: "da" };
+      else if (path === "/settings") data = { display_name: "MediaHub", advanced_mode: false, theme: "dark" };
+      else if (path === "/setup/status") data = { setup_required: false };
+      else if (path === "/apps") data = [{ id: "plex", name: "Plex", packageId: "org.mediahub.plex", isMock: false, state: "running", detailPath: "/apps/plex", health: { status: "healthy", checks: [] } }];
+      else if (path === "/updates/summary" || path === "/updates/check") data = { count: 0, items: [], notifications: [], checkedAt: 1791580000 };
+      else if (path === "/updates/platform") data = { configured: true, installedVersion: "0.4.29", installedCommit: "a".repeat(40), latestCommit: "a".repeat(40), repository: "test/hub", updateAvailable: false, installReady: false };
+      else if (path === "/updates/platform/operation") data = { enabled: true, state: "failed", progress: 100, message: "Download interrupted", logs: ["Preserved console output"], steps: [] };
+      else if (path === "/updates/queue") data = { state: "idle", items: [], logs: [] };
+      else if (path === "/system/status") data = { version: "0.4.29" };
+      else if (path.includes("versions")) data = { available: true, plex: { version: "1.42" } };
+      else if (["/catalog", "/integrations", "/notifications"].includes(path)) data = [];
+      else if (path === "/events/stream") {
+        await route.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" });
+        return;
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data }) });
+    });
+    await page.goto("/settings?section=Updates");
+    const cards = page.locator(".updates-components > .panel");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText("0.4.29");
+    await expect(page.getByText("Cannot read properties of undefined", { exact: false })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Opdater alle", exact: true })).toBeVisible();
+    await cards.first().getByText("Konsol", { exact: true }).click();
+    await expect(cards.first().getByLabel("Opdateringskonsol")).toContainText("Preserved console output");
+    const bounds = await cards.evaluateAll((elements) => elements.map((element) => ({ width: element.getBoundingClientRect().width, top: element.getBoundingClientRect().top })));
+    if (width > 760) {
+      expect(bounds[0].width).toBeLessThan(400);
+      expect(bounds[0].top).toBeCloseTo(bounds[1].top, 0);
+    } else expect(bounds[1].top).toBeGreaterThan(bounds[0].top);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/settings-updates-${width}.png`, fullPage: true });
+  });
+}
+
+for (const width of [1440, 390, 320]) {
   test(`MediaHub is the primary app hub (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     const errors: string[] = [];

@@ -1,11 +1,10 @@
 import { translateText, t } from "./i18n";
 
-import { LayoutGroup } from "./page-layout";
 import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
+import { Bell, RefreshCw } from "lucide-react";
 import { api, ApiResponseError } from "./api";
 import { mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, Panel, useLoad } from "./phase2";
@@ -200,14 +199,6 @@ function checkedAt(value: number | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value * 1000));
-}
-
-function scheduleLabel(hours: number | undefined) {
-  if (!hours) return "Automatic checks are off";
-  if (hours === 1) return "Every hour";
-  if (hours === 24) return "Every day";
-  if (hours === 168) return "Every week";
-  return `Every ${hours} hours`;
 }
 
 type QueueStatus = {
@@ -883,12 +874,7 @@ export function UpdatesPage({
     );
 
   return (
-    <LayoutGroup id="updates-UpdatesPage-1" className="stack updates-page">
-      <p className="muted">
-        {t(
-          "Verified updates with configuration rollback and media kept separate. Updates continue on the server if you leave, refresh or close this page. Return here to follow progress.",
-        )}
-      </p>
+    <div className="stack updates-page">
       {updating && <UpdateRestartNotice disconnected={restarting} />}
       <ErrorBox error={error || (restarting ? "" : serverError || appsError)} />
       {!restarting && (
@@ -899,28 +885,9 @@ export function UpdatesPage({
           {translateText(notice)}
         </p>
       )}
-      <Panel title={t("Update overview")}>
+      <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
-          <div>
-            <ShieldCheck />
-            <p>
-              <strong>
-                {t("Full check: ")}
-                {scheduleLabel(updateSummary.data?.intervalHours)}
-              </strong>
-            </p>
-            {!!updateSummary.data?.mainCheckIntervalSeconds && (
-              <p className="muted">
-                {t("MediaHub checks: every")}{" "}
-                {updateSummary.data.mainCheckIntervalSeconds / 60}
-                {t(" min")}
-              </p>
-            )}
-            <p className="muted">
-              {t("Last checked: ")}
-              {checkedAt(updateSummary.data?.checkedAt)}
-            </p>
-          </div>
+          <h2>{t("Update all")}</h2>
           <div className="button-row">
             {batchPlan.tasks.length > 0 && busy !== "all-check" && (
               <button
@@ -939,14 +906,12 @@ export function UpdatesPage({
                   : t("Update all")}
               </button>
             )}
-            <button disabled={!!busy} onClick={() => void checkAll()}>
+            <button disabled={!!busy} onClick={() => void checkAll()} aria-label={t("Check all now")} title={t("Check all now")}>
               <RefreshCw
                 className={busy === "all-check" ? "spin" : ""}
                 size={16}
-              />{" "}
-              {busy === "all-check" ? t("Checking…") : t("Check all now")}
+              />
             </button>
-            <Link to="/settings">{t("Change schedule →")}</Link>
           </div>
         </div>
         <div className="update-summary-line" role="status">
@@ -1024,13 +989,6 @@ export function UpdatesPage({
             {t(". These apps do not yet have an automatic installer.")}
           </p>
         )}
-        {operations.batch?.status === "running" && (
-          <p role="status">
-            {t(
-              "Updates continue on the server. You can leave this page. Core updates last.",
-            )}
-          </p>
-        )}
         {operations.batch &&
           (operations.batch.status === "success" ? (
             <details>
@@ -1043,11 +1001,8 @@ export function UpdatesPage({
         {operations.all && operations.all.status !== "success" && (
           <OperationProgress activeOnly statusOnly operation={operations.all} />
         )}
-      </Panel>
-      <LayoutGroup
-        id="updates-UpdatesPage-2"
-        className="apps-grid updates-grid"
-      >
+      </section>
+      <div className="updates-components">
         <Panel title={t("MediaHub Core")}>
           <div className="runtime-row">
             <span>{t("Installed")}</span>
@@ -1065,34 +1020,18 @@ export function UpdatesPage({
               {release?.latestCommit?.slice(0, 7) || t("Not checked yet")}
             </strong>
           </div>
-          <div className="runtime-row">
-            <span>{t("Update source")}</span>
-            <span>
-              {release?.installReady
-                ? release.updateMethod === "source"
-                  ? t("GitHub source · build locally")
-                  : t("Legacy image release")
-                : release?.manifest
-                  ? t("Manifest verified")
-                  : release?.repository || t("Choose in Settings")}
-            </span>
-          </div>
           <div className="button-row">
             <button
               onClick={() => void checkPlatform()}
               disabled={!!busy || !release}
+              aria-label={t("Check GitHub")}
+              title={t("Check GitHub")}
             >
               <RefreshCw
                 className={busy === "platform-check" ? "spin" : ""}
                 size={16}
-              />{" "}
-              {busy === "platform-check" ? t("Checking…") : t("Check GitHub")}
+              />
             </button>
-            {release?.releaseUrl && (
-              <a href={release.releaseUrl} target="_blank" rel="noreferrer">
-                {t("View code →")}
-              </a>
-            )}
             <button
               className="primary"
               disabled={!!busy || !release?.installReady}
@@ -1108,6 +1047,11 @@ export function UpdatesPage({
           )}
           <details className="update-card-advanced">
             <summary>{t("Details and update settings")}</summary>
+            {release?.releaseUrl && (
+              <a href={release.releaseUrl} target="_blank" rel="noreferrer">
+                {t("View code →")}
+              </a>
+            )}
             <p>
               {translateText(release?.message) ||
                 t("Checking main for code changes...")}
@@ -1221,27 +1165,9 @@ export function UpdatesPage({
                         : t("Not verified"))}
                   </strong>
                 </div>
-                {!isPlex && !isCloudflare && (
-                  <div className="runtime-row">
-                    <span>{t("VPN runtime")}</span>
-                    <span>
-                      {version?.vpn?.version || t("Pinned Gluetun image")}
-                    </span>
-                  </div>
-                )}
                 <div className="runtime-row">
                   <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
                   <span>{latest[app.id] || t("Not checked")}</span>
-                </div>
-                <div className="runtime-row">
-                  <span>{t("Update method")}</span>
-                  <span>
-                    {isCloudflare
-                      ? t("Official release check")
-                      : isPlex
-                        ? t("Managed by MediaHub")
-                        : t("Coordinated fail-closed update")}
-                  </span>
                 </div>
                 <div className="button-row">
                   {(isPlex || isCloudflare) && (
@@ -1251,14 +1177,13 @@ export function UpdatesPage({
                           !!busy || (!isCloudflare && !version?.available)
                         }
                         onClick={() => void check(app)}
+                        aria-label={t("Check release")}
+                        title={t("Check release")}
                       >
                         <RefreshCw
                           className={busy === `check:${app.id}` ? "spin" : ""}
                           size={16}
-                        />{" "}
-                        {busy === `check:${app.id}`
-                          ? t("Checking…")
-                          : t("Check release")}
+                        />
                       </button>
                       {isPlex && (
                         <button
@@ -1281,13 +1206,6 @@ export function UpdatesPage({
                     {t("Open app & recovery →")}
                   </Link>
                 </div>
-                {isPlex && (
-                  <p className="muted">
-                    {plexChecks[app.id]?.message ||
-                      plexChecks[app.id]?.reason ||
-                      "Check the managed publisher image before updating. Plex server releases alone do not confirm an image update."}
-                  </p>
-                )}
                 {operations[app.id] && (
                   <OperationProgress
                     activeOnly
@@ -1298,6 +1216,9 @@ export function UpdatesPage({
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
                     <p className="muted">
+                      {t("VPN runtime")}: {version?.vpn?.version || t("Pinned Gluetun image")}
+                    </p>
+                    <p className="muted">
                       {t(
                         "VPN and torrent-client updates require a coordinated, fail-closed deployment. Routine restarts are available from the app page.",
                       )}
@@ -1307,6 +1228,7 @@ export function UpdatesPage({
                 {isPlex && (
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
+                    <p>{plexChecks[app.id]?.message || plexChecks[app.id]?.reason}</p>
                     <p className="muted">
                       {t(
                         "MediaHub checks the LinuxServer publisher image digest, not Plex's in-server updater. An image release may leave the Plex server version unchanged. A configuration rollback snapshot is created before replacing the runtime. Media files stay separate.",
@@ -1327,7 +1249,7 @@ export function UpdatesPage({
               </Panel>
             );
           })}
-      </LayoutGroup>
-    </LayoutGroup>
+      </div>
+    </div>
   );
 }

@@ -2613,6 +2613,82 @@ td time {
   }
 }
 
+.updates-components {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.updates-components > .panel,
+.updates-components > .layout-card > .panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.updates-components .panel-heading {
+  padding: 16px 16px 10px;
+}
+.updates-components .panel-heading h2 {
+  font-size: 15px;
+}
+.updates-components .phase-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  min-width: 0;
+}
+.updates-components .runtime-row {
+  padding: 0;
+  min-height: 0;
+  font-size: 12px;
+  gap: 12px;
+}
+.updates-components .runtime-row strong,
+.updates-components .runtime-row span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.updates-components .button-row {
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 8px;
+}
+.updates-components details > summary {
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.updates-components .operation-details pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.updates-actions {
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.updates-actions h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.updates-actions .update-policy-heading {
+  margin: 0;
+  align-items: center;
+}
+.updates-actions .update-summary-line {
+  border: 0;
+  padding: 0;
+  margin-top: 12px;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .updates-components {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .update-restart-notice {
   display: flex;
   align-items: flex-start;
