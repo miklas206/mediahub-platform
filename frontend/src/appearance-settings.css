@@ -4,6 +4,16 @@
 .settings-general-compact {
   width: 100%;
   max-width: 720px;
+  margin-inline: auto;
+}
+.appearance-settings.appearance-compact .appearance-controls {
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 12px;
+}
+.appearance-compact .appearance-color-field {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .appearance-settings.appearance-compact .appearance-presets {
   grid-template-columns: repeat(auto-fit, minmax(min(105px, 100%), 1fr));

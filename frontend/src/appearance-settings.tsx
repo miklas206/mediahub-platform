@@ -166,7 +166,6 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
             </button>
           ))}
         </div>
-        {!compact && <>
         <div className="appearance-controls">
           {fields.map(([key, label]) => (
             <div className="appearance-color-field" key={key}>
@@ -200,6 +199,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
             </div>
           ))}
         </div>
+        {!compact && <>
         <div className="appearance-depth">
           <label htmlFor="appearance-depth">
             <SlidersHorizontal size={15} />

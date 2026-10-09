@@ -202,11 +202,25 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole("tab", { name: "Generelt", exact: true }).click();
     await expect(page.getByRole("button", { name: "Tilpas layout", exact: true })).toHaveCount(0);
     await expect(page.getByRole("group", { name: "Farvepaletter" })).toBeVisible();
-    await expect(page.locator(".appearance-controls, .appearance-depth, .appearance-preview")).toHaveCount(0);
+    await expect(page.locator('.appearance-controls input[type="color"]')).toHaveCount(3);
+    await expect(page.locator(".appearance-depth, .appearance-preview")).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Sprog", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Havblå", exact: true }).click();
+    const colorInputs = page.locator('.appearance-controls input[type="text"]');
+    await colorInputs.nth(0).fill("#123abc");
+    await colorInputs.nth(1).fill("#abcdef");
+    await colorInputs.nth(2).fill("#234567");
+    const preferencesRequest = page.waitForRequest((request) => request.url().includes("/auth/preferences") && request.method() === "PUT");
     await page.getByRole("button", { name: "Gem farver", exact: true }).click();
+    expect((await preferencesRequest).postDataJSON().appearance).toMatchObject({ accent: "#123abc", secondary: "#abcdef", background: "#234567" });
     await expect(page.getByRole("button", { name: "Gem farver", exact: true })).toBeDisabled();
+    await expect(colorInputs.nth(0)).toHaveValue("#123abc");
+    const general = await page.locator(".settings-general-compact").boundingBox();
+    const container = await page.locator(".settings-general-compact").evaluate((element) => {
+      const bounds = element.parentElement!.getBoundingClientRect();
+      return { x: bounds.x, width: bounds.width };
+    });
+    expect(Math.abs(general!.x + general!.width / 2 - container.x - container.width / 2)).toBeLessThan(2);
     expect(mutations).toEqual(["/auth/preferences"]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/settings-general-${width}.png`, fullPage: true });
