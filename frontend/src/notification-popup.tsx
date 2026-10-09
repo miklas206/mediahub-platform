@@ -1,4 +1,4 @@
-import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { t } from "./i18n";
 import "./notification-popup.css";
@@ -15,24 +15,30 @@ function messageText(message: ReactNode): string {
 
 function Popup({ notification, dismiss }: { notification: Notification; dismiss: (id: string) => void }) {
   const [paused, setPaused] = useState(false);
+  const [closing, setClosing] = useState(false);
   const remaining = useRef(notification.tone === "danger" ? 9000 : 6000);
   useEffect(() => {
+    if (closing) {
+      const timer = window.setTimeout(() => dismiss(notification.id), window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 480);
+      return () => window.clearTimeout(timer);
+    }
     if (paused) return;
     const started = Date.now();
-    const timer = window.setTimeout(() => dismiss(notification.id), remaining.current);
+    const timer = window.setTimeout(() => setClosing(true), remaining.current);
     return () => {
       window.clearTimeout(timer);
       remaining.current = Math.max(0, remaining.current - (Date.now() - started));
     };
-  }, [paused, dismiss, notification.id]);
+  }, [paused, closing, dismiss, notification.id]);
   const Icon = notification.tone === "success" ? CheckCircle2 : notification.tone === "info" ? Info : AlertTriangle;
   return (
-    <div className={`notification-popup ${notification.tone}`} role={notification.tone === "danger" ? "alert" : "status"}
+    <div className={`notification-popup ${notification.tone}${closing ? " is-popping" : ""}`} role={notification.tone === "danger" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
       <Icon size={19} aria-hidden="true" />
       <div>{notification.message}</div>
-      <button type="button" aria-label={t("Dismiss notification")} title={t("Dismiss notification")} onClick={() => dismiss(notification.id)}><X size={16} /></button>
+      <button type="button" disabled={closing} aria-label={t("Dismiss notification")} title={t("Dismiss notification")} onClick={() => setClosing(true)}><X size={16} /></button>
+      {closing && <span className="notification-burst" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} style={{ "--angle": `${index * 36}deg` } as CSSProperties} />)}</span>}
     </div>
   );
 }

@@ -239,6 +239,9 @@ for (const width of [1440, 390, 320]) {
     await page.screenshot({ path: `test-results/notification-popup-${width}.png`, fullPage: true });
     await page.mouse.move(0, 900);
     await page.clock.fastForward(6500);
+    await expect(popup).toHaveClass(/is-popping/);
+    await expect(popup.locator(".notification-burst i")).toHaveCount(10);
+    await page.clock.runFor(500);
     await expect(popup).toHaveCount(0);
     await page.clock.resume();
     await page.getByRole("button", { name: "Opdater sundhedstjek" }).click();

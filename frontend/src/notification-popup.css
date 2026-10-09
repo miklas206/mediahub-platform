@@ -10,6 +10,7 @@
   pointer-events: none;
 }
 .notification-popups .notification-popup {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -41,4 +42,38 @@
   color: var(--muted);
 }
 @keyframes notification-enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .notification-popup { animation: none; } }
+.notification-popups .notification-popup.is-popping {
+  pointer-events: none;
+  animation: notification-pop 480ms ease-out forwards;
+}
+.notification-burst { position: absolute; inset: 0; pointer-events: none; }
+.notification-burst i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--healthy);
+  animation: notification-fragment 480ms ease-out forwards;
+}
+.notification-burst i:nth-child(3n) { background: var(--warning); }
+.notification-burst i:nth-child(3n + 1) { background: var(--accent); }
+@keyframes notification-pop {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.08, 1.15); }
+  40% { transform: scale(1.12, 1.2); background: transparent; border-color: transparent; box-shadow: none; }
+  41%, 100% { color: transparent; background: transparent; border-color: transparent; box-shadow: none; }
+  100% { transform: scale(1.12, 1.2); opacity: 0; }
+}
+.is-popping > svg, .is-popping > div, .is-popping > button { animation: notification-content-pop 480ms forwards; }
+@keyframes notification-content-pop { 0%, 35% { opacity: 1; } 40%, 100% { opacity: 0; } }
+@keyframes notification-fragment {
+  0%, 30% { opacity: 0; transform: rotate(var(--angle)) translateX(0); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(150px) rotate(150deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notification-popups .notification-popup, .is-popping > svg, .is-popping > div, .is-popping > button { animation: none; }
+  .notification-burst { display: none; }
+}
