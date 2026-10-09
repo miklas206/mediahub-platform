@@ -91,6 +91,16 @@ class HostUpdater:
 
     @staticmethod
     def _run(args, capture=True, on_output=None):
+        if args[:3] == ["docker", "builder", "prune"]:
+            with tempfile.TemporaryDirectory(prefix="mediahub-cleanup-") as temporary:
+                environment = {
+                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                    "HOME": temporary,
+                    "DOCKER_CONFIG": temporary,
+                    "BUILDX_CONFIG": str(Path(temporary) / "buildx"),
+                    "DOCKER_HOST": "unix:///var/run/docker.sock",
+                }
+                return HostUpdater._run_command(args, capture, environment)
         source_build = args[:2] == ["docker", "build"]
         environment = None
         if source_build:
@@ -107,13 +117,17 @@ class HostUpdater:
             }
         if source_build and on_output:
             return HostUpdater._stream_build(args, environment, on_output)
+        return HostUpdater._run_command(args, capture, environment)
+
+    @staticmethod
+    def _run_command(args, capture, environment):
         result = subprocess.run(
             args,
             check=True,
             text=True,
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
             stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
-            timeout=1800 if source_build else 600,
+            timeout=1800 if args[:2] == ["docker", "build"] else 600,
             env=environment,
         )
         output = result.stdout or ""
