@@ -215,7 +215,14 @@ for (const width of [1440, 390, 320]) {
     expect((await preferencesRequest).postDataJSON().appearance).toMatchObject({ accent: "#123abc", secondary: "#abcdef", background: "#234567" });
     await expect(page.getByRole("button", { name: "Gem farver", exact: true })).toBeDisabled();
     await expect(colorInputs.nth(0)).toHaveValue("#123abc");
+    await expect(page.getByRole("button", { name: "Gemt", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Havblå", exact: true }).click();
+    await page.getByRole("button", { name: "Gemt", exact: true }).click();
+    await expect(colorInputs.nth(0)).toHaveValue("#123abc");
+    await expect(page.getByRole("button", { name: "Gem farver", exact: true })).toBeDisabled();
+    const tabs = await page.getByRole("tablist").boundingBox();
     const general = await page.locator(".settings-general-compact").boundingBox();
+    expect(Math.abs(tabs!.x + tabs!.width / 2 - general!.x - general!.width / 2)).toBeLessThan(2);
     const container = await page.locator(".settings-general-compact").evaluate((element) => {
       const bounds = element.parentElement!.getBoundingClientRect();
       return { x: bounds.x, width: bounds.width };

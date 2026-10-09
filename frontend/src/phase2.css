@@ -206,6 +206,8 @@
   background: var(--surface);
   width: fit-content;
   max-width: 100%;
+  margin-inline: auto;
+  justify-content: center;
 }
 .settings-tabs button {
   min-height: 38px;

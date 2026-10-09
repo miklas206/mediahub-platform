@@ -87,6 +87,9 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
   }, []);
   const invalid = fields.some(([key]) => !isHexColor(inputs[key]));
   const dirty = !same(saved, draft) || invalid;
+  const availablePresets = saved && !presets.some((preset) => same(saved, preset.value))
+    ? [...presets, { name: "Saved palette", value: saved }]
+    : presets;
   function choose(value: Appearance | null) {
     setDraft(value);
     setInputs(value || defaultAppearance);
@@ -145,7 +148,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
           role="group"
           aria-label={t("Color palettes")}
         >
-          {presets.map((preset) => (
+          {availablePresets.map((preset) => (
             <button
               key={preset.name}
               type="button"
