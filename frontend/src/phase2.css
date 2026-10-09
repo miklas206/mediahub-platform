@@ -196,6 +196,12 @@
   color: var(--muted);
   font-size: 13px;
 }
+.settings-content {
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  margin-inline: auto;
+}
 .settings-tabs {
   display: flex;
   gap: 4px;

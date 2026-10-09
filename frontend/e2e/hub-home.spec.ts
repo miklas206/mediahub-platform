@@ -34,7 +34,7 @@ for (const width of [1440, 390, 320]) {
           dashboard_sections: [],
           theme: "dark",
         };
-      else if (path === "/updates/summary") data = { count: 2 };
+      else if (path === "/updates/summary") data = { count: 2, items: [], notifications: [] };
       else if (path === "/health")
         data = { status: "healthy", version: "beta" };
       else if (path === "/maintenance")
@@ -234,6 +234,23 @@ for (const width of [1440, 390, 320]) {
     await expect(page.locator('[data-layout-title="Workspace preferences"]')).toHaveCount(0);
     await expect(page.getByText("Vælg din menu", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Vælg dit dashboard", { exact: true })).toHaveCount(0);
+    const settingsBounds = await page.locator(".settings-content").boundingBox();
+    expect(settingsBounds!.width).toBeCloseTo(general!.width, 0);
+    for (const tabName of ["Brugere", "Sikkerhed", "Integrationer", "Healthcheck", "Aktivitet", "Logfiler"]) {
+      await page.getByRole("tab", { name: tabName, exact: true }).click();
+      await expect.poll(() => page.locator(".settings-content").evaluate((element, expected) => {
+        if (!element.isConnected || !element.parentElement) return null;
+        const bounds = element.getBoundingClientRect();
+        const parent = element.parentElement!.getBoundingClientRect();
+        const parentStyle = getComputedStyle(element.parentElement!);
+        const availableWidth = parent.width - parseFloat(parentStyle.paddingLeft) - parseFloat(parentStyle.paddingRight);
+        return {
+          widthMatches: Math.abs(bounds.width - Math.min(720, availableWidth)) < 1,
+          centered: Math.abs(bounds.x + bounds.width / 2 - parent.x - parent.width / 2) < 1,
+          noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+        };
+      }, { width: general!.width }), { message: tabName }).toEqual({ widthMatches: true, centered: true, noOverflow: true });
+    }
     expect(errors).toEqual([]);
   });
 }

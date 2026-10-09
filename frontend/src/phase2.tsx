@@ -1844,7 +1844,7 @@ export function SettingsExtensions({
     ...(advanced ? ["Network", "Agent", "Advanced"] : []),
   ];
   return (
-    <div className="stack">
+    <div className="settings-content stack">
       <div className="settings-tabs" role="tablist" aria-label={t("Settings")}>
         {tabs.map((tabName) => (
           <button
