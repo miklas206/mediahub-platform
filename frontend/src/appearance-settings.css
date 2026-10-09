@@ -3,7 +3,7 @@
 }
 .settings-general-compact {
   width: 100%;
-  max-width: 720px;
+  max-width: 100%;
   margin-inline: auto;
 }
 .appearance-settings.appearance-compact .appearance-controls {

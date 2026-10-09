@@ -245,13 +245,15 @@ for (const width of [1440, 390, 320]) {
         const parentStyle = getComputedStyle(element.parentElement!);
         const availableWidth = parent.width - parseFloat(parentStyle.paddingLeft) - parseFloat(parentStyle.paddingRight);
         return {
-          widthMatches: Math.abs(bounds.width - Math.min(720, availableWidth)) < 1,
+          widthMatches: bounds.width <= availableWidth + 1,
           centered: Math.abs(bounds.x + bounds.width / 2 - parent.x - parent.width / 2) < 1,
           noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
         };
       }, { width: general!.width }), { message: tabName }).toEqual({ widthMatches: true, centered: true, noOverflow: true });
     }
     expect(errors).toEqual([]);
+    const tabRows = await page.getByRole("tab").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
+    expect(Math.max(...tabRows) - Math.min(...tabRows)).toBeLessThan(1);
     const footerBefore = await page.locator(".footer").boundingBox();
     expect(await page.locator(".footer").evaluate((element) => getComputedStyle(element).position)).toBe("fixed");
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

@@ -197,15 +197,21 @@
   font-size: 13px;
 }
 .settings-content {
-  width: 100%;
-  max-width: 720px;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   margin-inline: auto;
+}
+.settings-content > :not(.settings-tabs) {
+  contain: inline-size;
+  width: 100%;
+  min-width: 0;
 }
 .settings-tabs {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -213,9 +219,11 @@
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .settings-tabs button {
+  flex: none;
+  white-space: nowrap;
   min-height: 38px;
   padding: 7px 13px;
   border-color: transparent;
