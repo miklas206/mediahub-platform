@@ -1834,21 +1834,19 @@ export function SettingsExtensions({
   const network = useLoad<{ pending: NetworkConfig }>("/network");
   const [edited, setEdited] = useState<NetworkConfig>();
   const [message, setMessage] = useState("");
+  const tabs = [
+    "General",
+    ...(sections.Users ? ["Users"] : []),
+    "Security",
+    ...["Integrations", "Updates"].filter((name) => sections[name]),
+    "Healthcheck",
+    ...["Activity", "Logs"].filter((name) => sections[name]),
+    ...(advanced ? ["Network", "Agent", "Advanced"] : []),
+  ];
   return (
     <div className="stack">
-      <div className="settings-tabs" role="tablist">
-        {(advanced
-          ? [
-              "General",
-              "Healthcheck",
-              ...Object.keys(sections),
-              "Network",
-              "Agent",
-              "Security",
-              "Advanced",
-            ]
-          : ["General", "Healthcheck", ...Object.keys(sections), "Security"]
-        ).map((tabName) => (
+      <div className="settings-tabs" role="tablist" aria-label={t("Settings")}>
+        {tabs.map((tabName) => (
           <button
             role="tab"
             aria-selected={tab === tabName}

@@ -187,6 +187,10 @@ for (const width of [1440, 390, 320]) {
     ).toBeVisible();
     expect(mutations).toEqual([]);
     await expect(page.locator(".sidebar nav a")).toHaveCount(2);
+    await expect(page.getByRole("tab")).toHaveText([
+      "Generelt", "Brugere", "Sikkerhed", "Integrationer",
+      "Opdateringer", "Healthcheck", "Aktivitet", "Logfiler",
+    ]);
     await page.getByRole("tab", { name: "Brugere", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Brugere", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Tilf\u00f8j bruger", exact: true })).toBeVisible();

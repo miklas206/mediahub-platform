@@ -1041,6 +1041,14 @@ function Shell({
                       <SettingsExtensions
                         general={
                           <LayoutGroup id="settings-general-layout">
+                            <LayoutGroup id="settings-general-cards">
+                              <div
+                                className="dashboard-card"
+                                data-layout-title="Language"
+                              >
+                                <LanguageSettings />
+                              </div>
+                            </LayoutGroup>
                             <LayoutGroup
                               id="settings-appearance-cards"
                               className="settings-appearance-group stack"
@@ -1050,14 +1058,6 @@ function Shell({
                                 data-layout-title="Colors and shades"
                               >
                                 <AppearanceSettings />
-                              </div>
-                            </LayoutGroup>
-                            <LayoutGroup id="settings-general-cards">
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Language"
-                              >
-                                <LanguageSettings />
                               </div>
                             </LayoutGroup>
                           </LayoutGroup>
