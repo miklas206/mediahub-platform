@@ -632,6 +632,7 @@ function Shell({
         <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
+            .filter(([path]) => path !== "/apps" && path !== "/store")
             .filter(([path]) => visibleNavigation.includes(path) || (path === "/apps" && (runtimePage || location.pathname.startsWith("/integrations/"))))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
