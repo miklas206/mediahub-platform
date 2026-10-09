@@ -1222,13 +1222,21 @@ nav a.active {
   flex-shrink: 0;
 }
 .footer {
+  position: fixed;
+  left: 238px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   display: flex;
   gap: 12px;
   justify-content: space-between;
   color: var(--muted);
   font-size: 11px;
-  padding-top: 30px;
-  opacity: 0.7;
+  padding: 12px 32px;
+  background: var(--bg);
+}
+.main-content:has(> .footer) {
+  padding-bottom: 76px;
 }
 .notice {
   padding: 13px 17px;
@@ -2392,8 +2400,14 @@ td time {
     padding: 0 16px;
   }
   .footer {
+    left: 0;
+    bottom: calc(63px + env(safe-area-inset-bottom));
+    padding: 8px 16px;
     flex-direction: column;
     gap: 5px;
+  }
+  .main-content:has(> .footer) {
+    padding-bottom: 150px;
   }
   .storage-form {
     grid-template-columns: 1fr;

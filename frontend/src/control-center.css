@@ -1523,9 +1523,6 @@ img.plex-poster {
     box-shadow: none;
     color: var(--accent);
   }
-  .workspace .footer {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
-  }
 }
 @media (max-width: 350px) {
   .control-summary:not(.layout-custom-grid) {

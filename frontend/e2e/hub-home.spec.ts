@@ -252,5 +252,15 @@ for (const width of [1440, 390, 320]) {
       }, { width: general!.width }), { message: tabName }).toEqual({ widthMatches: true, centered: true, noOverflow: true });
     }
     expect(errors).toEqual([]);
+    const footerBefore = await page.locator(".footer").boundingBox();
+    expect(await page.locator(".footer").evaluate((element) => getComputedStyle(element).position)).toBe("fixed");
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const footerAfter = await page.locator(".footer").boundingBox();
+    expect(footerAfter!.y).toBeCloseTo(footerBefore!.y, 0);
+    expect(footerAfter!.y + footerAfter!.height).toBeLessThanOrEqual(1000);
+    if (width <= 760) {
+      const dock = await page.locator(".mobile-dock").boundingBox();
+      expect(footerAfter!.y + footerAfter!.height).toBeLessThanOrEqual(dock!.y);
+    }
   });
 }
