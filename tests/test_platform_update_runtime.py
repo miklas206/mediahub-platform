@@ -16,6 +16,36 @@ def digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def test_orphaned_download_fails_after_restart(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    operation = "a" * 32
+    updater._write_status(
+        "downloading", 5, "Downloading", operation, "0.5.0",
+        [{"id": "download", "state": "running"}],
+    )
+    status = updater.status()
+    assert status["state"] == "failed"
+    assert status["operationId"] == operation
+    assert status["steps"][0]["state"] == "error"
+    assert "no host update was started" in status["message"]
+    assert json.loads((spool / "status.json").read_text())["state"] == "failed"
+
+
+@pytest.mark.parametrize("owner", ["task", "request", "host", "staged"])
+def test_download_recovery_preserves_owned_operations(tmp_path, monkeypatch, owner):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    operation = "a" * 32
+    state = "staged" if owner == "staged" else "downloading"
+    updater._write_status(state, 5, "Downloading", operation, "0.5.0", [])
+    if owner == "task":
+        updater.task = SimpleNamespace(done=lambda: False)
+    elif owner == "request":
+        (spool / "request.json").write_text("{}")
+    elif owner == "host":
+        (spool / f"running-{operation}.json").write_text("{}")
+    assert updater.status()["state"] == state
+
+
 def test_maintenance_queues_once_and_blocks_updates(tmp_path, monkeypatch):
     updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
     monkeypatch.setattr(updater, "_host_capability", lambda name: True)
