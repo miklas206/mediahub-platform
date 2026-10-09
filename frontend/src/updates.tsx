@@ -2,12 +2,13 @@ import { translateText, t } from "./i18n";
 
 import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, RefreshCw } from "lucide-react";
+import { Bell, RefreshCw, Box, Download, Terminal } from "lucide-react";
+import { ServiceIcon } from "./service-icon";
 import { api, ApiResponseError } from "./api";
 import { mergeUpdateConsole } from "./update-progress";
-import { ErrorBox, Panel, useLoad } from "./phase2";
+import { ErrorBox, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
 import { updateAllPlan } from "./update-all";
 import {
@@ -238,6 +239,20 @@ function queueOperation(job: QueueStatus): OperationState {
               : "running",
     })),
   };
+}
+
+function UpdateCard({ name, packageId, children }: { name: string; packageId?: string; children: ReactNode }) {
+  return (
+    <article className="hub-app-card update-component-card">
+      <header className="update-component-heading">
+        <span className="hub-app-icon">
+          {packageId ? <ServiceIcon packageId={packageId} size={28} /> : <Box size={26} />}
+        </span>
+        <h2>{name}</h2>
+      </header>
+      <div className="update-component-body">{children}</div>
+    </article>
+  );
 }
 
 export function UpdatesPage({
@@ -887,15 +902,13 @@ export function UpdatesPage({
       )}
       <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
-          <h2>{t("Update all")}</h2>
           <div className="button-row">
-            {batchPlan.tasks.length > 0 && busy !== "all-check" && (
               <button
                 className="primary"
                 disabled={!!busy || !apps || !batchPlan.tasks.length}
                 onClick={() => void installAll()}
               >
-                <RefreshCw
+                <Download
                   size={16}
                   className={
                     operations.batch?.status === "running" ? "spin" : ""
@@ -905,7 +918,6 @@ export function UpdatesPage({
                   ? t("Updating all…")
                   : t("Update all")}
               </button>
-            )}
             <button disabled={!!busy} onClick={() => void checkAll()} aria-label={t("Check all now")} title={t("Check all now")}>
               <RefreshCw
                 className={busy === "all-check" ? "spin" : ""}
@@ -989,21 +1001,9 @@ export function UpdatesPage({
             {t(". These apps do not yet have an automatic installer.")}
           </p>
         )}
-        {operations.batch &&
-          (operations.batch.status === "success" ? (
-            <details>
-              <summary>{t("Latest update console")}</summary>
-              <OperationProgress activeOnly operation={operations.batch} />
-            </details>
-          ) : (
-            <OperationProgress activeOnly operation={operations.batch} />
-          ))}
-        {operations.all && operations.all.status !== "success" && (
-          <OperationProgress activeOnly statusOnly operation={operations.all} />
-        )}
       </section>
       <div className="updates-components">
-        <Panel title={t("MediaHub Core")}>
+        <UpdateCard name={t("MediaHub Core")}>
           <div className="runtime-row">
             <span>{t("Installed")}</span>
             <strong>
@@ -1042,9 +1042,6 @@ export function UpdatesPage({
                 : t("Install update")}
             </button>
           </div>
-          {operations.platform && (
-            <OperationProgress activeOnly operation={operations.platform} />
-          )}
           <details className="update-card-advanced">
             <summary>{t("Details and update settings")}</summary>
             {release?.releaseUrl && (
@@ -1133,16 +1130,28 @@ export function UpdatesPage({
               <Link to="/backups">{t("Create configuration backup →")}</Link>
             </p>
           </details>
-        </Panel>
+        </UpdateCard>
         {apps?.some(
           (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
         ) && (
-          <div className="layout-card" data-layout-title="Seedbox Agent">
-            <AgentUpdates
-              busy={!!busy}
-              onChange={() => updateSummary.reload()}
-            />
-          </div>
+          <UpdateCard name={t("Seedbox Agent")} packageId="org.mediahub.seedbox">
+            <div className="runtime-row">
+              <span>{t("Installed")}</span>
+              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.installedVersion || t("Not checked")}</strong>
+            </div>
+            <div className="runtime-row">
+              <span>{t("Latest")}</span>
+              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.latestVersion || t("Not checked")}</strong>
+            </div>
+            <details className="update-agent-details">
+              <summary>{t("Update Agent")}</summary>
+              <AgentUpdates
+                embedded
+                busy={!!busy}
+                onChange={() => updateSummary.reload()}
+              />
+            </details>
+          </UpdateCard>
         )}
         {apps
           ?.filter((app) => !app.isMock)
@@ -1151,7 +1160,7 @@ export function UpdatesPage({
             const isPlex = app.packageId === "org.mediahub.plex";
             const isCloudflare = app.packageId === "org.mediahub.cloudflared";
             return (
-              <Panel key={app.id} title={app.name}>
+              <UpdateCard key={app.id} name={app.name} packageId={app.packageId}>
                 <div className="runtime-row">
                   <span>{t("Installed")}</span>
                   <strong>
@@ -1202,16 +1211,11 @@ export function UpdatesPage({
                       )}
                     </>
                   )}
-                  <Link to={app.detailPath || "/apps"}>
-                    {t("Open app & recovery →")}
-                  </Link>
                 </div>
-                {operations[app.id] && (
-                  <OperationProgress
-                    activeOnly
-                    operation={operations[app.id]!}
-                  />
-                )}
+                <details className="update-card-details">
+                  <summary>{t("Open app & recovery →")}</summary>
+                  <Link to={app.detailPath || "/apps"}>{app.name}</Link>
+                </details>
                 {!isPlex && !isCloudflare && (
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
@@ -1246,10 +1250,23 @@ export function UpdatesPage({
                     </p>
                   </details>
                 )}
-              </Panel>
+              </UpdateCard>
             );
           })}
       </div>
+      <section className="updates-console" aria-label={t("Console")}>
+        <details open={updating || undefined}>
+          <summary><Terminal size={17} />{t("Console")}</summary>
+          <div className="updates-console-content">
+            {Object.entries(operations).filter(([, operation]) => operation).map(([id, operation]) => (
+              <div key={id}>
+                <h3>{translateText(operation!.title)}</h3>
+                <OperationProgress activeOnly operation={operation!} />
+              </div>
+            ))}
+          </div>
+        </details>
+      </section>
     </div>
   );
 }

@@ -24,9 +24,11 @@ type Job = {
 export function AgentUpdates({
   onChange,
   busy,
+  embedded = false,
 }: {
   onChange: () => void;
   busy: boolean;
+  embedded?: boolean;
 }) {
   const [check, setCheck] = useState<Check>();
   const [error, setError] = useState("");
@@ -149,8 +151,8 @@ export function AgentUpdates({
     }
   }
   const disabled = working || busy || operation?.status === "running";
-  return (
-    <Panel title={t("Seedbox Agent")}>
+  const content = (
+    <>
       <ErrorBox error={error} />
       {error && !check?.credentialsStored && (
         <button
@@ -433,6 +435,7 @@ export function AgentUpdates({
         </details>
       )}
       {operation && <OperationProgress activeOnly operation={operation} />}
-    </Panel>
+    </>
   );
+  return embedded ? <div className="stack">{content}</div> : <Panel title={t("Seedbox Agent")}>{content}</Panel>;
 }

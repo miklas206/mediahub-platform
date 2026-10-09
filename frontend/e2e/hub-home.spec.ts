@@ -25,13 +25,15 @@ for (const width of [1440, 390, 320]) {
       await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data }) });
     });
     await page.goto("/settings?section=Updates");
-    const cards = page.locator(".updates-components > .panel");
+    const cards = page.locator(".updates-components > .update-component-card");
     await expect(cards).toHaveCount(2);
     await expect(cards.first()).toContainText("0.4.29");
     await expect(page.getByText("Cannot read properties of undefined", { exact: false })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Opdater alle", exact: true })).toBeVisible();
-    await cards.first().getByText("Konsol", { exact: true }).click();
-    await expect(cards.first().getByLabel("Opdateringskonsol")).toContainText("Preserved console output");
+    await expect(cards.first().getByText("Download interrupted", { exact: true })).toHaveCount(0);
+    await page.locator(".updates-console > details > summary").click();
+    await page.locator(".updates-console").getByText("Konsol", { exact: true }).last().click();
+    await expect(page.locator(".updates-console").getByLabel("Opdateringskonsol")).toContainText("Preserved console output");
     const bounds = await cards.evaluateAll((elements) => elements.map((element) => ({ width: element.getBoundingClientRect().width, top: element.getBoundingClientRect().top })));
     if (width > 760) {
       expect(bounds[0].width).toBeLessThan(400);

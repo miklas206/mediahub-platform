@@ -2619,6 +2619,98 @@ td time {
   gap: 16px;
   align-items: start;
 }
+.updates-page .update-component-card {
+  border-radius: 8px;
+  min-width: 0;
+  height: 100%;
+}
+.update-component-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px 14px;
+}
+.update-component-heading h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.update-component-heading .hub-app-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: var(--accent);
+}
+.update-component-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 18px 16px;
+  flex: 1;
+}
+.update-component-body .runtime-row {
+  border: 0;
+  background: none;
+  font-size: 12px;
+}
+.update-component-body > .button-row {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+}
+.update-component-body > details {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.updates-page .updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.updates-page .updates-actions .update-policy-heading {
+  order: 2;
+}
+.updates-page .updates-actions .update-summary-line {
+  margin: 0;
+  flex: 1;
+}
+.updates-console {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  min-width: 0;
+}
+.updates-console > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.updates-console-content {
+  display: grid;
+  gap: 18px;
+  padding-top: 16px;
+}
+.updates-console-content h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.updates-console-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .updates-page .updates-actions .update-summary-line {
+    flex-basis: 100%;
+    font-weight: 400;
+  }
+  .updates-page .updates-actions .update-policy-heading {
+    width: 100%;
+  }
+}
 .updates-components > .panel,
 .updates-components > .layout-card > .panel {
   min-width: 0;
