@@ -628,6 +628,7 @@ function Shell({
         <p className="nav-label">{t("WORKSPACE")}</p>
         <nav>
           {navigation
+            .filter(([path]) => path !== "/apps" && path !== "/store")
             .filter(([path]) => visibleNavigation.includes(path))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
