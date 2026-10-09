@@ -15,6 +15,7 @@ for (const width of [1440, 390, 320]) {
       if (request.method() !== "GET") mutations.push(path);
       let data: unknown = [];
       if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/users") data = [{ id: "test", username: "tester", role: "administrator", createdAt: "2026-10-09T12:00:00Z" }];
       else if (path === "/auth/me")
         data = {
           id: "test",
@@ -28,7 +29,7 @@ for (const width of [1440, 390, 320]) {
         data = {
           display_name: "MediaHub",
           advanced_mode: false,
-          visible_navigation: ["/", "/apps", "/store", "/settings"],
+          visible_navigation: ["/", "/maintenance", "/storage", "/activity", "/logs", "/updates", "/backups", "/integrations", "/settings"],
           dashboard_sections: [],
           theme: "dark",
         };
@@ -103,13 +104,13 @@ for (const width of [1440, 390, 320]) {
       page.getByRole("heading", { name: "MediaHub beta" }),
     ).toBeVisible();
     const cards = page.locator(".hub-app-card");
-    await expect(cards).toHaveCount(7);
+    await expect(cards).toHaveCount(6);
     await expect(page.locator(".app-store-page, .store-hero")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Tilf\u00f8j app", exact: true }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Kan s\u00e6ttes op", exact: true }).click();
-    await expect(cards).toHaveCount(4);
+    await expect(cards).toHaveCount(3);
     await expect(page).toHaveURL(/\/$/);
     await page.getByRole("button", { name: "Alle apps", exact: true }).click();
     await expect(
@@ -122,7 +123,7 @@ for (const width of [1440, 390, 320]) {
     ).toHaveCount(3);
     await expect(
       page.locator("#hub-group-false + .hub-app-grid .hub-app-card"),
-    ).toHaveCount(4);
+    ).toHaveCount(3);
     await expect(
       page.getByRole("region", { name: "Administrer MediaHub" }),
     ).toHaveCount(0);
@@ -160,13 +161,13 @@ for (const width of [1440, 390, 320]) {
     await page
       .getByRole("button", { name: "Kan sættes op", exact: true })
       .click();
-    await expect(cards).toHaveCount(4);
+    await expect(cards).toHaveCount(3);
     await page
       .getByRole("button", { name: "Klar til at åbne", exact: true })
       .click();
     await expect(cards).toHaveCount(3);
     await page.getByRole("button", { name: "Alle apps", exact: true }).click();
-    await expect(cards).toHaveCount(7);
+    await expect(cards).toHaveCount(6);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -185,6 +186,14 @@ for (const width of [1440, 390, 320]) {
       page.getByRole("button", { name: "Kontrollér og ryd op" }),
     ).toBeVisible();
     expect(mutations).toEqual([]);
+    await expect(page.locator(".sidebar nav a")).toHaveCount(2);
+    await page.getByRole("tab", { name: "Brugere", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Brugere", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tilf\u00f8j bruger", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "tester (dig)", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Slet tester", exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/settings-users-${width}.png`, fullPage: true });
     expect(errors).toEqual([]);
   });
 }

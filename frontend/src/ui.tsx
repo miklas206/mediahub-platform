@@ -77,6 +77,7 @@ import { bytes, uptime } from "./format";
 import { PlatformVersion } from "./platform-version";
 import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
+import { UsersPage } from "./users";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
@@ -126,9 +127,6 @@ import { batchAppHealthRefresh } from "./app-events";
 const SetupWizard = lazy(() =>
   import("./wizard").then((module) => ({ default: module.SetupWizard })),
 );
-const BackupsPage = lazy(() =>
-  import("./backups").then((module) => ({ default: module.BackupsPage })),
-);
 const UpdatesPage = lazy(() =>
   import("./updates").then((module) => ({ default: module.UpdatesPage })),
 );
@@ -153,11 +151,6 @@ const CloudflareStorePage = lazy(() =>
 );
 const FjordHubStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.FjordHubStorePage })),
-);
-const WindowsSharePage = lazy(() =>
-  import("./windows-share").then((module) => ({
-    default: module.WindowsSharePage,
-  })),
 );
 const FjordHubUninstallPage = lazy(() =>
   import("./fjordhub-uninstall").then((module) => ({
@@ -629,7 +622,7 @@ function Shell({
         <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
-            .filter(([path]) => path !== "/apps" && path !== "/store")
+            .filter(([path]) => ["/", "/overview", "/settings"].includes(path))
             .filter(([path]) => visibleNavigation.includes(path) || (path === "/apps" && (runtimePage || location.pathname.startsWith("/integrations/"))))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
@@ -860,7 +853,7 @@ function Shell({
                 ...navigation
                   .filter(
                     ([path]) =>
-                      visibleNavigation.includes(path) &&
+                      ["/", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
                       (advancedMode || path !== "/hosts"),
                   )
                   .map(([path, label]) => ({ path, label: t(label) })),
@@ -960,11 +953,11 @@ function Shell({
                   <Route path="/apps/:appId" element={<AppRuntimePage />} />
                   <Route
                     path="/apps/windows-share"
-                    element={<WindowsSharePage />}
+                    element={<Navigate to="/" replace />}
                   />
                   <Route
                     path="/store/windows-share"
-                    element={<WindowsSharePage />}
+                    element={<Navigate to="/" replace />}
                   />
                   <Route
                     path="/store/cloudflare"
@@ -983,7 +976,7 @@ function Shell({
                     path="/"
                     element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />}
                   />
-                  <Route path="/maintenance" element={<MaintenancePage />} />
+                  <Route path="/maintenance" element={<Navigate to="/settings?section=Healthcheck" replace />} />
                   <Route
                     path="/overview"
                     element={
@@ -1025,64 +1018,21 @@ function Shell({
                   />
                   <Route
                     path="/storage"
-                    element={
-                      <LayoutGroup id="ui-Shell-2" className="stack">
-                        <div
-                          className="layout-card"
-                          data-layout-title="Media files"
-                        >
-                          <MediaFiles />
-                        </div>
-                        <div
-                          className="layout-card"
-                          data-layout-title="Storage"
-                        >
-                          <StorageSummary />
-                        </div>
-                        {advancedMode && (
-                          <details className="technical-disclosure">
-                            <summary>{t("Technical storage mappings")}</summary>
-                            <LayoutGroup id="ui-Shell-3" className="stack">
-                              <div
-                                className="layout-card"
-                                data-layout-title="Storage mappings"
-                              >
-                                <LogicalStoragePanel />
-                              </div>
-                              <StorageWorkspace />
-                            </LayoutGroup>
-                          </details>
-                        )}
-                      </LayoutGroup>
-                    }
+                    element={<Navigate to="/" replace />}
                   />
                   <Route path="/hosts" element={<HostsPage />} />
                   <Route path="/integrations/:integrationId" element={<FjordHubHome administrator={user.role === "administrator"} username={user.username} />} />
-                  <Route path="/integrations" element={<IntegrationsPage administrator={user.role === "administrator"} username={user.username} />} />
+                  <Route path="/integrations" element={<Navigate to="/settings?section=Integrations" replace />} />
                   <Route
                     path="/activity"
                     element={
-                      <LayoutGroup id="activity-cards">
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Event timeline"
-                        >
-                          <ActivityPage revision={revision} />
-                        </div>
-                      </LayoutGroup>
+                      <Navigate to="/settings?section=Activity" replace />
                     }
                   />
                   <Route
                     path="/logs"
                     element={
-                      <LayoutGroup id="logs-cards">
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Logs"
-                        >
-                          <Logs />
-                        </div>
-                      </LayoutGroup>
+                      <Navigate to="/settings?section=Logs" replace />
                     }
                   />
                   <Route
@@ -1120,6 +1070,13 @@ function Shell({
                         }
                         maintenance={<MaintenancePage />}
                         security={<SecuritySettings />}
+                        sections={{
+                          Activity: <ActivityPage revision={revision} />,
+                          Logs: <Logs />,
+                          Updates: <UpdatesPage apps={navigationApps} appsError={navigationAppsError} />,
+                          Integrations: <IntegrationsPage administrator={user.role === "administrator"} username={user.username} />,
+                          ...(user.role === "administrator" ? { Users: <UsersPage currentUserId={user.id} /> } : {}),
+                        }}
                         advanced={advancedMode}
                       />
                     }
@@ -1127,13 +1084,10 @@ function Shell({
                   <Route
                     path="/updates"
                     element={
-                      <UpdatesPage
-                        apps={navigationApps}
-                        appsError={navigationAppsError}
-                      />
+                      <Navigate to="/settings?section=Updates" replace />
                     }
                   />
-                  <Route path="/backups" element={<BackupsPage />} />
+                  <Route path="/backups" element={<Navigate to="/" replace />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
@@ -1152,10 +1106,6 @@ function Shell({
         <NavLink to="/" end>
           <LayoutDashboard size={19} />
           <span>{t("Home")}</span>
-        </NavLink>
-        <NavLink to="/storage">
-          <HardDrive size={19} />
-          <span>{t("Storage")}</span>
         </NavLink>
         <NavLink to="/settings">
           <Settings2 size={19} />
@@ -1369,10 +1319,6 @@ function Dashboard({
           >
             <Download size={15} />
             {t("Downloads")}
-          </Link>
-          <Link to="/storage">
-            <FolderOpen size={15} />
-            {t("Media files")}
           </Link>
           <Link to="/updates">
             <RefreshCw size={15} />
@@ -1989,7 +1935,7 @@ function SettingsPage() {
               </div>
             </div>
             <div className="choice-grid">
-              {navigation.map(([path, label, Icon]) => {
+              {navigation.filter(([path]) => ["/", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
                 const required = path === "/" || path === "/settings";
                 return (
                   <label className="choice-card" key={path}>
@@ -2429,27 +2375,11 @@ function MaintenancePage() {
 
       <Section title={t("Maintenance tools")}>
         <div className="maintenance-actions">
-          <NavLink className="maintenance-action" to="/storage">
-            <HardDrive size={20} />
-            <span>
-              <strong>{t("Storage")}</strong>
-              <small>{t("Review capacity, folders and media files")}</small>
-            </span>
-            <ChevronRight size={17} />
-          </NavLink>
           <NavLink className="maintenance-action" to="/updates">
             <RefreshCw size={20} />
             <span>
               <strong>{t("Updates")}</strong>
               <small>{t("Check verified MediaHub and app releases")}</small>
-            </span>
-            <ChevronRight size={17} />
-          </NavLink>
-          <NavLink className="maintenance-action" to="/backups">
-            <Database size={20} />
-            <span>
-              <strong>{t("Configuration backups")}</strong>
-              <small>{t("Protect settings without duplicating media")}</small>
             </span>
             <ChevronRight size={17} />
           </NavLink>

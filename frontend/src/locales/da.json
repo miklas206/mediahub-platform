@@ -514,6 +514,8 @@
   "Storage": "Lager",
   "Hosts": "Værter",
   "Activity": "Aktivitet",
+  "Users": "Brugere",
+  "Healthcheck": "Healthcheck",
   "Logs": "Logfiler",
   "Updates": "Opdateringer",
   "Backups": "Sikkerhedskopier",

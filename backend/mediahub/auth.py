@@ -43,6 +43,48 @@ class AuthService:
                 raise DomainError("already_initialized", "An administrator already exists", 409)
             db.add(User(username=username, password_hash=hasher.hash(password)))
 
+    def users(self):
+        with self.sessions() as db:
+            return [self.public_user(user) for user in db.scalars(select(User).order_by(User.username))]
+
+    @staticmethod
+    def public_user(user):
+        return {"id": user.id, "username": user.username, "role": user.role, "createdAt": user.created_at}
+
+    def save_user(self, username, password, user_id=None):
+        username = username.strip().lower()
+        if not username or len(username) > 80 or (password and not 12 <= len(password) <= 256) or (not user_id and not password):
+            raise DomainError("invalid_credentials", "Use a username and a 12-256 character password")
+        with self.sessions.begin() as db:
+            user = db.get(User, user_id) if user_id else None
+            if user_id and user is None:
+                raise DomainError("user_not_found", "User not found", 404)
+            duplicate = db.scalar(select(User).where(User.username == username))
+            if duplicate and duplicate.id != user_id:
+                raise DomainError("username_exists", "Username already exists", 409)
+            if user is None:
+                user = User(username=username, password_hash=hasher.hash(password), role="administrator")
+                db.add(user)
+            else:
+                user.username = username
+                if password:
+                    user.password_hash = hasher.hash(password)
+                    db.execute(delete(Session).where(Session.user_id == user.id))
+            db.flush()
+            return self.public_user(user)
+
+    def delete_user(self, user_id, actor_id):
+        with self.sessions.begin() as db:
+            user = db.get(User, user_id)
+            if user is None:
+                raise DomainError("user_not_found", "User not found", 404)
+            administrators = list(db.scalars(select(User.id).where(User.role == "administrator")))
+            if user_id == actor_id or (user.role == "administrator" and len(administrators) <= 1):
+                raise DomainError("protected_user", "Cannot delete your own account or the last administrator", 409)
+            db.execute(delete(Session).where(Session.user_id == user_id))
+            db.execute(delete(UserSecurity).where(UserSecurity.user_id == user_id))
+            db.delete(user)
+
     def throttle(self, client: str):
         clock = time.time()
         self.attempts = {

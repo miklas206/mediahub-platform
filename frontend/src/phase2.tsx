@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { api, uploadMediaFile } from "./api";
 import { droppedMediaFiles, type MediaUploadFile } from "./media-drop";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { bytes, fileFormat } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
 import type { Storage, InstalledAppInfo } from "./contracts";
@@ -1815,14 +1815,18 @@ export function SettingsExtensions({
   general,
   maintenance,
   security,
+  sections = {},
   advanced = false,
 }: {
   general: ReactNode;
   maintenance: ReactNode;
   security: ReactNode;
+  sections?: Record<string, ReactNode>;
   advanced?: boolean;
 }) {
-  const [tab, setTab] = useState("General");
+  const [parameters, setParameters] = useSearchParams();
+  const tab = parameters.get("section") || "General";
+  const setTab = (value: string) => setParameters({ section: value });
   useEffect(() => {
     if (!advanced && ["Storage", "Network", "Agent", "Advanced"].includes(tab))
       setTab("General");
@@ -1836,14 +1840,14 @@ export function SettingsExtensions({
         {(advanced
           ? [
               "General",
-              "Maintenance",
-              "Storage",
+              "Healthcheck",
+              ...Object.keys(sections),
               "Network",
               "Agent",
               "Security",
               "Advanced",
             ]
-          : ["General", "Maintenance", "Security"]
+          : ["General", "Healthcheck", ...Object.keys(sections), "Security"]
         ).map((tabName) => (
           <button
             role="tab"
@@ -1857,8 +1861,8 @@ export function SettingsExtensions({
         ))}
       </div>
       {tab === "General" && general}
-      {tab === "Maintenance" && maintenance}
-      {tab === "Storage" && <StorageWorkspace />}
+      {tab === "Healthcheck" && maintenance}
+      {sections[tab]}
       {tab === "Network" && (
         <LayoutGroup id="settings-network-cards">
           <Panel title={t("Network configuration")}>

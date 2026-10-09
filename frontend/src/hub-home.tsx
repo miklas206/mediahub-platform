@@ -93,7 +93,7 @@ export function buildHubEntries({
   return catalog
     .filter(
       (entry) =>
-        entry.availability === "available" && Object.hasOwn(hubApps, entry.id),
+        entry.availability === "available" && entry.id !== "org.mediahub.windows-share" && Object.hasOwn(hubApps, entry.id),
     )
     .map((entry) => {
       const definition = hubApps[entry.id as keyof typeof hubApps];

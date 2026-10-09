@@ -60,6 +60,32 @@ class PathRequest(StrictModel):
     path: str = Field(min_length=1, max_length=4096)
 
 
+class ManagedUser(StrictModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(default="", max_length=256)
+
+
+@router.get("/users")
+async def users(request: Request, user=Depends(administrator)):
+    return result(services(request).auth.users())
+
+
+@router.post("/users")
+async def create_user(body: ManagedUser, request: Request, user=Depends(administrator)):
+    return result(services(request).auth.save_user(body.username, body.password))
+
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: str, body: ManagedUser, request: Request, user=Depends(administrator)):
+    return result(services(request).auth.save_user(body.username, body.password, user_id))
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, request: Request, user=Depends(administrator)):
+    services(request).auth.delete_user(user_id, user["id"])
+    return result({"deleted": True})
+
+
 class GitHubTokenRequest(StrictModel):
     token: str = Field(min_length=20, max_length=512)
 

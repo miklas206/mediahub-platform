@@ -54,7 +54,7 @@ const input = {
 describe("primary MediaHub app hub", () => {
   it("exposes the supported MediaHub apps with real setup paths before installation", () => {
     const entries = buildHubEntries(input);
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(
       entries.every(
         (entry) => !entry.configured && entry.statusLabel === "Not set up",
@@ -95,7 +95,7 @@ describe("primary MediaHub app hub", () => {
   });
   it("keeps FjordHub as one peer app and its child apps inside FjordHub", () => {
     const entries = buildHubEntries({ ...input, integrations: [integration] });
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(entries.find((entry) => entry.name === "FjordHub")).toMatchObject({
       configured: true,
       path: "/integrations/fjordhub-one",
@@ -148,7 +148,7 @@ describe("primary MediaHub app hub", () => {
       ],
       deployment: { state: "succeeded", uninstall: { state: "removed" } },
     });
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(entries.find((entry) => entry.name === "FjordHub")?.configured).toBe(
       false,
     );
