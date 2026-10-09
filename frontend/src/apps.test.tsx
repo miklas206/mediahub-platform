@@ -1,9 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { NotificationPopup } from "./notification-popup";
 import { Apps } from "./ui";
 import type { AppInfo } from "./contracts";
 import type { Integration } from "./integrations";
+
+vi.mock("./notification-popup", () => ({ NotificationPopup: vi.fn(() => null) }));
 
 const app: AppInfo = {
   id: "plex",
@@ -54,8 +57,10 @@ describe("apps using the shell's live registry", () => {
   it("preserves skeleton, empty and failed states", () => {
     expect(render(undefined)).toContain("app-skeleton-grid");
     expect(render([])).toContain("No apps installed");
-    expect(render([app], "Offline")).toContain("Offline");
-    expect(render([app], "Offline")).toContain("Plex");
+    const failed = render([app], "Offline");
+    expect(failed).not.toContain("Offline");
+    expect(failed).toContain("Plex");
+    expect(vi.mocked(NotificationPopup).mock.calls.some(([props]) => props.children === "Offline" && props.tone === "danger")).toBe(true);
   });
   it("retains enabled integration cards even with an empty local registry", () => {
     const html = render([], "", [integration]);

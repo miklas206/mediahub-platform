@@ -93,11 +93,13 @@ export function Panel({
     </section>
   );
 }
+import { NotificationPopup } from "./notification-popup";
+
 export function ErrorBox({ error }: { error: string }) {
   return error ? (
-    <div className="notice" role="alert">
+    <NotificationPopup tone="danger">
       {t(error)}
-    </div>
+    </NotificationPopup>
   ) : null;
 }
 
@@ -513,7 +515,7 @@ export function StorageWorkspace() {
     <LayoutGroup id="phase2-StorageWorkspace-1" className="stack">
       <Panel title={t("Storage locations")}>
         <ErrorBox error={error} />
-        {message && <p className="success">{translateText(message)}</p>}
+        {message && <NotificationPopup tone="success">{translateText(message)}</NotificationPopup>}
         {data?.length ? (
           data.map((item) => (
             <div className="storage-row" key={item.id}>
@@ -1336,9 +1338,9 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
       ))}
       <button>{t("Save app configuration")}</button>
       {message && (
-        <p role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </p>
+        </NotificationPopup>
       )}
     </form>
   );

@@ -1,4 +1,5 @@
 import { serviceSnapshots } from "./service-snapshots";
+import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
 import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
@@ -209,12 +210,12 @@ function Notice({
   tone = "danger",
 }: {
   children: ReactNode;
-  tone?: "danger" | "warning" | "info";
+  tone?: "danger" | "warning" | "info" | "success";
 }) {
   return (
-    <div role="alert" className={`notice ${tone}`}>
+    <NotificationPopup tone={tone}>
       {typeof children === "string" ? t(children) : children}
-    </div>
+    </NotificationPopup>
   );
 }
 function Loading() {
@@ -1560,9 +1561,9 @@ export function LegacyStoragePage() {
     <div className="stack">
       {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
-        <div role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </div>
+        </NotificationPopup>
       )}
       <Section title={t("Storage locations")}>
         {!data ? (
@@ -1782,9 +1783,9 @@ function SettingsPage() {
     <Section title={t("Workspace preferences")}>
       {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
-        <div role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </div>
+        </NotificationPopup>
       )}
       {!draft ? (
         <Loading />
@@ -2312,7 +2313,7 @@ function MaintenancePage() {
         {failure && <Notice>{failure}</Notice>}
         {cleanup.error && <Notice>{translateText(cleanup.error)}</Notice>}
         {cleanup.data && cleanup.data.state !== "idle" && (
-          <Notice>{translateText(cleanup.data.message)}</Notice>
+          <Notice tone={cleanup.data.state === "succeeded" ? "success" : cleanup.data.state === "failed" ? "danger" : "info"}>{translateText(cleanup.data.message)}</Notice>
         )}
         {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">

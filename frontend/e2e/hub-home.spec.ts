@@ -84,7 +84,7 @@ for (const width of [1440, 390, 320]) {
       else if (path === "/health")
         data = { status: "healthy", version: "beta" };
       else if (path === "/maintenance")
-        data = { state: "idle", message: "Ready" };
+        data = { state: "succeeded", message: "Maintenance completed. Removed 0 old update files and unused build cache. Media, app data and rollback backups were preserved." };
       else if (path === "/runtime")
         data = {
           connected: false,
@@ -224,11 +224,25 @@ for (const width of [1440, 390, 320]) {
       path: `test-results/hub-home-${width}.png`,
       fullPage: true,
     });
+    await page.clock.install();
     await page.locator('[data-app-id="healthcheck"] a').click();
     await expect(
       page.getByRole("heading", { name: "Healthcheck", exact: true }),
     ).toBeVisible();
+    const popup = page.locator(".notification-popup.success").filter({ hasText: "Maintenance completed" });
+    await expect(popup).toBeVisible();
+    await expect(page.locator(".notification-popup.danger")).toHaveCount(0);
+    expect((await popup.boundingBox())!.y).toBeLessThan(40);
+    await popup.hover();
+    await page.clock.fastForward(6500);
+    await expect(popup).toBeVisible();
+    await page.screenshot({ path: `test-results/notification-popup-${width}.png`, fullPage: true });
+    await page.mouse.move(0, 900);
+    await page.clock.fastForward(6500);
+    await expect(popup).toHaveCount(0);
+    await page.clock.resume();
     await page.getByRole("button", { name: "Opdater sundhedstjek" }).click();
+    await expect(popup).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Kontrollér og ryd op" }),
     ).toBeVisible();

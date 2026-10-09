@@ -1,4 +1,5 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -124,9 +125,9 @@ export function FjordHubUninstallPage() {
         )}
       </p>
       {error && (!job || removed || !supported) && (
-        <p className="error" role="alert">
+        <NotificationPopup tone="danger">
           {translateText(error)}
-        </p>
+        </NotificationPopup>
       )}
       {!loaded && !error && (
         <p role="status">{t("Loading the recorded installation…")}</p>

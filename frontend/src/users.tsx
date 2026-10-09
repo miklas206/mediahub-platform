@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "./api";
 import { useData } from "./use-data";
+import { NotificationPopup } from "./notification-popup";
 
 type ManagedUser = { id: string; username: string; role: string; createdAt: string };
 
@@ -34,7 +35,7 @@ export function UsersPage({ currentUserId }: { currentUserId: string }) {
   }
   return <section className="panel">
     <div className="panel-heading"><h2>Brugere</h2><button disabled={busy} onClick={() => { setEditing({ username: "" }); setPassword(""); }}><Plus size={16} /> {"Tilf\u00f8j bruger"}</button></div>
-    {(error || failure) && <div role="alert" className="notice">{error || failure}</div>}
+    {(error || failure) && <NotificationPopup tone="danger">{error || failure}</NotificationPopup>}
     {editing && <form className="settings-form" onSubmit={save}>
       <label>Brugernavn<input required maxLength={80} autoComplete="off" value={editing.username || ""} onChange={event => setEditing({ ...editing, username: event.target.value })} /></label>
       <label>Adgangskode<input type="password" autoComplete="new-password" required={!editing.id} minLength={12} maxLength={256} value={password} onChange={event => setPassword(event.target.value)} /></label>

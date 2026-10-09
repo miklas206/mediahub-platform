@@ -6,6 +6,7 @@
 - Preserve the existing app workflows, per-host runtime policies, authentication, encrypted secrets, storage boundaries and external integrations. Show actual installed/connected state; never pretend catalog entries are installed.
 - Keep secondary FjordHub apps under their parent FjordHub integration. The main hub must work independently of FjordHub.
 - Keep server addresses, identities, storage paths and credentials configurable. No live data, environment files, private keys or databases belong in Git.
+- UI action results and transient errors must use NotificationPopup, not inline banners. Use success/info for successful results and danger only for errors. Popups appear at the top, close automatically, and pause while hovered or focused. Keep progress, consoles, required setup guidance and security recovery data on the page.
 - Run focused checks for changed functionality, commit and push to this repository. Distinguish local tests, pushed source and the installed beta version.
 - This task explicitly authorizes deployment to the existing beta LXC only. Preserve its user account and rollback data. Do not alter the original production MediaHub or its apps.
 - Keep the Apache-2.0 license and original MediaHub attribution. The earlier FjordHub-based attempt remains in Git history and the archive branch for recovery.

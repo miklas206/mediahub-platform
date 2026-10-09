@@ -1,4 +1,5 @@
 import { translateText, getLocale, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 import { useRuntimeSnapshot } from "./use-service-snapshot";
 
 import { LayoutGroup } from "./page-layout";
@@ -1092,7 +1093,7 @@ export function AppRuntimePage() {
             {translateText(updateResult) ||
               t("No release check has been run in this session.")}
           </p>
-          {actionError && <div role="alert">{actionError}</div>}
+          {actionError && <NotificationPopup tone="danger">{actionError}</NotificationPopup>}
           <p className="muted">
             {t(
               "No automatic update or restart is performed. That avoids choosing the wrong installation method and unexpectedly interrupting the tunnel.",
@@ -1142,7 +1143,7 @@ export function AppRuntimePage() {
                 </button>
               ))}
             </div>
-            {actionError && <div role="alert">{actionError}</div>}
+            {actionError && <NotificationPopup tone="danger">{actionError}</NotificationPopup>}
             {data.view === "plex" && (
               <>
                 <div className="runtime-toolbar">

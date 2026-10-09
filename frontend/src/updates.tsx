@@ -6,6 +6,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "rea
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, Box, Download, Terminal } from "lucide-react";
 import { ServiceIcon } from "./service-icon";
+import { NotificationPopup } from "./notification-popup";
 import { api, ApiResponseError } from "./api";
 import { mergeUpdateConsole } from "./update-progress";
 import { ErrorBox, useLoad } from "./phase2";
@@ -896,9 +897,9 @@ export function UpdatesPage({
         <ErrorBox error={platformRelease.error || updateSummary.error} />
       )}
       {notice && (
-        <p className="success" role="status">
+        <NotificationPopup tone="success">
           {translateText(notice)}
-        </p>
+        </NotificationPopup>
       )}
       <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
@@ -966,10 +967,10 @@ export function UpdatesPage({
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "failed")
           .map((item) => (
-            <p className="notice" role="alert" key={item.id}>
+            <NotificationPopup tone="danger" key={item.id}>
               <strong>{item.name}:</strong> {translateText(item.message)}
               {item.errorCode && <small> ({item.errorCode})</small>}
-            </p>
+            </NotificationPopup>
           ))}
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "deferred")

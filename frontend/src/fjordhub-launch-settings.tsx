@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "./api";
 import { t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 import { ErrorBox } from "./phase2";
 import { installedFjordHubApps, type Integration } from "./integrations";
 import { fjordHubAppLink } from "./fjordhub-app-link";
@@ -86,7 +87,7 @@ function AppLaunchForm({
             : t("API-provided URL")}
       </small>
       <ErrorBox error={error} />
-      {notice && <p role="status">{notice}</p>}
+      {notice && <NotificationPopup tone="success">{notice}</NotificationPopup>}
       <div className="button-row">
         <button type="submit" disabled={busy || url === saved}>
           {busy ? t("Working…") : t("Save")}

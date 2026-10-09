@@ -1,0 +1,44 @@
+.notification-popups {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 24px));
+  z-index: 10000;
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+.notification-popups .notification-popup {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 24px #0003;
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: auto;
+  animation: notification-enter 160ms ease-out;
+}
+.notification-popup > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.notification-popup.success > svg { color: var(--healthy); }
+.notification-popup.danger > svg { color: var(--danger); }
+.notification-popup.warning > svg { color: var(--warning); }
+.notification-popup > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.notification-popup > button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+@keyframes notification-enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .notification-popup { animation: none; } }

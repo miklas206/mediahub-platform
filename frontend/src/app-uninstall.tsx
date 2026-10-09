@@ -1,4 +1,5 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -112,9 +113,9 @@ export function AppUninstall({
                 )}
           </p>
           {error && (
-            <p role="alert" className="error">
+            <NotificationPopup tone="danger">
               {translateText(error)}
-            </p>
+            </NotificationPopup>
           )}
           {working && (
             <p role="status">

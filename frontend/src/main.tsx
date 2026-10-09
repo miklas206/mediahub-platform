@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { Application } from "./ui";
+import { NotificationProvider } from "./notification-popup";
 import "./styles.css";
 import "./phase2.css";
 import "./security.css";
@@ -10,7 +11,7 @@ import "./checkboxes.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <Application />
+      <NotificationProvider><Application /></NotificationProvider>
     </BrowserRouter>
   </StrictMode>,
 );

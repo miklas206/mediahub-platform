@@ -1,4 +1,5 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useMemo, useState } from "react";
 import {
@@ -573,9 +574,9 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
         {t(" Add tunnel configuration")}
       </button>
       {message && (
-        <p className="success" role="status">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </p>
+        </NotificationPopup>
       )}
     </Panel>
   );

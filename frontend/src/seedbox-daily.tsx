@@ -1,4 +1,5 @@
 import { translateText, countryName, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 import { LayoutGroup } from "./page-layout";
 import { CountryFlag, countryLabel } from "./country-flag";
 
@@ -253,9 +254,9 @@ export function SeedboxDaily({
     <div className="stack seedbox-daily">
       <ErrorBox error={error} />
       {notice && (
-        <p role="status" className="notice">
+        <NotificationPopup tone="success">
           {translateText(notice)}
-        </p>
+        </NotificationPopup>
       )}
       <LayoutGroup
         id={section === "vpn" ? "seedbox-vpn-cards" : "seedbox-daily-location"}

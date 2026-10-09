@@ -1,4 +1,5 @@
 import { getLocale, translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { LayoutGroup } from "./page-layout";
 import {
@@ -517,7 +518,7 @@ export function IntegrationsPage({
         </p>
       </div>
       <ErrorBox error={error || failure} />
-      {notice && <p role="status">{translateText(notice)}</p>}
+      {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       {integrationId && (
         <header className="fjordhub-home-heading">
           {visibleItems[0] ? (

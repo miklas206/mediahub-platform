@@ -1,4 +1,5 @@
 import { getLocale, translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
@@ -269,7 +270,7 @@ export function LogicalStoragePanel() {
         )}
       </p>
       <ErrorBox error={error || storage.error || hosts.error} />
-      {message && <p role="status">{translateText(message)}</p>}
+      {message && <NotificationPopup tone="success">{translateText(message)}</NotificationPopup>}
       {storage.data?.map((item) => (
         <div key={item.id} className="logical-dataset">
           <h3>

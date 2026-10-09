@@ -17,6 +17,8 @@ type SessionInfo = {
   current: boolean;
 };
 
+import { NotificationPopup } from "./notification-popup";
+
 export function SecuritySettings() {
   const [status, setStatus] = useState<Security>();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -117,11 +119,11 @@ export function SecuritySettings() {
   return (
     <LayoutGroup id="security-extra-1" className="security-workspace">
       {error && (
-        <div className="notice" role="alert">
+        <NotificationPopup tone="danger">
           {translateText(error)}
-        </div>
+        </NotificationPopup>
       )}
-      {notice && <p role="status">{translateText(notice)}</p>}
+      {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       {codes.length > 0 && (
         <div className="recovery-panel" role="status">
           <h3>{t("Save your recovery codes")}</h3>
