@@ -194,6 +194,10 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByRole("button", { name: "Slet tester", exact: true })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/settings-users-${width}.png`, fullPage: true });
+    await page.getByRole("tab", { name: "Generelt", exact: true }).click();
+    await expect(page.locator('[data-layout-title="Workspace preferences"]')).toHaveCount(0);
+    await expect(page.getByText("Vælg din menu", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Vælg dit dashboard", { exact: true })).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }

@@ -1059,12 +1059,6 @@ function Shell({
                               >
                                 <LanguageSettings />
                               </div>
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Workspace preferences"
-                              >
-                                <SettingsPage />
-                              </div>
                             </LayoutGroup>
                           </LayoutGroup>
                         }
