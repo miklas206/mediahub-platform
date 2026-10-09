@@ -4,7 +4,6 @@ import {
   Activity,
   ArrowRight,
   Box,
-  Plus,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -244,16 +243,6 @@ export function HubHome({
           </h1>
           <p>{t("Your apps, media and services. Together in one place.")}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setQuery("");
-            setFilter("setup");
-          }}
-        >
-          <Plus size={17} />
-          {t("Add app")}
-        </button>
       </header>
       <div className="hub-status-strip" aria-label={t("Hub status")}>
         <span>
