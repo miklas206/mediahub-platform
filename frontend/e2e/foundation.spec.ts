@@ -151,9 +151,7 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     path: "../.qa/dashboard-desktop.png",
     fullPage: true,
   });
-  await expect(page.locator(".sidebar nav a[href='/apps']")).toHaveCount(0);
-  await expect(page.locator(".sidebar nav a[href='/store']")).toHaveCount(0);
-  await page.goto("/apps");
+  await page.getByRole("link", { name: "Apps", exact: true }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByText("Mock adapter: stopped", { exact: true }),
