@@ -598,8 +598,8 @@ export function ServiceOverview({
           <div key="empty" className="service-empty">
             <Layers3 size={24} />
             <h3>{t(apps ? "No apps installed" : "Loading apps…")}</h3>
-            <Link className="text-link" to="/store">
-              {t("Open App Store →")}
+            <Link className="text-link" to="/">
+              {t("Home")}
             </Link>
           </div>
         )}

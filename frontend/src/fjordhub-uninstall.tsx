@@ -116,7 +116,7 @@ export function FjordHubUninstallPage() {
     plan?.preserveMounts.filter((mount) => mount.kind === "gpu") || [];
   return (
     <div className="stack">
-      <Link to="/store">{t("← Back to App Store")}</Link>
+      <Link to="/">{t("Back to MediaHub")}</Link>
       <h2>{t("Uninstall FjordHub")}</h2>
       <p>
         {t(

@@ -1,6 +1,5 @@
 import { translateText, t } from "./i18n";
 
-import { LayoutGroup } from "./page-layout";
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
 import { useEffect, useRef, useState } from "react";
@@ -13,45 +12,22 @@ import {
   HardDrive,
   PackagePlus,
   ShieldCheck,
-  Store,
 } from "lucide-react";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 import { IntegrationsPage } from "./integrations";
-import { CatalogPage, Panel } from "./phase2";
+import { Panel } from "./phase2";
 import {
   defaultFjordHubConfig,
   fjordHubErrors,
   type FjordHubConfig,
 } from "./fjordhub-commands";
 
-export function AppStorePage() {
-  return (
-    <LayoutGroup id="store-AppStorePage-1" className="stack app-store-page">
-      <section className="store-hero">
-        <div className="store-hero-icon">
-          <Store size={28} />
-        </div>
-        <div>
-          <p className="eyebrow">{t("MEDIAHUB APP STORE")}</p>
-          <h2>{t("Add only what you need.")}</h2>
-          <p>
-            {t(
-              "Guided setup keeps required choices visible, stores secrets safely and never changes DNS, storage or containers without a clear step.",
-            )}
-          </p>
-        </div>
-      </section>
-      <CatalogPage showInstalled />
-    </LayoutGroup>
-  );
-}
-
 export function CloudflareStorePage() {
   const [saved, setSaved] = useState(false);
   return (
     <div className="stack store-install-page">
-      <Link className="text-link" to="/store">
-        {t("← Back to App Store")}
+      <Link className="text-link" to="/">
+        {t("Back to MediaHub")}
       </Link>
       <Panel title={t("What MediaHub can prepare")}>
         <div className="store-discovery-grid">
@@ -168,8 +144,8 @@ export function FjordHubStorePage() {
 
   return (
     <div className="stack store-install-page">
-      <Link className="text-link" to="/store">
-        {t("← Back to App Store")}
+      <Link className="text-link" to="/">
+        {t("Back to MediaHub")}
       </Link>
       <Panel title={t("Guided FjordHub deployment")}>
         <div className="assisted-setup-intro">

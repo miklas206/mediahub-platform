@@ -244,10 +244,16 @@ export function HubHome({
           </h1>
           <p>{t("Your apps, media and services. Together in one place.")}</p>
         </div>
-        <Link className="button-link" to="/store">
+        <button
+          type="button"
+          onClick={() => {
+            setQuery("");
+            setFilter("setup");
+          }}
+        >
           <Plus size={17} />
           {t("Add app")}
-        </Link>
+        </button>
       </header>
       <div className="hub-status-strip" aria-label={t("Hub status")}>
         <span>

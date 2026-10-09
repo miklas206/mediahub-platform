@@ -148,9 +148,6 @@ const ContainerAppPage = lazy(() =>
 const SecuritySettings = lazy(() =>
   import("./security").then((module) => ({ default: module.SecuritySettings })),
 );
-const AppStorePage = lazy(() =>
-  import("./store").then((module) => ({ default: module.AppStorePage })),
-);
 const CloudflareStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.CloudflareStorePage })),
 );
@@ -981,7 +978,7 @@ function Shell({
                     path="/store/fjordhub/uninstall"
                     element={<FjordHubUninstallPage />}
                   />
-                  <Route path="/store" element={<AppStorePage />} />
+                  <Route path="/store" element={<Navigate to="/" replace />} />
                   <Route
                     path="/"
                     element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />}
@@ -1018,8 +1015,8 @@ function Shell({
                                 )}
                               </p>
                             </div>
-                            <NavLink className="primary" to="/store">
-                              {t("Open App Store →")}
+                            <NavLink className="primary" to="/">
+                              {t("Home")}
                             </NavLink>
                           </section>
                         }

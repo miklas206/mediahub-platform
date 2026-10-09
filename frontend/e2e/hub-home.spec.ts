@@ -97,12 +97,20 @@ for (const width of [1440, 390, 320]) {
         body: JSON.stringify({ data }),
       });
     });
-    await page.goto("/");
+    await page.goto("/store");
+    await expect(page).toHaveURL(/\/$/);
     await expect(
       page.getByRole("heading", { name: "MediaHub beta" }),
     ).toBeVisible();
     const cards = page.locator(".hub-app-card");
     await expect(cards).toHaveCount(7);
+    await expect(page.locator(".app-store-page, .store-hero")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Tilf\u00f8j app", exact: true })
+      .click();
+    await expect(cards).toHaveCount(4);
+    await expect(page).toHaveURL(/\/$/);
+    await page.getByRole("button", { name: "Alle apps", exact: true }).click();
     await expect(
       page.locator(
         ".sidebar nav a[href='/apps'], .sidebar nav a[href='/store'], .mobile-dock a[href='/apps'], .mobile-dock a[href='/store']",
