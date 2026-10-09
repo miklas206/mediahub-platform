@@ -17,6 +17,7 @@ class Config(BaseSettings):
         env_prefix="MEDIAHUB_", env_file=".env", extra="ignore", hide_input_in_errors=True
     )
     base_url: str = "http://127.0.0.1:18765"
+    runtime_mode: Literal["external", "embedded"] = "external"
     setup_storage: list[StorageInput] = Field(default_factory=list, max_length=50)
     public_url: str | None = None
     fjordhub_url: str | None = None  # Optional operator-discovered normal LAN URL.

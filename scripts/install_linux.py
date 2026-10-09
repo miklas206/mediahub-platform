@@ -85,6 +85,7 @@ def main():
         "--device-snapshot", help="Optional existing host-generated metadata file for an LXC"
     )
     parser.add_argument("--source-repository", help="Trusted GitHub owner/repo for source updates")
+    parser.add_argument("--hub-stack", action="store_true", help="Install the beta single-hub runtime and TLS proxy")
     args = parser.parse_args()
     if os.name != "posix" or os.geteuid() != 0:
         raise ValueError("Run on the new Linux Docker host as root")
@@ -436,6 +437,11 @@ def main():
         "services": {"core": core, "agent": agent},
         "networks": {"control": {"internal": True}, "lan": {}},
     }
+    if args.hub_stack:
+        from hub_stack import hub_stack
+
+        compose, routing = hub_stack(compose, root)
+        new_file(root / "hub-proxy.json", json.dumps(routing, indent=2), 0o644)
     new_file(root / "compose.json", json.dumps(compose, indent=2))
     new_file(root / "installed-version", project_version + "\n", 0o600)
     new_file(

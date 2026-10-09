@@ -37,9 +37,26 @@ A read-only Docker socket bind does not make Docker control unprivileged.
 6. Replace remaining runtime dependencies and frontend delivery in controlled
    steps. Remove the old Agent only after no live workflow depends on it.
 
-The runtime has NOT been migrated by the initial home-page change. Existing
-Core/Agent APIs remain in use until the corresponding migration gate passes.
-Do not present visual similarity as architecture parity.
+## Single-Hub Installation Profile
+
+New installations can select `install.sh --hub-stack` with the normal storage
+and LAN options. Existing authorized beta installations use
+`python3 scripts/migrate_hub_stack.py --root /opt/mediahub --apply` from a
+reviewed source checkout. Without `--apply`, this performs a read-only preflight.
+Never run this on production or the Proxmox hypervisor.
+
+This profile embeds the existing validated runtime in the hub process using an
+internal ASGI transport; it does not publish the runtime routes or an Agent port.
+Traefik forwards TLS to the hub without replacing browser certificates. Accounts,
+policies and mounted app storage remain at their original paths. Migration builds
+before downtime and snapshots account/runtime state for rollback. The old Agent
+container is stopped rather than deleting its data.
+
+The updater remains a separate systemd host service, not yet a container. Source
+updates rebuild only the hub and snapshot both hub and runtime state. Independent
+app containers are not update targets. Flask/Jinja parity and manifest-driven
+Compose lifecycle for every app remain separate migration work. This is not a
+claim that the full FjordHub architecture has already been reproduced.
 
 ## Deployment Boundaries
 

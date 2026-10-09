@@ -71,7 +71,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     setup_logging(config.log_level)
 
     @asynccontextmanager
-    async def lifespan(app):
+    async def services_lifespan(app):
         config.data_dir.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             config.data_dir.chmod(0o700)
@@ -90,7 +90,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.storage = StorageManager(sessions, config, events)
         svc.apps = AppManager(sessions, events, config)
         svc.apps.initialize()
-        svc.agent = AgentClient(config)
+        svc.agent = getattr(app.state, "local_runtime", None) or AgentClient(config)
         svc.catalog = Catalog(config, sessions, svc.agent)
         svc.windows_share = WindowsShareService(sessions)
         svc.integrations = IntegrationService(config, sessions, events)
@@ -168,6 +168,22 @@ def create_app(config: Config | None = None) -> FastAPI:
             with contextlib.suppress(asyncio.CancelledError):
                 await collector
             engine.dispose()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        if config.runtime_mode == "external":
+            async with services_lifespan(app):
+                yield
+            return
+        from agent.main import AgentConfig, create_agent
+
+        runtime_config = AgentConfig()
+        local_app = create_agent(runtime_config)
+        token = runtime_config.token_file.read_text().strip()
+        app.state.local_runtime = AgentClient(config, token=token, local_app=local_app)
+        async with local_app.router.lifespan_context(local_app):
+            async with services_lifespan(app):
+                yield
 
     app = FastAPI(
         title="MediaHub API",
