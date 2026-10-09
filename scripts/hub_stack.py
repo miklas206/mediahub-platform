@@ -1,4 +1,5 @@
 import copy
+import ipaddress
 from pathlib import Path
 
 
@@ -12,8 +13,14 @@ def hub_stack(compose: dict, root: Path) -> tuple[dict, dict]:
     hub = result["services"]["core"]
     runtime = result["services"].pop("agent")
     ports = hub.pop("ports")
-    if len(ports) != 1 or not isinstance(ports[0], str) or not ports[0].endswith(":18765:18765"):
-        raise ValueError("Expected the standard explicitly bound HTTPS port")
+    if not ports or len(ports) > 2:
+        raise ValueError("Expected explicit hub HTTPS bindings")
+    for binding in ports:
+        if not isinstance(binding, str):
+            raise ValueError("Expected explicit hub HTTPS bindings")
+        address, port, target = binding.split(":")
+        if not ipaddress.IPv4Address(address).is_private or port not in {"443", "18765"} or target != "18765":
+            raise ValueError("Expected explicit private hub HTTPS bindings")
     mounts = {}
     for volume in [*hub["volumes"], *runtime["volumes"]]:
         if not isinstance(volume, str):

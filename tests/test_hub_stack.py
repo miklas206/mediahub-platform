@@ -46,6 +46,13 @@ def test_hub_stack_preserves_state_and_https_without_mutating_input():
     assert routing["tcp"]["routers"]["hub"]["tls"] == {"passthrough": True}
 
 
+def test_hub_stack_preserves_both_beta_https_ports():
+    original = original_stack()
+    original["services"]["core"]["ports"].append("192.168.1.111:443:18765")
+    migrated, _ = hub_stack(original, Path("/opt/mediahub"))
+    assert migrated["services"]["proxy"]["ports"] == original["services"]["core"]["ports"]
+
+
 def test_hub_stack_rejects_other_projects_and_nonstandard_stacks():
     original = original_stack()
     original["name"] = "production-other"
