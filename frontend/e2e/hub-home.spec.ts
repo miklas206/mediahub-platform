@@ -244,6 +244,10 @@ for (const width of [1440, 390, 320]) {
         await expect(page.locator(".security-workspace > header")).toHaveCount(0);
         await expect(page.locator('.security-card form input[name="newPassword"]')).toBeVisible();
         await expect(page.locator(".session-row")).toHaveCount(1);
+        if (width > 760) {
+          const cardBounds = await page.locator(".security-grid .security-card").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
+          expect(Math.abs(cardBounds[0] - cardBounds[1])).toBeLessThan(1);
+        }
         await page.screenshot({ path: `test-results/settings-security-${width}.png`, fullPage: true });
       }
       await expect.poll(() => page.locator(".settings-content").evaluate((element, expected) => {

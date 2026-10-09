@@ -140,7 +140,7 @@ export function SecuritySettings() {
           </button>
         </div>
       )}
-      <LayoutGroup id="security-SecuritySettings-1" className="security-grid">
+      <div className="security-grid">
         <article className="security-card">
           <ShieldCheck />
           <h3>{t("Authenticator app")}</h3>
@@ -232,7 +232,7 @@ export function SecuritySettings() {
             <button disabled={busy}>{t("Change password")}</button>
           </form>
         </article>
-      </LayoutGroup>
+      </div>
       {status?.totpEnabled && (
         <article className="security-card">
           <ShieldCheck />
