@@ -3,7 +3,7 @@ import { api } from "./api";
 import { Panel, ErrorBox } from "./phase2";
 import { setLanguage, t, useLanguage, type Language } from "./i18n";
 
-export function LanguageSettings() {
+export function LanguageSettings({ compact = false }: { compact?: boolean }) {
   const language = useLanguage();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +27,7 @@ export function LanguageSettings() {
     <Panel title={t("Language")}>
       <ErrorBox error={error} />
       <label>
-        {t("Language")}
+        {!compact && t("Language")}
         <select
           aria-label={t("Language")}
           value={language}
@@ -38,7 +38,7 @@ export function LanguageSettings() {
           <option value="en">{t("English")}</option>
         </select>
       </label>
-      <p className="muted">{t("Saved for your account on all devices.")}</p>
+      {!compact && <p className="muted">{t("Saved for your account on all devices.")}</p>}
     </Panel>
   );
 }

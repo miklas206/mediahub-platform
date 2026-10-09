@@ -15,6 +15,7 @@ for (const width of [1440, 390, 320]) {
       if (request.method() !== "GET") mutations.push(path);
       let data: unknown = [];
       if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/auth/preferences") data = request.postDataJSON();
       else if (path === "/users") data = [{ id: "test", username: "tester", role: "administrator", createdAt: "2026-10-09T12:00:00Z" }];
       else if (path === "/auth/me")
         data = {
@@ -199,6 +200,16 @@ for (const width of [1440, 390, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/settings-users-${width}.png`, fullPage: true });
     await page.getByRole("tab", { name: "Generelt", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Tilpas layout", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Farvepaletter" })).toBeVisible();
+    await expect(page.locator(".appearance-controls, .appearance-depth, .appearance-preview")).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Sprog", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Havblå", exact: true }).click();
+    await page.getByRole("button", { name: "Gem farver", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Gem farver", exact: true })).toBeDisabled();
+    expect(mutations).toEqual(["/auth/preferences"]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/settings-general-${width}.png`, fullPage: true });
     await expect(page.locator('[data-layout-title="Workspace preferences"]')).toHaveCount(0);
     await expect(page.getByText("Vælg din menu", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Vælg dit dashboard", { exact: true })).toHaveCount(0);

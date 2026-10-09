@@ -930,7 +930,7 @@ function Shell({
             </Notice>
           )}
           <PageLayout
-            customizable={location.pathname !== "/"}
+            customizable={false}
             key={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
             storageKey={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
           >
@@ -1040,13 +1040,13 @@ function Shell({
                     element={
                       <SettingsExtensions
                         general={
-                          <LayoutGroup id="settings-general-layout">
+                          <LayoutGroup id="settings-general-layout" className="settings-general-compact stack">
                             <LayoutGroup id="settings-general-cards">
                               <div
                                 className="dashboard-card"
                                 data-layout-title="Language"
                               >
-                                <LanguageSettings />
+                                <LanguageSettings compact />
                               </div>
                             </LayoutGroup>
                             <LayoutGroup
@@ -1057,7 +1057,7 @@ function Shell({
                                 className="dashboard-card"
                                 data-layout-title="Colors and shades"
                               >
-                                <AppearanceSettings />
+                                <AppearanceSettings compact />
                               </div>
                             </LayoutGroup>
                           </LayoutGroup>
