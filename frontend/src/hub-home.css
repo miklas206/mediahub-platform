@@ -138,6 +138,22 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
+.hub-app-groups {
+  display: grid;
+  gap: 28px;
+}
+.hub-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  margin: 0 0 14px;
+}
+.hub-group-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
 .hub-app-card {
   display: flex;
   flex-direction: column;

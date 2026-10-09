@@ -4,12 +4,9 @@ import {
   Activity,
   ArrowRight,
   Box,
-  HardDrive,
   Plus,
   RefreshCw,
   Search,
-  Settings2,
-  ShieldCheck,
 } from "lucide-react";
 import type { AppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
@@ -344,48 +341,74 @@ export function HubHome({
             ))}
           </div>
         ) : (
-          <div className="hub-app-grid">
-            {visible.map((entry) => (
-              <article
-                className={`hub-app-card ${entry.configured ? "configured" : "setup"}`}
-                key={entry.id}
-                data-app-id={entry.id}
-              >
-                <div className="hub-card-top">
-                  <span
-                    className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
-                  >
-                    {entry.id === "healthcheck" ? (
-                      <Activity size={29} />
-                    ) : (
-                      <ServiceIcon packageId={entry.id} size={32} />
-                    )}
-                  </span>
-                  <span
-                    className={`hub-app-status ${entry.status}`}
-                    title={
-                      entry.statusDetail ? t(entry.statusDetail) : undefined
-                    }
-                  >
-                    <span />
-                    {t(entry.statusLabel)}
-                  </span>
-                </div>
-                <div className="hub-card-copy">
-                  <span className="hub-app-category">{t(entry.category)}</span>
-                  <h3>{t(entry.name)}</h3>
-                  <p>{t(entry.description)}</p>
-                </div>
-                <Link
-                  className="hub-card-action"
-                  to={entry.path}
-                  aria-label={`${t(entry.action)} · ${t(entry.name)}`}
+          <div className="hub-app-groups">
+            {[true, false].map((isConfigured) => {
+              const group = visible.filter(
+                (entry) => entry.configured === isConfigured,
+              );
+              if (!group.length) return null;
+              return (
+                <section
+                  key={String(isConfigured)}
+                  aria-labelledby={`hub-group-${isConfigured}`}
                 >
-                  <span>{t(entry.action)}</span>
-                  <ArrowRight size={17} />
-                </Link>
-              </article>
-            ))}
+                  <h3
+                    className="hub-group-heading"
+                    id={`hub-group-${isConfigured}`}
+                  >
+                    {t(isConfigured ? "Added apps" : "Available to set up")}
+                    <span>{group.length}</span>
+                  </h3>
+                  <div className="hub-app-grid">
+                    {group.map((entry) => (
+                      <article
+                        className={`hub-app-card ${entry.configured ? "configured" : "setup"}`}
+                        key={entry.id}
+                        data-app-id={entry.id}
+                      >
+                        <div className="hub-card-top">
+                          <span
+                            className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
+                          >
+                            {entry.id === "healthcheck" ? (
+                              <Activity size={29} />
+                            ) : (
+                              <ServiceIcon packageId={entry.id} size={32} />
+                            )}
+                          </span>
+                          <span
+                            className={`hub-app-status ${entry.status}`}
+                            title={
+                              entry.statusDetail
+                                ? t(entry.statusDetail)
+                                : undefined
+                            }
+                          >
+                            <span />
+                            {t(entry.statusLabel)}
+                          </span>
+                        </div>
+                        <div className="hub-card-copy">
+                          <span className="hub-app-category">
+                            {t(entry.category)}
+                          </span>
+                          <h3>{t(entry.name)}</h3>
+                          <p>{t(entry.description)}</p>
+                        </div>
+                        <Link
+                          className="hub-card-action"
+                          to={entry.path}
+                          aria-label={`${t(entry.action)} · ${t(entry.name)}`}
+                        >
+                          <span>{t(entry.action)}</span>
+                          <ArrowRight size={17} />
+                        </Link>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
         {!!catalog.data && !visible.length && (
@@ -404,34 +427,6 @@ export function HubHome({
             </button>
           </div>
         )}
-      </section>
-      <section className="hub-management" aria-label={t("Manage MediaHub")}>
-        <div>
-          <h2>{t("Manage MediaHub")}</h2>
-          <p>{t("Shared tools for your hub and all your apps.")}</p>
-        </div>
-        <div className="hub-management-links">
-          <Link to="/overview">
-            <Activity size={18} />
-            <span>{t("Overview")}</span>
-            <ArrowRight size={14} />
-          </Link>
-          <Link to="/storage">
-            <HardDrive size={18} />
-            <span>{t("Storage")}</span>
-            <ArrowRight size={14} />
-          </Link>
-          <Link to="/backups">
-            <ShieldCheck size={18} />
-            <span>{t("Backups")}</span>
-            <ArrowRight size={14} />
-          </Link>
-          <Link to="/settings">
-            <Settings2 size={18} />
-            <span>{t("Settings")}</span>
-            <ArrowRight size={14} />
-          </Link>
-        </div>
       </section>
     </div>
   );

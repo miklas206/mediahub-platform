@@ -104,6 +104,20 @@ for (const width of [1440, 390, 320]) {
     const cards = page.locator(".hub-app-card");
     await expect(cards).toHaveCount(7);
     await expect(
+      page.locator(
+        ".sidebar nav a[href='/apps'], .sidebar nav a[href='/store'], .mobile-dock a[href='/apps'], .mobile-dock a[href='/store']",
+      ),
+    ).toHaveCount(0);
+    await expect(
+      page.locator("#hub-group-true + .hub-app-grid .hub-app-card"),
+    ).toHaveCount(3);
+    await expect(
+      page.locator("#hub-group-false + .hub-app-grid .hub-app-card"),
+    ).toHaveCount(4);
+    await expect(
+      page.getByRole("region", { name: "Administrer MediaHub" }),
+    ).toHaveCount(0);
+    await expect(
       page.locator('[data-app-id="org.mediahub.seedbox"] a'),
     ).toHaveAttribute("href", "/apps/seedbox-real");
     await expect(

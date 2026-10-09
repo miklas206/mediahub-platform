@@ -1156,10 +1156,6 @@ function Shell({
           <LayoutDashboard size={19} />
           <span>{t("Home")}</span>
         </NavLink>
-        <NavLink to="/apps">
-          <Box size={19} />
-          <span>{t("Apps")}</span>
-        </NavLink>
         <NavLink to="/storage">
           <HardDrive size={19} />
           <span>{t("Storage")}</span>
