@@ -44,34 +44,33 @@
 @keyframes notification-enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 .notification-popups .notification-popup.is-popping {
   pointer-events: none;
-  animation: notification-pop 480ms ease-out forwards;
+  animation: notification-pop 760ms cubic-bezier(.22, .75, .25, 1) forwards;
 }
 .notification-burst { position: absolute; inset: 0; pointer-events: none; }
-.notification-burst i {
+.notification-fragment {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 9px;
-  height: 5px;
-  border-radius: 2px;
-  background: var(--healthy);
-  animation: notification-fragment 480ms ease-out forwards;
+  inset: -1px;
+  animation: notification-fragment 760ms cubic-bezier(.16, .8, .3, 1) forwards;
 }
-.notification-burst i:nth-child(3n) { background: var(--warning); }
-.notification-burst i:nth-child(3n + 1) { background: var(--accent); }
+.notification-popups .notification-popup.notification-shard {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  animation: none;
+  pointer-events: none;
+}
 @keyframes notification-pop {
   0% { transform: scale(1); }
-  25% { transform: scale(1.08, 1.15); }
-  40% { transform: scale(1.12, 1.2); background: transparent; border-color: transparent; box-shadow: none; }
-  41%, 100% { color: transparent; background: transparent; border-color: transparent; box-shadow: none; }
-  100% { transform: scale(1.12, 1.2); opacity: 0; }
+  22% { transform: scale(1.035, 1.1); }
+  23%, 100% { transform: scale(1.035, 1.1); background: transparent; border-color: transparent; box-shadow: none; }
 }
-.is-popping > svg, .is-popping > div, .is-popping > button { animation: notification-content-pop 480ms forwards; }
-@keyframes notification-content-pop { 0%, 35% { opacity: 1; } 40%, 100% { opacity: 0; } }
+.is-popping > svg, .is-popping > div, .is-popping > button { animation: notification-content-pop 760ms forwards; }
+@keyframes notification-content-pop { 0%, 22% { opacity: 1; } 23%, 100% { opacity: 0; } }
 @keyframes notification-fragment {
-  0%, 30% { opacity: 0; transform: rotate(var(--angle)) translateX(0); }
-  40% { opacity: 1; }
-  100% { opacity: 0; transform: rotate(var(--angle)) translateX(150px) rotate(150deg); }
+  0%, 22% { opacity: 0; transform: translate(0, 0) rotate(0); }
+  23% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  65% { opacity: .9; }
+  100% { opacity: 0; transform: translate(var(--fragment-x), var(--fragment-y)) rotate(var(--fragment-rotation)) scale(.88); }
 }
 @media (prefers-reduced-motion: reduce) {
   .notification-popups .notification-popup, .is-popping > svg, .is-popping > div, .is-popping > button { animation: none; }

@@ -229,7 +229,7 @@ for (const width of [1440, 390, 320]) {
     await expect(
       page.getByRole("heading", { name: "Healthcheck", exact: true }),
     ).toBeVisible();
-    const popup = page.locator(".notification-popup.success").filter({ hasText: "Maintenance completed" });
+    const popup = page.locator(".notification-popups > .notification-popup.success").filter({ hasText: "Maintenance completed" });
     await expect(popup).toBeVisible();
     await expect(page.locator(".notification-popup.danger")).toHaveCount(0);
     expect((await popup.boundingBox())!.y).toBeLessThan(40);
@@ -240,7 +240,16 @@ for (const width of [1440, 390, 320]) {
     await page.mouse.move(0, 900);
     await page.clock.fastForward(6500);
     await expect(popup).toHaveClass(/is-popping/);
-    await expect(popup.locator(".notification-burst i")).toHaveCount(10);
+    await expect(popup.locator(".notification-fragment")).toHaveCount(8);
+    await expect(popup.locator(".notification-shard").first()).toContainText("Maintenance completed");
+    await page.clock.runFor(300);
+    await popup.evaluate((element) => {
+      for (const animation of element.getAnimations({ subtree: true })) {
+        animation.pause();
+        animation.currentTime = 340;
+      }
+    });
+    await page.screenshot({ path: `test-results/notification-tear-${width}.png`, fullPage: true });
     await page.clock.runFor(500);
     await expect(popup).toHaveCount(0);
     await page.clock.resume();

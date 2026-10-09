@@ -1,4 +1,4 @@
-import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useLayoutEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { t } from "./i18n";
 import "./notification-popup.css";
@@ -6,6 +6,16 @@ import "./notification-popup.css";
 type Tone = "danger" | "warning" | "info" | "success";
 type Notification = { id: string; message: ReactNode; tone: Tone };
 const NotificationContext = createContext<(notification: Notification) => void>(() => {});
+const fragments = [
+  ["0 0, 27% 0, 23% 43%, 0 58%", -90, -60, -18],
+  ["27% 0, 51% 0, 48% 57%, 23% 43%", -35, -85, 12],
+  ["51% 0, 76% 0, 73% 46%, 48% 57%", 35, -75, -14],
+  ["76% 0, 100% 0, 100% 55%, 73% 46%", 90, -55, 20],
+  ["0 58%, 23% 43%, 29% 100%, 0 100%", -80, 65, 16],
+  ["23% 43%, 48% 57%, 52% 100%, 29% 100%", -30, 90, -12],
+  ["48% 57%, 73% 46%, 78% 100%, 52% 100%", 35, 80, 18],
+  ["73% 46%, 100% 55%, 100% 100%, 78% 100%", 85, 60, -16],
+] as const;
 
 function messageText(message: ReactNode): string {
   return Children.toArray(message).map((child) =>
@@ -16,10 +26,34 @@ function messageText(message: ReactNode): string {
 function Popup({ notification, dismiss }: { notification: Notification; dismiss: (id: string) => void }) {
   const [paused, setPaused] = useState(false);
   const [closing, setClosing] = useState(false);
+  const surface = useRef<HTMLDivElement>(null);
+  const burst = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (!closing || !surface.current || !burst.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const layer = burst.current;
+    for (const [polygon, horizontal, vertical, rotation] of fragments) {
+      const piece = document.createElement("span");
+      piece.className = "notification-fragment";
+      piece.style.setProperty("--fragment-x", `${horizontal}px`);
+      piece.style.setProperty("--fragment-y", `${vertical}px`);
+      piece.style.setProperty("--fragment-rotation", `${rotation}deg`);
+      const copy = surface.current.cloneNode(true) as HTMLDivElement;
+      copy.querySelector(".notification-burst")?.remove();
+      copy.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
+      copy.removeAttribute("role");
+      copy.classList.remove("is-popping");
+      copy.classList.add("notification-shard");
+      copy.inert = true;
+      copy.style.clipPath = `polygon(${polygon})`;
+      piece.append(copy);
+      layer.append(piece);
+    }
+    return () => layer.replaceChildren();
+  }, [closing]);
   const remaining = useRef(notification.tone === "danger" ? 9000 : 6000);
   useEffect(() => {
     if (closing) {
-      const timer = window.setTimeout(() => dismiss(notification.id), window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 480);
+      const timer = window.setTimeout(() => dismiss(notification.id), window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 760);
       return () => window.clearTimeout(timer);
     }
     if (paused) return;
@@ -32,13 +66,13 @@ function Popup({ notification, dismiss }: { notification: Notification; dismiss:
   }, [paused, closing, dismiss, notification.id]);
   const Icon = notification.tone === "success" ? CheckCircle2 : notification.tone === "info" ? Info : AlertTriangle;
   return (
-    <div className={`notification-popup ${notification.tone}${closing ? " is-popping" : ""}`} role={notification.tone === "danger" ? "alert" : "status"}
+    <div ref={surface} className={`notification-popup ${notification.tone}${closing ? " is-popping" : ""}`} role={notification.tone === "danger" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
       <Icon size={19} aria-hidden="true" />
       <div>{notification.message}</div>
       <button type="button" disabled={closing} aria-label={t("Dismiss notification")} title={t("Dismiss notification")} onClick={() => setClosing(true)}><X size={16} /></button>
-      {closing && <span className="notification-burst" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} style={{ "--angle": `${index * 36}deg` } as CSSProperties} />)}</span>}
+      {closing && <span ref={burst} className="notification-burst" aria-hidden="true" />}
     </div>
   );
 }
