@@ -122,44 +122,20 @@
   animation: notification-countdown linear forwards;
 }
 .notification-popup[data-paused="true"] .notification-lifetime,
-.notification-popup.is-popping .notification-lifetime { animation-play-state: paused; }
+.notification-popup.is-closing .notification-lifetime { animation-play-state: paused; }
 @keyframes notification-countdown { to { transform: scaleX(0); } }
 @keyframes notification-code-fall { to { transform: translateY(260px); } }
 @keyframes notification-enter {
   from { opacity: 0; transform: translateY(-18px) scale(.97); filter: brightness(1.8); }
   to { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
 }
-.notification-popups .notification-popup.is-popping {
+.notification-popups .notification-popup.is-closing {
   pointer-events: none;
-  animation: notification-pop 760ms cubic-bezier(.22, .75, .25, 1) forwards;
+  animation: notification-disconnect 240ms ease-out forwards;
 }
-.notification-burst { position: absolute; inset: 0; pointer-events: none; }
-.notification-fragment {
-  position: absolute;
-  inset: -1px;
-  animation: notification-fragment 760ms cubic-bezier(.16, .8, .3, 1) forwards;
-}
-.notification-popups .notification-popup.notification-shard {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  animation: none;
-  pointer-events: none;
-}
-@keyframes notification-pop {
-  0% { transform: scale(1); }
-  22% { transform: scale(1.035, 1.1); }
-  23%, 100% { transform: scale(1.035, 1.1); background: transparent; border-color: transparent; box-shadow: none; }
-}
-.is-popping > svg, .is-popping > div, .is-popping > button,
-.is-popping > .notification-code, .is-popping > .notification-lifetime,
-.is-popping::before, .is-popping::after { animation: notification-content-pop 760ms forwards; }
-@keyframes notification-content-pop { 0%, 22% { opacity: 1; } 23%, 100% { opacity: 0; } }
-@keyframes notification-fragment {
-  0%, 22% { opacity: 0; transform: translate(0, 0) rotate(0); }
-  23% { opacity: 1; transform: translate(0, 0) rotate(0); }
-  65% { opacity: .7; filter: brightness(1.6); }
-  100% { opacity: 0; transform: translate(var(--fragment-x), var(--fragment-y)) rotate(var(--fragment-rotation)) scale(.88); filter: brightness(2); }
+@keyframes notification-disconnect {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-6px); }
 }
 @media (max-width: 480px) {
   .notification-popups .notification-popup { gap: 8px; padding: 15px 10px; }
@@ -169,5 +145,5 @@
   .notification-popups .notification-popup,
   .notification-popup > *, .notification-code > span,
   .notification-popup::before, .notification-popup::after { animation: none; }
-  .notification-burst, .notification-code, .notification-lifetime { display: none; }
+  .notification-code, .notification-lifetime { display: none; }
 }

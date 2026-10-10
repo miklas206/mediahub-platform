@@ -2108,6 +2108,7 @@ function MaintenancePage() {
   const storage = useData<Storage[]>("/storage/locations");
   const apps = useData<AppInfo[]>("/apps");
   const [checking, setChecking] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState<{ message: string; tone: "success" | "danger" }>();
   const [operation, setOperation] = useState<OperationState>();
   const [snapshot, setSnapshot] = useState<{
     core?: { status: string; version: string };
@@ -2227,6 +2228,7 @@ function MaintenancePage() {
         if (result.operationId !== started.operationId) continue;
         if (result.state === "failed") throw new Error(result.message);
         if (result.state === "succeeded") {
+          setCleanupNotice({ message: result.message, tone: "success" });
           details.push(result.message);
           details.push(
             `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })} GiB of system disk space.`,
@@ -2256,6 +2258,7 @@ function MaintenancePage() {
       );
     } catch (error) {
       steps[activeStep].state = "error";
+      setCleanupNotice({ message: error instanceof Error ? error.message : "Maintenance could not be completed.", tone: "danger" });
       details.push(
         "Request failed · see the warning above for the safe error message",
       );
@@ -2312,8 +2315,8 @@ function MaintenancePage() {
         </div>
         {failure && <Notice>{failure}</Notice>}
         {cleanup.error && <Notice>{translateText(cleanup.error)}</Notice>}
-        {cleanup.data && cleanup.data.state !== "idle" && (
-          <Notice tone={cleanup.data.state === "succeeded" ? "success" : cleanup.data.state === "failed" ? "danger" : "info"}>{translateText(cleanup.data.message)}</Notice>
+        {cleanupNotice && (
+          <Notice tone={cleanupNotice.tone}>{translateText(cleanupNotice.message)}</Notice>
         )}
         {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">

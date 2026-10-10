@@ -32,7 +32,7 @@ test("Matrix notifications fit mobile, pause, dismiss and respect reduced motion
   expect(dimensions.every((box) => box.width >= 250 && box.left >= 0 && box.right <= box.viewport && box.scroll <= box.client), JSON.stringify(dimensions)).toBe(true);
   await page.screenshot({ path: "test-results/matrix-popups-mobile.png" });
   await error.getByRole("button").click();
-  await expect(page.locator(".notification-fragment")).toHaveCount(8);
+  await expect(page.locator(".notification-fragment")).toHaveCount(0);
   await expect(popups).toHaveCount(3);
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await popups.first().locator(".notification-code").evaluate((element) =>
