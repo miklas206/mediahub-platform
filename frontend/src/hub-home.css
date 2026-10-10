@@ -12,6 +12,25 @@
   padding-inline: 7px;
   font-size: 21px;
 }
+@media (min-width: 761px) and (max-width: 1200px) {
+  .sidebar .brand {
+    gap: 6px;
+    padding-inline: 0;
+    font-size: 18px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .sidebar .brand img {
+    width: 28px;
+    height: 28px;
+    flex: none;
+  }
+  .sidebar .brand .brand-beta {
+    margin-left: 0;
+    padding: 2px 4px;
+    font-size: 8px;
+  }
+}
 .hub-home {
   display: grid;
   gap: 24px;

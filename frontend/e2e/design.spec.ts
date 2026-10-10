@@ -5,6 +5,29 @@ import type { Torrent } from "../src/torrent-list";
 import type { RetentionRule } from "../src/torrent-retention";
 import danish from "../src/locales/da.json" with { type: "json" };
 
+test("compact branding and settings tabs fit narrow screens without horizontal scrolling", async ({ page }) => {
+  await designFixtures(page);
+  await page.goto("/settings");
+  await expect(page.locator(".settings-tabs")).toBeVisible();
+  for (const width of [768, 960, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect.poll(() => page.locator(".settings-tabs").evaluate((tabs) => {
+      const bounds = tabs.getBoundingClientRect();
+      return tabs.scrollWidth <= tabs.clientWidth && Array.from(tabs.querySelectorAll("button")).every((button) => {
+        const box = button.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom;
+      });
+    })).toBe(true);
+    if (width > 760) {
+      expect(await page.locator(".sidebar .brand").evaluate((brand) => {
+        const bounds = brand.closest(".sidebar")!.getBoundingClientRect();
+        return Array.from(brand.children).every((child) => child.getBoundingClientRect().right <= bounds.right - 8);
+      })).toBe(true);
+    }
+    await page.screenshot({ path: `test-results/settings-responsive-${width}.png` });
+  }
+});
+
 // These examples use isolated browser fixtures; production never receives demo data.
 const gib = 1024 ** 3;
 const mib = 1024 ** 2;
