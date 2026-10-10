@@ -1,7 +1,7 @@
 import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { t } from "./i18n";
-import { notificationSeason, NotificationSeasonArt } from "./notification-season";
+import { notificationSeason, NotificationSeasonArt, nextNotificationAnimal, type NotificationAnimal, type NotificationSeason } from "./notification-season";
 import "./notification-popup.css";
 
 type Tone = "danger" | "warning" | "info" | "success";
@@ -50,6 +50,8 @@ function Popup({ notification, dismiss }: { notification: Notification; dismiss:
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [duckRun, setDuckRun] = useState(0);
+  const [artwork, setArtwork] = useState<{ season: NotificationSeason; animal: NotificationAnimal }>({ season: notificationSeason(new Date()), animal: "duck" });
+  const previousAnimal = useRef<NotificationAnimal | undefined>(undefined);
   useEffect(() => {
     if (!duckRun) return;
     const timer = window.setTimeout(() => setDuckRun(0), 10000);
@@ -60,6 +62,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
   const dismiss = useCallback((id: string) => {
     setNotifications((current) => current.filter((item) => item.id !== id));
+    const animal = nextNotificationAnimal(previousAnimal.current);
+    previousAnimal.current = animal;
+    setArtwork({ season: notificationSeason(new Date()), animal });
     setDuckRun((current) => current + 1);
   }, []);
   return (
@@ -68,7 +73,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       <div className="notification-popups" aria-label={t("Notifications")}>
         {notifications.map((notification) => <Popup key={notification.id} notification={notification} dismiss={dismiss} />)}
       </div>
-      {duckRun > 0 && <div key={duckRun} className="notification-duck" aria-hidden="true" data-season={notificationSeason(new Date())}><span><NotificationSeasonArt season={notificationSeason(new Date())} /></span></div>}
+      {duckRun > 0 && <div key={duckRun} className="notification-duck" aria-hidden="true" data-season={artwork.season} data-animal={artwork.animal}><span><NotificationSeasonArt season={artwork.season} animal={artwork.animal} /></span></div>}
     </NotificationContext.Provider>
   );
 }
