@@ -41,6 +41,8 @@ describe("Updates first render", () => {
     ])
       expect(html).toContain(`<h2>${name}</h2>`);
     expect(html).not.toContain("Mock app");
+    expect(html.indexOf('class="updates-console"')).toBeLessThan(html.indexOf('class="updates-actions"'));
+    expect(html.indexOf('class="updates-console"')).toBeLessThan(html.indexOf('class="updates-components"'));
   });
 
   it("keeps known cards visible when refreshing the shared list fails", () => {

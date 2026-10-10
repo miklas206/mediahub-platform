@@ -901,6 +901,19 @@ export function UpdatesPage({
           {translateText(notice)}
         </NotificationPopup>
       )}
+      <section className="updates-console" aria-label={t("Console")}>
+        <details open={updating || undefined}>
+          <summary><Terminal size={17} />{t("Console")}</summary>
+          <div className="updates-console-content">
+            {Object.entries(operations).filter(([, operation]) => operation).map(([id, operation]) => (
+              <div key={id}>
+                <h3>{translateText(operation!.title)}</h3>
+                <OperationProgress activeOnly operation={operation!} />
+              </div>
+            ))}
+          </div>
+        </details>
+      </section>
       <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
           <div className="button-row">
@@ -1255,19 +1268,6 @@ export function UpdatesPage({
             );
           })}
       </div>
-      <section className="updates-console" aria-label={t("Console")}>
-        <details open={updating || undefined}>
-          <summary><Terminal size={17} />{t("Console")}</summary>
-          <div className="updates-console-content">
-            {Object.entries(operations).filter(([, operation]) => operation).map(([id, operation]) => (
-              <div key={id}>
-                <h3>{translateText(operation!.title)}</h3>
-                <OperationProgress activeOnly operation={operation!} />
-              </div>
-            ))}
-          </div>
-        </details>
-      </section>
     </div>
   );
 }
