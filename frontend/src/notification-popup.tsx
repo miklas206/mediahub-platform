@@ -66,12 +66,16 @@ function Popup({ notification, dismiss }: { notification: Notification; dismiss:
   }, [paused, closing, dismiss, notification.id]);
   const Icon = notification.tone === "success" ? CheckCircle2 : notification.tone === "info" ? Info : AlertTriangle;
   return (
-    <div ref={surface} className={`notification-popup ${notification.tone}${closing ? " is-popping" : ""}`} role={notification.tone === "danger" ? "alert" : "status"}
+    <div ref={surface} className={`notification-popup ${notification.tone}${closing ? " is-popping" : ""}`} data-paused={paused} role={notification.tone === "danger" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
+      <span className="notification-code" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, index) => <span key={index} style={{ left: `${index * 13}%`, animationDelay: `${index * -0.7}s` }}>{index % 2 ? "10:01\n0011\n01:10\n1100\n1010" : "0101\n11:00\n1001\n00:11\n0110"}</span>)}
+      </span>
       <Icon size={19} aria-hidden="true" />
-      <div>{notification.message}</div>
+      <div className="notification-message">{notification.message}</div>
       <button type="button" disabled={closing} aria-label={t("Dismiss notification")} title={t("Dismiss notification")} onClick={() => setClosing(true)}><X size={16} /></button>
+      <span className="notification-lifetime" aria-hidden="true" style={{ animationDuration: notification.tone === "danger" ? "9s" : "6s" }} />
       {closing && <span ref={burst} className="notification-burst" aria-hidden="true" />}
     </div>
   );
