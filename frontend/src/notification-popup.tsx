@@ -48,16 +48,26 @@ function Popup({ notification, dismiss }: { notification: Notification; dismiss:
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [duckRun, setDuckRun] = useState(0);
+  useEffect(() => {
+    if (!duckRun) return;
+    const timer = window.setTimeout(() => setDuckRun(0), 10000);
+    return () => window.clearTimeout(timer);
+  }, [duckRun]);
   const push = useCallback((notification: Notification) => {
     setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, 4));
   }, []);
-  const dismiss = useCallback((id: string) => setNotifications((current) => current.filter((item) => item.id !== id)), []);
+  const dismiss = useCallback((id: string) => {
+    setNotifications((current) => current.filter((item) => item.id !== id));
+    setDuckRun((current) => current + 1);
+  }, []);
   return (
     <NotificationContext.Provider value={push}>
       {children}
       <div className="notification-popups" aria-label={t("Notifications")}>
         {notifications.map((notification) => <Popup key={notification.id} notification={notification} dismiss={dismiss} />)}
       </div>
+      {duckRun > 0 && <div key={duckRun} className="notification-duck" aria-hidden="true"><span><img src="/notification-duck.svg" alt="" width="64" height="64" /></span></div>}
     </NotificationContext.Provider>
   );
 }

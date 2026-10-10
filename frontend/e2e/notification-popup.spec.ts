@@ -34,10 +34,24 @@ test("Matrix notifications fit mobile, pause, dismiss and respect reduced motion
   await error.getByRole("button").click();
   await expect(page.locator(".notification-fragment")).toHaveCount(0);
   await expect(popups).toHaveCount(3);
+  await expect(page.locator(".notification-duck")).toHaveCount(1);
+  expect(await page.locator(".notification-duck").evaluate((element) => getComputedStyle(element).pointerEvents)).toBe("none");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await popups.first().locator(".notification-code").evaluate((element) =>
     getComputedStyle(element).display)).toBe("none");
   await popups.first().getByRole("button").click();
   await expect(popups).toHaveCount(2);
   await expect(page.locator(".notification-fragment")).toHaveCount(0);
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await popups.first().getByRole("button").click();
+  await page.clock.runFor(1);
+  await expect(popups).toHaveCount(1);
+  await popups.first().getByRole("button").click();
+  await page.clock.runFor(1);
+  await expect(popups).toHaveCount(0);
+  await page.clock.runFor(9998);
+  await expect(page.locator(".notification-duck")).toHaveCount(1);
+  await page.clock.runFor(2);
+  await expect(page.locator(".notification-duck")).toHaveCount(0);
 });
