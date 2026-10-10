@@ -148,7 +148,7 @@
   animation: notification-duck-run 10s linear forwards;
 }
 .notification-duck span { display: block; animation: notification-duck-waddle 180ms ease-in-out infinite alternate; }
-.notification-duck img { display: block; width: 64px; height: 64px; filter: drop-shadow(0 0 7px #65ff9a55); }
+.notification-duck svg { display: block; width: 64px; height: 64px; filter: drop-shadow(0 0 7px #65ff9a55); }
 @keyframes notification-duck-run {
   0% { transform: translate(12px, calc(100dvh - 90px)); }
   25% { transform: translate(calc(100vw - 76px), calc(100dvh - 90px)); }

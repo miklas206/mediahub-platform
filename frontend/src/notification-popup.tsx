@@ -1,6 +1,7 @@
 import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { t } from "./i18n";
+import { notificationSeason, NotificationSeasonArt } from "./notification-season";
 import "./notification-popup.css";
 
 type Tone = "danger" | "warning" | "info" | "success";
@@ -67,7 +68,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       <div className="notification-popups" aria-label={t("Notifications")}>
         {notifications.map((notification) => <Popup key={notification.id} notification={notification} dismiss={dismiss} />)}
       </div>
-      {duckRun > 0 && <div key={duckRun} className="notification-duck" aria-hidden="true"><span><img src="/notification-duck.svg" alt="" width="64" height="64" /></span></div>}
+      {duckRun > 0 && <div key={duckRun} className="notification-duck" aria-hidden="true" data-season={notificationSeason(new Date())}><span><NotificationSeasonArt season={notificationSeason(new Date())} /></span></div>}
     </NotificationContext.Provider>
   );
 }
