@@ -16,6 +16,7 @@ for (const width of [1440, 390, 320]) {
       else if (path === "/catalog") data = [{ id: "org.mediahub.seedbox", name: "Seedbox", availability: "available" }];
       else if (path === "/fjordhub/deployment") data = null;
       else if (path === "/mediaseed/status") data = { configured: true, available: true, url: "http://192.168.1.111:18800", preview: true };
+      else if (path === "/mediavpn/status") data = { configured: true, available: true, url: "http://192.168.1.111:18802", preview: true };
       else if (path === "/events/stream") {
         await route.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" });
         return;
@@ -30,6 +31,11 @@ for (const width of [1440, 390, 320]) {
     await expect(link).toHaveAttribute("href", "http://192.168.1.111:18800/");
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(card.locator('image[href="/assets/services/qbittorrent.svg"]')).toHaveCount(1);
+    const vpn = page.locator('[data-app-id="org.mediahub.mediavpn"]');
+    await expect(vpn).toContainText("MediaVPN");
+    await expect(vpn.getByRole("link", { name: "Åbn app · MediaVPN" })).toHaveAttribute("href", "http://192.168.1.111:18802/");
+    await expect(vpn.locator('image[href="/assets/services/mediavpn.svg"]')).toHaveCount(1);
     expect(errors).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/mediaseed-hub-${width}.png`, fullPage: true });

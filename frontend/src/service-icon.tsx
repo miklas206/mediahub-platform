@@ -35,6 +35,12 @@ export function ServiceIcon({
 }: LucideProps & { packageId: string }) {
   const id = packageId.toLowerCase();
   const appId = id.replace(/^org\.mediahub\./, "");
+  if (appId === "mediavpn")
+    return (
+      <svg width={size} height={size} viewBox="0 0 48 48" className={className} aria-hidden={props["aria-label"] ? undefined : true} {...props}>
+        <image href="/assets/services/mediavpn.svg" width="48" height="48" />
+      </svg>
+    );
   const Fallback = fjordFallbacks[appId as keyof typeof fjordFallbacks];
   if (Fallback)
     return (
@@ -62,7 +68,7 @@ export function ServiceIcon({
     return <FolderSymlink size={size} className={className} {...props} />;
   const brand = id.includes("plex")
     ? "plex"
-    : /seedbox|qbittorrent/.test(id)
+    : /seedbox|mediaseed|qbittorrent/.test(id)
       ? "qbittorrent"
       : /cloudflare/.test(id)
         ? "cloudflare"

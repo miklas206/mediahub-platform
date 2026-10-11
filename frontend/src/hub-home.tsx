@@ -91,6 +91,8 @@ export function buildHubEntries({
   deploymentError = "",
   mediaseed,
   mediaseedError = "",
+  mediavpn,
+  mediavpnError = "",
 }: {
   catalog: CatalogApp[];
   apps: AppInfo[] | undefined;
@@ -101,8 +103,10 @@ export function buildHubEntries({
   deploymentError?: string;
   mediaseed?: MediaSeedStatus;
   mediaseedError?: string;
+  mediavpn?: MediaSeedStatus;
+  mediavpnError?: string;
 }): HubEntry[] {
-  return catalog
+  const entries: HubEntry[] = catalog
     .filter(
       (entry) =>
         entry.availability === "available" && entry.id !== "org.mediahub.windows-share" && Object.hasOwn(hubApps, entry.id),
@@ -194,6 +198,24 @@ export function buildHubEntries({
       };
     })
     .sort((left, right) => Number(right.configured) - Number(left.configured));
+  if (mediavpn?.configured && mediavpn.url && URL.canParse(mediavpn.url)) {
+    const address = new URL(mediavpn.url);
+    if (["http:", "https:"].includes(address.protocol) && !address.username && !address.password) {
+      entries.push({
+        id: "org.mediahub.mediavpn",
+        name: "MediaVPN",
+        description: "WireGuard connections · preview",
+        category: "Network",
+        path: address.href,
+        configured: true,
+        external: true,
+        status: mediavpn.available && !mediavpnError ? "healthy" : "unknown",
+        statusLabel: mediavpnError ? "Status unavailable" : mediavpn.available ? "App available" : "Check connection",
+        action: "Open app",
+      });
+    }
+  }
+  return entries.sort((left, right) => Number(right.configured) - Number(left.configured));
 }
 
 export function HubHome({
@@ -216,14 +238,17 @@ export function HubHome({
     "/fjordhub/deployment",
   );
   const mediaseed = useData<MediaSeedStatus>("/mediaseed/status");
+  const mediavpn = useData<MediaSeedStatus>("/mediavpn/status");
   const reloadDeployment = deployment.reload;
   const reloadMediaSeed = mediaseed.reload;
+  const reloadMediaVPN = mediavpn.reload;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "configured" | "setup">("all");
   useEffect(() => {
     const refresh = () => {
       reloadDeployment();
       reloadMediaSeed();
+      reloadMediaVPN();
     };
     window.addEventListener("apps-changed", refresh);
     window.addEventListener("integrations-changed", refresh);
@@ -231,7 +256,7 @@ export function HubHome({
       window.removeEventListener("apps-changed", refresh);
       window.removeEventListener("integrations-changed", refresh);
     };
-  }, [reloadDeployment, reloadMediaSeed]);
+  }, [reloadDeployment, reloadMediaSeed, reloadMediaVPN]);
   const entries = buildHubEntries({
     catalog: catalog.data || [],
     apps,
@@ -242,6 +267,8 @@ export function HubHome({
     deploymentError: deployment.error,
     mediaseed: mediaseed.data,
     mediaseedError: mediaseed.error,
+    mediavpn: mediavpn.data,
+    mediavpnError: mediavpn.error,
   });
   const configured = entries.filter((entry) => entry.configured).length;
   const cards: HubEntry[] = [
@@ -350,6 +377,7 @@ export function HubHome({
                 catalog.reload();
                 deployment.reload();
                 mediaseed.reload();
+                mediavpn.reload();
                 window.dispatchEvent(new Event("apps-changed"));
                 window.dispatchEvent(new Event("integrations-changed"));
               }}

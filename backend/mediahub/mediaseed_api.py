@@ -57,3 +57,11 @@ async def status(request: Request, user=Depends(authenticated)):
     if origin is None:
         return result({"configured": False, "available": False, "url": None})
     return result({"configured": True, "available": await available(origin), "url": origin, "preview": True})
+
+
+@router.get("/mediavpn/status")
+async def vpn_status(request: Request, user=Depends(authenticated)):
+    origin = app_origin(services(request).config.operator_app_urls.get("org.mediahub.mediavpn"))
+    if origin is None:
+        return result({"configured": False, "available": False, "url": None})
+    return result({"configured": True, "available": await available(origin), "url": origin, "preview": True})

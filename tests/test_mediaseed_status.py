@@ -3,6 +3,18 @@ from mediahub.mediaseed_api import app_origin
 
 def test_mediaseed_status_requires_login(client):
     assert client.get("/api/v1/mediaseed/status").status_code == 401
+    assert client.get("/api/v1/mediavpn/status").status_code == 401
+
+
+def test_mediavpn_configured_app_health(logged_in, monkeypatch):
+    assert logged_in.get("/api/v1/mediavpn/status").json()["data"]["configured"] is False
+    async def probe(origin):
+        assert origin == "http://192.168.1.111:18802"
+        return True
+    monkeypatch.setattr("mediahub.mediaseed_api.available", probe)
+    logged_in.app.state.services.config.operator_app_urls["org.mediahub.mediavpn"] = "http://192.168.1.111:18802"
+    response = logged_in.get("/api/v1/mediavpn/status")
+    assert response.json()["data"] == {"configured": True, "available": True, "url": "http://192.168.1.111:18802", "preview": True}
 
 
 def test_mediaseed_unconfigured(logged_in):

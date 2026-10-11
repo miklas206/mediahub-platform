@@ -52,6 +52,12 @@ const input = {
 };
 
 describe("primary MediaHub app hub", () => {
+  it("adds the separate MediaVPN app without claiming tunnel health", () => {
+    const entries = buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" } });
+    expect(entries.find((entry) => entry.id === "org.mediahub.mediavpn")).toMatchObject({ name: "MediaVPN", path: "http://192.168.1.111:18802/", external: true, configured: true, statusLabel: "App available" });
+    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" }, mediavpnError: "Offline" }).find((entry) => entry.name === "MediaVPN")?.status).toBe("unknown");
+    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "javascript:alert(1)" } }).some((entry) => entry.name === "MediaVPN")).toBe(false);
+  });
   it("opens the separate MediaSeed instead of the old Seedbox wizard", () => {
     const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" } });
     expect(entries.find((entry) => entry.id === "org.mediahub.seedbox")).toMatchObject({
