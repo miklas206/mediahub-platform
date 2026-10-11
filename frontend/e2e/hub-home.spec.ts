@@ -23,7 +23,7 @@ for (const width of [1440, 390, 320]) {
         else if (path === "/auth/me") data = { id: "test", username: "tester", role: "administrator", csrf: "test", language: "da" };
         else if (path === "/settings") data = {
           display_name: "MediaHub", theme: "dark", advanced_mode: true,
-          visible_navigation: ["/", "/overview", "/settings"],
+          visible_navigation: ["/", "/settings"],
           dashboard_sections: ["apps", "system", "storage", "network", "activity", "core", "runtime", "integrations", "cloudflare", "torrents", "uploads"],
         };
         else if (path === "/setup/status") data = { setup_required: false };
@@ -38,6 +38,14 @@ for (const width of [1440, 390, 320]) {
         await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data }) });
       });
       await page.goto("/overview");
+      if (width > 760) {
+        await expect(page.locator('.sidebar nav a[href="/overview"]')).toBeVisible();
+      } else {
+        await page.locator('.mobile-menu').focus();
+        await page.locator('.mobile-menu').press('Enter');
+        await expect(page.locator('.sidebar nav a[href="/overview"]')).toBeVisible();
+        await page.locator('.scrim').click();
+      }
       const overview = page.locator(".overview-grid");
       await expect(overview.locator(".dashboard-card")).toHaveCount(installed ? 4 : 2);
       await expect(overview.locator('[data-section="apps"]')).toBeVisible();

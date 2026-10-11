@@ -511,7 +511,7 @@ function Shell({
         .then((s) => {
           setDisplayName(s.display_name);
           setAdvancedMode(s.advanced_mode);
-          setVisibleNavigation(Array.from(new Set<NavigationPath>(["/", "/settings", ...s.visible_navigation])));
+          setVisibleNavigation(Array.from(new Set<NavigationPath>(["/", "/overview", "/settings", ...s.visible_navigation])));
           document.documentElement.dataset.theme = s.theme;
         })
         .catch(() => {});
