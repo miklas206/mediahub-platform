@@ -8,17 +8,12 @@ import { LanguageSettings } from "./language-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
-  ControlSummary,
-  ControlStatus,
-  ServiceOverview,
   ResourceTrends,
-  useServiceReports,
   useMetricHistory,
 } from "./control-center";
 import { WorkspaceSearch } from "./workspace-search";
 import { ServiceIcon } from "./service-icon";
 import { useDashboardData } from "./dashboard-data";
-import { DashboardUpdates } from "./dashboard-updates";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
 import { DashboardUploads } from "./dashboard-uploads";
@@ -47,14 +42,9 @@ import {
 } from "react-router-dom";
 import {
   Activity as ActivityIcon,
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   Box,
   Bell,
-  CircleAlert,
-  CircleCheck,
-  Info,
   Download,
   FolderOpen,
   ChevronDown,
@@ -86,7 +76,6 @@ import {
   type Runtime,
 } from "./runtime";
 import {
-  IntegrationsCard,
   IntegrationsPage,
   FjordHubHome,
   IntegrationAppLinks,
@@ -95,7 +84,6 @@ import {
   IntegrationProvider,
   type Integration,
 } from "./integrations";
-import { CloudflareTunnelCard } from "./cloudflare";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   OperationProgress,
@@ -103,8 +91,6 @@ import {
   type OperationStep,
 } from "./operation-progress";
 import {
-  RuntimePanel,
-  StorageSummary,
   SettingsExtensions,
   StorageWorkspace,
   MediaFiles,
@@ -497,8 +483,6 @@ function Shell({
   const [advancedMode, setAdvancedMode] = useState(false);
   const [visibleNavigation, setVisibleNavigation] =
     useState<NavigationPath[]>(simpleNavigation);
-  const [dashboardSections, setDashboardSections] =
-    useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
   const navigationIntegrationState = useIntegrations();
   const { items: navigationIntegrations } = navigationIntegrationState;
@@ -526,7 +510,6 @@ function Shell({
           setDisplayName(s.display_name);
           setAdvancedMode(s.advanced_mode);
           setVisibleNavigation(Array.from(new Set<NavigationPath>(["/", "/settings", ...s.visible_navigation])));
-          setDashboardSections(s.dashboard_sections);
           document.documentElement.dataset.theme = s.theme;
         })
         .catch(() => {});
@@ -985,9 +968,7 @@ function Shell({
                         metrics={metrics}
                         apps={navigationApps}
                         error={navigationAppsError}
-                        revision={revision}
                         live={live}
-                        sections={dashboardSections}
                       />
                     }
                   />
@@ -1133,35 +1114,22 @@ function Dashboard({
   metrics: m,
   apps,
   error,
-  revision,
   live,
-  sections,
 }: {
   metrics?: Metrics;
   apps?: AppInfo[];
   error: string;
-  revision: number;
   live: boolean;
-  sections: DashboardSection[];
 }) {
-  const {
-    data: recentActivity,
-    error: activityError,
-    reload: reloadActivity,
-  } = useData<Activity[]>("/events/history?limit=4");
-  useEffect(() => {
-    reloadActivity();
-  }, [revision, reloadActivity]);
-  const reports = useServiceReports(apps);
-  const dashboardData = useDashboardData(
-    apps?.find((a) => a.packageId === "org.mediahub.seedbox")?.id,
-  );
+  const seedbox = apps?.find((a) => a.packageId === "org.mediahub.seedbox");
+  const dashboardData = useDashboardData(seedbox?.id);
   const samples = useMetricHistory(m);
   if (!m) return <Loading />;
-  const visible = new Set(sections);
-  const cards: { id: DashboardSection | "updates"; content: ReactNode }[] = [
-    { id: "updates", content: <DashboardUpdates /> },
-    { id: "storage", content: <StorageSummary /> },
+  const cards: { id: DashboardSection; content: ReactNode }[] = [
+    {
+      id: "system",
+      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
+    },
     {
       id: "torrents",
       content: <DashboardTorrents apps={apps} data={dashboardData} />,
@@ -1170,237 +1138,23 @@ function Dashboard({
       id: "uploads",
       content: <DashboardUploads apps={apps} data={dashboardData} />,
     },
-    {
-      id: "apps",
-      content: (
-        <Section
-          title={t("Your apps")}
-          aside={
-            <NavLink className="text-link" to="/apps">
-              {t("View apps ")}
-              <ArrowUpRight size={15} />
-            </NavLink>
-          }
-        >
-          <ServiceOverview
-            apps={apps}
-            reports={reports}
-            live={live}
-            failed={!!error}
-            dashboard={dashboardData}
-          />
-        </Section>
-      ),
-    },
-    { id: "cloudflare", content: <CloudflareTunnelCard /> },
-    { id: "integrations", content: <IntegrationsCard /> },
-    {
-      id: "activity",
-      content: (
-        <Section
-          title={t("Recent activity")}
-          aside={
-            <NavLink className="text-link" to="/activity">
-              {t("Full timeline ")}
-              <ArrowUpRight size={15} />
-            </NavLink>
-          }
-        >
-          <ActivityList items={recentActivity || []} />
-          {activityError && <Notice>{activityError}</Notice>}
-        </Section>
-      ),
-    },
-    {
-      id: "network",
-      content: (
-        <Section title={t("Network throughput")}>
-          <div className="network-card">
-            <div>
-              <ArrowDown size={19} />
-              <span>{t("Download")}</span>
-              <strong>
-                {bytes(m.network.downloadBytesPerSecond)}
-                <small>{t("/s")}</small>
-              </strong>
-            </div>
-            <div>
-              <ArrowUp size={19} />
-              <span>{t("Upload")}</span>
-              <strong>
-                {bytes(m.network.uploadBytesPerSecond)}
-                <small>{t("/s")}</small>
-              </strong>
-            </div>
-          </div>
-          <div className="panel-note">
-            {t("Runtime network totals, not torrent speeds.")}
-          </div>
-        </Section>
-      ),
-    },
-    {
-      id: "core",
-      content: (
-        <Section
-          title={t("Core status")}
-          aside={<Badge value={live ? "healthy" : "unknown"} />}
-        >
-          <div className="status-rows">
-            <StatusLine
-              label={t("Backend API")}
-              value={live ? "Connected" : "Disconnected"}
-            />
-            <StatusLine
-              label={t("Realtime")}
-              value={live ? "Streaming · SSE" : "Reconnecting"}
-            />
-            <StatusLine
-              label={t("Runtime control")}
-              value="Agent-verified actions"
-            />
-            <StatusLine label={t("Public ingress")} value="Not managed" />
-            <StatusLine label={t("Release")} value={m.version} />
-          </div>
-        </Section>
-      ),
-    },
-    { id: "runtime", content: <RuntimePanel /> },
-    {
-      id: "system",
-      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
-    },
-  ];
-  const cardOrder = [
-    "apps",
-    "system",
-    "updates",
-    "activity",
-    "torrents",
-    "uploads",
-    "storage",
-    "network",
-    "core",
-    "runtime",
-    "integrations",
-    "cloudflare",
   ];
   return (
     <>
       {error && <Notice>{translateText(error)}</Notice>}
-      <div className="dashboard-context">
-        <div className="dashboard-status-stack">
-          <time dateTime={m.timestamp}>
-            {new Date(m.timestamp).toLocaleDateString(getLocale(), {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </time>
-          <ControlStatus
-            apps={apps}
-            live={live}
-            failed={!!error}
-            reports={reports}
-          />
-        </div>
-        <div className="quick-actions" aria-label={t("Quick actions")}>
-          <Link
-            to={
-              apps?.find((a) => a.packageId === "org.mediahub.seedbox")
-                ?.detailPath || "/apps"
-            }
-          >
-            <Download size={15} />
-            {t("Downloads")}
-          </Link>
-          <Link to="/updates">
-            <RefreshCw size={15} />
-            {t("Updates")}
-          </Link>
-        </div>
-      </div>
-      <ControlSummary
-        metrics={m}
-        apps={apps}
-        live={live}
-        reports={reports}
-        appsError={!!error}
-        dashboard={dashboardData}
-      />
-      <LayoutGroup
-        id="ui-Dashboard-1"
-        className="dashboard-grid"
-        defaultHidden={cards
-          .filter(({ id }) => id !== "updates" && !visible.has(id))
-          .map(({ id }) => id)}
-      >
-        {cards
-          .sort((a, b) => cardOrder.indexOf(a.id) - cardOrder.indexOf(b.id))
-          .map(({ id, content }) => (
+      <div className="dashboard-grid overview-grid">
+        {cards.filter(({ id }) => id === "system" || seedbox).map(({ id, content }) => (
             <div
               className="dashboard-card"
               key={id}
               data-section={id}
-              data-layout-nested={id === "apps" ? "true" : undefined}
-              data-layout-title={
-                id === "updates"
-                  ? "Updates"
-                  : dashboardChoices.find((choice) => choice[0] === id)?.[1]
-              }
+              data-layout-title={dashboardChoices.find((choice) => choice[0] === id)?.[1]}
             >
               {content}
             </div>
           ))}
-      </LayoutGroup>
+      </div>
     </>
-  );
-}
-
-function StatusLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span>{typeof label === "string" ? t(label) : translateText(label)}</span>
-      <strong>{translateText(value)}</strong>
-    </div>
-  );
-}
-function ActivityList({ items }: { items: Activity[] }) {
-  return items.length ? (
-    <div className="activity-list">
-      {items.map((item) => (
-        <div className="activity-item" key={item.id}>
-          <div className={`activity-icon ${item.severity}`}>
-            {item.severity === "error" ||
-            item.severity === "critical" ||
-            item.severity === "warning" ? (
-              <CircleAlert size={15} />
-            ) : item.severity === "success" ? (
-              <CircleCheck size={15} />
-            ) : (
-              <Info size={15} />
-            )}
-          </div>
-          <div>
-            <strong>{translateText(item.message)}</strong>
-            <small>
-              {translateText(item.source)} · {translateText(item.severity)}
-            </small>
-          </div>
-          <time dateTime={item.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString(getLocale(), {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </time>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <Empty title={t("No activity yet")}>
-      {t("New events will appear here.")}
-    </Empty>
   );
 }
 

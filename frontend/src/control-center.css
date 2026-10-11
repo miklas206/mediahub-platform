@@ -187,6 +187,18 @@
 .dashboard-grid:not(.layout-custom-grid) > .layout-item {
   grid-column: span 6;
 }
+.dashboard-grid.overview-grid > .dashboard-card[data-section] {
+  grid-column: span 6;
+  min-width: 0;
+}
+.dashboard-grid.overview-grid > .dashboard-card[data-section="system"] {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .dashboard-grid.overview-grid > .dashboard-card[data-section] {
+    grid-column: 1 / -1;
+  }
+}
 .dashboard-grid:not(.layout-custom-grid)
   > .layout-item:has([data-section="apps"]) {
   grid-column: 1 / -1;
