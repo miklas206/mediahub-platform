@@ -741,6 +741,7 @@
   "Back": "Tilbage",
   "of 4": "af 4",
   "Continue": "Fortsæt",
+  "Continue without 2FA": "Fortsæt uden 2FA",
   "Save configuration": "Gem konfiguration",
   "Cloudflare configuration": "Cloudflare-konfiguration",
   "Loading saved configuration…": "Indlæser gemt konfiguration…",

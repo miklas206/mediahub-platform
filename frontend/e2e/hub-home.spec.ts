@@ -39,23 +39,24 @@ for (const width of [1440, 390, 320]) {
       });
       await page.goto("/overview");
       const overview = page.locator(".overview-grid");
-      await expect(overview.locator(".dashboard-card")).toHaveCount(installed ? 3 : 1);
+      await expect(overview.locator(".dashboard-card")).toHaveCount(installed ? 4 : 2);
+      await expect(overview.locator('[data-section="apps"]')).toBeVisible();
       await expect(overview.locator('[data-section="system"]')).toBeVisible();
       await expect(page.locator(".control-summary, .dashboard-context")).toHaveCount(0);
-      await expect(overview.locator('[data-section="apps"], [data-section="storage"], [data-section="updates"], [data-section="activity"], [data-section="runtime"]')).toHaveCount(0);
+      await expect(overview.locator('[data-section="storage"], [data-section="updates"], [data-section="activity"], [data-section="runtime"]')).toHaveCount(0);
       if (installed) {
         await expect(overview.locator('[data-section="torrents"]')).toBeVisible();
         await expect(overview.locator('[data-section="uploads"]')).toBeVisible();
-        await expect(overview.locator("a")).toHaveCount(2);
-        await expect(overview.locator("a").first()).toHaveAttribute("href", "/apps/seedbox?section=torrents");
+        await expect(overview.locator(".overview-apps a")).toHaveAttribute("href", "/apps/seedbox");
+        await expect(overview.locator('[data-section="torrents"] a')).toHaveAttribute("href", "/apps/seedbox?section=torrents");
         const bounds = await overview.locator(".dashboard-card").evaluateAll((elements) => elements.map((element) => ({ top: element.getBoundingClientRect().top, width: element.getBoundingClientRect().width })));
         expect(bounds[0].top).toBeLessThan(bounds[1].top);
         if (width > 760) {
-          expect(bounds[1].top).toBeCloseTo(bounds[2].top, 0);
-          expect(bounds[0].width).toBeGreaterThan(bounds[1].width);
-        } else expect(bounds[1].top).toBeLessThan(bounds[2].top);
+          expect(bounds[2].top).toBeCloseTo(bounds[3].top, 0);
+          expect(bounds[1].width).toBeGreaterThan(bounds[2].width);
+        } else expect(bounds[2].top).toBeLessThan(bounds[3].top);
       }
-      expect(requests.some((path) => path.startsWith("/events/history") || path.endsWith("/runtime"))).toBe(false);
+      expect(requests.some((path) => path.startsWith("/events/history"))).toBe(false);
       expect(errors).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: `test-results/overview-${width}-${installed}.png`, fullPage: true });

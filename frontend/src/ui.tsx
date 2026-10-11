@@ -8,6 +8,8 @@ import { LanguageSettings } from "./language-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
+  ServiceOverview,
+  useServiceReports,
   ResourceTrends,
   useMetricHistory,
 } from "./control-center";
@@ -1122,10 +1124,19 @@ function Dashboard({
   live: boolean;
 }) {
   const seedbox = apps?.find((a) => a.packageId === "org.mediahub.seedbox");
+  const reports = useServiceReports(apps);
   const dashboardData = useDashboardData(seedbox?.id);
   const samples = useMetricHistory(m);
   if (!m) return <Loading />;
   const cards: { id: DashboardSection; content: ReactNode }[] = [
+    {
+      id: "apps",
+      content: (
+        <Section title={t("Your apps")}>
+          <ServiceOverview compact apps={apps} reports={reports} live={live} failed={!!error} dashboard={dashboardData} />
+        </Section>
+      ),
+    },
     {
       id: "system",
       content: <ResourceTrends metrics={m} samples={samples} live={live} />,
@@ -1143,7 +1154,7 @@ function Dashboard({
     <>
       {error && <Notice>{translateText(error)}</Notice>}
       <div className="dashboard-grid overview-grid">
-        {cards.filter(({ id }) => id === "system" || seedbox).map(({ id, content }) => (
+        {cards.filter(({ id }) => id === "apps" || id === "system" || seedbox).map(({ id, content }) => (
             <div
               className="dashboard-card"
               key={id}

@@ -56,6 +56,7 @@ export function SetupWizard({
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [totpEnabled, setTotpEnabled] = useState<boolean>();
   const [checks, setChecks] = useState<Checks>();
   const [review, setReview] = useState<Review>();
   useEffect(() => {
@@ -366,7 +367,7 @@ export function SetupWizard({
           )}
           {draft.step === 3 && (
             <div className="stack">
-              <SecuritySettings />
+              <SecuritySettings setup onProtectionChange={setTotpEnabled} />
               <p className="muted">
                 {t(
                   "Protect your account with an authenticator. Save the recovery codes before continuing. You can also enable two-factor authentication later in Settings → Security.",
@@ -647,10 +648,10 @@ export function SetupWizard({
               {draft.step !== 8 && (draft.step !== 2 || user) && (
                 <button
                   className="primary"
-                  disabled={busy || (draft.step === 7 && !review?.canApply)}
+                  disabled={busy || (draft.step === 3 && totpEnabled === undefined) || (draft.step === 7 && !review?.canApply)}
                   onClick={() => move(draft.step + 1)}
                 >
-                  {t("Continue ")}
+                  {t(draft.step === 3 && !totpEnabled ? "Continue without 2FA" : "Continue ")}
                   <ArrowRight size={16} />
                 </button>
               )}

@@ -311,14 +311,45 @@ export function ServiceOverview({
   live,
   failed,
   dashboard,
+  compact = false,
 }: {
   apps?: AppInfo[];
   reports: Reports;
   live: boolean;
   failed: boolean;
   dashboard: DashboardData;
+  compact?: boolean;
 }) {
   const { items: integrations } = useIntegrations();
+  if (compact) {
+    return (
+      <div className="service-overview overview-apps">
+        {(apps || []).map((app) => (
+          <article key={app.id} className="service-card service-tile">
+            <div className="service-tile-title">
+              <ServiceIcon packageId={app.packageId} size={28} />
+              <h3>{app.name}</h3>
+              <StatusBadge
+                status={effectiveServiceStatus(app, reports[app.id], live, failed)}
+                label={staleServiceLabel(reports[app.id])}
+              />
+            </div>
+            <Link className="service-open" to={app.detailPath || `/apps/${app.id}`}>
+              {t("Open {name}", { name: app.name })}
+              <ArrowUpRight size={13} />
+            </Link>
+          </article>
+        ))}
+        {!apps?.length && (
+          <div className="service-empty">
+            <Layers3 size={24} />
+            <h3>{t(failed ? "Status unavailable" : apps ? "No apps installed" : "Loading apps…")}</h3>
+            <Link className="service-open" to="/">{t("View apps ")}</Link>
+          </div>
+        )}
+      </div>
+    );
+  }
   const fjordflixIntegrations = integrations.filter(
     (row) => row.enabled && row.tokenConfigured && row.snapshot.fjordflix,
   );

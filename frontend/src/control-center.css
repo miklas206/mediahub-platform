@@ -191,8 +191,12 @@
   grid-column: span 6;
   min-width: 0;
 }
-.dashboard-grid.overview-grid > .dashboard-card[data-section="system"] {
+.dashboard-grid.overview-grid > .dashboard-card[data-section="system"],
+.dashboard-grid.overview-grid > .dashboard-card[data-section="apps"] {
   grid-column: 1 / -1;
+}
+.overview-apps .service-tile {
+  min-height: 0;
 }
 @media (max-width: 760px) {
   .dashboard-grid.overview-grid > .dashboard-card[data-section] {

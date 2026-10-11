@@ -19,7 +19,10 @@ type SessionInfo = {
 
 import { NotificationPopup } from "./notification-popup";
 
-export function SecuritySettings() {
+export function SecuritySettings({ setup = false, onProtectionChange }: {
+  setup?: boolean;
+  onProtectionChange?: (enabled: boolean) => void;
+}) {
   const [status, setStatus] = useState<Security>();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [qr, setQr] = useState("");
@@ -35,6 +38,7 @@ export function SecuritySettings() {
       .then(([s, list]) => {
         setStatus(s);
         setSessions(list);
+        onProtectionChange?.(s.totpEnabled);
       })
       .catch((e) => setError(e.message));
   };
@@ -142,7 +146,7 @@ export function SecuritySettings() {
           </button>
         </div>
       )}
-      <div className="security-grid">
+      <div className={setup ? "security-setup" : "security-grid"}>
         <article className="security-card">
           <ShieldCheck />
           <h3>{t("Authenticator app")}</h3>
@@ -210,7 +214,7 @@ export function SecuritySettings() {
             </form>
           )}
         </article>
-        <article className="security-card">
+        {!setup && <article className="security-card">
           <KeyRound />
           <h3>{t("Password")}</h3>
           <p>
@@ -233,9 +237,9 @@ export function SecuritySettings() {
             </label>
             <button disabled={busy}>{t("Change password")}</button>
           </form>
-        </article>
+        </article>}
       </div>
-      {status?.totpEnabled && (
+      {!setup && status?.totpEnabled && (
         <article className="security-card">
           <ShieldCheck />
           <h3>{t("Security policy")}</h3>
@@ -273,7 +277,7 @@ export function SecuritySettings() {
           )}
         </article>
       )}
-      <article className="security-card">
+      {!setup && <article className="security-card">
         <Monitor />
         <h3>{t("Signed-in sessions")}</h3>
         {sessions.map((s) => (
@@ -306,7 +310,7 @@ export function SecuritySettings() {
             </button>
           </div>
         ))}
-      </article>
+      </article>}
     </LayoutGroup>
   );
 }

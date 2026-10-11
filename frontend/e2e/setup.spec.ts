@@ -2,6 +2,47 @@ import { expect, test } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { defaultDraft } from "../src/phase2-types";
+
+for (const enabled of [false, true]) {
+  for (const width of [1440, 390]) {
+    test(`Focused 2FA setup (${enabled}, ${width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      let draft = { ...defaultDraft, step: 3 };
+      const mutations: string[] = [];
+      await page.route("**/api/**", async (route) => {
+        const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
+        if (route.request().method() !== "GET") mutations.push(path);
+        let data: unknown = [];
+        if (path === "/auth/status") data = { needsSetup: false };
+        else if (path === "/auth/me") data = { id: "test", username: "tester", role: "administrator", csrf: "test", language: "en" };
+        else if (path === "/setup/status") data = { setup_required: true };
+        else if (path === "/setup/draft") {
+          if (route.request().method() === "PUT") draft = route.request().postDataJSON().draft;
+          data = { setup_required: true, revision: 1, draft };
+        } else if (path === "/security") data = { totpEnabled: enabled, recoveryCodesRemaining: 8, requireTotp: false };
+        else if (path === "/settings") data = { display_name: "MediaHub", theme: "dark", visible_navigation: [], dashboard_sections: [] };
+        else if (path === "/updates/summary") data = { count: 0, items: [], notifications: [] };
+        else if (path === "/events/stream") {
+          await route.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" });
+          return;
+        }
+        await route.fulfill({ json: { data } });
+      });
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: "Two-factor authentication", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change password", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Signed-in sessions", exact: true })).toHaveCount(0);
+      const next = page.getByRole("button", { name: enabled ? "Continue" : "Continue without 2FA", exact: true });
+      await expect(next).toBeEnabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: `test-results/setup-2fa-${enabled}-${width}.png`, fullPage: true });
+      await next.click();
+      await expect(page.getByRole("heading", { name: "Storage", exact: true })).toBeVisible();
+      expect(mutations).toEqual(["/setup/draft"]);
+    });
+  }
+}
 
 test("fresh wizard resumes and completed installation skips setup", async ({
   page,
@@ -34,6 +75,9 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Continue without 2FA" })
+  ).toBeVisible();
   await page
     .locator("summary")
     .filter({ hasText: "Advanced: discover an existing installation" })
@@ -59,7 +103,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     .getByRole("checkbox", { name: "Select for future import planning" })
     .first()
     .check();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue without 2FA", exact: true }).click();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Storage", exact: true }),
