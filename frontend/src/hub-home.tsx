@@ -70,6 +70,14 @@ export type HubEntry = {
   statusLabel: string;
   statusDetail?: string;
   action: string;
+  external?: boolean;
+};
+
+export type MediaSeedStatus = {
+  configured: boolean;
+  available: boolean;
+  url: string | null;
+  preview?: boolean;
 };
 
 /** A catalog entry is a setup option until the live registry confirms it. */
@@ -81,6 +89,8 @@ export function buildHubEntries({
   integrationsError = "",
   deployment,
   deploymentError = "",
+  mediaseed,
+  mediaseedError = "",
 }: {
   catalog: CatalogApp[];
   apps: AppInfo[] | undefined;
@@ -89,6 +99,8 @@ export function buildHubEntries({
   integrationsError?: string;
   deployment: FjordHubInstallation | null | undefined;
   deploymentError?: string;
+  mediaseed?: MediaSeedStatus;
+  mediaseedError?: string;
 }): HubEntry[] {
   return catalog
     .filter(
@@ -97,6 +109,23 @@ export function buildHubEntries({
     )
     .map((entry) => {
       const definition = hubApps[entry.id as keyof typeof hubApps];
+      if (entry.id === "org.mediahub.seedbox" && mediaseed?.configured && mediaseed.url && URL.canParse(mediaseed.url)) {
+        const address = new URL(mediaseed.url);
+        if (["http:", "https:"].includes(address.protocol) && !address.username && !address.password) {
+          return {
+            id: entry.id,
+            name: "MediaSeed",
+            description: "Independent Seedbox app · preview",
+            category: definition.category,
+            path: address.href,
+            configured: true,
+            external: true,
+            status: mediaseed.available && !mediaseedError ? "healthy" : "unknown",
+            statusLabel: mediaseedError ? "Status unavailable" : mediaseed.available ? "App available" : "Check connection",
+            action: "Open app",
+          };
+        }
+      }
       const installed = apps?.find(
         (app) => app.packageId === entry.id && !app.isMock,
       );
@@ -186,18 +215,23 @@ export function HubHome({
   const deployment = useData<FjordHubInstallation | null>(
     "/fjordhub/deployment",
   );
+  const mediaseed = useData<MediaSeedStatus>("/mediaseed/status");
   const reloadDeployment = deployment.reload;
+  const reloadMediaSeed = mediaseed.reload;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "configured" | "setup">("all");
   useEffect(() => {
-    const refresh = () => reloadDeployment();
+    const refresh = () => {
+      reloadDeployment();
+      reloadMediaSeed();
+    };
     window.addEventListener("apps-changed", refresh);
     window.addEventListener("integrations-changed", refresh);
     return () => {
       window.removeEventListener("apps-changed", refresh);
       window.removeEventListener("integrations-changed", refresh);
     };
-  }, [reloadDeployment]);
+  }, [reloadDeployment, reloadMediaSeed]);
   const entries = buildHubEntries({
     catalog: catalog.data || [],
     apps,
@@ -206,6 +240,8 @@ export function HubHome({
     integrationsError,
     deployment: deployment.data,
     deploymentError: deployment.error,
+    mediaseed: mediaseed.data,
+    mediaseedError: mediaseed.error,
   });
   const configured = entries.filter((entry) => entry.configured).length;
   const cards: HubEntry[] = [
@@ -313,6 +349,7 @@ export function HubHome({
               onClick={() => {
                 catalog.reload();
                 deployment.reload();
+                mediaseed.reload();
                 window.dispatchEvent(new Event("apps-changed"));
                 window.dispatchEvent(new Event("integrations-changed"));
               }}
@@ -390,14 +427,23 @@ export function HubHome({
                           <h3>{t(entry.name)}</h3>
                           <p>{t(entry.description)}</p>
                         </div>
-                        <Link
+                        {entry.external ? <a
+                          className="hub-card-action"
+                          href={entry.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${t(entry.action)} · ${t(entry.name)}`}
+                        >
+                          <span>{t(entry.action)}</span>
+                          <ArrowRight size={17} />
+                        </a> : <Link
                           className="hub-card-action"
                           to={entry.path}
                           aria-label={`${t(entry.action)} · ${t(entry.name)}`}
                         >
                           <span>{t(entry.action)}</span>
                           <ArrowRight size={17} />
-                        </Link>
+                        </Link>}
                       </article>
                     ))}
                   </div>

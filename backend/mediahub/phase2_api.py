@@ -21,6 +21,7 @@ from mediahub.errors import DomainError
 from mediahub.network import cookie_options
 from mediahub.path_policy import DirectoryPolicy
 from mediahub.plex_api import router as plex_router
+from mediahub.mediaseed_api import router as mediaseed_router
 from mediahub.plex_media_api import router as plex_media_router
 from mediahub.seedbox_daily_api import router as daily_router
 from mediahub.seedbox_rss import router as rss_router
@@ -29,6 +30,7 @@ from mediahub.seedbox_wizard_api import router as wizard_router
 from mediahub.setup import NetworkSettings, SaveDraft
 
 router = APIRouter()
+router.include_router(mediaseed_router)
 router.include_router(wizard_router)
 router.include_router(daily_router)
 router.include_router(rss_router)

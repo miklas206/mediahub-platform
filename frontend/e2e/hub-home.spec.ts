@@ -1,6 +1,42 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390, 320]) {
+  test(`Separate MediaSeed opens from hub (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
+      let data: unknown = [];
+      if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/auth/me") data = { id: "test", username: "tester", role: "administrator", csrf: "test", language: "da" };
+      else if (path === "/settings") data = { display_name: "MediaHub", theme: "dark", advanced_mode: false, visible_navigation: ["/", "/overview", "/settings"], dashboard_sections: [] };
+      else if (path === "/setup/status") data = { setup_required: false };
+      else if (path === "/updates/summary") data = { count: 0, items: [], notifications: [] };
+      else if (path === "/catalog") data = [{ id: "org.mediahub.seedbox", name: "Seedbox", availability: "available" }];
+      else if (path === "/fjordhub/deployment") data = null;
+      else if (path === "/mediaseed/status") data = { configured: true, available: true, url: "http://192.168.1.111:18800", preview: true };
+      else if (path === "/events/stream") {
+        await route.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" });
+        return;
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data }) });
+    });
+    await page.goto("/");
+    const card = page.locator('[data-app-id="org.mediahub.seedbox"]');
+    await expect(card).toContainText("MediaSeed");
+    await expect(card).toContainText("App tilgængelig");
+    const link = card.getByRole("link", { name: "Åbn app · MediaSeed" });
+    await expect(link).toHaveAttribute("href", "http://192.168.1.111:18800/");
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(errors).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/mediaseed-hub-${width}.png`, fullPage: true });
+  });
+}
+
+for (const width of [1440, 390, 320]) {
   for (const installed of [true, false]) {
     test(`Simple overview (${width}px, Seedbox ${installed})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });

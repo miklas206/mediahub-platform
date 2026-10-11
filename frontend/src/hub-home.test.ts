@@ -52,6 +52,17 @@ const input = {
 };
 
 describe("primary MediaHub app hub", () => {
+  it("opens the separate MediaSeed instead of the old Seedbox wizard", () => {
+    const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" } });
+    expect(entries.find((entry) => entry.id === "org.mediahub.seedbox")).toMatchObject({
+      name: "MediaSeed", path: "http://192.168.1.111:18800/", configured: true, external: true, action: "Open app", statusLabel: "App available",
+    });
+  });
+  it("keeps the configured app link without inventing healthy status on failed refresh", () => {
+    const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" }, mediaseedError: "Offline" });
+    expect(entries.find((entry) => entry.id === "org.mediahub.seedbox")).toMatchObject({ external: true, status: "unknown", statusLabel: "Status unavailable", action: "Open app" });
+    expect(buildHubEntries({ ...input, mediaseed: { configured: true, available: false, url: "javascript:alert(1)" } }).find((entry) => entry.id === "org.mediahub.seedbox")?.external).toBeUndefined();
+  });
   it("exposes the supported MediaHub apps with real setup paths before installation", () => {
     const entries = buildHubEntries(input);
     expect(entries).toHaveLength(5);
