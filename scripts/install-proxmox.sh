@@ -29,6 +29,12 @@ printf '%s\n' 'This installs Core and Agent, not an existing Seedbox migration. 
 read -r -p 'Type INSTALL to create this new container: ' CONFIRM
 [ "$CONFIRM" = INSTALL ] || exit 0
 trap 'echo "If a step failed, inspect the new container before retrying. Existing guests/media are not cleaned up." >&2' ERR
+if [ ! -c /dev/net/tun ]; then
+    modprobe tun || { echo 'Cannot load the host TUN driver. MediaHub VPN apps require /dev/net/tun.' >&2; exit 1; }
+fi
+[ -c /dev/net/tun ] || { echo 'Host TUN device is unavailable. No container was created.' >&2; exit 1; }
+install -d -m 0755 /etc/modules-load.d
+printf 'tun\n' > /etc/modules-load.d/mediahub-tun.conf
 pveam update
 TEMPLATE=$(pveam available --section system | awk '$2 ~ /^debian-13-standard_.*_amd64.tar.zst$/ {print $2}' | sort -V | tail -n 1)
 [ -n "$TEMPLATE" ] || { echo 'No Debian 13 template found.' >&2; exit 1; }
@@ -37,8 +43,13 @@ pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
 pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" --hostname "$HOSTNAME" \
     --unprivileged 1 --features nesting=1,keyctl=1 --cores 6 --memory 16384 --swap 0 \
     --rootfs "$STORAGE:32" --mp0 "$STORAGE:32,mp=/storage,backup=1" \
+    --dev0 path=/dev/net/tun,uid=0,gid=0,mode=0600 \
     --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,ip6=manual,firewall=1" --onboot 1
 pct start "$CTID"
+pct exec "$CTID" -- sh -c 'test -c /dev/net/tun && test -r /dev/net/tun && test -w /dev/net/tun' || {
+    echo 'The new MediaHub LXC cannot access TUN. Installation stopped before installing apps; inspect its device configuration.' >&2
+    exit 1
+}
 DATA_VOLUME=$(pct config "$CTID" | awk '/^mp0:/ {split($2, parts, ","); print parts[1]}')
 DATA_DEVICE=$(pvesm path "$DATA_VOLUME")
 DATA_UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
