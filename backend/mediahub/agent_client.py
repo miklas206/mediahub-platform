@@ -3,6 +3,7 @@ import ssl
 from collections.abc import AsyncIterable
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -35,6 +36,11 @@ class AgentClient:
         self.config = config
         self.token = token
         self.local_app = local_app
+
+    @property
+    def trusted_transport(self):
+        """Embedded calls never leave the process; network calls must use verified TLS."""
+        return self.local_app is not None or urlsplit(self.config.agent_url).scheme == "https"
 
     def _transport(self):
         if self.local_app is not None:

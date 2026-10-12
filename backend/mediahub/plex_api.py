@@ -1,7 +1,5 @@
 """Plex module installation. All mutations use authenticated, CSRF-protected HTTPS."""
 
-from urllib.parse import urlsplit
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
@@ -18,7 +16,7 @@ def target(request, host="local"):
     if request.url.scheme != "https":
         raise DomainError("https_required", "Use HTTPS to configure Plex", 403)
     client = services(request).hosts.client(host)
-    if urlsplit(client.config.agent_url).scheme != "https":
+    if not client.trusted_transport:
         raise DomainError("agent_tls_required", "Plex requires a trusted HTTPS Agent", 409)
     return client
 
