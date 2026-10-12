@@ -42,6 +42,11 @@ class AgentClient:
         """Embedded calls never leave the process; network calls must use verified TLS."""
         return self.local_app is not None or urlsplit(self.config.agent_url).scheme == "https"
 
+    def _base_url(self):
+        # ASGITransport makes no network connection. Its synthetic URL must carry
+        # the trusted scheme for the Agent's installation/credential guards.
+        return "https://embedded.mediahub" if self.local_app is not None else self.config.agent_url
+
     def _transport(self):
         if self.local_app is not None:
             return httpx.ASGITransport(app=self.local_app)
@@ -92,7 +97,7 @@ class AgentClient:
                 raise ValueError()
             transport = self._transport()
             async with httpx.AsyncClient(
-                base_url=self.config.agent_url,
+                base_url=self._base_url(),
                 transport=transport,
                 timeout=(
                     180
@@ -175,7 +180,7 @@ class AgentClient:
             if expected_size is not None:
                 headers["Content-Length"] = str(expected_size)
             async with httpx.AsyncClient(
-                base_url=self.config.agent_url,
+                base_url=self._base_url(),
                 transport=transport,
                 timeout=httpx.Timeout(connect=8, read=60, write=None, pool=8),
                 trust_env=False,
