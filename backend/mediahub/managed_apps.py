@@ -217,7 +217,7 @@ class ManagedApps:
             if clients:
                 raise DomainError(
                     "app_dependency",
-                    "Afinstaller MediaSeed først. Dens torrentklient bruger MediaVPN.",
+                    "Frakobl MediaVPN under VPN i MediaSeed først. Derefter kan MediaVPN afinstalleres uden at fjerne MediaSeed.",
                     409,
                 )
         owned = {row["Id"] for row in rows}
@@ -340,7 +340,11 @@ class ManagedApps:
                     raise DomainError(
                         "installation_changed", "Installation changed during removal", 409
                     )
-                await self.disconnect_client(self.policy[package])
+                if any(
+                    row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox") == "mediaseed"
+                    for row in current
+                ):
+                    await self.disconnect_client(self.policy[package])
                 for row in job["containers"]:
                     identifier = row["Id"]
                     actual = await self.docker(

@@ -180,7 +180,8 @@ def test_failure_keeps_snapshot_and_can_retry(logged_in, tmp_path, monkeypatch):
 
 
 def test_controller_failure_never_deletes_containers(logged_in, tmp_path, monkeypatch):
-    _, manager, _, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+    rows["a" * 64]["Config"]["Labels"]["org.mediahub.mediavpn.seedbox"] = "mediaseed"
     monkeypatch.setattr(
         manager,
         "disconnect_client",
@@ -195,6 +196,22 @@ def test_controller_failure_never_deletes_containers(logged_in, tmp_path, monkey
 
     asyncio.run(remove())
     assert not any(method != "GET" for method, _ in calls)
+
+
+def test_unattached_seed_removal_does_not_require_mediavpn(logged_in, tmp_path, monkeypatch):
+    _, manager, rows, _ = setup_manager(logged_in, tmp_path, monkeypatch)
+    disconnect = AsyncMock(side_effect=DomainError("controller", "MediaVPN removed", 503))
+    monkeypatch.setattr(manager, "disconnect_client", disconnect)
+
+    async def remove():
+        ready = await manager.status(SEED)
+        await manager.remove(SEED, ready["installationId"])
+        await manager.tasks[SEED]
+        assert (await manager.status(SEED))["state"] == "succeeded"
+
+    asyncio.run(remove())
+    disconnect.assert_not_called()
+    assert not rows
 
 
 def test_pending_removal_resumes_after_restart(logged_in, tmp_path, monkeypatch):

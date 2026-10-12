@@ -69,8 +69,10 @@ sharing those ownership labels on one Docker daemon.
 Removal requires an administrator, CSRF and confirmation tied to the current
 container IDs. MediaSeed disconnects its torrent client through MediaVPN's
 authenticated integration before stopping and removing its app/client
-containers. MediaVPN removal is blocked while that client exists; uninstall
-MediaSeed first. Foreign containers sharing a target's network namespace also
+containers. MediaVPN removal is blocked while that client exists; disconnect
+MediaVPN inside MediaSeed's VPN page first. This releases the client container
+without removing MediaSeed, its torrents or downloads. A disconnected MediaSeed
+can also be uninstalled when MediaVPN is absent. Foreign containers sharing a target's network namespace also
 block removal. No real app is removed merely by opening the dialog.
 
 Only selected containers are stopped and removed, with `force=false&v=false`.
