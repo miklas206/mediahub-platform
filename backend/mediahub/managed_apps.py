@@ -137,6 +137,8 @@ class ManagedApps:
                 response = await client.request(method, path)
             if missing and response.status_code == 404:
                 return None
+            if response.status_code == 304 and method == "POST" and "/stop?" in path:
+                return {}
             response.raise_for_status()
             return response.json() if response.content else {}
         except (httpx.HTTPError, ValueError):
