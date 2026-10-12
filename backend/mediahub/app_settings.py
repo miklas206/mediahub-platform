@@ -43,6 +43,12 @@ def describe(svc, package_id):
         if not installed and not connected:
             raise DomainError("app_not_found", "This app is not installed or connected", 404)
         name = installed.name if installed else {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}.get(package_id, package_id)
+        removable = None
+        if installed and not installed.is_mock:
+            adapter = svc.apps.adapters.get(installed.id)
+            definition = getattr(adapter, "definition", None)
+            if hasattr(definition, "binding_key") or package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"}:
+                removable = svc.apps.get(installed.id)
     return {
         "packageId": package_id,
         "name": name,
@@ -51,6 +57,7 @@ def describe(svc, package_id):
         "ssoOrigin": svc.config.sso_app_urls.get(package_id),
         "ssoManaged": package_id in svc.config.sso_app_urls,
         "routingManaged": False,
+        "removableApp": removable,
         "configurationPath": {"org.mediahub.cloudflared": "/store/cloudflare", "org.mediahub.plex": "/apps/install/plex", "org.mediahub.jellyfin": "/apps/install/jellyfin", "org.mediahub.seedbox": "/apps/install/seedbox"}.get(package_id),
     }
 

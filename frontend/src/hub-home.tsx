@@ -435,7 +435,6 @@ export function HubHome({
                         data-app-id={entry.id}
                       >
                         <div className="hub-card-top">
-                          {entry.settingsPath && <Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link>}
                           <span
                             className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
                           >
@@ -464,6 +463,7 @@ export function HubHome({
                           <h3>{t(entry.name)}</h3>
                           <p>{t(entry.description)}</p>
                         </div>
+                        {entry.settingsPath && <div className="hub-card-tools"><Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link></div>}
                         {entry.external ? <a
                           className="hub-card-action"
                           href={entry.path}

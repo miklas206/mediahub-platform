@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Save, RotateCcw } from "lucide-react";
 import { api } from "./api";
 import { useData } from "./use-data";
 import { NotificationPopup } from "./notification-popup";
+import { AppUninstall } from "./app-uninstall";
+import type { InstalledAppInfo } from "./contracts";
 
-type AppSettings = { name: string; externalUrl: string; localUrl: string | null; ssoOrigin: string | null; ssoManaged: boolean; configurationPath: string | null };
+type AppSettings = { name: string; externalUrl: string; localUrl: string | null; ssoOrigin: string | null; ssoManaged: boolean; configurationPath: string | null; removableApp?: InstalledAppInfo | null };
 
 export function AppSettingsPage() {
+  const navigate = useNavigate();
   const { packageId = "" } = useParams();
   const { data, error, reload } = useData<AppSettings>(`/app-settings/${encodeURIComponent(packageId)}`);
   const [draft, setDraft] = useState<string | null>(null);
@@ -37,5 +40,6 @@ export function AppSettingsPage() {
       {data.ssoManaged && <p>{"Et nyt dom\u00e6ne skal ogs\u00e5 konfigureres i appen og dens SSO-registrering."}</p>}
       <div className="button-row"><button type="submit" disabled={busy}><Save size={16} /> Gem adresse</button><button type="button" disabled={busy || !data.externalUrl} onClick={() => void save(undefined, true)}><RotateCcw size={16} /> Nulstil</button>{data.configurationPath && <Link to={data.configurationPath}><ExternalLink size={16} /> App-konfiguration</Link>}</div>
     </form></section>}
+    {data?.removableApp && <section className="panel"><h2>{"Afinstallation"}</h2><AppUninstall app={data.removableApp} onRemoved={() => { window.dispatchEvent(new Event("apps-changed")); navigate("/"); }} /></section>}
   </div>;
 }

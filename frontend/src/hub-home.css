@@ -257,6 +257,25 @@
   color: var(--muted);
   max-width: 38ch;
 }
+.hub-card-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px 10px;
+}
+.hub-card-tools a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.hub-card-tools a:hover,
+.hub-card-tools a:focus-visible {
+  background: var(--raised);
+  color: var(--accent);
+}
 .hub-card-action {
   display: flex;
   align-items: center;

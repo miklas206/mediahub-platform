@@ -4,6 +4,7 @@ for (const width of [1440, 390]) {
   test(`App address settings save and reset (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     let externalUrl = "";
+    let installed = false;
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
       let data: unknown = [];
@@ -15,12 +16,14 @@ for (const width of [1440, 390]) {
       else if (path === "/fjordhub/deployment") data = null;
       else if (path === "/app-settings/org.mediahub.mediavpn") {
         if (route.request().method() === "PUT") externalUrl = route.request().postDataJSON().externalUrl;
-        data = { name: "MediaVPN", externalUrl, localUrl: "http://192.168.1.111:18802", ssoManaged: false, ssoOrigin: null, configurationPath: null };
+        data = { name: "MediaVPN", externalUrl, localUrl: "http://192.168.1.111:18802", ssoManaged: false, ssoOrigin: null, configurationPath: null, removableApp: installed ? { id: "installed-test", name: "MediaVPN", packageId: "org.mediahub.mediavpn", state: "running", version: "1", isMock: false } : null };
       }
+      else if (path === "/apps/installed-test/uninstall") data = { state: "ready", installationId: "synthetic", message: "Synthetic removal; data preserved" };
       await route.fulfill({ json: { data, error: null, metadata: {} } });
     });
     await page.goto("/app-settings/org.mediahub.mediavpn");
     await expect(page.getByRole("heading", { name: "MediaVPN: indstillinger" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Afinstaller", exact: true })).toHaveCount(0);
     await page.getByLabel("Ekstern app-adresse").fill("https://vpn.example.com");
     await page.getByRole("button", { name: "Gem adresse" }).click();
     await expect.poll(() => externalUrl).toBe("https://vpn.example.com");
@@ -28,6 +31,11 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: "Nulstil" }).click();
     await expect.poll(() => externalUrl).toBe("");
     await expect(page.getByLabel("Ekstern app-adresse")).toHaveValue("");
+    installed = true;
+    await page.reload();
+    await page.getByRole("button", { name: "Afinstaller", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("button").first()).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/app-settings-${width}.png`, fullPage: true });
   });

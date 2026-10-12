@@ -32,6 +32,13 @@ for (const width of [1440, 390, 320]) {
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
     await expect(card.locator('image[href="/assets/services/mediaseed.svg"]')).toHaveCount(1);
+    const settings = card.getByRole("link", { name: "Indstillinger: MediaSeed" });
+    await expect(settings).toHaveAttribute("href", "/app-settings/org.mediahub.mediaseed");
+    await expect(card.locator(".hub-card-top a")).toHaveCount(0);
+    const settingsBounds = await settings.boundingBox();
+    const iconBounds = await card.locator(".hub-app-icon").boundingBox();
+    expect(settingsBounds!.y).toBeGreaterThan(iconBounds!.y + iconBounds!.height);
+    expect(settingsBounds!.x).toBeGreaterThan(iconBounds!.x);
     const vpn = page.locator('[data-app-id="org.mediahub.mediavpn"]');
     await expect(vpn).toContainText("MediaVPN");
     await expect(vpn.getByRole("link", { name: "Åbn app · MediaVPN" })).toHaveAttribute("href", "http://192.168.1.111:18802/");
