@@ -166,6 +166,7 @@ class AppManager:
             "version": app.version,
             "state": app.state,
             "isMock": app.is_mock,
+            "openUrl": self.config.sso_app_urls[app.package_id] + "/auth/hub/start" if app.package_id in self.config.sso_app_urls else None,
             "detailPath": (
                 "/apps/install/" + app.package_id.removeprefix("org.mediahub.")
                 if getattr(getattr(self.adapters.get(app.id), "definition", None), "view_id", None) == "container"

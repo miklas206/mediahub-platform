@@ -52,6 +52,16 @@ class Config(BaseSettings):
         return validate_url(value, allow_http=True)
 
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
+    sso_app_urls: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("sso_app_urls")
+    @classmethod
+    def valid_sso_urls(cls, values):
+        for package_id, address in values.items():
+            parsed = urlsplit(address)
+            if package_id != "org.mediahub.mediaseed" or parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+                raise ValueError("SSO requires a supported app and an HTTPS origin")
+        return {key: value.rstrip("/") for key, value in values.items()}
     cloudflared_status_url: str | None = None
     cloudflared_probe_urls: list[str] = Field(default_factory=list)
     platform_update_spool: Path | None = None

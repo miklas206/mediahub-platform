@@ -22,6 +22,8 @@ export type User = {
   username: string;
   role: string;
   csrf: string;
+  totpEnabled?: boolean;
+  totpRequired?: boolean;
   language?: "en" | "da";
   appearance?: Appearance | null;
 };

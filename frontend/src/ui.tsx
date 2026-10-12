@@ -292,6 +292,13 @@ export function Application() {
     void refresh();
   }, [refresh]);
   useEffect(() => {
+    if (!user || (user.totpRequired && !user.totpEnabled)) return;
+    const resume = new URLSearchParams(window.location.search).get("sso");
+    if (!resume) return;
+    const target = new URL(resume, window.location.origin);
+    if (target.origin === window.location.origin && target.pathname === "/api/v1/sso/authorize") window.location.replace(target.href);
+  }, [user]);
+  useEffect(() => {
     const expired = () => {
       setUser(null);
       setCsrf("");
@@ -333,6 +340,7 @@ export function Application() {
         }}
       />
     );
+  if (user.role !== "administrator") return <MemberApps user={user} onLogout={async () => { await api("/auth/logout", "POST"); setUser(null); setCsrf(""); }} />;
   return (
     <Shell
       key={user.id}
@@ -346,6 +354,12 @@ export function Application() {
       }}
     />
   );
+}
+
+function MemberApps({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
+  const apps = useData<{ id: string; name: string; openUrl?: string }[]>("/apps?include_health=false");
+  if (user.totpRequired && !user.totpEnabled) return <main className="page stack"><Suspense fallback={<Loading />}><SecuritySettings /></Suspense><button onClick={() => window.location.reload()}>Forts\u00e6t</button></main>;
+  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><button onClick={() => void onLogout()}>Log ud</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>Mine apps</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{"\u00c5bn app"}</a> : <span>Loginintegration ikke konfigureret</span>}</article>)}</div></section></main>;
 }
 
 function Login({

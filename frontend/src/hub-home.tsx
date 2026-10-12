@@ -78,6 +78,7 @@ export type MediaSeedStatus = {
   available: boolean;
   url: string | null;
   preview?: boolean;
+  openUrl?: string | null;
 };
 
 /** A catalog entry is a setup option until the live registry confirms it. */
@@ -121,7 +122,7 @@ export function buildHubEntries({
             name: "MediaSeed",
             description: "Independent Seedbox app · preview",
             category: definition.category,
-            path: address.href,
+            path: mediaseed.openUrl || address.href,
             configured: true,
             external: true,
             status: mediaseed.available && !mediaseedError ? "healthy" : "unknown",

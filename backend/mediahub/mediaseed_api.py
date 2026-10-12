@@ -1,4 +1,5 @@
 import json
+import ssl
 from ipaddress import ip_address
 from urllib.parse import urlsplit
 
@@ -34,9 +35,10 @@ def app_origin(value):
     return value.rstrip("/")
 
 
-async def available(origin):
+async def available(origin, ca_file=None):
     try:
-        async with httpx.AsyncClient(timeout=3, follow_redirects=False, trust_env=False) as client:
+        verify = ssl.create_default_context(cafile=str(ca_file)) if ca_file else True
+        async with httpx.AsyncClient(timeout=3, follow_redirects=False, trust_env=False, verify=verify) as client:
             async with client.stream("GET", origin + "/healthz") as response:
                 if response.status_code != 200:
                     return False
@@ -56,7 +58,9 @@ async def status(request: Request, user=Depends(authenticated)):
     origin = app_origin(services(request).config.operator_app_urls.get("org.mediahub.mediaseed"))
     if origin is None:
         return result({"configured": False, "available": False, "url": None})
-    return result({"configured": True, "available": await available(origin), "url": origin, "preview": True})
+    sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediaseed")
+    health = await available(origin, services(request).config.agent_ca_file) if sso_origin else await available(origin)
+    return result({"configured": True, "available": health, "url": origin, **({"openUrl": sso_origin + "/auth/hub/start"} if sso_origin else {}), "preview": True})
 
 
 @router.get("/mediavpn/status")

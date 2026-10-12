@@ -45,13 +45,29 @@ class AuthService:
 
     def users(self):
         with self.sessions() as db:
-            return [self.public_user(user) for user in db.scalars(select(User).order_by(User.username))]
+            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id)} for user in db.scalars(select(User).order_by(User.username))]
+
+    @staticmethod
+    def app_roles(db, user_id):
+        row = db.scalar(select(Setting).where(Setting.key == "app_roles:" + user_id))
+        return dict(row.value) if row else {}
+
+    def app_role(self, user_id, package_id):
+        with self.sessions() as db:
+            user = db.get(User, user_id)
+            if user is None:
+                raise DomainError("unauthorized", "User no longer exists", 401)
+            roles = self.app_roles(db, user_id)
+            role = roles.get(package_id, "administrator" if user.role == "administrator" else None)
+            if role not in {"administrator", "user", "viewer"}:
+                raise DomainError("app_access_denied", "You do not have access to this app", 403)
+            return role
 
     @staticmethod
     def public_user(user):
         return {"id": user.id, "username": user.username, "role": user.role, "createdAt": user.created_at}
 
-    def save_user(self, username, password, user_id=None):
+    def save_user(self, username, password, user_id=None, role=None, app_roles=None):
         username = username.strip().lower()
         if not username or len(username) > 80 or (password and not 12 <= len(password) <= 256) or (not user_id and not password):
             raise DomainError("invalid_credentials", "Use a username and a 12-256 character password")
@@ -59,19 +75,37 @@ class AuthService:
             user = db.get(User, user_id) if user_id else None
             if user_id and user is None:
                 raise DomainError("user_not_found", "User not found", 404)
+            target_role = role or (user.role if user else "user")
+            if target_role not in {"administrator", "user"}:
+                raise DomainError("invalid_role", "Invalid hub role")
+            if app_roles is not None and any(key != "org.mediahub.mediaseed" or value not in {"administrator", "user", "viewer", "denied"} for key, value in app_roles.items()):
+                raise DomainError("invalid_app_roles", "Invalid app permissions")
+            if user and user.role == "administrator" and target_role != "administrator":
+                admins = list(db.scalars(select(User.id).where(User.role == "administrator")))
+                if len(admins) <= 1:
+                    raise DomainError("protected_user", "Cannot demote the last administrator", 409)
             duplicate = db.scalar(select(User).where(User.username == username))
             if duplicate and duplicate.id != user_id:
                 raise DomainError("username_exists", "Username already exists", 409)
             if user is None:
-                user = User(username=username, password_hash=hasher.hash(password), role="administrator")
+                user = User(username=username, password_hash=hasher.hash(password), role=target_role)
                 db.add(user)
             else:
                 user.username = username
+                user.role = target_role
                 if password:
                     user.password_hash = hasher.hash(password)
                     db.execute(delete(Session).where(Session.user_id == user.id))
             db.flush()
-            return self.public_user(user)
+            if app_roles is not None:
+                key = "app_roles:" + user.id
+                row = db.scalar(select(Setting).where(Setting.key == key))
+                if row:
+                    row.value = app_roles
+                else:
+                    db.add(Setting(key=key, value=app_roles))
+                db.flush()
+            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id)}
 
     def delete_user(self, user_id, actor_id):
         with self.sessions.begin() as db:
@@ -83,6 +117,7 @@ class AuthService:
                 raise DomainError("protected_user", "Cannot delete your own account or the last administrator", 409)
             db.execute(delete(Session).where(Session.user_id == user_id))
             db.execute(delete(UserSecurity).where(UserSecurity.user_id == user_id))
+            db.execute(delete(Setting).where(Setting.key == "app_roles:" + user_id))
             db.delete(user)
 
     def throttle(self, client: str):
@@ -185,6 +220,13 @@ class AuthService:
         if row and row.enabled:
             self.mfa.verify(db, row, code)
         return user
+
+    @staticmethod
+    def authenticate_session_policy(db, user):
+        policy = db.scalar(select(Setting).where(Setting.key == "authentication_policy"))
+        security = db.get(UserSecurity, user.id)
+        if policy and policy.value.get("requireTotp") and not (security and security.enabled):
+            raise DomainError("enrollment_required", "Set up two-factor authentication to continue", 403)
 
     def logout(self, token: str):
         with self.sessions.begin() as db:

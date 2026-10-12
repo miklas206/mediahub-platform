@@ -53,6 +53,7 @@ from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
 from mediahub.storage import StorageManager
+from mediahub.sso import router as sso_router
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
@@ -273,6 +274,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(sso_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
