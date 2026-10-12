@@ -3,6 +3,46 @@ from mediahub.db import User
 from sqlalchemy import select
 
 
+def test_administrator_login_preserves_and_requires_username_case(client):
+    auth = client.app.state.services.auth
+    password = "Mixed-Password-1234"
+    auth.create_admin("  TestAdmin  ", password)
+    assert auth.users()[0]["username"] == "TestAdmin"
+    for username in ("testadmin", "TESTADMIN"):
+        assert client.post("/api/auth/login", json={
+            "username": username, "password": password,
+        }).status_code == 401
+    assert client.post("/api/auth/login", json={
+        "username": "TestAdmin", "password": password.lower(),
+    }).status_code == 401
+    response = client.post("/api/auth/login", json={
+        "username": "TestAdmin", "password": password,
+    })
+    assert response.status_code == 200
+    assert response.json()["data"]["username"] == "TestAdmin"
+
+
+def test_managed_username_case_is_preserved_on_create_and_rename(logged_in):
+    password = "Mixed-Password-1234"
+    created = logged_in.post("/api/users", json={
+        "username": "OtherUser", "password": password,
+    })
+    assert created.status_code == 200
+    assert created.json()["data"]["username"] == "OtherUser"
+    identifier = created.json()["data"]["id"]
+    renamed = logged_in.put(f"/api/users/{identifier}", json={"username": "OTHERuser"})
+    assert renamed.status_code == 200
+    assert renamed.json()["data"]["username"] == "OTHERuser"
+    with TestClient(logged_in.app, base_url="http://127.0.0.1:18765") as member:
+        for username in ("OtherUser", "otheruser"):
+            assert member.post("/api/auth/login", json={
+                "username": username, "password": password,
+            }).status_code == 401
+        assert member.post("/api/auth/login", json={
+            "username": "OTHERuser", "password": password,
+        }).status_code == 200
+
+
 def test_manage_hub_users(logged_in):
     client = logged_in
     own = client.get("/api/auth/me").json()["data"]["id"]

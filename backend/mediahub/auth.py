@@ -33,7 +33,7 @@ class AuthService:
             return db.scalar(select(User.id).limit(1)) is None
 
     def create_admin(self, username: str, password: str):
-        username = username.strip().lower()
+        username = username.strip()
         if not username or len(username) > 80 or len(password) < 12 or len(password) > 256:
             raise DomainError(
                 "invalid_credentials", "Use a username and a 12–256 character password"
@@ -68,7 +68,7 @@ class AuthService:
         return {"id": user.id, "username": user.username, "role": user.role, "createdAt": user.created_at}
 
     def save_user(self, username, password, user_id=None, role=None, app_roles=None):
-        username = username.strip().lower()
+        username = username.strip()
         if not username or len(username) > 80 or (password and not 12 <= len(password) <= 256) or (not user_id and not password):
             raise DomainError("invalid_credentials", "Use a username and a 12-256 character password")
         with self.sessions.begin() as db:
@@ -139,7 +139,7 @@ class AuthService:
         clock = self.throttle("login:" + client)
         self.throttle("account:" + username.strip().lower())
         with self.sessions.begin() as db:
-            user = db.scalar(select(User).where(User.username == username.strip().lower()))
+            user = db.scalar(select(User).where(User.username == username.strip()))
             try:
                 valid = hasher.verify(user.password_hash if user else DUMMY_HASH, password)
             except (VerificationError, InvalidHashError):
