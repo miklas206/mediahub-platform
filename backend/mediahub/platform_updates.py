@@ -13,6 +13,7 @@ import httpx
 from packaging.version import InvalidVersion, Version
 
 from mediahub.errors import DomainError
+from mediahub.platform_source import check_github_access
 
 
 class GitHubReleaseProvider:
@@ -71,12 +72,7 @@ class GitHubReleaseProvider:
                     else "No release was found. Private repositories require read-only GitHub access."
                 ),
             }
-        if response.status_code in {401, 403}:
-            raise DomainError(
-                "github_credentials_rejected",
-                "GitHub rejected the stored private access. Replace it in Updates.",
-                409,
-            )
+        check_github_access(response)
         if response.status_code != 200:
             raise DomainError(
                 "release_provider_unavailable",

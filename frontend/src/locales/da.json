@@ -2824,5 +2824,8 @@
   "Tracker API": "Tracker-API",
   "Waiting for tracker statistics": "Afventer trackerstatistik",
   "Tracker statistics unavailable": "Trackerstatistik er utilgængelig",
-  "Showing up to 500 torrents": "Viser op til 500 torrents"
+  "Showing up to 500 torrents": "Viser op til 500 torrents",
+  "GitHub's request limit was reached. Wait before checking for updates again.": "GitHubs forespørgselsgrænse er nået. Vent, før du kontrollerer for opdateringer igen.",
+  "GitHub rejected the access credentials. Replace stored GitHub access in Updates.": "GitHub afviste adgangsoplysningerne. Erstat den gemte GitHub-adgang under Opdateringer.",
+  "GitHub denied this request. Check repository access; a temporary GitHub restriction is also possible.": "GitHub afviste forespørgslen. Kontrollér adgangen til repositoryet; det kan også være en midlertidig begrænsning hos GitHub."
 }

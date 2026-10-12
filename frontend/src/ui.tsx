@@ -480,7 +480,6 @@ function Brand() {
       <span>
         Media<span>Hub</span>
       </span>
-      <small className="brand-beta">beta</small>
     </div>
   );
 }

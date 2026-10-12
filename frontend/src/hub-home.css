@@ -25,11 +25,6 @@
     height: 28px;
     flex: none;
   }
-  .sidebar .brand .brand-beta {
-    margin-left: 0;
-    padding: 2px 4px;
-    font-size: 8px;
-  }
 }
 .hub-home {
   display: grid;
@@ -55,21 +50,6 @@
 .hub-app-toolbar p,
 .hub-management p {
   color: var(--muted);
-}
-.hub-beta,
-.brand-beta {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 10px;
-  font-weight: 650;
-  color: var(--accent);
-  border: 1px solid var(--accent-line);
-  border-radius: 5px;
-  padding: 3px 6px;
-  line-height: 1.3;
-}
-.brand .brand-beta {
-  margin-left: 2px;
 }
 .hub-status-strip {
   display: flex;
@@ -440,9 +420,6 @@
   }
 }
 @media (max-width: 360px) {
-  .mobile-brand .brand-beta {
-    display: none;
-  }
   .hub-management-links {
     grid-template-columns: minmax(0, 1fr);
   }
