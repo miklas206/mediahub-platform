@@ -75,5 +75,6 @@ async def vpn_status(request: Request, user=Depends(authenticated)):
         return result({"configured": False, "available": False, "url": None})
     from mediahub.app_settings import saved_address
 
-    external = saved_address(services(request), "org.mediahub.mediavpn")
+    sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediavpn")
+    external = sso_origin + "/auth/hub/start" if sso_origin else saved_address(services(request), "org.mediahub.mediavpn")
     return result({"configured": True, "available": await available(origin), "url": origin, **({"openUrl": external} if external else {}), "preview": True})

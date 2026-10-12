@@ -78,7 +78,7 @@ class AuthService:
             target_role = role or (user.role if user else "user")
             if target_role not in {"administrator", "user"}:
                 raise DomainError("invalid_role", "Invalid hub role")
-            if app_roles is not None and any(key != "org.mediahub.mediaseed" or value not in {"administrator", "user", "viewer", "denied"} for key, value in app_roles.items()):
+            if app_roles is not None and any(key not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"} or value not in {"administrator", "user", "viewer", "denied"} for key, value in app_roles.items()):
                 raise DomainError("invalid_app_roles", "Invalid app permissions")
             if user and user.role == "administrator" and target_role != "administrator":
                 admins = list(db.scalars(select(User.id).where(User.role == "administrator")))

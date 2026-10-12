@@ -186,23 +186,25 @@ def test_app_list_uses_one_query_and_preserves_fields(logged_in):
     assert all(not row["isMock"] for row in svc.apps.list())
 
 
+@pytest.mark.parametrize("package,name", [("org.mediahub.mediaseed", "MediaSeed"), ("org.mediahub.mediavpn", "MediaVPN")])
 @pytest.mark.parametrize("healthy", [True, False])
-def test_connected_sso_app_has_overview_health_and_launch_url(logged_in, monkeypatch, healthy):
+def test_connected_sso_app_has_overview_health_and_launch_url(logged_in, monkeypatch, healthy, package, name):
     from unittest.mock import AsyncMock
 
     svc = logged_in.app.state.services
-    svc.config.sso_app_urls = {"org.mediahub.mediaseed": "https://seed.example"}
-    svc.config.operator_app_urls = {"org.mediahub.mediaseed": "https://127.0.0.1:18800"}
+    svc.config.sso_app_urls = {package: "https://seed.example"}
+    svc.config.operator_app_urls = {package: "https://127.0.0.1:18800"}
     probe = AsyncMock(return_value=healthy)
     monkeypatch.setattr("mediahub.mediaseed_api.available", probe)
     response = logged_in.get("/api/v1/apps")
-    app = next(row for row in response.json()["data"] if row["packageId"] == "org.mediahub.mediaseed")
+    app = next(row for row in response.json()["data"] if row["packageId"] == package)
     assert app["health"]["status"] == ("healthy" if healthy else "unknown")
     assert app["openUrl"] == "https://seed.example/auth/hub/start"
     assert app["version"] == "connected"
+    assert app["name"] == name
     probe.assert_awaited_once()
     probe.reset_mock()
     lightweight = logged_in.get("/api/v1/apps?include_health=false").json()["data"]
-    app = next(row for row in lightweight if row["packageId"] == "org.mediahub.mediaseed")
+    app = next(row for row in lightweight if row["packageId"] == package)
     assert "health" not in app
     probe.assert_not_awaited()

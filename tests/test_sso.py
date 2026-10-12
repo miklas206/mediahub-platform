@@ -2,6 +2,8 @@ import base64
 import hashlib
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
+
 from mediahub.db import InstalledApp
 
 
@@ -46,18 +48,26 @@ def test_revoked_app_access_invalidates_existing_sso_session(logged_in):
     assert logged_in.get("/api/v1/sso/authorize", params={"packageId": "org.mediahub.mediaseed", "state": "s" * 64, "challenge": "c" * 43}, follow_redirects=False).status_code == 403
 
 
-def test_actual_mediaseed_hub_roundtrip(logged_in, tmp_path, monkeypatch):
+@pytest.mark.parametrize("module,prefix,package,read_path", [
+    ("mediaseed", "MEDIASEED", "org.mediahub.mediaseed", "/api/storage"),
+    ("mediavpn", "MEDIAVPN", "org.mediahub.mediavpn", "/api/profiles"),
+])
+def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, prefix, package, read_path):
+    import importlib
     from pathlib import Path
 
     import httpx
     from fastapi.testclient import TestClient
 
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "mediaseed"))
-    from mediaseed.app import create_app
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / module))
+    create_app = importlib.import_module(module + ".app").create_app
 
     configure(logged_in)
-    monkeypatch.setenv("MEDIASEED_HUB_URL", "https://127.0.0.1:18765")
-    created = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {"org.mediahub.mediaseed": "viewer"}}).json()["data"]
+    logged_in.app.state.services.config.sso_app_urls[package] = "https://seed.example"
+    monkeypatch.setenv(prefix + "_HUB_URL", "https://127.0.0.1:18765")
+    creation = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {package: "viewer"}})
+    assert creation.status_code == 200
+    created = creation.json()["data"]
     with TestClient(logged_in.app, base_url="http://127.0.0.1:18765") as member:
         assert member.post("/api/auth/login", json={"username": "member", "password": "synthetic-password-123"}).status_code == 200
         app = create_app(tmp_path / "seed", "https://seed.example", hub_transport=httpx.ASGITransport(app=logged_in.app))
@@ -72,4 +82,4 @@ def test_actual_mediaseed_hub_roundtrip(logged_in, tmp_path, monkeypatch):
             assert seed.get("/api/auth/me").json()["username"] == "member"
             assert seed.get("/api/auth/me").json()["role"] == "viewer"
             assert logged_in.put(f"/api/users/{created['id']}", json={"username": "member", "appRoles": {}}).status_code == 200
-            assert seed.get("/api/storage").status_code == 403
+            assert seed.get(read_path).status_code == 403
