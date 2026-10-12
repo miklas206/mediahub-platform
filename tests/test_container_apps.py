@@ -272,8 +272,13 @@ def test_container_api_install_registers_owning_host_and_adapter(logged_in):
     from mediahub.apps.remote_registry import register_remote_apps
 
     svc = logged_in.app.state.services
+    from mediahub.db import InstallationState
+    from sqlalchemy import select
+    with svc.sessions.begin() as db:
+        db.scalar(select(InstallationState)).setup_completed = True
     agent = SimpleNamespace(
         config=SimpleNamespace(agent_url="https://192.168.1.110:18767"),
+        trusted_transport=True,
         request=AsyncMock(return_value={"state": "accepted"}),
     )
     svc.hosts.client = lambda host: agent
@@ -301,10 +306,15 @@ def test_container_api_install_registers_owning_host_and_adapter(logged_in):
 @pytest.mark.parametrize("app", ["prowlarr", "radarr", "sonarr", "autobrr"])
 def test_retired_apps_hidden_and_installation_rejected(logged_in, app):
     svc = logged_in.app.state.services
+    from mediahub.db import InstallationState
+    from sqlalchemy import select
+    with svc.sessions.begin() as db:
+        db.scalar(select(InstallationState)).setup_completed = True
     assert "org.mediahub." + app not in {item["id"] for item in svc.catalog.list()}
     assert "org.mediahub.jellyfin" in {item["id"] for item in svc.catalog.list()}
     agent = SimpleNamespace(
         config=SimpleNamespace(agent_url="https://192.168.1.110:18767"),
+        trusted_transport=True,
         request=AsyncMock(),
     )
     svc.hosts.client = lambda host: agent

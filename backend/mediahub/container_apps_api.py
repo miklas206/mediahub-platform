@@ -1,5 +1,3 @@
-from urllib.parse import urlsplit
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
@@ -21,7 +19,7 @@ def target(request, host):
     if request.url.scheme != "https":
         raise DomainError("https_required", "Use HTTPS to install container apps", 403)
     client = services(request).hosts.client(host)
-    if urlsplit(client.config.agent_url).scheme != "https":
+    if not client.trusted_transport:
         raise DomainError("agent_tls_required", "A trusted HTTPS Agent is required", 409)
     return client
 
@@ -60,6 +58,7 @@ async def plan(body: ContainerInstallation, request: Request):
 @router.post("/install", status_code=202)
 async def install(body: ContainerInstallRequest, request: Request):
     svc, spec = services(request), body.installation
+    svc.setup.require_complete()
     target(request, spec.hostId)
     installable_app(spec.app)
     with svc.sessions() as db:

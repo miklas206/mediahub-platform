@@ -304,6 +304,27 @@ def test_administrator_setup_requires_no_token_and_cannot_be_reused(setup_client
     ]  # user alone is not setup
 
 
+def test_setup_does_not_select_or_install_apps(setup_client):
+    bootstrap(setup_client)
+    svc = setup_client.app.state.services
+    draft = setup_client.get("/api/v1/setup/draft").json()["data"]["draft"]
+    draft["selected_apps"] = ["org.mediahub.plex"]
+    state = save(setup_client, draft)
+    assert state["draft"]["selected_apps"] == []
+    denied = setup_client.post("/api/v1/plex/install", json={
+        "installation": {"moviesStorageIds": ["movies"], "appdataStorageId": "appdata"},
+        "reviewedPlanDigest": "a" * 64,
+    })
+    assert denied.status_code == 409
+    assert denied.json()["error"]["code"] == "setup_required"
+    with pytest.raises(DomainError, match="Finish MediaHub setup"):
+        svc.setup.require_complete()
+    assert setup_client.post("/api/v1/setup/apply", json={"revision": state["revision"]}).status_code == 200
+    svc.setup.require_complete()
+    assert setup_client.get("/api/v1/apps").json()["data"] == []
+    assert not any("/plex/" in path for _, path in svc.agent.calls)
+
+
 def test_setup_resume_revision_and_completion(setup_client):
     bootstrap(setup_client)
     root = setup_client.storage_root

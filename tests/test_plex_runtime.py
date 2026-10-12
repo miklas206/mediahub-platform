@@ -9,6 +9,32 @@ from mediahub.errors import DomainError
 from agent.plex_runtime import PlexRuntime
 
 
+@pytest.mark.parametrize("status,path,code", [
+    (404, "/images/approved-image/json", "plex_image_missing"),
+    (500, "/images/approved-image/json", "plex_provision_failed"),
+    (404, "/containers/plex/json", "plex_provision_failed"),
+])
+def test_missing_install_image_has_actionable_error_without_docker_details(
+    tmp_path, monkeypatch, status, path, code
+):
+    import httpx
+
+    original = httpx.AsyncClient
+
+    def client(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(
+            lambda request: httpx.Response(status, json={"message": "private-runtime-detail"})
+        )
+        return original(**kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    runtime = PlexRuntime(SimpleNamespace(socket="unused"), None, tmp_path)
+    with pytest.raises(DomainError) as error:
+        asyncio.run(runtime.request("GET", path))
+    assert error.value.code == code
+    assert "private-runtime-detail" not in str(error.value)
+
+
 def archive(content, kind=tarfile.REGTYPE):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as stream:

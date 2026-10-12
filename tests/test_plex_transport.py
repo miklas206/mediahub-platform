@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from mediahub.agent_client import AgentClient
+from mediahub.container_apps_api import target as container_target
 from mediahub.errors import DomainError
 from mediahub.plex_api import target
 from mediahub.update_queue import UpdateQueue
@@ -13,13 +14,14 @@ def client_for(url, embedded):
     return AgentClient(SimpleNamespace(agent_url=url), local_app=object() if embedded else None)
 
 
+@pytest.mark.parametrize("target_function", [target, container_target])
 @pytest.mark.parametrize("url,embedded,trusted", [
     ("http://127.0.0.1:18767", True, True),
     ("https://192.0.2.10:18767", False, True),
     ("http://192.0.2.10:18767", False, False),
     ("http://127.0.0.1:18767", False, False),
 ])
-def test_plex_target_accepts_embedded_or_https_only(url, embedded, trusted):
+def test_plex_target_accepts_embedded_or_https_only(url, embedded, trusted, target_function):
     client = client_for(url, embedded)
     request = SimpleNamespace(
         url=SimpleNamespace(scheme="https"),
@@ -29,13 +31,13 @@ def test_plex_target_accepts_embedded_or_https_only(url, embedded, trusted):
     )
     assert client.trusted_transport is trusted
     if trusted:
-        assert target(request) is client
+        assert target_function(request, "local") is client
     else:
         with pytest.raises(DomainError, match="trusted HTTPS Agent"):
-            target(request)
+            target_function(request, "local")
     request.url.scheme = "http"
     with pytest.raises(DomainError, match="Use HTTPS"):
-        target(request)
+        target_function(request, "local")
 
 
 @pytest.mark.parametrize("embedded", [True, False])

@@ -38,6 +38,7 @@ async def plan(body: PlexInstallation, request: Request):
 @router.post("/install", status_code=202)
 async def install(body: PlexInstallRequest, request: Request):
     svc = services(request)
+    svc.setup.require_complete()
     payload = body.model_dump()
     if body.claimToken:
         payload["claimToken"] = body.claimToken.get_secret_value()

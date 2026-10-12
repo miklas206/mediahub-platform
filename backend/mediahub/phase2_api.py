@@ -130,6 +130,7 @@ async def seedbox_install(
     body: PrepareSeedboxRequest, request: Request, user=Depends(administrator)
 ):
     svc = services(request)
+    svc.setup.require_complete()
     with svc.sessions() as db:
         binding = db.scalar(select(Setting).where(Setting.key == "seedbox_installation"))
         if binding is None or binding.value != body.installation.model_dump():

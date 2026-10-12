@@ -136,6 +136,16 @@ class PlexRuntime:
                 if len(response.content) > 4 * 1024**2:
                     raise ValueError()
                 return response.content if binary else response.json() if response.content else {}
+        except httpx.HTTPStatusError as exc:
+            if method == "GET" and path.startswith("/images/") and exc.response.status_code == 404:
+                raise DomainError(
+                    "plex_image_missing",
+                    "Required Plex image is missing on the host; prepare the approved image and try again",
+                    409,
+                ) from None
+            raise DomainError(
+                "plex_provision_failed", "Plex runtime operation failed", 503
+            ) from None
         except (httpx.HTTPError, ValueError):
             raise DomainError(
                 "plex_provision_failed", "Plex runtime operation failed", 503
@@ -293,10 +303,14 @@ class PlexRuntime:
             # mkdir without exist_ok claims a new directory, preventing accidental
             # adoption/chown of existing application or media data.
             code += (
+                # FUSE checks the caller's effective UID; namespace-root cannot
+                # bypass permissions on the host-owned media pool in an LXC.
+                f"os.setegid({policy.gid}); os.seteuid({policy.uid}); "
                 f"r=pathlib.Path('/appdata')/{plan['installation']['installationId']!r}; "
-                f"r.mkdir(mode=0o750); os.chown(r,{policy.uid},{policy.gid}); "
-                f"[( (r/d).mkdir(mode=0o750),os.chown(r/d,{policy.uid},{policy.gid})) "
+                "r.mkdir(mode=0o750); "
+                "[(r/d).mkdir(mode=0o750) "
                 f"for d in {PERSISTENT_DIRECTORIES!r}]; "
+                "os.seteuid(0); os.setegid(0); "
             )
         code += "pathlib.Path('/config/.prepared').touch(mode=0o600); time.sleep(180)"
         await self.request(

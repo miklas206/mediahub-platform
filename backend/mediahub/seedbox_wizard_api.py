@@ -198,6 +198,7 @@ async def preflight(body: WizardExecute, request: Request):
 
 @router.post("/install", status_code=202)
 async def install(body: WizardExecute, request: Request):
+    services(request).setup.require_complete()
     response = await forward(request, "/install", body.model_dump())
     register_installation(request)
     return response

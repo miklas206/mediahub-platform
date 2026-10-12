@@ -102,6 +102,12 @@ class SetupService:
             row.draft = draft.model_dump()
             row.revision += 1
 
+    def require_complete(self):
+        if not self.state()["setup_completed"]:
+            raise DomainError(
+                "setup_required", "Finish MediaHub setup before installing apps", 409
+            )
+
     def save(self, body: SaveDraft):
         if self.lock.locked():
             raise DomainError("setup_busy", "Setup is currently applying", 409)
@@ -113,8 +119,8 @@ class SetupService:
                 raise DomainError(
                     "revision_conflict", "Setup changed in another session; reload to continue", 409
                 )
-            for app in body.draft.selected_apps:
-                self.svc.catalog.get(app)
+            # App provisioning belongs to the hub after Core setup, never the wizard.
+            body.draft.selected_apps = []
             if len({s.name for s in body.draft.storage}) != len(body.draft.storage):
                 raise DomainError("duplicate_storage", "Storage names must be unique")
             row.draft = body.draft.model_dump()
