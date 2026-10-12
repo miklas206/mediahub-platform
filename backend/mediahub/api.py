@@ -192,6 +192,7 @@ async def apps(
 
         if unavailable(svc, package_id):
             continue
+        origin = saved_address(svc, package_id) or origin
         if package_id not in registered:
             connected = {"id": package_id, "packageId": package_id, "name": {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}[package_id], "version": "connected", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"}
             if include_health:

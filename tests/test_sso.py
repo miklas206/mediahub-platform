@@ -52,7 +52,8 @@ def test_revoked_app_access_invalidates_existing_sso_session(logged_in):
     ("mediaseed", "MEDIASEED", "org.mediahub.mediaseed", "/api/storage"),
     ("mediavpn", "MEDIAVPN", "org.mediahub.mediavpn", "/api/profiles"),
 ])
-def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, prefix, package, read_path):
+@pytest.mark.parametrize("external", [False, True])
+def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, prefix, package, read_path, external):
     import importlib
     from pathlib import Path
 
@@ -65,21 +66,38 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     configure(logged_in)
     logged_in.app.state.services.config.sso_app_urls[package] = "https://seed.example"
     monkeypatch.setenv(prefix + "_HUB_URL", "https://127.0.0.1:18765")
+    browser_origin = "https://custom.example" if external else "https://seed.example"
+    if external:
+        assert logged_in.put("/api/v1/app-settings/" + package, json={"externalUrl": browser_origin}).status_code == 200
     creation = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {package: "viewer"}})
     assert creation.status_code == 200
     created = creation.json()["data"]
     with TestClient(logged_in.app, base_url="http://127.0.0.1:18765") as member:
         assert member.post("/api/auth/login", json={"username": "member", "password": "synthetic-password-123"}).status_code == 200
         app = create_app(tmp_path / "seed", "https://seed.example", hub_transport=httpx.ASGITransport(app=logged_in.app))
-        with TestClient(app, base_url="https://seed.example") as seed:
+        with TestClient(app, base_url=browser_origin) as seed:
+            assert seed.get("/api/auth/status").json()["loginUrl"] == browser_origin + "/auth/hub/start"
+            assert seed.get("/", headers={"Host": "unregistered.example"}).status_code == 400
+            assert seed.post("/api/auth/logout", headers={"Origin": "https://unregistered.example"}).status_code == 403
             start = seed.get("/auth/hub/start", follow_redirects=False)
             authorize_url = urlsplit(start.headers["location"])
             authorization = member.get(authorize_url.path + "?" + authorize_url.query, follow_redirects=False)
             assert authorization.status_code == 303
             callback_url = urlsplit(authorization.headers["location"])
+            assert callback_url.netloc == urlsplit(browser_origin).netloc
             callback = seed.get(callback_url.path + "?" + callback_url.query, follow_redirects=False)
             assert callback.status_code == 303
             assert seed.get("/api/auth/me").json()["username"] == "member"
             assert seed.get("/api/auth/me").json()["role"] == "viewer"
             assert logged_in.put(f"/api/users/{created['id']}", json={"username": "member", "appRoles": {}}).status_code == 200
             assert seed.get(read_path).status_code == 403
+        if external:
+            with TestClient(app, base_url="http://custom.example") as proxy:
+                start = proxy.get("/auth/hub/start", follow_redirects=False)
+                assert start.status_code == 303
+                assert start.headers["location"].startswith("https://127.0.0.1:18765/api/v1/sso/authorize?")
+            with TestClient(app, base_url="https://seed.example") as local:
+                redirect = local.get("/auth/hub/start", follow_redirects=False)
+                assert redirect.status_code == 303
+                assert redirect.headers["location"] == browser_origin + "/auth/hub/start"
+                assert "set-cookie" not in redirect.headers

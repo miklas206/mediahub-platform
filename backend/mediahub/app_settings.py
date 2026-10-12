@@ -51,7 +51,7 @@ def describe(svc, package_id):
         "name": name,
         "externalUrl": saved_address(svc, package_id),
         "localUrl": svc.config.operator_app_urls.get(package_id),
-        "ssoOrigin": svc.config.sso_app_urls.get(package_id),
+        "ssoOrigin": (saved_address(svc, package_id) or svc.config.sso_app_urls[package_id]) if package_id in svc.config.sso_app_urls else None,
         "ssoManaged": package_id in svc.config.sso_app_urls,
         "routingManaged": False,
         "removableApp": removable,
@@ -73,8 +73,6 @@ def save(package_id: str, body: AddressSettings, request: Request):
     svc = services(request)
     current = describe(svc, package_id)
     address = normalize_address(body.externalUrl)
-    if address and current["ssoManaged"] and address != normalize_address(current["ssoOrigin"]):
-        raise DomainError("sso_origin_change_required", "Configure and verify this HTTPS origin in the app and its SSO registration before changing its address", 409)
     key = "app_address:" + package_id
     with svc.sessions.begin() as db:
         row = db.scalar(select(Setting).where(Setting.key == key))

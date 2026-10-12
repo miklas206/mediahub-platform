@@ -25,10 +25,14 @@ def test_reject_unsafe_addresses(logged_in, address):
     assert logged_in.put("/api/v1/app-settings/" + package, json={"externalUrl": address}).status_code == 400
 
 
-def test_sso_address_change_is_not_silently_applied(logged_in):
+def test_sso_address_change_updates_registration_and_reset(logged_in):
     logged_in.app.state.services.config.sso_app_urls["org.mediahub.mediaseed"] = "https://seed.example"
     path = "/api/v1/app-settings/org.mediahub.mediaseed"
-    assert logged_in.put(path, json={"externalUrl": "https://other.example"}).status_code == 409
+    changed = logged_in.put(path, json={"externalUrl": "https://other.example"})
+    assert changed.status_code == 200
+    assert changed.json()["data"]["ssoOrigin"] == "https://other.example"
+    assert logged_in.get("/api/v1/sso/origin?packageId=org.mediahub.mediaseed").json()["data"]["origin"] == "https://other.example"
+    assert logged_in.put(path, json={"externalUrl": ""}).json()["data"]["ssoOrigin"] == "https://seed.example"
     assert logged_in.put(path, json={"externalUrl": "https://seed.example"}).status_code == 200
 
 

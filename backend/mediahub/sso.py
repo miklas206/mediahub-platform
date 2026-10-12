@@ -26,11 +26,18 @@ class Exchange(StrictModel):
 
 def configured_app(svc, package_id):
     from mediahub.managed_apps import unavailable
+    from mediahub.app_settings import saved_address
 
     origin = svc.config.sso_app_urls.get(package_id)
     if not origin or unavailable(svc, package_id):
         raise DomainError("sso_unavailable", "SSO is not configured for this installed app", 409)
-    return origin
+    return saved_address(svc, package_id) or origin
+
+
+@router.get("/sso/origin")
+def app_origin(request: Request, packageId: str):
+    # Public configuration only; identities and grants remain authenticated.
+    return result({"origin": configured_app(services(request), packageId)})
 
 
 def identity(svc, db, grant):

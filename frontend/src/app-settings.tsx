@@ -34,7 +34,7 @@ export function AppSettingsPage() {
       <label>Ekstern app-adresse<input type="url" maxLength={2048} placeholder="https://app.example.com" value={draft ?? data.externalUrl} onChange={event => setDraft(event.target.value)} disabled={busy} /></label>
       <dl><dt>Lokal adresse</dt><dd style={{ overflowWrap: "anywhere" }}>{data.localUrl || "Ikke registreret"}</dd>{data.ssoManaged && <><dt>Registreret SSO-adresse</dt><dd style={{ overflowWrap: "anywhere" }}>{data.ssoOrigin}</dd></>}</dl>
       <p>{"DNS, HTTPS-certifikat og proxy skal pege p\u00e5 appen, f\u00f8r dom\u00e6net kan bruges. Adressen bliver ikke publiceret automatisk."}</p>
-      {data.ssoManaged && <p>{"Et nyt dom\u00e6ne skal ogs\u00e5 konfigureres i appen og dens SSO-registrering."}</p>}
+      {data.ssoManaged && <p>{"Den gemte adresse bruges ogs\u00e5 til automatisk hub-login. Nulstil for at bruge appens lokale HTTPS-adresse igen."}</p>}
       <div className="button-row"><button type="submit" disabled={busy}><Save size={16} /> Gem adresse</button><button type="button" disabled={busy || !data.externalUrl} onClick={() => void save(undefined, true)}><RotateCcw size={16} /> Nulstil</button>{data.configurationPath && <Link to={data.configurationPath}><ExternalLink size={16} /> App-konfiguration</Link>}</div>
     </form></section>}
   </div>;

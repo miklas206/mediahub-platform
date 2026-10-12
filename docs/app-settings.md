@@ -16,10 +16,12 @@ MediaHub does not silently create DNS records, obtain certificates, modify
 Cloudflare tunnels or open firewall ports. Configure those before saving a
 domain address. No network request is made to an arbitrary submitted URL.
 
-For MediaSeed managed SSO, a different external origin is rejected until the
-app's configured origin and MediaHub's registered SSO origin are changed
-together. Changing only the opening link must never redirect login codes to
-an unregistered domain or break host/origin/state-cookie protections.
+For managed MediaSeed and MediaVPN, saving an external origin also changes the
+registered SSO callback origin. Apps read that registration over their verified
+hub connection, accept only their local host or the registered domain, and
+redirect login to the registered origin before creating the state cookie.
+Reset restores the configured local HTTPS origin. Origin checks and current
+hub permissions remain enforced; no credentials are copied between hosts.
 
 Settings endpoints require a current hub administrator and CSRF for writes.
 Addresses must be HTTPS origins without credentials, paths, queries or

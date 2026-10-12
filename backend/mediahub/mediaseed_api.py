@@ -62,6 +62,9 @@ async def status(request: Request, user=Depends(authenticated)):
     if origin is None:
         return result({"configured": False, "available": False, "url": None})
     sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediaseed")
+    if sso_origin:
+        from mediahub.sso import configured_app
+        sso_origin = configured_app(services(request), "org.mediahub.mediaseed")
     health = await available(origin, services(request).config.agent_ca_file) if sso_origin else await available(origin)
     return result({"configured": True, "available": health, "url": origin, **({"openUrl": sso_origin + "/auth/hub/start"} if sso_origin else {}), "preview": True})
 
@@ -76,5 +79,8 @@ async def vpn_status(request: Request, user=Depends(authenticated)):
     from mediahub.app_settings import saved_address
 
     sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediavpn")
+    if sso_origin:
+        from mediahub.sso import configured_app
+        sso_origin = configured_app(services(request), "org.mediahub.mediavpn")
     external = sso_origin + "/auth/hub/start" if sso_origin else saved_address(services(request), "org.mediahub.mediavpn")
     return result({"configured": True, "available": await available(origin), "url": origin, **({"openUrl": external} if external else {}), "preview": True})

@@ -57,6 +57,12 @@ set `MEDIASEED_HUB_BROWSER_URL` / `MEDIAVPN_HUB_BROWSER_URL` to that public
 HTTPS origin. Browser authorization then reuses the existing public hub session,
 while code exchange and permission checks continue over the verified private
 `*_HUB_URL`. This avoids routing machine requests through browser access policies.
+Saving an HTTPS app domain in app settings updates the canonical SSO callback
+and opening link together. Apps obtain this registration from `/sso/origin`
+over verified TLS. Login redirects to that app origin before setting state;
+only the local host and the current registered app host are accepted. Domain
+DNS, TLS, and proxy routing must already reach the app. Reset restores the
+operator-configured HTTPS app origin without changing private health addresses.
 The hub issues a 60-second single-use code for the registered callback.
 MediaSeed exchanges that code over verified TLS and creates a local session
 bound to the stable hub user ID. No hub passwords or password hashes are
