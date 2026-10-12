@@ -340,10 +340,18 @@ class ManagedApps:
                     raise DomainError(
                         "installation_changed", "Installation changed during removal", 409
                     )
-                if any(
+                has_client = any(
                     row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox") == "mediaseed"
                     for row in current
-                ):
+                )
+                # An enabled controller may be waiting for VPN health and have
+                # no client yet. Fence it before deleting its source containers.
+                vpn_present = (
+                    package == "org.mediahub.mediaseed"
+                    and "org.mediahub.mediavpn" in self.policy
+                    and bool(await self.containers("org.mediahub.mediavpn"))
+                )
+                if has_client or vpn_present:
                     await self.disconnect_client(self.policy[package])
                 for row in job["containers"]:
                     identifier = row["Id"]

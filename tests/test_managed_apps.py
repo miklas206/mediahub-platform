@@ -214,6 +214,28 @@ def test_unattached_seed_removal_does_not_require_mediavpn(logged_in, tmp_path, 
     assert not rows
 
 
+def test_seed_removal_fences_present_controller_before_client_is_created(logged_in, tmp_path, monkeypatch):
+    _, manager, _, _ = setup_manager(logged_in, tmp_path, monkeypatch)
+    manager.policy[VPN] = manager.policy[SEED].model_copy(update={"project": "synthetic-vpn"})
+    containers = manager.containers
+
+    async def current(package):
+        return [{"Id": "vpn-controller"}] if package == VPN else await containers(package)
+
+    monkeypatch.setattr(manager, "containers", current)
+    disconnect = AsyncMock()
+    monkeypatch.setattr(manager, "disconnect_client", disconnect)
+
+    async def remove():
+        ready = await manager.status(SEED)
+        await manager.remove(SEED, ready["installationId"])
+        await manager.tasks[SEED]
+        assert (await manager.status(SEED))["state"] == "succeeded"
+
+    asyncio.run(remove())
+    disconnect.assert_awaited_once()
+
+
 def test_pending_removal_resumes_after_restart(logged_in, tmp_path, monkeypatch):
     _, manager, rows, _ = setup_manager(logged_in, tmp_path, monkeypatch)
 

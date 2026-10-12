@@ -23,7 +23,7 @@ for (const width of [1440, 390, 320]) {
       else if (path.startsWith("/app-settings/")) data = { name: packageId.endsWith("mediaseed") ? "MediaSeed" : "MediaVPN", externalUrl: "", localUrl: "http://127.0.0.1:18802", removableApp: { id: "managed-app", packageId, state: "running", isMock: false } };
       else if (path === "/apps/managed-app/uninstall") {
         if (packageId.endsWith("mediavpn")) {
-          await route.fulfill({ status: 409, json: { data: null, error: { code: "app_dependency", message: "Afinstaller MediaSeed først. Dens torrentklient bruger MediaVPN." } } });
+          await route.fulfill({ status: 409, json: { data: null, error: { code: "app_dependency", message: "Frakobl MediaVPN under VPN i MediaSeed først. Derefter kan MediaVPN afinstalleres uden at fjerne MediaSeed." } } });
           return;
         }
         if (route.request().method() === "POST") {
@@ -44,7 +44,7 @@ for (const width of [1440, 390, 320]) {
     packageId = "org.mediahub.mediavpn";
     await page.goto("/");
     await page.getByRole("button", { name: /^Afinstaller:/ }).click();
-    await expect(page.getByText("Afinstaller MediaSeed først. Dens torrentklient bruger MediaVPN.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Frakobl MediaVPN under VPN i MediaSeed først. Derefter kan MediaVPN afinstalleres uden at fjerne MediaSeed.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Bekræft fjernelse", exact: true })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
