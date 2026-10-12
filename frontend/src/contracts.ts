@@ -14,6 +14,7 @@ export type AppInfo = {
   state: string;
   isMock: boolean;
   detailPath?: string | null;
+  externalUrl?: string;
   health: Health;
 };
 export type InstalledAppInfo = Omit<AppInfo, "health">;

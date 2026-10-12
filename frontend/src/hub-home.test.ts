@@ -52,6 +52,10 @@ const input = {
 };
 
 describe("primary MediaHub app hub", () => {
+  it("opens a saved external address and keeps app settings accessible", () => {
+    const entries = buildHubEntries({ ...input, apps: [{ ...seedbox, externalUrl: "https://seed.example.com" }] });
+    expect(entries.find(entry => entry.id === seedbox.packageId)).toMatchObject({ path: "https://seed.example.com", external: true, settingsPath: "/app-settings/org.mediahub.seedbox" });
+  });
   it("adds the separate MediaVPN app without claiming tunnel health", () => {
     const entries = buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" } });
     expect(entries.find((entry) => entry.id === "org.mediahub.mediavpn")).toMatchObject({ name: "MediaVPN", path: "http://192.168.1.111:18802/", external: true, configured: true, statusLabel: "App available" });

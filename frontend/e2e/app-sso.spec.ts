@@ -1,6 +1,36 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390]) {
+  test(`App address settings save and reset (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    let externalUrl = "";
+    await page.route("**/api/**", async route => {
+      const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
+      let data: unknown = [];
+      if (path === "/auth/status") data = { needsSetup: false };
+      else if (path === "/setup/status") data = { setup_required: false };
+      else if (path === "/auth/me") data = { id: "admin", username: "administrator", role: "administrator", csrf: "synthetic", language: "da" };
+      else if (path === "/settings") data = { display_name: "MediaHub", visible_navigation: ["/", "/settings"], dashboard_sections: [], theme: "dark" };
+      else if (path === "/updates/summary") data = { count: 0, items: [], notifications: [] };
+      else if (path === "/fjordhub/deployment") data = null;
+      else if (path === "/app-settings/org.mediahub.mediavpn") {
+        if (route.request().method() === "PUT") externalUrl = route.request().postDataJSON().externalUrl;
+        data = { name: "MediaVPN", externalUrl, localUrl: "http://192.168.1.111:18802", ssoManaged: false, ssoOrigin: null, configurationPath: null };
+      }
+      await route.fulfill({ json: { data, error: null, metadata: {} } });
+    });
+    await page.goto("/app-settings/org.mediahub.mediavpn");
+    await expect(page.getByRole("heading", { name: "MediaVPN: indstillinger" })).toBeVisible();
+    await page.getByLabel("Ekstern app-adresse").fill("https://vpn.example.com");
+    await page.getByRole("button", { name: "Gem adresse" }).click();
+    await expect.poll(() => externalUrl).toBe("https://vpn.example.com");
+    await expect(page.getByText("App-adressen er gemt.", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Nulstil" }).click();
+    await expect.poll(() => externalUrl).toBe("");
+    await expect(page.getByLabel("Ekstern app-adresse")).toHaveValue("");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/app-settings-${width}.png`, fullPage: true });
+  });
   test(`App roles can be assigned (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     let saved: unknown;

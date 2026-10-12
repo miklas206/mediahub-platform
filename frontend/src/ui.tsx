@@ -71,6 +71,7 @@ import { PlatformVersion } from "./platform-version";
 import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
 import { UsersPage } from "./users";
+import { AppSettingsPage } from "./app-settings";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
@@ -972,6 +973,7 @@ function Shell({
                     element={<FjordHubUninstallPage />}
                   />
                   <Route path="/store" element={<Navigate to="/" replace />} />
+                  <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"
                     element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />}

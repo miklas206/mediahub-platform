@@ -20,6 +20,7 @@ from mediahub.agent_client import AgentClient
 from mediahub.agent_updates import AgentUpdates
 from mediahub.agent_updates_api import router as agent_updates_router
 from mediahub.api import router
+from mediahub.app_settings import router as app_settings_router
 from mediahub.apps.cloudflared import (
     register_cloudflared_app,
     should_register_cloudflared_app,
@@ -274,6 +275,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(app_settings_router, prefix="/api/v1")
     app.include_router(sso_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")

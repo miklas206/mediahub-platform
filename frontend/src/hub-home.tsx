@@ -6,6 +6,7 @@ import {
   Box,
   RefreshCw,
   Search,
+  Settings2,
 } from "lucide-react";
 import type { AppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
@@ -71,6 +72,7 @@ export type HubEntry = {
   statusDetail?: string;
   action: string;
   external?: boolean;
+  settingsPath?: string;
 };
 
 export type MediaSeedStatus = {
@@ -128,6 +130,7 @@ export function buildHubEntries({
             status: mediaseed.available && !mediaseedError ? "healthy" : "unknown",
             statusLabel: mediaseedError ? "Status unavailable" : mediaseed.available ? "App available" : "Check connection",
             action: "Open app",
+            settingsPath: "/app-settings/org.mediahub.mediaseed",
           };
         }
       }
@@ -170,7 +173,10 @@ export function buildHubEntries({
         description: definition.description,
         category: definition.category,
         configured,
+        settingsPath: installed ? `/app-settings/${entry.id}` : undefined,
+        external: installed?.externalUrl ? true : undefined,
         path:
+          installed?.externalUrl ||
           installed?.detailPath ||
           (integration
             ? `/integrations/${encodeURIComponent(integration.id)}`
@@ -207,7 +213,8 @@ export function buildHubEntries({
         name: "MediaVPN",
         description: "WireGuard connections · preview",
         category: "Network",
-        path: address.href,
+        path: mediavpn.openUrl || address.href,
+        settingsPath: "/app-settings/org.mediahub.mediavpn",
         configured: true,
         external: true,
         status: mediavpn.available && !mediavpnError ? "healthy" : "unknown",
@@ -428,6 +435,7 @@ export function HubHome({
                         data-app-id={entry.id}
                       >
                         <div className="hub-card-top">
+                          {entry.settingsPath && <Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link>}
                           <span
                             className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
                           >

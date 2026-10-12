@@ -182,6 +182,9 @@ async def apps(
 ):
     svc = services(request)
     listing = svc.apps.list()
+    from mediahub.app_settings import saved_address
+
+    listing = [{**app, "externalUrl": saved_address(svc, app["packageId"])} for app in listing]
     registered = {app["packageId"] for app in listing}
     listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
     for package_id, origin in svc.config.sso_app_urls.items():
