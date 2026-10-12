@@ -53,8 +53,8 @@ from mediahub.seedbox_reachability import SeedboxReachability
 from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
-from mediahub.storage import StorageManager
 from mediahub.sso import router as sso_router
+from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
@@ -108,6 +108,10 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions, svc.integrations)
         register_remote_apps(svc)
+        from mediahub.managed_apps import ManagedApps
+
+        svc.managed_apps = ManagedApps(svc)
+        await svc.managed_apps.initialize()
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -150,6 +154,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await svc.managed_apps.close()
             await svc.update_queue.stop()
             port_collector.cancel()
             with contextlib.suppress(asyncio.CancelledError):

@@ -47,7 +47,7 @@ def describe(svc, package_id):
         if installed and not installed.is_mock:
             adapter = svc.apps.adapters.get(installed.id)
             definition = getattr(adapter, "definition", None)
-            if hasattr(definition, "binding_key") or package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"}:
+            if getattr(adapter, "managed", False) or hasattr(definition, "binding_key") or package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"}:
                 removable = svc.apps.get(installed.id)
     return {
         "packageId": package_id,

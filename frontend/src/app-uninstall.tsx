@@ -22,6 +22,7 @@ export function AppUninstall({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const windowsShare = app.packageId === "org.mediahub.windows-share";
+  const managed = ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId);
   const removalLabel = windowsShare
     ? t("Remove connection")
     : app.packageId === "org.mediahub.cloudflared"
@@ -48,7 +49,7 @@ export function AppUninstall({
         if (!cancelled)
           setError(
             (e as Error).message +
-              (windowsShare
+              (managed ? "" : windowsShare
                 ? " Check the connection to MediaHub and try again."
                 : " Check the Agent connection and update the Agent if removal is not supported."),
           );
@@ -59,7 +60,7 @@ export function AppUninstall({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, onRemoved, busy, windowsShare]);
+  }, [open, endpoint, onRemoved, busy, windowsShare, managed]);
   const remove = async () => {
     if (!status?.installationId) return;
     setBusy(true);
@@ -85,6 +86,7 @@ export function AppUninstall({
       <button
         onClick={() => {
           setError("");
+          setStatus(undefined);
           setOpen(true);
         }}
       >
@@ -115,6 +117,11 @@ export function AppUninstall({
           {error && (
             <NotificationPopup tone="danger">
               {translateText(error)}
+            </NotificationPopup>
+          )}
+          {status?.state === "failed" && !error && (
+            <NotificationPopup tone="danger">
+              {translateText(status.message)}
             </NotificationPopup>
           )}
           {working && (

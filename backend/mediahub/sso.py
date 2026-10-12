@@ -25,8 +25,10 @@ class Exchange(StrictModel):
 
 
 def configured_app(svc, package_id):
+    from mediahub.managed_apps import unavailable
+
     origin = svc.config.sso_app_urls.get(package_id)
-    if not origin:
+    if not origin or unavailable(svc, package_id):
         raise DomainError("sso_unavailable", "SSO is not configured for this installed app", 409)
     return origin
 

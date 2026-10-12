@@ -52,6 +52,8 @@ class Config(BaseSettings):
         return validate_url(value, allow_http=True)
 
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
+    managed_apps_policy_file: Path | None = None
+    managed_apps_docker_socket: Path | None = None
     sso_app_urls: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("sso_app_urls")

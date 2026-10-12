@@ -334,10 +334,13 @@ export function ServiceOverview({
                 label={staleServiceLabel(reports[app.id])}
               />
             </div>
-            <Link className="service-open" to={app.detailPath || `/apps/${app.id}`}>
+            {app.openUrl || app.externalUrl ? <a className="service-open" href={app.openUrl || app.externalUrl} target="_blank" rel="noopener noreferrer">
               {t("Open {name}", { name: app.name })}
               <ArrowUpRight size={13} />
-            </Link>
+            </a> : <Link className="service-open" to={app.detailPath || `/apps/${app.id}`}>
+              {t("Open {name}", { name: app.name })}
+              <ArrowUpRight size={13} />
+            </Link>}
           </article>
         ))}
         {!apps?.length && (

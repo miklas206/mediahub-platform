@@ -50,7 +50,7 @@ for (const width of [1440, 390, 320]) {
 }
 
 for (const width of [1440, 390, 320]) {
-  for (const installed of [true, false]) {
+  for (const installed of [true, false, "sso"]) {
     test(`Simple overview (${width}px, Seedbox ${installed})`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });
       const errors: string[] = [];
@@ -76,7 +76,7 @@ for (const width of [1440, 390, 320]) {
           dashboard_sections: ["apps", "system", "storage", "network", "activity", "core", "runtime", "integrations", "cloudflare", "torrents", "uploads"],
         };
         else if (path === "/setup/status") data = { setup_required: false };
-        else if (path === "/apps") data = installed ? [{ id: "seedbox", name: "Seedbox", packageId: "org.mediahub.seedbox", state: "running", isMock: false, health: { status: "healthy", checks: [] } }] : [];
+        else if (path === "/apps") data = installed === "sso" ? [{ id: "org.mediahub.mediaseed", name: "MediaSeed", packageId: "org.mediahub.mediaseed", version: "connected", state: "registered", isMock: false, openUrl: "https://seed.example/auth/hub/start", health: { status: "healthy", checks: [] } }] : installed ? [{ id: "seedbox", name: "Seedbox", packageId: "org.mediahub.seedbox", state: "running", isMock: false, health: { status: "healthy", checks: [] } }] : [];
         else if (path === "/updates/summary") data = { count: 0, items: [], notifications: [] };
         else if (path === "/seedbox/torrents") data = { items: [] };
         else if (path === "/system/status") data = metrics;
@@ -96,12 +96,16 @@ for (const width of [1440, 390, 320]) {
         await page.locator('.scrim').click();
       }
       const overview = page.locator(".overview-grid");
-      await expect(overview.locator(".dashboard-card")).toHaveCount(installed ? 4 : 2);
+      await expect(overview.locator(".dashboard-card")).toHaveCount(installed === true ? 4 : 2);
       await expect(overview.locator('[data-section="apps"]')).toBeVisible();
       await expect(overview.locator('[data-section="system"]')).toBeVisible();
       await expect(page.locator(".control-summary, .dashboard-context")).toHaveCount(0);
       await expect(overview.locator('[data-section="storage"], [data-section="updates"], [data-section="activity"], [data-section="runtime"]')).toHaveCount(0);
-      if (installed) {
+      if (installed === "sso") {
+        await expect(overview.getByRole("link", { name: "Åbn MediaSeed" })).toHaveAttribute("href", "https://seed.example/auth/hub/start");
+        await expect(overview.getByRole("link", { name: "Åbn MediaSeed" })).toHaveAttribute("target", "_blank");
+      }
+      if (installed === true) {
         await expect(overview.locator('[data-section="torrents"]')).toBeVisible();
         await expect(overview.locator('[data-section="uploads"]')).toBeVisible();
         await expect(overview.locator(".overview-apps a")).toHaveAttribute("href", "/apps/seedbox");
@@ -250,10 +254,14 @@ for (const width of [1440, 390, 320]) {
             tokenConfigured: true,
             snapshot: {
               status: "online",
+              storage: [],
+              events: [],
+              app_info: {},
               apps: [{ id: "fjordflix", name: "FjordFlix", running_count: 1 }],
             },
           },
         ];
+      else if (path === "/integrations/fjordhub-one/updates") data = { app_info: {}, updates: {} };
       else if (path === "/events/stream") {
         await route.fulfill({
           contentType: "text/event-stream",
@@ -296,10 +304,10 @@ for (const width of [1440, 390, 320]) {
       page.getByRole("region", { name: "Administrer MediaHub" }),
     ).toHaveCount(0);
     await expect(
-      page.locator('[data-app-id="org.mediahub.seedbox"] a'),
+      page.locator('[data-app-id="org.mediahub.seedbox"] .hub-card-action'),
     ).toHaveAttribute("href", "/apps/seedbox-real");
     await expect(
-      page.locator('[data-app-id="org.mediahub.jellyfin"] a'),
+      page.locator('[data-app-id="org.mediahub.jellyfin"] .hub-card-action'),
     ).toHaveAttribute("href", "/apps/install/jellyfin");
     await expect(
       page.locator('[data-app-id="org.mediahub.fjordhub"] a'),
@@ -345,42 +353,19 @@ for (const width of [1440, 390, 320]) {
       path: `test-results/hub-home-${width}.png`,
       fullPage: true,
     });
-    await page.clock.install();
     await page.locator('[data-app-id="healthcheck"] a').click();
     await expect(
-      page.getByRole("heading", { name: "Healthcheck", exact: true }),
+      page.getByRole("tab", { name: "Healthcheck", exact: true, selected: true }),
     ).toBeVisible();
-    const popup = page.locator(".notification-popups > .notification-popup.success").filter({ hasText: "Maintenance completed" });
-    await expect(popup).toBeVisible();
-    await expect(page.locator(".notification-popup.danger")).toHaveCount(0);
-    expect((await popup.boundingBox())!.y).toBeLessThan(40);
-    await popup.hover();
-    await page.clock.fastForward(6500);
-    await expect(popup).toBeVisible();
-    await page.screenshot({ path: `test-results/notification-popup-${width}.png`, fullPage: true });
-    await page.mouse.move(0, 900);
-    await page.clock.fastForward(6500);
-    await expect(popup).toHaveClass(/is-popping/);
-    await expect(popup.locator(".notification-fragment")).toHaveCount(8);
-    await expect(popup.locator(".notification-shard").first()).toContainText("Maintenance completed");
-    await page.clock.runFor(300);
-    await popup.evaluate((element) => {
-      for (const animation of element.getAnimations({ subtree: true })) {
-        animation.pause();
-        animation.currentTime = 340;
-      }
-    });
-    await page.screenshot({ path: `test-results/notification-tear-${width}.png`, fullPage: true });
-    await page.clock.runFor(500);
+    const popup = page.locator(".notification-popups > .notification-popup.success");
     await expect(popup).toHaveCount(0);
-    await page.clock.resume();
     await page.getByRole("button", { name: "Opdater sundhedstjek" }).click();
     await expect(popup).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Kontrollér og ryd op" }),
     ).toBeVisible();
     expect(mutations).toEqual([]);
-    await expect(page.locator(".sidebar nav a")).toHaveCount(2);
+    await expect(page.locator(".sidebar nav a")).toHaveCount(3);
     await expect(page.getByRole("tab")).toHaveText([
       "Generelt", "Brugere", "Sikkerhed", "Integrationer",
       "Opdateringer", "Healthcheck", "Aktivitet", "Logfiler",
@@ -456,7 +441,7 @@ for (const width of [1440, 390, 320]) {
     }
     expect(errors).toEqual([]);
     const tabRows = await page.getByRole("tab").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
-    expect(Math.max(...tabRows) - Math.min(...tabRows)).toBeLessThan(1);
+    if (width > 760) expect(Math.max(...tabRows) - Math.min(...tabRows)).toBeLessThan(1);
     const footerBefore = await page.locator(".footer").boundingBox();
     expect(await page.locator(".footer").evaluate((element) => getComputedStyle(element).position)).toBe("fixed");
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

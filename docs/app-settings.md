@@ -29,3 +29,58 @@ Automatic domain provisioning and generic in-place runtime reconfiguration
 are not implemented by this settings page. Each app requires its own verified
 configuration adapter; existing Plex, Jellyfin, Seedbox and Cloudflare
 configuration pages remain separate.
+
+## Managed MediaSeed and MediaVPN removal
+
+For an explicitly registered installation, open the app card's settings icon,
+then **Afinstallation → Afinstaller**. A connected URL alone never enables this.
+The hub must have `MEDIAHUB_MANAGED_APPS_POLICY_FILE` pointing to a read-only
+operator policy and `MEDIAHUB_MANAGED_APPS_DOCKER_SOCKET` to its Docker socket.
+This reuses the beta's existing Docker authority; it does not require a new
+network listener. Socket access gives Docker control even with a read-only bind.
+
+Example policy (replace identities and project names with verified installation
+values; never commit the deployed policy or integration credentials):
+
+```json
+{
+  "org.mediahub.mediaseed": {
+    "installationId": "unique-mediaseed-installation-id",
+    "project": "mediaseed-project",
+    "runtimeLabels": {"org.mediahub.mediavpn.seedbox": "mediaseed"},
+    "integrationUrl": "http://192.168.1.20:18802",
+    "integrationTokenFile": "/managed-auth/mediaseed.token"
+  },
+  "org.mediahub.mediavpn": {
+    "installationId": "unique-mediavpn-installation-id",
+    "project": "mediavpn-project",
+    "runtimeLabels": {"org.mediahub.mediavpn.owner": "mediavpn"}
+  }
+}
+```
+
+Mount the policy and token read-only. The hub user needs read permission on the
+token, without exposing it to other users. Runtime labels refer to the single
+local MediaVPN controller; this policy does not support multiple controllers
+sharing those ownership labels on one Docker daemon.
+
+Removal requires an administrator, CSRF and confirmation tied to the current
+container IDs. MediaSeed disconnects its torrent client through MediaVPN's
+authenticated integration before stopping and removing its app/client
+containers. MediaVPN removal is blocked while that client exists; uninstall
+MediaSeed first. Foreign containers sharing a target's network namespace also
+block removal. No real app is removed merely by opening the dialog.
+
+Only selected containers are stopped and removed, with `force=false&v=false`.
+No volume, image, network, source, bind-mounted file or VPN profile is deleted.
+Active transfers stop. Named volumes are checked after removal. A private,
+durable journal contains container identities and mount metadata, never Docker
+environment variables. Interrupted removal resumes after a hub restart; failed
+removal retains registration and offers retry. New replacement containers stop
+the retry rather than being silently included.
+
+After verified removal the saved operator URLs and SSO configuration remain for
+rollback, but the app is excluded from connected status and SSO login. Restore
+the original Compose project and client settings to roll back; assign a new
+installation ID when explicitly registering a fresh installation. Automatic
+reinstallation and fresh-install SSO provisioning remain separate work.

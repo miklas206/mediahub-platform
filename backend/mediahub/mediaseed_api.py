@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from mediahub.api import authenticated, result, services
+from mediahub.managed_apps import unavailable
 
 router = APIRouter()
 
@@ -55,6 +56,8 @@ async def available(origin, ca_file=None):
 
 @router.get("/mediaseed/status")
 async def status(request: Request, user=Depends(authenticated)):
+    if unavailable(services(request), "org.mediahub.mediaseed", removed_only=True):
+        return result({"configured": False, "available": False, "url": None})
     origin = app_origin(services(request).config.operator_app_urls.get("org.mediahub.mediaseed"))
     if origin is None:
         return result({"configured": False, "available": False, "url": None})
@@ -65,6 +68,8 @@ async def status(request: Request, user=Depends(authenticated)):
 
 @router.get("/mediavpn/status")
 async def vpn_status(request: Request, user=Depends(authenticated)):
+    if unavailable(services(request), "org.mediahub.mediavpn", removed_only=True):
+        return result({"configured": False, "available": False, "url": None})
     origin = app_origin(services(request).config.operator_app_urls.get("org.mediahub.mediavpn"))
     if origin is None:
         return result({"configured": False, "available": False, "url": None})

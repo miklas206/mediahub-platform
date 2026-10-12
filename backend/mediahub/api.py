@@ -188,8 +188,19 @@ async def apps(
     registered = {app["packageId"] for app in listing}
     listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
     for package_id, origin in svc.config.sso_app_urls.items():
+        from mediahub.managed_apps import unavailable
+
+        if unavailable(svc, package_id):
+            continue
         if package_id not in registered:
-            listing.append({"id": package_id, "packageId": package_id, "name": "MediaSeed", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"})
+            connected = {"id": package_id, "packageId": package_id, "name": "MediaSeed", "version": "connected", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"}
+            if include_health:
+                from mediahub.mediaseed_api import available
+
+                private_origin = svc.config.operator_app_urls.get(package_id)
+                healthy = bool(private_origin) and await available(private_origin, svc.config.agent_ca_file)
+                connected["health"] = {"status": "healthy" if healthy else "unknown", "summary": "App available" if healthy else "Check connection", "checks": []}
+            listing.append(connected)
     if user["role"] != "administrator":
         visible = []
         for app in listing:
