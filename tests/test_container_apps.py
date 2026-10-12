@@ -109,10 +109,10 @@ def inspected_container(plan):
 
 
 @pytest.mark.parametrize("app", CONTAINER_APPS)
-def test_plans_pin_images_and_scope_mounts(tmp_path, app):
+def test_plans_request_latest_approved_publisher_and_scope_mounts(tmp_path, app):
     runtime, spec = runtime_and_spec(tmp_path, app)
     plan = asyncio.run(runtime.build_plan(spec))
-    assert "@sha256:" in plan["container"]["Image"]
+    assert plan["container"]["Image"] == CONTAINER_APPS[app]["repository"] + ":latest"
     host = plan["container"]["HostConfig"]
     assert (
         host["PortBindings"][str(CONTAINER_APPS[app]["port"]) + "/tcp"][0]["HostIp"]
@@ -187,13 +187,16 @@ def test_runtime_ownership_checks_and_data_preserving_removal(tmp_path):
     )
 
 
-def test_pull_failure_is_reported_without_creating_container(tmp_path):
+def test_pull_failure_is_reported_without_creating_container(tmp_path, monkeypatch):
     runtime, spec = runtime_and_spec(tmp_path)
     plan = asyncio.run(runtime.build_plan(spec))
-    runtime.request = AsyncMock(side_effect=DomainError("failed", "pull failed", 503))
+    runtime.request = AsyncMock()
+    pull = AsyncMock(side_effect=DomainError("failed", "pull failed", 503))
+    monkeypatch.setattr("agent.container_apps.pull_latest", pull)
     asyncio.run(runtime.provision("radarr", plan))
     assert runtime.operations["radarr"]["state"] == "failed"
-    assert runtime.request.call_count == 1
+    runtime.request.assert_not_awaited()
+    pull.assert_awaited_once()
 
 
 def test_uninstall_failed_installation_only_forgets_registration(tmp_path):
@@ -226,10 +229,13 @@ def test_owned_existing_container_can_resume_after_failed_install(tmp_path):
     assert "jellyfin" not in runtime.operations
 
 
-def test_provision_records_ownership_before_creating_and_starting(tmp_path):
+def test_provision_records_ownership_before_creating_and_starting(tmp_path, monkeypatch):
     runtime, spec = runtime_and_spec(tmp_path)
     plan = asyncio.run(runtime.build_plan(spec))
     calls = []
+    publisher = "linuxserver/radarr@sha256:" + "b" * 64
+    pull = AsyncMock(return_value={"Id": "sha256:" + "a" * 64, "RepoDigests": [publisher]})
+    monkeypatch.setattr("agent.container_apps.pull_latest", pull)
 
     async def request(method, path, body=None, missing=False):
         calls.append((method, path))
@@ -243,6 +249,7 @@ def test_provision_records_ownership_before_creating_and_starting(tmp_path):
             }
         if path.startswith("/containers/create"):
             assert runtime.record("radarr")["desiredRunning"] is False
+            assert body["Image"] == publisher
         if path.endswith("/json"):
             return inspected_container(plan)
         return {}
@@ -252,6 +259,7 @@ def test_provision_records_ownership_before_creating_and_starting(tmp_path):
     assert runtime.operations["radarr"]["state"] == "installed"
     assert runtime.record("radarr")["desiredRunning"] is True
     assert calls[-1] == ("POST", "/containers/mediahub-radarr/start")
+    pull.assert_awaited_once_with(runtime.socket, "linuxserver/radarr")
 
 
 def test_container_api_requires_login_https_and_csrf(client, logged_in):

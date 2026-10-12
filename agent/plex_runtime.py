@@ -21,6 +21,7 @@ from mediahub.errors import DomainError
 from mediahub.secret_store import SecretStore
 
 from agent.install_files import read_json, save_json
+from agent.install_images import publisher_reference, pull_latest
 from agent.plex_control import PlexMount, PlexPolicy
 from agent.plex_install import PMS_ROOT, PlexInstallPolicy, installation_plan
 from agent.plex_vpn import PlexVPN
@@ -35,6 +36,13 @@ class PlexRuntime:
         self.last_saved = None
         self.operation = {"state": "idle", "message": "No operation running"}
         self.update_task = None
+        self.install_task = None
+        self.install_operation_path = self.state_dir / "plex-install-operation.json"
+        if self.install_operation_path.exists():
+            self.operation = read_json(self.install_operation_path)
+            if self.operation.get("state") == "running":
+                self.operation.update(state="failed", message="Plex installation was interrupted; review the app runtime before retrying")
+                save_json(self.install_operation_path, self.operation)
         self.libraries_ready = False
         self.vpn = PlexVPN(self)
 
@@ -355,6 +363,44 @@ class PlexRuntime:
             await self.request("POST", f"/containers/{name}/stop?t=2")
             await self.request("DELETE", f"/containers/{name}")
 
+    async def queue_install(self, body: PlexInstallRequest):
+        # A cold Plex image can take minutes. Accept before downloading so a
+        # browser/proxy timeout cannot cancel provisioning halfway through.
+        if (self.install_task and not self.install_task.done()) or self.control.lock.locked():
+            raise DomainError("operation_busy", "Another Plex operation is running", 409)
+        policy = self.policy()
+        plan = installation_plan(policy, body.installation)
+        if plan["planDigest"] != body.reviewedPlanDigest:
+            raise DomainError("plex_plan_changed", "Review the current installation plan first", 409)
+        if Path(self.control.policy_file).exists():
+            raise DomainError("plex_already_installed", "Managed Plex is already installed", 409)
+        self.operation = {
+            "state": "running", "action": "install", "hostId": policy.hostId,
+            "installationId": body.installation.installationId,
+            "message": "Downloading the latest Plex image and preparing installation",
+        }
+        save_json(self.install_operation_path, self.operation)
+        self.install_task = asyncio.create_task(self._run_install(body))
+        return {"state": "accepted", "installationId": body.installation.installationId,
+                "message": self.operation["message"]}
+
+    async def _run_install(self, body):
+        try:
+            await self.install(body)
+            self.operation.update(state="succeeded", message="Plex started; account and libraries are being checked")
+        except DomainError as error:
+            self.operation.update(state="failed", message=error.message)
+        except Exception:
+            self.operation.update(state="failed", message="Plex installation failed; media and persistent data were retained")
+        finally:
+            save_json(self.install_operation_path, self.operation)
+
+    async def close(self):
+        if self.install_task and not self.install_task.done():
+            self.install_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.install_task
+
     async def install(self, body: PlexInstallRequest):
         async with self.control.lock:
             policy = self.policy()
@@ -385,8 +431,8 @@ class PlexRuntime:
                     "Media storage is not verified; installation blocked",
                     409,
                 )
-            # Image must have been pulled by the controlled operator/update path.
-            image = await self.request("GET", "/images/" + policy.image + "/json")
+            image = await pull_latest(self.control.socket, "lscr.io/linuxserver/plex")
+            plan["container"]["Image"] = publisher_reference(image, "lscr.io/linuxserver/plex")
             existing = await self.request("GET", "/volumes")
             if any(
                 v["Name"] == plan["runtimeVolume"]["Name"] for v in existing.get("Volumes") or []

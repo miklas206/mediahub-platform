@@ -72,6 +72,7 @@ import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
 import { UsersPage } from "./users";
 import { AppSettingsPage } from "./app-settings";
+import { MediaVPNSetupPage } from "./mediavpn-setup";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
@@ -973,6 +974,7 @@ function Shell({
                     element={<FjordHubUninstallPage />}
                   />
                   <Route path="/store" element={<Navigate to="/" replace />} />
+                  <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"

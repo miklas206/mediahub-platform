@@ -11,6 +11,7 @@ import httpx
 from mediahub.apps.seedbox import SeedboxInstallation, compose_plan
 
 from agent.forwarding_rules import owned_ports
+from agent.install_images import resolved_seedbox_policy
 from agent.port_forwarding import PortLeaseError
 from agent.port_listener import ListeningPortError
 from agent.ram_secrets import RuntimeSecrets
@@ -29,6 +30,8 @@ class ScopedDriver:
         spec = SeedboxInstallation.model_validate(saved["installation"])
         if spec.hostId != policy.hostId or spec.downloadsStorageId != policy.downloadsStorageId:
             raise ValueError("Installation ownership mismatch")
+        if saved.get("resolvedImages"):
+            policy = resolved_seedbox_policy(policy, saved["resolvedImages"])
         return policy, spec
 
     async def request(self, method, path, **kwargs):

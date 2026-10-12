@@ -12,6 +12,7 @@ from mediahub.apps.seedbox_credentials import VPNProfileRegistry
 from mediahub.errors import DomainError
 
 from agent.install_files import read_json, save_json
+from agent.install_images import publisher_reference, pull_latest, resolved_seedbox_policy
 from agent.port_forwarding import PortForwarding
 from agent.ram_secrets import RuntimeSecrets, verify_ram_directory
 from agent.seedbox_driver import ScopedDriver
@@ -22,6 +23,7 @@ class BoundInstallRuntime(ScopedDriver):
     def __init__(self, installer, socket_path, devices, spec):
         super().__init__(installer, socket_path, devices)
         self.spec = spec
+        self.resolved_images = None
         self.forwarding = PortForwarding(self)
 
     def binding(self):
@@ -31,6 +33,14 @@ class BoundInstallRuntime(ScopedDriver):
             or self.spec.downloadsStorageId != policy.downloadsStorageId
         ):
             raise ValueError("Installation not delegated to this host/storage")
+        saved = Path(policy.workRoot) / "installation.json"
+        images = self.resolved_images
+        if images is None and saved.exists():
+            record = read_json(saved)
+            if record.get("installation") == self.spec.model_dump():
+                images = record.get("resolvedImages")
+        if images:
+            policy = resolved_seedbox_policy(policy, images)
         return policy, self.spec
 
 
@@ -44,7 +54,8 @@ class ProductionInstallDriver:
         self.transaction_id = None
 
     def review(self):
-        policy, spec = self.runtime.binding()
+        _, spec = self.runtime.binding()
+        policy = self.runtime.installer.policy()
         plan = self.runtime.installer.plan(spec)
         # Bind approval to immutable desired data, not transient mount observations.
         material = {
@@ -54,6 +65,8 @@ class ProductionInstallDriver:
         }
         plan["digest"] = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
         plan["qBittorrent"] = self.settings.model_dump()
+        for service, repository in (("vpn", "qmcgaw/gluetun"), ("torrent", "lscr.io/linuxserver/qbittorrent")):
+            plan["compose"]["services"][service]["image"] = repository + ":latest"
         plan["executionStage"] = "transactional-install"
         return plan
 
@@ -72,15 +85,12 @@ class ProductionInstallDriver:
         verify_ram_directory(Path(policy.workRoot) / "secrets")
         await self.runtime.storage_guard()
         await self.runtime.device_guard()
-        await self.runtime.write_probe(minimum_free_bytes=512 * 1024**2)
         # Docker storage probe runs in the actual host namespace, not a guessed Core path.
         info = (await self.runtime.request("GET", "/info")).json()
         if info.get("MemTotal", 0) < (spec.vpnMemoryMiB + spec.torrentMemoryMiB + 256) * 1024**2:
             raise DomainError(
                 "insufficient_memory", "Host memory is below the reviewed runtime budget", 409
             )
-        for image in (policy.paths.vpnImage, policy.paths.torrentImage):
-            await self.runtime.request("GET", "/images/" + image + "/json")
         for service in ("vpn", "torrent"):
             try:
                 await self.runtime.container(service)
@@ -97,9 +107,15 @@ class ProductionInstallDriver:
                         "runtime_conflict", "Existing runtime must be adopted, not overwritten", 409
                     )
         if not adoption:
+            images = {}
+            for field, repository in (("vpnImage", "qmcgaw/gluetun"), ("torrentImage", "lscr.io/linuxserver/qbittorrent")):
+                image = await pull_latest(self.runtime.socket, repository)
+                images[field] = publisher_reference(image, repository)
+            self.runtime.resolved_images = images
             # No publishing: reserve/release only to test that loopback is unused.
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
                 probe.bind(("127.0.0.1", spec.webPort))
+        await self.runtime.write_probe(minimum_free_bytes=512 * 1024**2)
         return {"state": "passed", "digest": digest}
 
     async def execute(self, step):
@@ -121,8 +137,12 @@ class ProductionInstallDriver:
             )
             target = root / "installation.json"
             if target.exists():
-                if read_json(target).get("installation") != spec.model_dump():
+                record = read_json(target)
+                if record.get("installation") != spec.model_dump():
                     raise ValueError("Existing installation binding differs")
+                if self.runtime.resolved_images:
+                    record["resolvedImages"] = self.runtime.resolved_images
+                    save_json(target, record)
             else:
                 save_json(
                     target,
@@ -130,6 +150,7 @@ class ProductionInstallDriver:
                         "installation": spec.model_dump(),
                         "review": self.review(),
                         "state": "prepared",
+                        "resolvedImages": self.runtime.resolved_images or {},
                     },
                 )
         elif step == "prepare_directories":

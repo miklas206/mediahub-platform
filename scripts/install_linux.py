@@ -318,7 +318,7 @@ def main():
         command("systemctl", "enable", "--now", service + ".timer")
         os.chown(evidence, 10001, 10001)
     plex_image = "lscr.io/linuxserver/plex@sha256:be083133dfe001b6caed5a321720e6db9d38fdde1ea8f9d29340d40057a7fa53"
-    command("docker", "pull", plex_image, capture=False)
+    # App images are fetched at the actual app install, after Core setup.
     policy = {
         "hostId": "local",
         "bindAddress": address,
@@ -507,7 +507,7 @@ def main():
         "Create your administrator in the setup wizard. Keep the server private until setup is claimed."
     )
     print(
-        "Complete the browser wizard, including optional Plex installation. No public access was configured."
+        "Complete the browser wizard, then install your apps from the hub. No public access was configured."
     )
     print(
         "Server certificates expire in 90 days. See docs/certificates.md for renewal and rotation."

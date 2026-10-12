@@ -6,7 +6,6 @@ import json
 import os
 import time
 from pathlib import Path
-from urllib.parse import quote
 
 import httpx
 from mediahub.apps.containers import (
@@ -20,6 +19,7 @@ from mediahub.errors import DomainError
 from pydantic import Field, field_validator
 
 from agent.install_files import read_json, save_json
+from agent.install_images import publisher_reference, pull_latest
 from agent.plex_control import PlexControl
 from agent.plex_install import PlexInstallPolicy
 
@@ -227,7 +227,7 @@ class ContainerApps:
         if spec.app == "autobrr":
             environment += ["AUTOBRR__HOST=0.0.0.0", "AUTOBRR__PORT=7474"]
         container = {
-            "Image": definition["repository"] + "@" + definition["digest"],
+            "Image": definition["repository"] + ":latest",
             "User": f"{policy.uid}:{policy.gid}",
             "Env": environment,
             "ExposedPorts": {port: {}},
@@ -317,12 +317,9 @@ class ContainerApps:
         try:
             async with self.locks[app]:
                 policy = self.policy()
-                await self.request(
-                    "POST", "/images/create?fromImage=" + quote(plan["container"]["Image"], safe="")
-                )
-                image = await self.request(
-                    "GET", "/images/" + quote(plan["container"]["Image"], safe="") + "/json"
-                )
+                repository = CONTAINER_APPS[app]["repository"]
+                image = await pull_latest(self.socket, repository)
+                plan["container"]["Image"] = publisher_reference(image, repository)
                 plan["imageId"] = image["Id"]
                 current = await self.build_plan(
                     ContainerInstallation.model_validate(plan["installation"])

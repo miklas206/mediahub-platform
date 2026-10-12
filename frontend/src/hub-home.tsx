@@ -228,6 +228,19 @@ export function buildHubEntries({
       });
     }
   }
+  if (!entries.some(entry => entry.id === "org.mediahub.mediavpn")) {
+    entries.push({
+      id: "org.mediahub.mediavpn",
+      name: "MediaVPN",
+      description: "WireGuard connections",
+      category: "Network",
+      path: "/store/mediavpn",
+      configured: false,
+      status: "unknown",
+      statusLabel: mediavpnError ? "Status unavailable" : "Not set up",
+      action: "Set up",
+    });
+  }
   return entries.sort((left, right) => Number(right.configured) - Number(left.configured));
 }
 
