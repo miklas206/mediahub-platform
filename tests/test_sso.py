@@ -89,8 +89,34 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
             assert callback.status_code == 303
             assert seed.get("/api/auth/me").json()["username"] == "member"
             assert seed.get("/api/auth/me").json()["role"] == "viewer"
+            # Hub overview grants are read-only, package-bound and recheck roles.
+            from sqlalchemy import select
+            from mediahub.auth import digest
+            from mediahub.db import Session, Setting
+            import time
+            token = "o" * 64
+            svc = logged_in.app.state.services
+            with svc.sessions.begin() as db:
+                parent = db.scalar(select(Session).where(Session.user_id == created["id"]))
+                grant = {"sessionId": parent.id, "packageId": package, "expires": int(time.time()) + 30}
+                db.add(Setting(key="sso:session:" + digest(token), value=grant))
+            assert seed.get("/api/hub/overview").status_code == 401
+            headers = {"Authorization": "Bearer " + token}
+            assert seed.get("/api/hub/overview", headers=headers).status_code == 403
+            with svc.sessions.begin() as db:
+                row = db.scalar(select(Setting).where(Setting.key == "sso:session:" + digest(token)))
+                row.value = {**grant, "scope": "overview"}
+            overview = seed.get("/api/hub/overview", headers=headers)
+            assert overview.status_code == 200, overview.text
+            assert "checkedAt" in overview.json()
+            assert "api_key" not in overview.text and "private_key" not in overview.text
+            with TestClient(app, base_url=browser_origin) as reader:
+                # The overview bearer alone creates no app cookie/write session.
+                assert reader.get("/api/hub/overview", headers=headers).status_code == 200
+                assert reader.get(read_path, headers=headers).status_code == 401
             assert logged_in.put(f"/api/users/{created['id']}", json={"username": "member", "appRoles": {}}).status_code == 200
             assert seed.get(read_path).status_code == 403
+            assert seed.get("/api/hub/overview", headers=headers).status_code == 403
         if external:
             with TestClient(app, base_url="http://custom.example") as proxy:
                 start = proxy.get("/auth/hub/start", follow_redirects=False)

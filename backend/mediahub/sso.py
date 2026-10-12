@@ -102,4 +102,7 @@ def session_identity(request: Request, packageId: str):
         row = db.scalar(select(Setting).where(Setting.key == "sso:session:" + digest(token)))
         if row is None or row.value["packageId"] != packageId or row.value["expires"] <= int(time.time()):
             raise DomainError("unauthorized", "SSO session expired", 401)
-        return result(identity(svc, db, row.value))
+        public = identity(svc, db, row.value)
+        if row.value.get("scope"):
+            public["scope"] = row.value["scope"]
+        return result(public)

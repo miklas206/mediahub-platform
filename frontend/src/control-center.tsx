@@ -38,6 +38,7 @@ import { appStatusLabel } from "./seedbox-status";
 import type { AppInfo, Health, Metrics } from "./contracts";
 import type { Runtime } from "./runtime";
 import "./control-center.css";
+import { AppOverviewDetails, overviewEntry, overviewHealth, useAppOverview } from "./app-overview";
 
 type Report = { report?: Runtime; failed: boolean; stale?: boolean };
 export type Reports = Record<string, Report>;
@@ -321,6 +322,7 @@ export function ServiceOverview({
   compact?: boolean;
 }) {
   const { items: integrations } = useIntegrations();
+  const appOverview = useAppOverview(compact && !!apps?.some(app => /org\.mediahub\.(mediaseed|mediavpn)$/.test(app.packageId)));
   if (compact) {
     return (
       <div className="service-overview overview-apps">
@@ -330,10 +332,11 @@ export function ServiceOverview({
               <ServiceIcon packageId={app.packageId} size={28} />
               <h3>{app.name}</h3>
               <StatusBadge
-                status={effectiveServiceStatus(app, reports[app.id], live, failed)}
+                status={/org\.mediahub\.(mediaseed|mediavpn)$/.test(app.packageId) ? overviewHealth(overviewEntry(appOverview, app.packageId)) : effectiveServiceStatus(app, reports[app.id], live, failed)}
                 label={staleServiceLabel(reports[app.id])}
               />
             </div>
+            {/org\.mediahub\.(mediaseed|mediavpn)$/.test(app.packageId) && <AppOverviewDetails entry={overviewEntry(appOverview, app.packageId)} vpn={app.packageId === "org.mediahub.mediavpn"} />}
             {app.openUrl || app.externalUrl ? <a className="service-open" href={app.openUrl || app.externalUrl} target="_blank" rel="noopener noreferrer">
               {t("Open {name}", { name: app.name })}
               <ArrowUpRight size={13} />

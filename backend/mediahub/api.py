@@ -31,7 +31,7 @@ def authenticated(request: Request):
     user = svc.auth.authenticate(request.cookies.get(COOKIE))
     path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
     if user.get("role") != "administrator":
-        own_paths = {"/auth/me", "/auth/logout", "/auth/preferences", "/apps"}
+        own_paths = {"/auth/me", "/auth/logout", "/auth/preferences", "/apps", "/app-overview"}
         if path.startswith("/apps/"):
             parts = path.split("/")
             app = svc.apps.get(parts[2])
