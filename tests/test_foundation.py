@@ -372,17 +372,25 @@ def test_settings_persist_and_reject_secrets(logged_in):
         "update_check_interval_hours": 24,
         "visible_navigation": [
             "/",
-            "/apps",
             "/store",
             "/storage",
+            "/maintenance",
             "/updates",
-            "/backups",
             "/settings",
         ],
         "dashboard_sections": ["storage", "torrents", "uploads", "apps", "system"],
     }
     assert logged_in.put("/api/settings", json={**values, "advanced_mode": True}).status_code == 200
     assert logged_in.get("/api/settings").json()["data"]["advanced_mode"] is True
+    health_navigation = {
+        **values,
+        "visible_navigation": ["/", "/overview", "/maintenance", "/settings"],
+    }
+    assert logged_in.put("/api/settings", json=health_navigation).status_code == 200
+    assert (
+        logged_in.get("/api/settings").json()["data"]["visible_navigation"]
+        == health_navigation["visible_navigation"]
+    )
     with_uploads = {**values, "dashboard_sections": ["torrents", "uploads"]}
     assert logged_in.put("/api/settings", json=with_uploads).status_code == 200
     assert logged_in.get("/api/settings").json()["data"]["dashboard_sections"] == [

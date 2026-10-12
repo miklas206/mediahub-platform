@@ -20,11 +20,21 @@ RUN pnpm build
 
 FROM python:3.12-slim-bookworm
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && chmod 0644 /etc/apt/keyrings/docker.asc \
+    && printf 'Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: bookworm\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' > /etc/apt/sources.list.d/docker.sources \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
 # Match the Agent's dependency layer so Docker can reuse it for both images.
 COPY requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MEDIAHUB_DATA_DIR=/data MEDIAHUB_PROJECT_ROOT=/app PYTHONPATH=/app:/app/backend
-RUN groupadd --gid 10001 mediahub && useradd --uid 10001 --gid mediahub --no-create-home mediahub \
+RUN groupadd --gid 1000 media && groupadd --gid 10001 mediahub \
+    && useradd --uid 10001 --gid media --groups mediahub --no-create-home mediahub \
     && mkdir /data && chown mediahub:mediahub /data \
     && printf '#!/bin/sh\nexec python -m mediahub.cli "$@"\n' > /usr/local/bin/mediahub \
     && chmod 0755 /usr/local/bin/mediahub
@@ -34,7 +44,7 @@ COPY agent/ ./agent/
 COPY apps/ ./apps/
 COPY alembic.ini ./
 COPY --from=frontend /build/frontend/dist ./frontend/dist
-USER 10001:10001
+USER 10001
 EXPOSE 18765
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/api/health',timeout=4)"
 CMD ["mediahub", "serve", "--host", "0.0.0.0", "--port", "18765"]

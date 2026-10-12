@@ -2,7 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from mediahub.api import apps, stream
+from mediahub.api import _apps_with_health, stream
 from mediahub.contracts import Health
 from mediahub.db import InstalledApp
 from mediahub.events import EventBus
@@ -23,12 +23,9 @@ def test_app_list_checks_independent_apps_concurrently():
             return Health(status="healthy", summary=app_id)
 
         manager = SimpleNamespace(list=lambda: rows, health=health)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(apps=manager)))
-        )
-        payload = await apps(request, user={"id": "test"})
-        assert [row["id"] for row in payload["data"]] == [row["id"] for row in rows]
-        assert all(row["health"]["summary"] == row["id"] for row in payload["data"])
+        payload = await _apps_with_health(SimpleNamespace(apps=manager))
+        assert [row["id"] for row in payload] == [row["id"] for row in rows]
+        assert all(row["health"]["summary"] == row["id"] for row in payload)
 
     asyncio.run(scenario())
 
@@ -44,7 +41,7 @@ def test_app_list_lightweight_endpoint_skips_health(logged_in, monkeypatch):
     monkeypatch.setattr(svc.apps, "health", unexpected_health)
     response = logged_in.get("/api/v1/apps?include_health=false")
     assert response.status_code == 200
-    assert response.json()["data"] == rows
+    assert response.json()["data"] == [{**row, "externalUrl": "", "ssoSupported": False} for row in rows]
     assert all("health" not in row for row in response.json()["data"])
 
 
@@ -64,7 +61,7 @@ def test_app_list_endpoint_includes_health_by_default(logged_in, monkeypatch, qu
     assert response.status_code == 200
     assert checked == [row["id"] for row in rows]
     assert response.json()["data"] == [
-        {**row, "health": reports[row["id"]].model_dump(mode="json")} for row in rows
+        {**row, "externalUrl": "", "ssoSupported": False, "health": reports[row["id"]].model_dump(mode="json")} for row in rows
     ]
 
 
@@ -117,14 +114,11 @@ def test_app_list_limits_parallel_health_checks():
         manager = SimpleNamespace(
             list=lambda: [{"id": str(index)} for index in range(20)], health=health
         )
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(apps=manager)))
-        )
-        payload = await apps(request, user={"id": "test"})
-        assert len(payload["data"]) == 20
+        payload = await _apps_with_health(SimpleNamespace(apps=manager))
+        assert len(payload) == 20
         assert peak == 8
         manager.list = lambda: []
-        assert (await apps(request, user={"id": "test"}))["data"] == []
+        assert await _apps_with_health(SimpleNamespace(apps=manager)) == []
 
     asyncio.run(scenario())
 
@@ -134,11 +128,8 @@ def test_app_list_still_propagates_health_errors():
         raise ValueError("Invalid app health")
 
     manager = SimpleNamespace(list=lambda: [{"id": "broken"}], health=health)
-    request = SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(apps=manager)))
-    )
     with pytest.raises(ValueError, match="Invalid app health"):
-        asyncio.run(apps(request, user={"id": "test"}))
+        asyncio.run(_apps_with_health(SimpleNamespace(apps=manager)))
 
 
 def test_app_list_uses_one_query_and_preserves_fields(logged_in):
@@ -186,8 +177,34 @@ def test_app_list_uses_one_query_and_preserves_fields(logged_in):
         "state": "running",
         "isMock": False,
         "detailPath": "/apps/perf-app",
+        "openUrl": None,
+        "removable": False,
     }
     assert not any(row["id"] == "perf-removed" for row in rows)
     assert any(row["isMock"] for row in rows)
     svc.apps.config.mock_app = False
     assert all(not row["isMock"] for row in svc.apps.list())
+
+
+@pytest.mark.parametrize("package,name", [("org.mediahub.mediaseed", "MediaSeed"), ("org.mediahub.mediavpn", "MediaVPN")])
+@pytest.mark.parametrize("healthy", [True, False])
+def test_connected_sso_app_has_overview_health_and_launch_url(logged_in, monkeypatch, healthy, package, name):
+    from unittest.mock import AsyncMock
+
+    svc = logged_in.app.state.services
+    svc.config.sso_app_urls = {package: "https://seed.example"}
+    svc.config.operator_app_urls = {package: "https://127.0.0.1:18800"}
+    probe = AsyncMock(return_value=healthy)
+    monkeypatch.setattr("mediahub.mediaseed_api.available", probe)
+    response = logged_in.get("/api/v1/apps")
+    app = next(row for row in response.json()["data"] if row["packageId"] == package)
+    assert app["health"]["status"] == ("healthy" if healthy else "unknown")
+    assert app["openUrl"] == "https://seed.example/auth/hub/start"
+    assert app["version"] == "connected"
+    assert app["name"] == name
+    probe.assert_awaited_once()
+    probe.reset_mock()
+    lightweight = logged_in.get("/api/v1/apps?include_health=false").json()["data"]
+    app = next(row for row in lightweight if row["packageId"] == package)
+    assert "health" not in app
+    probe.assert_not_awaited()

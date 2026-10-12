@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from mediahub import __version__
 from mediahub.errors import DomainError
 from mediahub.platform_source import SHA, download_source, normalize_source
+from mediahub.source_git import source_access
 
 IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 RUNNING = {"downloading", "staged", "building", "installing", "verifying", "rolling_back"}
@@ -252,6 +253,26 @@ class PlatformUpdateRuntime:
             value = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(value, dict):
                 raise ValueError()
+            operation = str(value.get("operationId") or "")
+            if (
+                value.get("state") == "downloading"
+                and operation
+                and re.fullmatch(r"[a-f0-9]{32}", operation)
+                and (self.task is None or self.task.done())
+                and not (self.root / "request.json").exists()
+                and not (self.root / f"running-{operation}.json").exists()
+            ):
+                steps = list(value.get("steps") or [])[:10]
+                for step in steps:
+                    if isinstance(step, dict) and step.get("state") == "running":
+                        step["state"] = "error"
+                self._write_status(
+                    "failed", 100,
+                    "Core restarted before the download completed; no host update was started. "
+                    "Check for updates and retry.",
+                    operation, str(value.get("toVersion") or __version__), steps,
+                )
+                value = json.loads(path.read_text(encoding="utf-8"))
             return {
                 "enabled": True,
                 "state": str(value.get("state") or "unknown")[:32],
@@ -435,9 +456,7 @@ class PlatformUpdateRuntime:
 
     def start_maintenance(self):
         if not self._host_capability("maintenance"):
-            raise DomainError(
-                "maintenance_unavailable", MAINTENANCE_UNAVAILABLE, 409
-            )
+            raise DomainError("maintenance_unavailable", MAINTENANCE_UNAVAILABLE, 409)
         if (
             self.status()["state"] in RUNNING
             or (self.task and not self.task.done())
@@ -562,7 +581,14 @@ class PlatformUpdateRuntime:
             ) as client:
                 if commit is not None:
                     raw_archive = stage / "github-source.tar.gz"
-                    await download_source(client, repository, commit, raw_archive, token)
+                    await download_source(
+                        client,
+                        repository,
+                        commit,
+                        raw_archive,
+                        token,
+                        source_access=source_access(self.services.config),
+                    )
                     digest = await asyncio.to_thread(
                         normalize_source, raw_archive, stage / "mediahub-source.tar.gz"
                     )

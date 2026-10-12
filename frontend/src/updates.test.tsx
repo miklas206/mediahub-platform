@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { NotificationPopup } from "./notification-popup";
 import type { AppInfo } from "./contracts";
 import { UpdatesPage } from "./updates";
+
+vi.mock("./notification-popup", () => ({ NotificationPopup: vi.fn(() => null) }));
 
 function app(name: string, isMock = false): AppInfo {
   return {
@@ -38,6 +41,8 @@ describe("Updates first render", () => {
     ])
       expect(html).toContain(`<h2>${name}</h2>`);
     expect(html).not.toContain("Mock app");
+    expect(html.indexOf('class="updates-console"')).toBeLessThan(html.indexOf('class="updates-actions"'));
+    expect(html.indexOf('class="updates-console"')).toBeLessThan(html.indexOf('class="updates-components"'));
   });
 
   it("keeps known cards visible when refreshing the shared list fails", () => {
@@ -47,6 +52,7 @@ describe("Updates first render", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("<h2>Seedbox</h2>");
-    expect(html).toContain("Agent unavailable");
+    expect(html).not.toContain("Agent unavailable");
+    expect(vi.mocked(NotificationPopup).mock.calls.some(([props]) => props.children === "Agent unavailable" && props.tone === "danger")).toBe(true);
   });
 });

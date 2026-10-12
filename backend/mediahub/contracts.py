@@ -57,6 +57,8 @@ class PlatformSettings(StrictModel):
     visible_navigation: list[
         Literal[
             "/",
+            "/overview",
+            "/maintenance",
             "/apps",
             "/store",
             "/storage",
@@ -68,7 +70,7 @@ class PlatformSettings(StrictModel):
             "/integrations",
             "/settings",
         ]
-    ] = ["/", "/apps", "/store", "/storage", "/updates", "/backups", "/settings"]
+    ] = ["/", "/store", "/storage", "/maintenance", "/updates", "/settings"]
     dashboard_sections: list[
         Literal[
             "torrents",

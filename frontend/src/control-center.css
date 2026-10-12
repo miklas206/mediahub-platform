@@ -187,6 +187,22 @@
 .dashboard-grid:not(.layout-custom-grid) > .layout-item {
   grid-column: span 6;
 }
+.dashboard-grid.overview-grid > .dashboard-card[data-section] {
+  grid-column: span 6;
+  min-width: 0;
+}
+.dashboard-grid.overview-grid > .dashboard-card[data-section="system"],
+.dashboard-grid.overview-grid > .dashboard-card[data-section="apps"] {
+  grid-column: 1 / -1;
+}
+.overview-apps .service-tile {
+  min-height: 0;
+}
+@media (max-width: 760px) {
+  .dashboard-grid.overview-grid > .dashboard-card[data-section] {
+    grid-column: 1 / -1;
+  }
+}
 .dashboard-grid:not(.layout-custom-grid)
   > .layout-item:has([data-section="apps"]) {
   grid-column: 1 / -1;
@@ -1496,7 +1512,7 @@ img.plex-poster {
   }
   .mobile-dock {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     position: fixed;
     inset: auto 0 0;
     z-index: 24;
@@ -1522,9 +1538,6 @@ img.plex-poster {
     background: var(--accent-bg);
     box-shadow: none;
     color: var(--accent);
-  }
-  .workspace .footer {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 }
 @media (max-width: 350px) {

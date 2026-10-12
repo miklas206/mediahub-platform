@@ -15,6 +15,8 @@ async def removal_status(svc, app_id):
     if app["state"] == "uninstalled":
         return {"state": "succeeded", "dataPreserved": True}
     adapter = svc.apps.adapter(app_id)
+    if getattr(adapter, "managed", False):
+        return await svc.managed_apps.status(app["packageId"])
     if app["packageId"] == WINDOWS_SHARE:
         return {
             "state": "ready",
@@ -68,6 +70,14 @@ async def removal_status(svc, app_id):
 
 
 async def remove_app(svc, app_id, confirmed):
+    app = svc.apps.get(app_id)
+    adapter = svc.apps.adapters.get(app_id)
+    if getattr(adapter, "managed", False):
+        response = await svc.managed_apps.remove(app["packageId"], confirmed)
+        if response["state"] in {"accepted", "running"}:
+            with svc.sessions.begin() as db:
+                db.get(InstalledApp, app_id).state = "removing"
+        return response
     report = await removal_status(svc, app_id)
     if not confirmed or confirmed != report.get("installationId"):
         raise DomainError("confirmation_required", "Exact installation confirmation required", 409)

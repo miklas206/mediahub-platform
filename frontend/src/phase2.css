@@ -196,6 +196,17 @@
   color: var(--muted);
   font-size: 13px;
 }
+.settings-content {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+}
+.settings-content > :not(.settings-tabs) {
+  contain: inline-size;
+  width: 100%;
+  min-width: 0;
+}
 .settings-tabs {
   display: flex;
   gap: 4px;
@@ -206,8 +217,12 @@
   background: var(--surface);
   width: fit-content;
   max-width: 100%;
+  margin-inline: auto;
+  justify-content: center;
 }
 .settings-tabs button {
+  flex: none;
+  white-space: nowrap;
   min-height: 38px;
   padding: 7px 13px;
   border-color: transparent;

@@ -31,9 +31,22 @@ class RuntimeAgent(Protocol):
 
 
 class AgentClient:
-    def __init__(self, config, token=None):
+    def __init__(self, config, token=None, local_app=None):
         self.config = config
         self.token = token
+        self.local_app = local_app
+
+    def _transport(self):
+        if self.local_app is not None:
+            return httpx.ASGITransport(app=self.local_app)
+        if self.config.agent_socket:
+            return httpx.AsyncHTTPTransport(uds=str(self.config.agent_socket))
+        return None
+
+    def _verification(self):
+        if self.local_app is not None:
+            return True
+        return ssl.create_default_context(cafile=getattr(self.config, "agent_ca_file", None))
 
     @staticmethod
     def _response_body(response):
@@ -71,11 +84,7 @@ class AgentClient:
             token = self.token or Path(self.config.agent_token_file).read_text().strip()
             if len(token) < 40:
                 raise ValueError()
-            transport = (
-                httpx.AsyncHTTPTransport(uds=str(self.config.agent_socket))
-                if self.config.agent_socket
-                else None
-            )
+            transport = self._transport()
             async with httpx.AsyncClient(
                 base_url=self.config.agent_url,
                 transport=transport,
@@ -97,9 +106,7 @@ class AgentClient:
                 ),
                 trust_env=False,
                 follow_redirects=False,
-                verify=ssl.create_default_context(
-                    cafile=getattr(self.config, "agent_ca_file", None)
-                ),
+                verify=self._verification(),
             ) as client:
                 if path == "/v1/plex/recent-media" or path.startswith("/v1/plex/artwork/"):
                     # Artwork crosses this JSON transport as base64. Bound the entire
@@ -154,11 +161,7 @@ class AgentClient:
             token = self.token or Path(self.config.agent_token_file).read_text().strip()
             if len(token) < 40:
                 raise ValueError()
-            transport = (
-                httpx.AsyncHTTPTransport(uds=str(self.config.agent_socket))
-                if self.config.agent_socket
-                else None
-            )
+            transport = self._transport()
             headers = {
                 "Authorization": "Bearer " + token,
                 "Content-Type": "application/octet-stream",
@@ -171,9 +174,7 @@ class AgentClient:
                 timeout=httpx.Timeout(connect=8, read=60, write=None, pool=8),
                 trust_env=False,
                 follow_redirects=False,
-                verify=ssl.create_default_context(
-                    cafile=getattr(self.config, "agent_ca_file", None)
-                ),
+                verify=self._verification(),
             ) as client:
                 response = await client.put(
                     endpoint,

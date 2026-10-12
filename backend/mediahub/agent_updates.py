@@ -25,6 +25,7 @@ from mediahub.db import Setting
 from mediahub.errors import DomainError
 from mediahub.fjordhub_deploy import PinnedKey, SSHAddress, clean_line, probe
 from mediahub.platform_source import GitHubSourceProvider, download_source, normalize_source
+from mediahub.source_git import source_access
 
 KEY = "seedbox.agent.update"
 SSH_KEY = "seedbox.agent.ssh.encrypted"
@@ -249,7 +250,9 @@ class AgentUpdates:
         identifier, client, address = self.binding()
         version = await client.request("GET", "/v1/version")
         checked = await GitHubSourceProvider(
-            version.get("version", "unknown"), version.get("sourceCommit")
+            version.get("version", "unknown"),
+            version.get("sourceCommit"),
+            source_access=source_access(self.svc.config),
         ).check(self.svc.settings.get().release_repository, self.svc.release_credentials.token())
         stored = self.saved_setup(identifier, address) is not None
         return {
@@ -442,6 +445,7 @@ class AgentUpdates:
                             checked["latestCommit"],
                             root / "download.tar.gz",
                             self.svc.release_credentials.token(),
+                            source_access=source_access(self.svc.config),
                         )
 
                 asyncio.run(download())

@@ -1,4 +1,5 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -87,7 +88,7 @@ export function SeedboxRSSSettings() {
         >
           {busy ? t("Saving…") : t("Save feed settings")}
         </button>
-        {notice && <p role="status">{translateText(notice)}</p>}
+        {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       </form>
     </Panel>
   );

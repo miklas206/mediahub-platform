@@ -17,7 +17,7 @@ python3 -c 'import ipaddress,sys; address=ipaddress.IPv4Address(sys.argv[1]); sy
 mkdir "$INSTALL_ROOT"
 SOURCE_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if [ ! -f "$SOURCE_ROOT/docker/Dockerfile" ]; then
-    git clone --depth 1 https://github.com/miklas206/mediahub-platform.git "$INSTALL_ROOT/source"
+    git clone --depth 1 https://github.com/miklas206/fjordcopy.git "$INSTALL_ROOT/source"
     SOURCE_ROOT="$INSTALL_ROOT/source"
 fi
 docker build -f "$SOURCE_ROOT/docker/Agent.Dockerfile" -t mediahub-guided-agent:local "$SOURCE_ROOT"

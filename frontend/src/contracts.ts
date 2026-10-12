@@ -7,6 +7,7 @@ export type Health = {
   checks: { name: string; status: string; message: string }[];
 };
 export type AppInfo = {
+  removable?: boolean;
   id: string;
   name: string;
   packageId: string;
@@ -14,6 +15,8 @@ export type AppInfo = {
   state: string;
   isMock: boolean;
   detailPath?: string | null;
+  externalUrl?: string;
+  openUrl?: string | null;
   health: Health;
 };
 export type InstalledAppInfo = Omit<AppInfo, "health">;
@@ -22,6 +25,8 @@ export type User = {
   username: string;
   role: string;
   csrf: string;
+  totpEnabled?: boolean;
+  totpRequired?: boolean;
   language?: "en" | "da";
   appearance?: Appearance | null;
 };
@@ -90,6 +95,8 @@ export type Settings = {
 };
 export type NavigationPath =
   | "/"
+  | "/overview"
+  | "/maintenance"
   | "/apps"
   | "/store"
   | "/storage"

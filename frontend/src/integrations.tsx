@@ -1,4 +1,5 @@
 import { getLocale, translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { LayoutGroup } from "./page-layout";
 import {
@@ -11,7 +12,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { AppLaunchSettings } from "./fjordhub-launch-settings";
 import { api } from "./api";
 import { bytes } from "./format";
@@ -275,6 +276,7 @@ export function IntegrationAppCard({
 }
 
 export function IntegrationAppLinks({ items }: { items: Integration[] }) {
+  const location = useLocation();
   return (
     <>
       {items
@@ -296,7 +298,7 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
                 />
                 <span>{row.name}</span>
               </Link>
-              <div className="app-subnav">
+              {location.pathname === `/integrations/${encodeURIComponent(row.id)}` && <div className="app-subnav">
                 {installedFjordHubApps(row).map((app) => (
                   <a
                     key={String(app.id)}
@@ -329,7 +331,7 @@ export function IntegrationAppLinks({ items }: { items: Integration[] }) {
                     />
                   </a>
                 ))}
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -516,7 +518,7 @@ export function IntegrationsPage({
         </p>
       </div>
       <ErrorBox error={error || failure} />
-      {notice && <p role="status">{translateText(notice)}</p>}
+      {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       {integrationId && (
         <header className="fjordhub-home-heading">
           {visibleItems[0] ? (

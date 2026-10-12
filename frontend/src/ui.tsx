@@ -1,4 +1,5 @@
 import { serviceSnapshots } from "./service-snapshots";
+import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
 import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
@@ -7,17 +8,14 @@ import { LanguageSettings } from "./language-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
-  ControlSummary,
-  ControlStatus,
   ServiceOverview,
-  ResourceTrends,
   useServiceReports,
+  ResourceTrends,
   useMetricHistory,
 } from "./control-center";
 import { WorkspaceSearch } from "./workspace-search";
 import { ServiceIcon } from "./service-icon";
 import { useDashboardData } from "./dashboard-data";
-import { DashboardUpdates } from "./dashboard-updates";
 import { LayoutGroup, PageLayout } from "./page-layout";
 import { DashboardTorrents } from "./dashboard-torrents";
 import { DashboardUploads } from "./dashboard-uploads";
@@ -46,14 +44,9 @@ import {
 } from "react-router-dom";
 import {
   Activity as ActivityIcon,
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   Box,
   Bell,
-  CircleAlert,
-  CircleCheck,
-  Info,
   Download,
   FolderOpen,
   ChevronDown,
@@ -76,6 +69,9 @@ import { api, setCsrf } from "./api";
 import { bytes, uptime } from "./format";
 import { PlatformVersion } from "./platform-version";
 import { SidebarClock } from "./sidebar-clock";
+import { HubHome } from "./hub-home";
+import { UsersPage } from "./users";
+import { AppSettingsPage } from "./app-settings";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
@@ -83,7 +79,6 @@ import {
   type Runtime,
 } from "./runtime";
 import {
-  IntegrationsCard,
   IntegrationsPage,
   FjordHubHome,
   IntegrationAppLinks,
@@ -92,7 +87,6 @@ import {
   IntegrationProvider,
   type Integration,
 } from "./integrations";
-import { CloudflareTunnelCard } from "./cloudflare";
 import { HostsPage, LogicalStoragePanel } from "./hosts";
 import {
   OperationProgress,
@@ -100,8 +94,6 @@ import {
   type OperationStep,
 } from "./operation-progress";
 import {
-  RuntimePanel,
-  StorageSummary,
   SettingsExtensions,
   StorageWorkspace,
   MediaFiles,
@@ -125,9 +117,6 @@ import { batchAppHealthRefresh } from "./app-events";
 const SetupWizard = lazy(() =>
   import("./wizard").then((module) => ({ default: module.SetupWizard })),
 );
-const BackupsPage = lazy(() =>
-  import("./backups").then((module) => ({ default: module.BackupsPage })),
-);
 const UpdatesPage = lazy(() =>
   import("./updates").then((module) => ({ default: module.UpdatesPage })),
 );
@@ -147,19 +136,11 @@ const ContainerAppPage = lazy(() =>
 const SecuritySettings = lazy(() =>
   import("./security").then((module) => ({ default: module.SecuritySettings })),
 );
-const AppStorePage = lazy(() =>
-  import("./store").then((module) => ({ default: module.AppStorePage })),
-);
 const CloudflareStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.CloudflareStorePage })),
 );
 const FjordHubStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.FjordHubStorePage })),
-);
-const WindowsSharePage = lazy(() =>
-  import("./windows-share").then((module) => ({
-    default: module.WindowsSharePage,
-  })),
 );
 const FjordHubUninstallPage = lazy(() =>
   import("./fjordhub-uninstall").then((module) => ({
@@ -168,9 +149,11 @@ const FjordHubUninstallPage = lazy(() =>
 );
 
 const navigation = [
-  ["/", "Dashboard", LayoutDashboard],
+  ["/", "Home", LayoutDashboard],
   ["/apps", "Apps", Box],
   ["/store", "App Store", Store],
+  ["/overview", "Overview", ActivityIcon],
+  ["/maintenance", "Healthcheck", ShieldCheck],
   ["/storage", "Storage", HardDrive],
   ["/hosts", "Hosts", Server],
   ["/activity", "Activity", ActivityIcon],
@@ -183,11 +166,10 @@ const navigation = [
 
 const simpleNavigation: NavigationPath[] = [
   "/",
-  "/apps",
   "/store",
   "/storage",
+  "/maintenance",
   "/updates",
-  "/backups",
   "/settings",
 ];
 const detailedNavigation: NavigationPath[] = navigation.map(([path]) => path);
@@ -217,12 +199,12 @@ function Notice({
   tone = "danger",
 }: {
   children: ReactNode;
-  tone?: "danger" | "warning" | "info";
+  tone?: "danger" | "warning" | "info" | "success";
 }) {
   return (
-    <div role="alert" className={`notice ${tone}`}>
+    <NotificationPopup tone={tone}>
       {typeof children === "string" ? t(children) : children}
-    </div>
+    </NotificationPopup>
   );
 }
 function Loading() {
@@ -311,6 +293,13 @@ export function Application() {
     void refresh();
   }, [refresh]);
   useEffect(() => {
+    if (!user || (user.totpRequired && !user.totpEnabled)) return;
+    const resume = new URLSearchParams(window.location.search).get("sso");
+    if (!resume) return;
+    const target = new URL(resume, window.location.origin);
+    if (target.origin === window.location.origin && target.pathname === "/api/v1/sso/authorize") window.location.replace(target.href);
+  }, [user]);
+  useEffect(() => {
     const expired = () => {
       setUser(null);
       setCsrf("");
@@ -352,6 +341,7 @@ export function Application() {
         }}
       />
     );
+  if (user.role !== "administrator") return <MemberApps user={user} onLogout={async () => { await api("/auth/logout", "POST"); setUser(null); setCsrf(""); }} />;
   return (
     <Shell
       key={user.id}
@@ -365,6 +355,12 @@ export function Application() {
       }}
     />
   );
+}
+
+function MemberApps({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
+  const apps = useData<{ id: string; name: string; openUrl?: string }[]>("/apps?include_health=false");
+  if (user.totpRequired && !user.totpEnabled) return <main className="page stack"><Suspense fallback={<Loading />}><SecuritySettings /></Suspense><button onClick={() => window.location.reload()}>Forts\u00e6t</button></main>;
+  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><button onClick={() => void onLogout()}>Log ud</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>Mine apps</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{"\u00c5bn app"}</a> : <span>Loginintegration ikke konfigureret</span>}</article>)}</div></section></main>;
 }
 
 function Login({
@@ -483,6 +479,7 @@ function Brand() {
       <span>
         Media<span>Hub</span>
       </span>
+      <small className="brand-beta">beta</small>
     </div>
   );
 }
@@ -503,8 +500,6 @@ function Shell({
   const [advancedMode, setAdvancedMode] = useState(false);
   const [visibleNavigation, setVisibleNavigation] =
     useState<NavigationPath[]>(simpleNavigation);
-  const [dashboardSections, setDashboardSections] =
-    useState<DashboardSection[]>(simpleDashboard);
   const [appsExpanded, setAppsExpanded] = useState(true);
   const navigationIntegrationState = useIntegrations();
   const { items: navigationIntegrations } = navigationIntegrationState;
@@ -531,8 +526,7 @@ function Shell({
         .then((s) => {
           setDisplayName(s.display_name);
           setAdvancedMode(s.advanced_mode);
-          setVisibleNavigation(s.visible_navigation);
-          setDashboardSections(s.dashboard_sections);
+          setVisibleNavigation(Array.from(new Set<NavigationPath>(["/", "/overview", "/settings", ...s.visible_navigation])));
           document.documentElement.dataset.theme = s.theme;
         })
         .catch(() => {});
@@ -603,6 +597,7 @@ function Shell({
   const runtimePage =
     location.pathname.startsWith("/apps/") && !windowsSharePage;
   const storePage = location.pathname.startsWith("/store/");
+  const activeApp = navigationApps?.find((app) => app.detailPath === location.pathname);
   const title =
     navigation.find(([path]) => path === location.pathname)?.[1] ||
     (location.pathname.startsWith("/integrations/")
@@ -610,10 +605,10 @@ function Shell({
       : windowsSharePage
       ? "Windows folder access"
       : runtimePage
-        ? "App runtime"
+        ? activeApp?.name || "App runtime"
         : storePage
           ? "App Store"
-          : "Dashboard");
+          : "Home");
   return (
     <div className="app-shell">
       {open && (
@@ -625,10 +620,11 @@ function Shell({
       )}
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <Brand />
-        <p className="nav-label">{t("WORKSPACE")}</p>
+        <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
-            .filter(([path]) => visibleNavigation.includes(path))
+            .filter(([path]) => ["/", "/overview", "/settings"].includes(path))
+            .filter(([path]) => visibleNavigation.includes(path) || (path === "/apps" && (runtimePage || location.pathname.startsWith("/integrations/"))))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
               path === "/apps" ? (
@@ -858,7 +854,7 @@ function Shell({
                 ...navigation
                   .filter(
                     ([path]) =>
-                      visibleNavigation.includes(path) &&
+                      ["/", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
                       (advancedMode || path !== "/hosts"),
                   )
                   .map(([path, label]) => ({ path, label: t(label) })),
@@ -897,24 +893,23 @@ function Shell({
           </div>
         </header>
         <main className="main-content">
-          {!runtimePage && (
+          {(runtimePage || windowsSharePage || storePage || location.pathname.startsWith("/integrations/")) && <Link className="hub-back-link" to="/">← {t("Back to MediaHub")}</Link>}
+          {!runtimePage && location.pathname !== "/" && (
             <div className="page-heading">
               <div>
                 <span className="eyebrow">
-                  {title === "Dashboard" ? t("CONTROL ROOM") : t("WORKSPACE")}
+                  {title === "Overview" ? t("CONTROL ROOM") : t("WORKSPACE")}
                 </span>
                 <h1>
-                  {title === "Dashboard"
-                    ? t("Dashboard")
-                    : translateText(title)}
+                  {translateText(title)}
                 </h1>
                 <p>
-                  {title === "Dashboard"
+                  {title === "Overview"
                     ? t("Your media. Your server. Together.")
                     : translateText(pageDescription(title))}
                 </p>
               </div>
-              {metrics && advancedMode && title !== "Dashboard" && (
+              {metrics && advancedMode && title !== "Overview" && (
                 <div className="host-chip">
                   <Server size={17} />
                   <span>
@@ -936,6 +931,7 @@ function Shell({
             </Notice>
           )}
           <PageLayout
+            customizable={false}
             key={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
             storageKey={`${user.id}:${location.pathname}:${runtimeLayoutSection(new URLSearchParams(location.search).get("section"), !!navigationApps?.some((app) => app.packageId === "org.mediahub.seedbox" && app.detailPath === location.pathname))}`}
           >
@@ -958,11 +954,11 @@ function Shell({
                   <Route path="/apps/:appId" element={<AppRuntimePage />} />
                   <Route
                     path="/apps/windows-share"
-                    element={<WindowsSharePage />}
+                    element={<Navigate to="/" replace />}
                   />
                   <Route
                     path="/store/windows-share"
-                    element={<WindowsSharePage />}
+                    element={<Navigate to="/" replace />}
                   />
                   <Route
                     path="/store/cloudflare"
@@ -976,17 +972,21 @@ function Shell({
                     path="/store/fjordhub/uninstall"
                     element={<FjordHubUninstallPage />}
                   />
-                  <Route path="/store" element={<AppStorePage />} />
+                  <Route path="/store" element={<Navigate to="/" replace />} />
+                  <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"
+                    element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />}
+                  />
+                  <Route path="/maintenance" element={<Navigate to="/settings?section=Healthcheck" replace />} />
+                  <Route
+                    path="/overview"
                     element={
                       <Dashboard
                         metrics={metrics}
                         apps={navigationApps}
                         error={navigationAppsError}
-                        revision={revision}
                         live={live}
-                        sections={dashboardSections}
                       />
                     }
                   />
@@ -1008,8 +1008,8 @@ function Shell({
                                 )}
                               </p>
                             </div>
-                            <NavLink className="primary" to="/store">
-                              {t("Open App Store →")}
+                            <NavLink className="primary" to="/">
+                              {t("Home")}
                             </NavLink>
                           </section>
                         }
@@ -1018,64 +1018,21 @@ function Shell({
                   />
                   <Route
                     path="/storage"
-                    element={
-                      <LayoutGroup id="ui-Shell-2" className="stack">
-                        <div
-                          className="layout-card"
-                          data-layout-title="Media files"
-                        >
-                          <MediaFiles />
-                        </div>
-                        <div
-                          className="layout-card"
-                          data-layout-title="Storage"
-                        >
-                          <StorageSummary />
-                        </div>
-                        {advancedMode && (
-                          <details className="technical-disclosure">
-                            <summary>{t("Technical storage mappings")}</summary>
-                            <LayoutGroup id="ui-Shell-3" className="stack">
-                              <div
-                                className="layout-card"
-                                data-layout-title="Storage mappings"
-                              >
-                                <LogicalStoragePanel />
-                              </div>
-                              <StorageWorkspace />
-                            </LayoutGroup>
-                          </details>
-                        )}
-                      </LayoutGroup>
-                    }
+                    element={<Navigate to="/" replace />}
                   />
                   <Route path="/hosts" element={<HostsPage />} />
                   <Route path="/integrations/:integrationId" element={<FjordHubHome administrator={user.role === "administrator"} username={user.username} />} />
-                  <Route path="/integrations" element={<IntegrationsPage administrator={user.role === "administrator"} username={user.username} />} />
+                  <Route path="/integrations" element={<Navigate to="/settings?section=Integrations" replace />} />
                   <Route
                     path="/activity"
                     element={
-                      <LayoutGroup id="activity-cards">
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Event timeline"
-                        >
-                          <ActivityPage revision={revision} />
-                        </div>
-                      </LayoutGroup>
+                      <Navigate to="/settings?section=Activity" replace />
                     }
                   />
                   <Route
                     path="/logs"
                     element={
-                      <LayoutGroup id="logs-cards">
-                        <div
-                          className="dashboard-card"
-                          data-layout-title="Logs"
-                        >
-                          <Logs />
-                        </div>
-                      </LayoutGroup>
+                      <Navigate to="/settings?section=Logs" replace />
                     }
                   />
                   <Route
@@ -1083,7 +1040,15 @@ function Shell({
                     element={
                       <SettingsExtensions
                         general={
-                          <LayoutGroup id="settings-general-layout">
+                          <LayoutGroup id="settings-general-layout" className="settings-general-compact stack">
+                            <LayoutGroup id="settings-general-cards">
+                              <div
+                                className="dashboard-card"
+                                data-layout-title="Language"
+                              >
+                                <LanguageSettings compact />
+                              </div>
+                            </LayoutGroup>
                             <LayoutGroup
                               id="settings-appearance-cards"
                               className="settings-appearance-group stack"
@@ -1092,27 +1057,20 @@ function Shell({
                                 className="dashboard-card"
                                 data-layout-title="Colors and shades"
                               >
-                                <AppearanceSettings />
-                              </div>
-                            </LayoutGroup>
-                            <LayoutGroup id="settings-general-cards">
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Language"
-                              >
-                                <LanguageSettings />
-                              </div>
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Workspace preferences"
-                              >
-                                <SettingsPage />
+                                <AppearanceSettings compact />
                               </div>
                             </LayoutGroup>
                           </LayoutGroup>
                         }
                         maintenance={<MaintenancePage />}
                         security={<SecuritySettings />}
+                        sections={{
+                          Activity: <ActivityPage revision={revision} />,
+                          Logs: <Logs />,
+                          Updates: <UpdatesPage apps={navigationApps} appsError={navigationAppsError} />,
+                          Integrations: <IntegrationsPage administrator={user.role === "administrator"} username={user.username} />,
+                          ...(user.role === "administrator" ? { Users: <UsersPage currentUserId={user.id} /> } : {}),
+                        }}
                         advanced={advancedMode}
                       />
                     }
@@ -1120,13 +1078,10 @@ function Shell({
                   <Route
                     path="/updates"
                     element={
-                      <UpdatesPage
-                        apps={navigationApps}
-                        appsError={navigationAppsError}
-                      />
+                      <Navigate to="/settings?section=Updates" replace />
                     }
                   />
-                  <Route path="/backups" element={<BackupsPage />} />
+                  <Route path="/backups" element={<Navigate to="/" replace />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
@@ -1144,15 +1099,7 @@ function Shell({
       <nav className="mobile-dock" aria-label={t("Quick navigation")}>
         <NavLink to="/" end>
           <LayoutDashboard size={19} />
-          <span>{t("Dashboard")}</span>
-        </NavLink>
-        <NavLink to="/apps">
-          <Box size={19} />
-          <span>{t("Apps")}</span>
-        </NavLink>
-        <NavLink to="/storage">
-          <HardDrive size={19} />
-          <span>{t("Storage")}</span>
+          <span>{t("Home")}</span>
         </NavLink>
         <NavLink to="/settings">
           <Settings2 size={19} />
@@ -1167,6 +1114,7 @@ function pageDescription(title: string) {
   return (
     {
       Apps: "One place for your apps, their status and controls.",
+      Healthcheck: "Health checks, diagnostics and safe maintenance.",
       "App Store": "Add apps through guided, security-aware setup flows.",
       Storage: "Registered locations. Your files stay exactly where they are.",
       Activity: "A timeline of events in this MediaHub installation.",
@@ -1184,35 +1132,31 @@ function Dashboard({
   metrics: m,
   apps,
   error,
-  revision,
   live,
-  sections,
 }: {
   metrics?: Metrics;
   apps?: AppInfo[];
   error: string;
-  revision: number;
   live: boolean;
-  sections: DashboardSection[];
 }) {
-  const {
-    data: recentActivity,
-    error: activityError,
-    reload: reloadActivity,
-  } = useData<Activity[]>("/events/history?limit=4");
-  useEffect(() => {
-    reloadActivity();
-  }, [revision, reloadActivity]);
+  const seedbox = apps?.find((a) => a.packageId === "org.mediahub.seedbox");
   const reports = useServiceReports(apps);
-  const dashboardData = useDashboardData(
-    apps?.find((a) => a.packageId === "org.mediahub.seedbox")?.id,
-  );
+  const dashboardData = useDashboardData(seedbox?.id);
   const samples = useMetricHistory(m);
   if (!m) return <Loading />;
-  const visible = new Set(sections);
-  const cards: { id: DashboardSection | "updates"; content: ReactNode }[] = [
-    { id: "updates", content: <DashboardUpdates /> },
-    { id: "storage", content: <StorageSummary /> },
+  const cards: { id: DashboardSection; content: ReactNode }[] = [
+    {
+      id: "apps",
+      content: (
+        <Section title={t("Your apps")}>
+          <ServiceOverview compact apps={apps} reports={reports} live={live} failed={!!error} dashboard={dashboardData} />
+        </Section>
+      ),
+    },
+    {
+      id: "system",
+      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
+    },
     {
       id: "torrents",
       content: <DashboardTorrents apps={apps} data={dashboardData} />,
@@ -1221,241 +1165,23 @@ function Dashboard({
       id: "uploads",
       content: <DashboardUploads apps={apps} data={dashboardData} />,
     },
-    {
-      id: "apps",
-      content: (
-        <Section
-          title={t("Your apps")}
-          aside={
-            <NavLink className="text-link" to="/apps">
-              {t("View apps ")}
-              <ArrowUpRight size={15} />
-            </NavLink>
-          }
-        >
-          <ServiceOverview
-            apps={apps}
-            reports={reports}
-            live={live}
-            failed={!!error}
-            dashboard={dashboardData}
-          />
-        </Section>
-      ),
-    },
-    { id: "cloudflare", content: <CloudflareTunnelCard /> },
-    { id: "integrations", content: <IntegrationsCard /> },
-    {
-      id: "activity",
-      content: (
-        <Section
-          title={t("Recent activity")}
-          aside={
-            <NavLink className="text-link" to="/activity">
-              {t("Full timeline ")}
-              <ArrowUpRight size={15} />
-            </NavLink>
-          }
-        >
-          <ActivityList items={recentActivity || []} />
-          {activityError && <Notice>{activityError}</Notice>}
-        </Section>
-      ),
-    },
-    {
-      id: "network",
-      content: (
-        <Section title={t("Network throughput")}>
-          <div className="network-card">
-            <div>
-              <ArrowDown size={19} />
-              <span>{t("Download")}</span>
-              <strong>
-                {bytes(m.network.downloadBytesPerSecond)}
-                <small>{t("/s")}</small>
-              </strong>
-            </div>
-            <div>
-              <ArrowUp size={19} />
-              <span>{t("Upload")}</span>
-              <strong>
-                {bytes(m.network.uploadBytesPerSecond)}
-                <small>{t("/s")}</small>
-              </strong>
-            </div>
-          </div>
-          <div className="panel-note">
-            {t("Runtime network totals, not torrent speeds.")}
-          </div>
-        </Section>
-      ),
-    },
-    {
-      id: "core",
-      content: (
-        <Section
-          title={t("Core status")}
-          aside={<Badge value={live ? "healthy" : "unknown"} />}
-        >
-          <div className="status-rows">
-            <StatusLine
-              label={t("Backend API")}
-              value={live ? "Connected" : "Disconnected"}
-            />
-            <StatusLine
-              label={t("Realtime")}
-              value={live ? "Streaming · SSE" : "Reconnecting"}
-            />
-            <StatusLine
-              label={t("Runtime control")}
-              value="Agent-verified actions"
-            />
-            <StatusLine label={t("Public ingress")} value="Not managed" />
-            <StatusLine label={t("Release")} value={m.version} />
-          </div>
-        </Section>
-      ),
-    },
-    { id: "runtime", content: <RuntimePanel /> },
-    {
-      id: "system",
-      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
-    },
-  ];
-  const cardOrder = [
-    "apps",
-    "system",
-    "updates",
-    "activity",
-    "torrents",
-    "uploads",
-    "storage",
-    "network",
-    "core",
-    "runtime",
-    "integrations",
-    "cloudflare",
   ];
   return (
     <>
       {error && <Notice>{translateText(error)}</Notice>}
-      <div className="dashboard-context">
-        <div className="dashboard-status-stack">
-          <time dateTime={m.timestamp}>
-            {new Date(m.timestamp).toLocaleDateString(getLocale(), {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </time>
-          <ControlStatus
-            apps={apps}
-            live={live}
-            failed={!!error}
-            reports={reports}
-          />
-        </div>
-        <div className="quick-actions" aria-label={t("Quick actions")}>
-          <Link
-            to={
-              apps?.find((a) => a.packageId === "org.mediahub.seedbox")
-                ?.detailPath || "/apps"
-            }
-          >
-            <Download size={15} />
-            {t("Downloads")}
-          </Link>
-          <Link to="/storage">
-            <FolderOpen size={15} />
-            {t("Media files")}
-          </Link>
-          <Link to="/updates">
-            <RefreshCw size={15} />
-            {t("Updates")}
-          </Link>
-        </div>
-      </div>
-      <ControlSummary
-        metrics={m}
-        apps={apps}
-        live={live}
-        reports={reports}
-        appsError={!!error}
-        dashboard={dashboardData}
-      />
-      <LayoutGroup
-        id="ui-Dashboard-1"
-        className="dashboard-grid"
-        defaultHidden={cards
-          .filter(({ id }) => id !== "updates" && !visible.has(id))
-          .map(({ id }) => id)}
-      >
-        {cards
-          .sort((a, b) => cardOrder.indexOf(a.id) - cardOrder.indexOf(b.id))
-          .map(({ id, content }) => (
+      <div className="dashboard-grid overview-grid">
+        {cards.filter(({ id }) => id === "apps" || id === "system" || seedbox).map(({ id, content }) => (
             <div
               className="dashboard-card"
               key={id}
               data-section={id}
-              data-layout-nested={id === "apps" ? "true" : undefined}
-              data-layout-title={
-                id === "updates"
-                  ? "Updates"
-                  : dashboardChoices.find((choice) => choice[0] === id)?.[1]
-              }
+              data-layout-title={dashboardChoices.find((choice) => choice[0] === id)?.[1]}
             >
               {content}
             </div>
           ))}
-      </LayoutGroup>
+      </div>
     </>
-  );
-}
-
-function StatusLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span>{typeof label === "string" ? t(label) : translateText(label)}</span>
-      <strong>{translateText(value)}</strong>
-    </div>
-  );
-}
-function ActivityList({ items }: { items: Activity[] }) {
-  return items.length ? (
-    <div className="activity-list">
-      {items.map((item) => (
-        <div className="activity-item" key={item.id}>
-          <div className={`activity-icon ${item.severity}`}>
-            {item.severity === "error" ||
-            item.severity === "critical" ||
-            item.severity === "warning" ? (
-              <CircleAlert size={15} />
-            ) : item.severity === "success" ? (
-              <CircleCheck size={15} />
-            ) : (
-              <Info size={15} />
-            )}
-          </div>
-          <div>
-            <strong>{translateText(item.message)}</strong>
-            <small>
-              {translateText(item.source)} · {translateText(item.severity)}
-            </small>
-          </div>
-          <time dateTime={item.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString(getLocale(), {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </time>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <Empty title={t("No activity yet")}>
-      {t("New events will appear here.")}
-    </Empty>
   );
 }
 
@@ -1616,9 +1342,9 @@ export function LegacyStoragePage() {
     <div className="stack">
       {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
-        <div role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </div>
+        </NotificationPopup>
       )}
       <Section title={t("Storage locations")}>
         {!data ? (
@@ -1838,9 +1564,9 @@ function SettingsPage() {
     <Section title={t("Workspace preferences")}>
       {(error || failure) && <Notice>{translateText(error) || failure}</Notice>}
       {message && (
-        <div role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </div>
+        </NotificationPopup>
       )}
       {!draft ? (
         <Loading />
@@ -1955,7 +1681,7 @@ function SettingsPage() {
             <div className="visibility-heading">
               <div>
                 <h3>{t("Choose your menu")}</h3>
-                <p>{t("Dashboard and Settings always stay available.")}</p>
+                <p>{t("Home and Settings always stay available.")}</p>
               </div>
               <div className="button-row">
                 <button
@@ -1985,7 +1711,7 @@ function SettingsPage() {
               </div>
             </div>
             <div className="choice-grid">
-              {navigation.map(([path, label, Icon]) => {
+              {navigation.filter(([path]) => ["/", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
                 const required = path === "/" || path === "/settings";
                 return (
                   <label className="choice-card" key={path}>
@@ -2163,6 +1889,7 @@ function MaintenancePage() {
   const storage = useData<Storage[]>("/storage/locations");
   const apps = useData<AppInfo[]>("/apps");
   const [checking, setChecking] = useState(false);
+  const [cleanupNotice, setCleanupNotice] = useState<{ message: string; tone: "success" | "danger" }>();
   const [operation, setOperation] = useState<OperationState>();
   const [snapshot, setSnapshot] = useState<{
     core?: { status: string; version: string };
@@ -2282,6 +2009,7 @@ function MaintenancePage() {
         if (result.operationId !== started.operationId) continue;
         if (result.state === "failed") throw new Error(result.message);
         if (result.state === "succeeded") {
+          setCleanupNotice({ message: result.message, tone: "success" });
           details.push(result.message);
           details.push(
             `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })} GiB of system disk space.`,
@@ -2311,6 +2039,7 @@ function MaintenancePage() {
       );
     } catch (error) {
       steps[activeStep].state = "error";
+      setCleanupNotice({ message: error instanceof Error ? error.message : "Maintenance could not be completed.", tone: "danger" });
       details.push(
         "Request failed · see the warning above for the safe error message",
       );
@@ -2336,6 +2065,10 @@ function MaintenancePage() {
       <Section
         title={t("Maintenance")}
         aside={
+          <div className="button-row">
+          <button type="button" onClick={() => { core.reload(); runtime.reload(); storage.reload(); apps.reload(); cleanup.reload(); }}>
+            <ActivityIcon size={15} />{t("Refresh health checks")}
+          </button>
           <button
             className="maintenance-check"
             type="button"
@@ -2343,8 +2076,9 @@ function MaintenancePage() {
             disabled={!canRunMaintenance(cleanup.data, cleanup.error, checking)}
           >
             <RefreshCw size={15} className={checking ? "spin" : ""} />
-            {checking ? t("Running…") : t("Run maintenance")}
+            {checking ? t("Running…") : t("Check and clean up")}
           </button>
+          </div>
         }
       >
         <div className="maintenance-hero">
@@ -2362,8 +2096,8 @@ function MaintenancePage() {
         </div>
         {failure && <Notice>{failure}</Notice>}
         {cleanup.error && <Notice>{translateText(cleanup.error)}</Notice>}
-        {cleanup.data && cleanup.data.state !== "idle" && (
-          <Notice>{translateText(cleanup.data.message)}</Notice>
+        {cleanupNotice && (
+          <Notice tone={cleanupNotice.tone}>{translateText(cleanupNotice.message)}</Notice>
         )}
         {operation && <OperationProgress operation={operation} />}
         <div className="maintenance-grid">
@@ -2420,27 +2154,11 @@ function MaintenancePage() {
 
       <Section title={t("Maintenance tools")}>
         <div className="maintenance-actions">
-          <NavLink className="maintenance-action" to="/storage">
-            <HardDrive size={20} />
-            <span>
-              <strong>{t("Storage")}</strong>
-              <small>{t("Review capacity, folders and media files")}</small>
-            </span>
-            <ChevronRight size={17} />
-          </NavLink>
           <NavLink className="maintenance-action" to="/updates">
             <RefreshCw size={20} />
             <span>
               <strong>{t("Updates")}</strong>
               <small>{t("Check verified MediaHub and app releases")}</small>
-            </span>
-            <ChevronRight size={17} />
-          </NavLink>
-          <NavLink className="maintenance-action" to="/backups">
-            <Database size={20} />
-            <span>
-              <strong>{t("Configuration backups")}</strong>
-              <small>{t("Protect settings without duplicating media")}</small>
             </span>
             <ChevronRight size={17} />
           </NavLink>
@@ -2464,6 +2182,8 @@ function MaintenancePage() {
 
 const navigationHelp: Record<NavigationPath, string> = {
   "/": "Your front page",
+  "/overview": "Resource usage, transfers and activity",
+  "/maintenance": "Health checks, diagnostics and safe maintenance.",
   "/apps": "Plex, Seedbox and future apps",
   "/store": "Add apps with guided setup",
   "/storage": "Browse media and check disk space",

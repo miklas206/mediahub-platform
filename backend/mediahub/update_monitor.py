@@ -10,6 +10,7 @@ from mediahub.db import Setting
 from mediahub.errors import DomainError
 from mediahub.main_branch_watch import MAIN_CHECK_INTERVAL_SECONDS, MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
+from mediahub.source_git import source_access
 
 STATE_KEY = "update-monitor"
 
@@ -19,7 +20,8 @@ class UpdateMonitor:
         self.services = services
         self.lock = asyncio.Lock()
         self.check_task = None
-        self.main_watch = MainBranchWatch()
+        self.source_access = source_access(getattr(services, "config", None))
+        self.main_watch = MainBranchWatch(source_access=self.source_access)
 
     def _load(self):
         with self.services.sessions() as db:
@@ -143,9 +145,9 @@ class UpdateMonitor:
         repository = self.services.settings.get().release_repository
         installed = self.services.platform_update.installed_source()
         commit = installed.get("commit") if installed.get("repository") == repository else None
-        return await GitHubSourceProvider(__version__, commit).check(
-            repository, self.services.release_credentials.token()
-        )
+        return await GitHubSourceProvider(
+            __version__, commit, source_access=self.source_access
+        ).check(repository, self.services.release_credentials.token())
 
     async def record_platform(self, result):
         previous = self._load()

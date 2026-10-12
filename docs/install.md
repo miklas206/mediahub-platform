@@ -91,12 +91,16 @@ This path creates **one new MediaHub LXC**, not one LXC per app. It never
 replaces LXC 102 or any other existing guest. The script currently supports
 amd64 Proxmox, a Debian 13 template and a DHCP-enabled local network.
 It installs Docker inside the new guest, not on the Proxmox hypervisor.
+The installer also loads the host TUN driver, enables it at host boot and
+passes `/dev/net/tun` to the new unprivileged LXC as a root-only device.
+It verifies device access before installing apps. VPN apps still need their
+own runtime configuration and a user-provided VPN profile.
 
 1. In the Proxmox web interface select your **node**, then **Shell**.
 2. Download and review the installer:
 
 ```sh
-curl -fL https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/install-proxmox.sh -o /root/mediahub-install-proxmox.sh
+curl -fL https://raw.githubusercontent.com/miklas206/fjordcopy/main/scripts/install-proxmox.sh -o /root/mediahub-install-proxmox.sh
 less /root/mediahub-install-proxmox.sh
 ```
 

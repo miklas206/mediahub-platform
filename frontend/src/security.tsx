@@ -2,7 +2,7 @@ import { getLocale, translateText, t } from "./i18n";
 
 import { LayoutGroup } from "./page-layout";
 import { useEffect, useState, type FormEvent } from "react";
-import { ShieldCheck, KeyRound, Monitor, RefreshCw } from "lucide-react";
+import { ShieldCheck, KeyRound, Monitor } from "lucide-react";
 import { api, setCsrf } from "./api";
 
 type Security = {
@@ -17,7 +17,12 @@ type SessionInfo = {
   current: boolean;
 };
 
-export function SecuritySettings() {
+import { NotificationPopup } from "./notification-popup";
+
+export function SecuritySettings({ setup = false, onProtectionChange }: {
+  setup?: boolean;
+  onProtectionChange?: (enabled: boolean) => void;
+}) {
   const [status, setStatus] = useState<Security>();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [qr, setQr] = useState("");
@@ -33,6 +38,7 @@ export function SecuritySettings() {
       .then(([s, list]) => {
         setStatus(s);
         setSessions(list);
+        onProtectionChange?.(s.totpEnabled);
       })
       .catch((e) => setError(e.message));
   };
@@ -116,24 +122,12 @@ export function SecuritySettings() {
   }
   return (
     <LayoutGroup id="security-extra-1" className="security-workspace">
-      <header>
-        <div>
-          <span className="eyebrow">{t("ACCOUNT PROTECTION")}</span>
-          <h2>
-            <ShieldCheck size={22} />
-            {t(" Security")}
-          </h2>
-        </div>
-        <button onClick={reload} aria-label={t("Refresh security status")}>
-          <RefreshCw size={16} />
-        </button>
-      </header>
       {error && (
-        <div className="notice" role="alert">
+        <NotificationPopup tone="danger">
           {translateText(error)}
-        </div>
+        </NotificationPopup>
       )}
-      {notice && <p role="status">{translateText(notice)}</p>}
+      {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       {codes.length > 0 && (
         <div className="recovery-panel" role="status">
           <h3>{t("Save your recovery codes")}</h3>
@@ -152,7 +146,7 @@ export function SecuritySettings() {
           </button>
         </div>
       )}
-      <LayoutGroup id="security-SecuritySettings-1" className="security-grid">
+      <div className={setup ? "security-setup" : "security-grid"}>
         <article className="security-card">
           <ShieldCheck />
           <h3>{t("Authenticator app")}</h3>
@@ -220,7 +214,7 @@ export function SecuritySettings() {
             </form>
           )}
         </article>
-        <article className="security-card">
+        {!setup && <article className="security-card">
           <KeyRound />
           <h3>{t("Password")}</h3>
           <p>
@@ -243,9 +237,9 @@ export function SecuritySettings() {
             </label>
             <button disabled={busy}>{t("Change password")}</button>
           </form>
-        </article>
-      </LayoutGroup>
-      {status?.totpEnabled && (
+        </article>}
+      </div>
+      {!setup && status?.totpEnabled && (
         <article className="security-card">
           <ShieldCheck />
           <h3>{t("Security policy")}</h3>
@@ -283,7 +277,7 @@ export function SecuritySettings() {
           )}
         </article>
       )}
-      <article className="security-card">
+      {!setup && <article className="security-card">
         <Monitor />
         <h3>{t("Signed-in sessions")}</h3>
         {sessions.map((s) => (
@@ -316,7 +310,7 @@ export function SecuritySettings() {
             </button>
           </div>
         ))}
-      </article>
+      </article>}
     </LayoutGroup>
   );
 }

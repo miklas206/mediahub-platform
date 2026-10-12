@@ -1,8 +1,8 @@
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
-const renderToStaticMarkup = (node: ReactNode) =>
-  render(<MemoryRouter>{node}</MemoryRouter>);
+const renderToStaticMarkup = (node: ReactNode, path = "/") =>
+  render(<MemoryRouter initialEntries={[path]}>{node}</MemoryRouter>);
 import { expect, it } from "vitest";
 import { IntegrationAppLinks, type Integration } from "./integrations";
 
@@ -64,7 +64,10 @@ it("shows licensed artwork or honest interface fallback and installed child apps
       ],
     },
   };
-  const html = renderToStaticMarkup(<IntegrationAppLinks items={[row]} />);
+  const home = renderToStaticMarkup(<IntegrationAppLinks items={[row]} />);
+  expect(home).toContain("FjordHub");
+  expect(home).not.toContain("FjordFlix");
+  const html = renderToStaticMarkup(<IntegrationAppLinks items={[row]} />, "/integrations/hub");
   expect(html).toContain('data-brand-fallback="fjordhub"');
   expect(html).toContain('href="http://192.168.1.40:8888/#card-fjordflix"');
   expect(html).toContain("FjordFlix");
@@ -81,6 +84,7 @@ it("shows licensed artwork or honest interface fallback and installed child apps
         },
       ]}
     />,
+    "/integrations/hub",
   );
   expect(legacy).not.toContain("FjordFlix");
   const detected = renderToStaticMarkup(
@@ -89,6 +93,7 @@ it("shows licensed artwork or honest interface fallback and installed child apps
         { ...row, tokenConfigured: false, snapshot: { status: "detected" } },
       ]}
     />,
+    "/integrations/hub",
   );
   expect(detected).toContain("FjordHub");
   expect(detected).not.toContain("FjordFlix");

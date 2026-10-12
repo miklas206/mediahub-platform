@@ -67,6 +67,22 @@ def test_maintenance_limits_docker_cleanup_and_reports_failure(tmp_path, monkeyp
     assert "private" not in status["message"]
 
 
+def test_cleanup_uses_temporary_docker_client_config(monkeypatch):
+    environments = []
+
+    def run(args, **kwargs):
+        environment = kwargs["env"]
+        assert os.path.isdir(environment["DOCKER_CONFIG"])
+        assert environment["HOME"] == environment["DOCKER_CONFIG"]
+        assert environment["DOCKER_HOST"] == "unix:///var/run/docker.sock"
+        environments.append(environment)
+        return SimpleNamespace(stdout="cleaned")
+
+    monkeypatch.setattr(host_module.subprocess, "run", run)
+    assert HostUpdater._run(["docker", "builder", "prune", "--force"]) == "cleaned"
+    assert not os.path.exists(environments[0]["DOCKER_CONFIG"])
+
+
 def test_maintenance_skips_mounted_stage(tmp_path, monkeypatch):
     updater = HostUpdater(tmp_path)
     stage = updater.updates / "staging" / OPERATION

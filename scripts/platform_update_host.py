@@ -81,8 +81,26 @@ class HostUpdater:
         self.update_mode = None
         self.update_reason = None
 
+    def _embedded(self):
+        compose = self._read_json(self.compose, 2 * 1024 * 1024)
+        return (
+            compose.get("name") == "mediahub-platform"
+            and "agent" not in compose.get("services", {})
+            and compose.get("services", {}).get("core", {}).get("environment", {}).get("MEDIAHUB_RUNTIME_MODE") == "embedded"
+        )
+
     @staticmethod
     def _run(args, capture=True, on_output=None):
+        if args[:3] == ["docker", "builder", "prune"]:
+            with tempfile.TemporaryDirectory(prefix="mediahub-cleanup-") as temporary:
+                environment = {
+                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                    "HOME": temporary,
+                    "DOCKER_CONFIG": temporary,
+                    "BUILDX_CONFIG": str(Path(temporary) / "buildx"),
+                    "DOCKER_HOST": "unix:///var/run/docker.sock",
+                }
+                return HostUpdater._run_command(args, capture, environment)
         source_build = args[:2] == ["docker", "build"]
         environment = None
         if source_build:
@@ -99,13 +117,17 @@ class HostUpdater:
             }
         if source_build and on_output:
             return HostUpdater._stream_build(args, environment, on_output)
+        return HostUpdater._run_command(args, capture, environment)
+
+    @staticmethod
+    def _run_command(args, capture, environment):
         result = subprocess.run(
             args,
             check=True,
             text=True,
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
             stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
-            timeout=1800 if source_build else 600,
+            timeout=1800 if args[:2] == ["docker", "build"] else 600,
             env=environment,
         )
         output = result.stdout or ""
@@ -632,8 +654,9 @@ class HostUpdater:
                 raise ValueError("Source version does not match requested version")
             images = {}
             fingerprint = self._agent_fingerprint(source)
-            reusable_agent = self._reusable_agent(fingerprint)
-            self.changed_roles = ("core",) if reusable_agent else ("core", "agent")
+            embedded = self._embedded()
+            reusable_agent = None if embedded else self._reusable_agent(fingerprint)
+            self.changed_roles = ("core",) if embedded or reusable_agent else ("core", "agent")
             self.update_mode = "fast" if reusable_agent else "full"
             self.update_reason = (
                 "Agent build inputs are unchanged; only Core needs rebuilding."
@@ -655,7 +678,7 @@ class HostUpdater:
                     step["label"] = (
                         "Fast update: build Core only" if reusable_agent else "Build Core and Agent"
                     )
-            for index, role in enumerate(("core", "agent")):
+            for index, role in enumerate(("core",) if embedded else ("core", "agent")):
                 if role == "agent" and reusable_agent:
                     images[role] = reusable_agent
                     self.status("building", 67, "Agent source unchanged; keeping the running Agent")
@@ -712,7 +735,7 @@ class HostUpdater:
                     capture=False,
                 )
                 images[role] = image_id
-            self.pending_build_cache = {
+            self.pending_build_cache = None if embedded else {
                 "agentFingerprint": fingerprint,
                 "agentImage": images["agent"],
             }
@@ -787,6 +810,8 @@ class HostUpdater:
         return total
 
     def _state_directories(self):
+        if self._embedded():
+            return ("data", "agent")
         return tuple("data" if role == "core" else "agent" for role in self.changed_roles)
 
     def _copy_configuration(self, backup):
@@ -850,7 +875,8 @@ class HostUpdater:
                 raise
         if "agent" in self.changed_roles:
             self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
-        self._wait("agent")
+        if not self._embedded():
+            self._wait("agent")
         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
         self._wait("core", health=True)
 
@@ -863,6 +889,8 @@ class HostUpdater:
         for path in compose_files:
             value = self._read_json(path, 2 * 1024 * 1024)
             for role in ("core", "agent"):
+                if role not in value["services"]:
+                    continue
                 reference = value["services"][role]["image"]
                 image = self.command("docker", "image", "inspect", "--format", "{{.Id}}", reference)
                 if not LOADED_IMAGE.fullmatch(image):
@@ -1038,6 +1066,8 @@ class HostUpdater:
                 self.operation = request["operationId"]
                 self.target = request["toVersion"]
                 source_mode = manifest.get("schemaVersion") in (2, 3)
+                if self._embedded() and not source_mode:
+                    raise ValueError("The single-hub profile requires a source update")
                 self.steps = [
                     {"id": "download", "label": "Download verified release", "state": "complete"},
                     {"id": "backup", "label": "Back up configuration", "state": "running"},
@@ -1084,9 +1114,8 @@ class HostUpdater:
                 offset = 1 if source_mode else 0
                 self.status("installing", 70, "Stopping changed services for a safe snapshot")
                 compose = self._read_json(self.compose, 2 * 1024 * 1024)
-                if compose.get("name") != "mediahub-platform" or set(
-                    compose.get("services", {})
-                ) < {"core", "agent"}:
+                required = {"core", "proxy"} if self._embedded() else {"core", "agent"}
+                if compose.get("name") != "mediahub-platform" or not required.issubset(compose.get("services", {})):
                     raise ValueError("Compose ownership validation failed")
                 self._backup_preflight()
                 services_stopped = True
@@ -1108,7 +1137,8 @@ class HostUpdater:
                 self._atomic_json(self.compose, compose, uid=0, gid=0)
                 if "agent" in self.changed_roles:
                     self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
-                self._wait("agent")
+                if not self._embedded():
+                    self._wait("agent")
                 self._compose_command("up", "-d", "--no-deps", "core", capture=False)
                 self.steps[2 + offset]["state"] = "complete"
                 self.steps[-1]["state"] = "running"
@@ -1150,7 +1180,8 @@ class HostUpdater:
                     elif services_stopped:
                         if "agent" in self.changed_roles:
                             self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
-                        self._wait("agent")
+                        if not self._embedded():
+                            self._wait("agent")
                         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
                         self._wait("core", health=True)
                     self.steps[-1]["state"] = "complete"

@@ -17,6 +17,7 @@ class Config(BaseSettings):
         env_prefix="MEDIAHUB_", env_file=".env", extra="ignore", hide_input_in_errors=True
     )
     base_url: str = "http://127.0.0.1:18765"
+    runtime_mode: Literal["external", "embedded"] = "external"
     setup_storage: list[StorageInput] = Field(default_factory=list, max_length=50)
     public_url: str | None = None
     fjordhub_url: str | None = None  # Optional operator-discovered normal LAN URL.
@@ -51,9 +52,45 @@ class Config(BaseSettings):
         return validate_url(value, allow_http=True)
 
     operator_app_urls: dict[str, str] = Field(default_factory=dict)
+    managed_apps_policy_file: Path | None = None
+    managed_apps_docker_socket: Path | None = None
+    sso_app_urls: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("sso_app_urls")
+    @classmethod
+    def valid_sso_urls(cls, values):
+        for package_id, address in values.items():
+            parsed = urlsplit(address)
+            if package_id not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"} or parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+                raise ValueError("SSO requires a supported app and an HTTPS origin")
+        return {key: value.rstrip("/") for key, value in values.items()}
     cloudflared_status_url: str | None = None
     cloudflared_probe_urls: list[str] = Field(default_factory=list)
     platform_update_spool: Path | None = None
+    source_git_repository: str | None = None
+    source_git_ssh_dir: Path | None = None
+
+    @field_validator("source_git_repository")
+    @classmethod
+    def valid_source_git_repository(cls, value):
+        from mediahub.platform_source import REPOSITORY
+
+        if value is not None and not REPOSITORY.fullmatch(value):
+            raise ValueError("Deploy-key source requires an owner/repository")
+        return value
+
+    @field_validator("source_git_ssh_dir")
+    @classmethod
+    def valid_source_git_ssh_dir(cls, value):
+        if value is not None and (not value.is_absolute() or ".." in value.parts):
+            raise ValueError("Deploy-key directory must be an absolute path")
+        return value
+
+    @model_validator(mode="after")
+    def source_git_pair(self):
+        if bool(self.source_git_repository) != bool(self.source_git_ssh_dir):
+            raise ValueError("Deploy-key source requires both repository and SSH directory")
+        return self
 
     @field_validator("platform_update_spool")
     @classmethod

@@ -5,14 +5,16 @@ import time
 
 import httpx
 
+from mediahub.errors import DomainError
 from mediahub.platform_source import REPOSITORY, SHA, headers
 
 MAIN_CHECK_INTERVAL_SECONDS = 15 * 60
 
 
 class MainBranchWatch:
-    def __init__(self, transport=None, clock=time.time):
+    def __init__(self, transport=None, clock=time.time, *, source_access=None):
         self.transport, self.clock = transport, clock
+        self.source_access = source_access
         self.identity = None
         self.etag = None
         self.commit = None
@@ -28,6 +30,12 @@ class MainBranchWatch:
         if now < self.next_check:
             return None
         self.next_check = now + MAIN_CHECK_INTERVAL_SECONDS
+        if self.source_access:
+            try:
+                self.commit = await self.source_access.head(repository)
+                return self.commit
+            except DomainError:
+                return None
         request_headers = headers(token)
         if self.etag:
             request_headers["If-None-Match"] = self.etag

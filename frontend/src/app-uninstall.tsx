@@ -1,6 +1,8 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { api } from "./api";
 import type { InstalledAppInfo } from "./contracts";
 type Removal = {
@@ -12,15 +14,20 @@ type Removal = {
 export function AppUninstall({
   app,
   onRemoved,
+  buttonClassName,
+  showIcon = false,
 }: {
   app: InstalledAppInfo;
   onRemoved: () => void;
+  buttonClassName?: string;
+  showIcon?: boolean;
 }) {
   const [open, setOpen] = useState(app.state === "removing");
   const [status, setStatus] = useState<Removal>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const windowsShare = app.packageId === "org.mediahub.windows-share";
+  const managed = ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId);
   const removalLabel = windowsShare
     ? t("Remove connection")
     : app.packageId === "org.mediahub.cloudflared"
@@ -47,7 +54,7 @@ export function AppUninstall({
         if (!cancelled)
           setError(
             (e as Error).message +
-              (windowsShare
+              (managed ? "" : windowsShare
                 ? " Check the connection to MediaHub and try again."
                 : " Check the Agent connection and update the Agent if removal is not supported."),
           );
@@ -58,7 +65,7 @@ export function AppUninstall({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, onRemoved, busy, windowsShare]);
+  }, [open, endpoint, onRemoved, busy, windowsShare, managed]);
   const remove = async () => {
     if (!status?.installationId) return;
     setBusy(true);
@@ -82,11 +89,16 @@ export function AppUninstall({
   return (
     <>
       <button
+        type="button"
+        className={buttonClassName}
+        aria-label={`${removalLabel}: ${translateText(app.name)}`}
         onClick={() => {
           setError("");
+          setStatus(undefined);
           setOpen(true);
         }}
       >
+        {showIcon && <Trash2 size={15} aria-hidden="true" />}
         {removalLabel}
       </button>
       {open && (
@@ -112,9 +124,14 @@ export function AppUninstall({
                 )}
           </p>
           {error && (
-            <p role="alert" className="error">
+            <NotificationPopup tone="danger">
               {translateText(error)}
-            </p>
+            </NotificationPopup>
+          )}
+          {status?.state === "failed" && !error && (
+            <NotificationPopup tone="danger">
+              {translateText(status.message)}
+            </NotificationPopup>
           )}
           {working && (
             <p role="status">

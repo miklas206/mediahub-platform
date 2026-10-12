@@ -167,7 +167,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const running = status?.state === "running";
   return (
     <div className="stack">
-      <Link to="/store">{t("App Store")}</Link>
+      <Link to="/">{t("Back to MediaHub")}</Link>
       <header>
         <h1>
           <ServiceIcon packageId={"org.mediahub." + app} size={28} />{" "}

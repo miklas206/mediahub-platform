@@ -1222,13 +1222,21 @@ nav a.active {
   flex-shrink: 0;
 }
 .footer {
+  position: fixed;
+  left: 238px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   display: flex;
   gap: 12px;
   justify-content: space-between;
   color: var(--muted);
   font-size: 11px;
-  padding-top: 30px;
-  opacity: 0.7;
+  padding: 12px 32px;
+  background: var(--bg);
+}
+.main-content:has(> .footer) {
+  padding-bottom: 76px;
 }
 .notice {
   padding: 13px 17px;
@@ -2392,8 +2400,14 @@ td time {
     padding: 0 16px;
   }
   .footer {
+    left: 0;
+    bottom: calc(63px + env(safe-area-inset-bottom));
+    padding: 8px 16px;
     flex-direction: column;
     gap: 5px;
+  }
+  .main-content:has(> .footer) {
+    padding-bottom: 150px;
   }
   .storage-form {
     grid-template-columns: 1fr;
@@ -2596,6 +2610,174 @@ td time {
   }
   .updates-page .updates-grid .panel-heading {
     padding: 12px 12px 0;
+  }
+}
+
+.updates-components {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.updates-page .update-component-card {
+  border-radius: 8px;
+  min-width: 0;
+  height: 100%;
+}
+.update-component-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px 14px;
+}
+.update-component-heading h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.update-component-heading .hub-app-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: var(--accent);
+}
+.update-component-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 18px 16px;
+  flex: 1;
+}
+.update-component-body .runtime-row {
+  border: 0;
+  background: none;
+  font-size: 12px;
+}
+.update-component-body > .button-row {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+}
+.update-component-body > details {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.updates-page .updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.updates-page .updates-actions .update-policy-heading {
+  order: 2;
+}
+.updates-page .updates-actions .update-summary-line {
+  margin: 0;
+  flex: 1;
+}
+.updates-console {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  min-width: 0;
+}
+.updates-console > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.updates-console-content {
+  display: grid;
+  gap: 18px;
+  padding-top: 16px;
+}
+.updates-console-content h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.updates-console-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .updates-page .updates-actions .update-summary-line {
+    flex-basis: 100%;
+    font-weight: 400;
+  }
+  .updates-page .updates-actions .update-policy-heading {
+    width: 100%;
+  }
+}
+.updates-components > .panel,
+.updates-components > .layout-card > .panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.updates-components .panel-heading {
+  padding: 16px 16px 10px;
+}
+.updates-components .panel-heading h2 {
+  font-size: 15px;
+}
+.updates-components .phase-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  min-width: 0;
+}
+.updates-components .runtime-row {
+  padding: 0;
+  min-height: 0;
+  font-size: 12px;
+  gap: 12px;
+}
+.updates-components .runtime-row strong,
+.updates-components .runtime-row span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.updates-components .button-row {
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 8px;
+}
+.updates-components details > summary {
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.updates-components .operation-details pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.updates-actions {
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.updates-actions h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.updates-actions .update-policy-heading {
+  margin: 0;
+  align-items: center;
+}
+.updates-actions .update-summary-line {
+  border: 0;
+  padding: 0;
+  margin-top: 12px;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .updates-components {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

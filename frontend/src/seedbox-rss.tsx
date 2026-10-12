@@ -1,4 +1,5 @@
 import { translateText, t } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -88,7 +89,7 @@ export function SeedboxRSS({
   return (
     <Panel title={t("RSS torrents")}>
       <ErrorBox error={error} />
-      {notice && <p role="status">{translateText(notice)}</p>}
+      {notice && <NotificationPopup tone="success">{translateText(notice)}</NotificationPopup>}
       <form
         onSubmit={(e) => {
           e.preventDefault();

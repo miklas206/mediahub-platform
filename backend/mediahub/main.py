@@ -20,6 +20,7 @@ from mediahub.agent_client import AgentClient
 from mediahub.agent_updates import AgentUpdates
 from mediahub.agent_updates_api import router as agent_updates_router
 from mediahub.api import router
+from mediahub.app_settings import router as app_settings_router
 from mediahub.apps.cloudflared import (
     register_cloudflared_app,
     should_register_cloudflared_app,
@@ -52,6 +53,7 @@ from mediahub.seedbox_reachability import SeedboxReachability
 from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
+from mediahub.sso import router as sso_router
 from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
@@ -71,7 +73,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     setup_logging(config.log_level)
 
     @asynccontextmanager
-    async def lifespan(app):
+    async def services_lifespan(app):
         config.data_dir.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             config.data_dir.chmod(0o700)
@@ -90,7 +92,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.storage = StorageManager(sessions, config, events)
         svc.apps = AppManager(sessions, events, config)
         svc.apps.initialize()
-        svc.agent = AgentClient(config)
+        svc.agent = getattr(app.state, "local_runtime", None) or AgentClient(config)
         svc.catalog = Catalog(config, sessions, svc.agent)
         svc.windows_share = WindowsShareService(sessions)
         svc.integrations = IntegrationService(config, sessions, events)
@@ -106,6 +108,10 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions, svc.integrations)
         register_remote_apps(svc)
+        from mediahub.managed_apps import ManagedApps
+
+        svc.managed_apps = ManagedApps(svc)
+        await svc.managed_apps.initialize()
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -148,6 +154,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await svc.managed_apps.close()
             await svc.update_queue.stop()
             port_collector.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -168,6 +175,22 @@ def create_app(config: Config | None = None) -> FastAPI:
             with contextlib.suppress(asyncio.CancelledError):
                 await collector
             engine.dispose()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        if config.runtime_mode == "external":
+            async with services_lifespan(app):
+                yield
+            return
+        from agent.main import AgentConfig, create_agent
+
+        runtime_config = AgentConfig()
+        local_app = create_agent(runtime_config)
+        token = runtime_config.token_file.read_text().strip()
+        app.state.local_runtime = AgentClient(config, token=token, local_app=local_app)
+        async with local_app.router.lifespan_context(local_app):
+            async with services_lifespan(app):
+                yield
 
     app = FastAPI(
         title="MediaHub API",
@@ -257,6 +280,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(app_settings_router, prefix="/api/v1")
+    app.include_router(sso_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")

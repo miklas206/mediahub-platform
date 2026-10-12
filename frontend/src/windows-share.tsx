@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { getLocale, t, translateText } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
 import { LayoutGroup } from "./page-layout";
 import "./windows-share.css";
 
@@ -324,12 +325,12 @@ export function WindowsSharePage({
         ))}
       </nav>
       {message && (
-        <p className="windows-share-feedback" role="status">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </p>
+        </NotificationPopup>
       )}
       {error && (
-        <div className="notice windows-share-feedback" role="alert">
+        <NotificationPopup tone="danger">
           {translateText(error)}
           {!saved && !loading && (
             <button
@@ -340,7 +341,7 @@ export function WindowsSharePage({
               {t("Try again")}
             </button>
           )}
-        </div>
+        </NotificationPopup>
       )}
       <LayoutGroup id="windows-share-panels" className="windows-share-grid">
         <section

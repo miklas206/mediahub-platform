@@ -63,7 +63,7 @@ const fields = [
 const same = (a: Appearance | null, b: Appearance | null) =>
   JSON.stringify(a) === JSON.stringify(b);
 
-export function AppearanceSettings() {
+export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
   const saved = useAppearance();
   const [draft, setDraft] = useState(saved);
   const [inputs, setInputs] = useState(saved || defaultAppearance);
@@ -87,6 +87,9 @@ export function AppearanceSettings() {
   }, []);
   const invalid = fields.some(([key]) => !isHexColor(inputs[key]));
   const dirty = !same(saved, draft) || invalid;
+  const availablePresets = saved && !presets.some((preset) => same(saved, preset.value))
+    ? [...presets, { name: "Saved palette", value: saved }]
+    : presets;
   function choose(value: Appearance | null) {
     setDraft(value);
     setInputs(value || defaultAppearance);
@@ -127,25 +130,25 @@ export function AppearanceSettings() {
     }
   }
   return (
-    <section className="panel appearance-settings">
+    <section className={`panel appearance-settings${compact ? " appearance-compact" : ""}`}>
       <header className="panel-heading">
         <h2>
           <Palette size={18} />
-          {t("Colors and shades")}
+          {t(compact ? "Color palettes" : "Colors and shades")}
         </h2>
       </header>
       <form onSubmit={(event) => void save(event)}>
-        <p className="appearance-description">
+        {!compact && <p className="appearance-description">
           {t(
             "Make MediaHub your own. Preview changes here, then save them for your account on all devices.",
           )}
-        </p>
+        </p>}
         <div
           className="appearance-presets"
           role="group"
           aria-label={t("Color palettes")}
         >
-          {presets.map((preset) => (
+          {availablePresets.map((preset) => (
             <button
               key={preset.name}
               type="button"
@@ -199,6 +202,7 @@ export function AppearanceSettings() {
             </div>
           ))}
         </div>
+        {!compact && <>
         <div className="appearance-depth">
           <label htmlFor="appearance-depth">
             <SlidersHorizontal size={15} />
@@ -256,6 +260,7 @@ export function AppearanceSettings() {
             "Green, yellow and red keep their meaning for online status, warnings and errors.",
           )}
         </p>
+        </>}
         {error && (
           <p role="alert" className="notice appearance-description">
             {translateText(error)}
@@ -276,20 +281,20 @@ export function AppearanceSettings() {
           >
             {t("Discard changes")}
           </button>
-          <button
+          {!compact && <button
             type="button"
             disabled={busy || draft === null}
             onClick={() => choose(null)}
           >
             <RotateCcw size={14} />
             {t("MediaHub defaults")}
-          </button>
+          </button>}
           <span role="status">
             {message
               ? t(message)
               : dirty
                 ? t("Preview · Save to keep your changes")
-                : t("Saved for your account on all devices.")}
+                : compact ? "" : t("Saved for your account on all devices.")}
           </span>
         </div>
       </form>

@@ -29,6 +29,17 @@ def services(request: Request):
 def authenticated(request: Request):
     svc = services(request)
     user = svc.auth.authenticate(request.cookies.get(COOKIE))
+    path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
+    if user.get("role") != "administrator":
+        own_paths = {"/auth/me", "/auth/logout", "/auth/preferences", "/apps", "/app-overview"}
+        if path.startswith("/apps/"):
+            parts = path.split("/")
+            app = svc.apps.get(parts[2])
+            svc.auth.app_role(user["id"], app["packageId"])
+            if request.method != "GET" or (len(parts) > 3 and parts[3] not in {"health", "open"}):
+                raise DomainError("administrator_required", "Administrator access is required", 403)
+        elif path not in own_paths and not path.startswith("/security") and not path.startswith("/sso/"):
+            raise DomainError("administrator_required", "Administrator access is required", 403)
     if user.get("totpRequired") and not user.get("totpEnabled"):
         path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
         if not (path.startswith("/security") or path in {"/auth/me", "/auth/logout", "/auth/preferences"}):
@@ -58,6 +69,34 @@ class Credentials(StrictModel):
 
 class PathRequest(StrictModel):
     path: str = Field(min_length=1, max_length=4096)
+
+
+class ManagedUser(StrictModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(default="", max_length=256)
+    role: Literal["administrator", "user"] | None = None
+    appRoles: dict[str, Literal["administrator", "user", "viewer", "denied"]] | None = None
+
+
+@router.get("/users")
+async def users(request: Request, user=Depends(administrator)):
+    return result(services(request).auth.users())
+
+
+@router.post("/users")
+async def create_user(body: ManagedUser, request: Request, user=Depends(administrator)):
+    return result(services(request).auth.save_user(body.username, body.password, role=body.role, app_roles=body.appRoles))
+
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: str, body: ManagedUser, request: Request, user=Depends(administrator)):
+    return result(services(request).auth.save_user(body.username, body.password, user_id, body.role, body.appRoles))
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, request: Request, user=Depends(administrator)):
+    services(request).auth.delete_user(user_id, user["id"])
+    return result({"deleted": True})
 
 
 class GitHubTokenRequest(StrictModel):
@@ -142,7 +181,40 @@ async def apps(
     user=Depends(authenticated),
 ):
     svc = services(request)
-    return result(await _apps_with_health(svc) if include_health else svc.apps.list())
+    listing = svc.apps.list()
+    from mediahub.app_settings import saved_address
+
+    listing = [{**app, "externalUrl": saved_address(svc, app["packageId"])} for app in listing]
+    registered = {app["packageId"] for app in listing}
+    listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
+    for package_id, origin in svc.config.sso_app_urls.items():
+        from mediahub.managed_apps import unavailable
+
+        if unavailable(svc, package_id):
+            continue
+        origin = saved_address(svc, package_id) or origin
+        if package_id not in registered:
+            connected = {"id": package_id, "packageId": package_id, "name": {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}[package_id], "version": "connected", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"}
+            if include_health:
+                from mediahub.mediaseed_api import available
+
+                private_origin = svc.config.operator_app_urls.get(package_id)
+                healthy = bool(private_origin) and await available(private_origin, svc.config.agent_ca_file)
+                connected["health"] = {"status": "healthy" if healthy else "unknown", "summary": "App available" if healthy else "Check connection", "checks": []}
+            listing.append(connected)
+    if user["role"] != "administrator":
+        visible = []
+        for app in listing:
+            try:
+                svc.auth.app_role(user["id"], app["packageId"])
+            except DomainError:
+                continue
+            visible.append(app)
+        return result(visible)
+    if include_health:
+        health = {app["id"]: app for app in await _apps_with_health(svc)}
+        listing = [{**app, **health.get(app["id"], {})} for app in listing]
+    return result(listing)
 
 
 @router.get("/apps/{app_id}")

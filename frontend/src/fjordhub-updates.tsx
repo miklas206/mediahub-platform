@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { NotificationPopup } from "./notification-popup";
 import { ServiceIcon } from "./service-icon";
 import type { Integration } from "./integrations";
 
@@ -226,7 +227,7 @@ export function FjordHubUpdates({
         Status kontrolleres hvert 45. sekund og hvert 5. sekund under
         opdatering. Kun dit valg starter installation.
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <NotificationPopup tone="danger">{error}</NotificationPopup>}
       {!ids.length && (
         <p>
           Ingen appoplysninger eller opdateringsadgang. Vælg adgang på det

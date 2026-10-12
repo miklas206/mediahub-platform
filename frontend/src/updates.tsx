@@ -1,14 +1,15 @@
 import { translateText, t } from "./i18n";
 
-import { LayoutGroup } from "./page-layout";
 import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, RefreshCw, ShieldCheck } from "lucide-react";
+import { Bell, RefreshCw, Box, Download, Terminal } from "lucide-react";
+import { ServiceIcon } from "./service-icon";
+import { NotificationPopup } from "./notification-popup";
 import { api, ApiResponseError } from "./api";
 import { mergeUpdateConsole } from "./update-progress";
-import { ErrorBox, Panel, useLoad } from "./phase2";
+import { ErrorBox, useLoad } from "./phase2";
 import type { AppInfo } from "./contracts";
 import { updateAllPlan } from "./update-all";
 import {
@@ -66,6 +67,7 @@ type PlatformRelease = {
   installedCommit?: string | null;
   latestCommit?: string | null;
   sourceChannel?: "main";
+  sourceAccessMethod?: "deploy-key" | "token" | "public";
   latestVersion: string | null;
   updateAvailable: boolean;
   releaseUrl: string | null;
@@ -201,14 +203,6 @@ function checkedAt(value: number | null | undefined) {
   }).format(new Date(value * 1000));
 }
 
-function scheduleLabel(hours: number | undefined) {
-  if (!hours) return "Automatic checks are off";
-  if (hours === 1) return "Every hour";
-  if (hours === 24) return "Every day";
-  if (hours === 168) return "Every week";
-  return `Every ${hours} hours`;
-}
-
 type QueueStatus = {
   operationId?: string;
   state: string;
@@ -246,6 +240,20 @@ function queueOperation(job: QueueStatus): OperationState {
               : "running",
     })),
   };
+}
+
+function UpdateCard({ name, packageId, children }: { name: string; packageId?: string; children: ReactNode }) {
+  return (
+    <article className="hub-app-card update-component-card">
+      <header className="update-component-heading">
+        <span className="hub-app-icon">
+          {packageId ? <ServiceIcon packageId={packageId} size={28} /> : <Box size={26} />}
+        </span>
+        <h2>{name}</h2>
+      </header>
+      <div className="update-component-body">{children}</div>
+    </article>
+  );
 }
 
 export function UpdatesPage({
@@ -882,52 +890,39 @@ export function UpdatesPage({
     );
 
   return (
-    <LayoutGroup id="updates-UpdatesPage-1" className="stack updates-page">
-      <p className="muted">
-        {t(
-          "Verified updates with configuration rollback and media kept separate. Updates continue on the server if you leave, refresh or close this page. Return here to follow progress.",
-        )}
-      </p>
+    <div className="stack updates-page">
       {updating && <UpdateRestartNotice disconnected={restarting} />}
       <ErrorBox error={error || (restarting ? "" : serverError || appsError)} />
       {!restarting && (
         <ErrorBox error={platformRelease.error || updateSummary.error} />
       )}
       {notice && (
-        <p className="success" role="status">
+        <NotificationPopup tone="success">
           {translateText(notice)}
-        </p>
+        </NotificationPopup>
       )}
-      <Panel title={t("Update overview")}>
-        <div className="update-policy-heading">
-          <div>
-            <ShieldCheck />
-            <p>
-              <strong>
-                {t("Full check: ")}
-                {scheduleLabel(updateSummary.data?.intervalHours)}
-              </strong>
-            </p>
-            {!!updateSummary.data?.mainCheckIntervalSeconds && (
-              <p className="muted">
-                {t("MediaHub checks: every")}{" "}
-                {updateSummary.data.mainCheckIntervalSeconds / 60}
-                {t(" min")}
-              </p>
-            )}
-            <p className="muted">
-              {t("Last checked: ")}
-              {checkedAt(updateSummary.data?.checkedAt)}
-            </p>
+      <section className="updates-console" aria-label={t("Console")}>
+        <details open={updating || undefined}>
+          <summary><Terminal size={17} />{t("Console")}</summary>
+          <div className="updates-console-content">
+            {Object.entries(operations).filter(([, operation]) => operation).map(([id, operation]) => (
+              <div key={id}>
+                <h3>{translateText(operation!.title)}</h3>
+                <OperationProgress activeOnly operation={operation!} />
+              </div>
+            ))}
           </div>
+        </details>
+      </section>
+      <section className="updates-actions" aria-label={t("Update all")}>
+        <div className="update-policy-heading">
           <div className="button-row">
-            {batchPlan.tasks.length > 0 && busy !== "all-check" && (
               <button
                 className="primary"
                 disabled={!!busy || !apps || !batchPlan.tasks.length}
                 onClick={() => void installAll()}
               >
-                <RefreshCw
+                <Download
                   size={16}
                   className={
                     operations.batch?.status === "running" ? "spin" : ""
@@ -937,15 +932,12 @@ export function UpdatesPage({
                   ? t("Updating all…")
                   : t("Update all")}
               </button>
-            )}
-            <button disabled={!!busy} onClick={() => void checkAll()}>
+            <button disabled={!!busy} onClick={() => void checkAll()} aria-label={t("Check all now")} title={t("Check all now")}>
               <RefreshCw
                 className={busy === "all-check" ? "spin" : ""}
                 size={16}
-              />{" "}
-              {busy === "all-check" ? t("Checking…") : t("Check all now")}
+              />
             </button>
-            <Link to="/settings">{t("Change schedule →")}</Link>
           </div>
         </div>
         <div className="update-summary-line" role="status">
@@ -988,10 +980,10 @@ export function UpdatesPage({
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "failed")
           .map((item) => (
-            <p className="notice" role="alert" key={item.id}>
+            <NotificationPopup tone="danger" key={item.id}>
               <strong>{item.name}:</strong> {translateText(item.message)}
               {item.errorCode && <small> ({item.errorCode})</small>}
-            </p>
+            </NotificationPopup>
           ))}
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "deferred")
@@ -1023,31 +1015,9 @@ export function UpdatesPage({
             {t(". These apps do not yet have an automatic installer.")}
           </p>
         )}
-        {operations.batch?.status === "running" && (
-          <p role="status">
-            {t(
-              "Updates continue on the server. You can leave this page. Core updates last.",
-            )}
-          </p>
-        )}
-        {operations.batch &&
-          (operations.batch.status === "success" ? (
-            <details>
-              <summary>{t("Latest update console")}</summary>
-              <OperationProgress activeOnly operation={operations.batch} />
-            </details>
-          ) : (
-            <OperationProgress activeOnly operation={operations.batch} />
-          ))}
-        {operations.all && operations.all.status !== "success" && (
-          <OperationProgress activeOnly statusOnly operation={operations.all} />
-        )}
-      </Panel>
-      <LayoutGroup
-        id="updates-UpdatesPage-2"
-        className="apps-grid updates-grid"
-      >
-        <Panel title={t("MediaHub Core")}>
+      </section>
+      <div className="updates-components">
+        <UpdateCard name={t("MediaHub Core")}>
           <div className="runtime-row">
             <span>{t("Installed")}</span>
             <strong>
@@ -1064,34 +1034,18 @@ export function UpdatesPage({
               {release?.latestCommit?.slice(0, 7) || t("Not checked yet")}
             </strong>
           </div>
-          <div className="runtime-row">
-            <span>{t("Update source")}</span>
-            <span>
-              {release?.installReady
-                ? release.updateMethod === "source"
-                  ? t("GitHub source · build locally")
-                  : t("Legacy image release")
-                : release?.manifest
-                  ? t("Manifest verified")
-                  : release?.repository || t("Choose in Settings")}
-            </span>
-          </div>
           <div className="button-row">
             <button
               onClick={() => void checkPlatform()}
               disabled={!!busy || !release}
+              aria-label={t("Check GitHub")}
+              title={t("Check GitHub")}
             >
               <RefreshCw
                 className={busy === "platform-check" ? "spin" : ""}
                 size={16}
-              />{" "}
-              {busy === "platform-check" ? t("Checking…") : t("Check GitHub")}
+              />
             </button>
-            {release?.releaseUrl && (
-              <a href={release.releaseUrl} target="_blank" rel="noreferrer">
-                {t("View code →")}
-              </a>
-            )}
             <button
               className="primary"
               disabled={!!busy || !release?.installReady}
@@ -1102,11 +1056,13 @@ export function UpdatesPage({
                 : t("Install update")}
             </button>
           </div>
-          {operations.platform && (
-            <OperationProgress activeOnly operation={operations.platform} />
-          )}
           <details className="update-card-advanced">
             <summary>{t("Details and update settings")}</summary>
+            {release?.releaseUrl && (
+              <a href={release.releaseUrl} target="_blank" rel="noreferrer">
+                {t("View code →")}
+              </a>
+            )}
             <p>
               {translateText(release?.message) ||
                 t("Checking main for code changes...")}
@@ -1123,68 +1079,93 @@ export function UpdatesPage({
                     "requires a complete verified release and the rollback-protected host updater.",
                   )}
             </p>
-            <p className="muted">
-              {privateAccess.data?.configured
-                ? t(
-                    "Configured · the token is encrypted and is never returned to this page.",
-                  )
-                : t(
-                    "Not configured · public repositories work without a token.",
-                  )}
-            </p>
-            <form onSubmit={savePrivateAccess} className="inline-secret-form">
-              <label>
-                {t("Read-only GitHub token")}
-                <input
-                  type="password"
-                  value={githubToken}
-                  onChange={(event) => setGithubToken(event.target.value)}
-                  minLength={20}
-                  maxLength={512}
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={
-                    privateAccess.data?.configured
-                      ? t("Enter a new token to replace it")
-                      : t("Fine-grained token with Contents: read")
-                  }
-                  required
-                />
-              </label>
-              <div className="button-row">
-                <button
-                  className="primary"
-                  disabled={busy === "github-credentials" || !githubToken}
-                >
-                  {privateAccess.data?.configured
-                    ? t("Replace private access")
-                    : t("Save private access")}
-                </button>
-                {privateAccess.data?.configured && (
-                  <button
-                    type="button"
-                    disabled={busy === "github-credentials"}
-                    onClick={() => void removePrivateAccess()}
-                  >
-                    {t("Remove access")}
-                  </button>
+            {release?.sourceAccessMethod === "deploy-key" ? (
+              <p className="muted">
+                {t(
+                  "Access with a separate read-only key is configured on the host.",
                 )}
-              </div>
-            </form>
+              </p>
+            ) : (
+              <>
+                <p className="muted">
+                  {privateAccess.data?.configured
+                    ? t(
+                        "Configured · the token is encrypted and is never returned to this page.",
+                      )
+                    : t(
+                        "Not configured · public repositories work without a token.",
+                      )}
+                </p>
+                <form
+                  onSubmit={savePrivateAccess}
+                  className="inline-secret-form"
+                >
+                  <label>
+                    {t("Read-only GitHub token")}
+                    <input
+                      type="password"
+                      value={githubToken}
+                      onChange={(event) => setGithubToken(event.target.value)}
+                      minLength={20}
+                      maxLength={512}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder={
+                        privateAccess.data?.configured
+                          ? t("Enter a new token to replace it")
+                          : t("Fine-grained token with Contents: read")
+                      }
+                      required
+                    />
+                  </label>
+                  <div className="button-row">
+                    <button
+                      className="primary"
+                      disabled={busy === "github-credentials" || !githubToken}
+                    >
+                      {privateAccess.data?.configured
+                        ? t("Replace private access")
+                        : t("Save private access")}
+                    </button>
+                    {privateAccess.data?.configured && (
+                      <button
+                        type="button"
+                        disabled={busy === "github-credentials"}
+                        onClick={() => void removePrivateAccess()}
+                      >
+                        {t("Remove access")}
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </>
+            )}
             <p>
               <Link to="/backups">{t("Create configuration backup →")}</Link>
             </p>
           </details>
-        </Panel>
+        </UpdateCard>
         {apps?.some(
           (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
         ) && (
-          <div className="layout-card" data-layout-title="Seedbox Agent">
-            <AgentUpdates
-              busy={!!busy}
-              onChange={() => updateSummary.reload()}
-            />
-          </div>
+          <UpdateCard name={t("Seedbox Agent")} packageId="org.mediahub.seedbox">
+            <div className="runtime-row">
+              <span>{t("Installed")}</span>
+              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.installedVersion || t("Not checked")}</strong>
+            </div>
+            <div className="runtime-row">
+              <span>{t("Latest")}</span>
+              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.latestVersion || t("Not checked")}</strong>
+            </div>
+            <details className="update-agent-details">
+              <summary>{t("Update Agent")}</summary>
+              <AgentUpdates
+                embedded
+                busy={!!busy}
+                onChange={() => updateSummary.reload()}
+              />
+            </details>
+          </UpdateCard>
         )}
         {apps
           ?.filter((app) => !app.isMock)
@@ -1193,7 +1174,7 @@ export function UpdatesPage({
             const isPlex = app.packageId === "org.mediahub.plex";
             const isCloudflare = app.packageId === "org.mediahub.cloudflared";
             return (
-              <Panel key={app.id} title={app.name}>
+              <UpdateCard key={app.id} name={app.name} packageId={app.packageId}>
                 <div className="runtime-row">
                   <span>{t("Installed")}</span>
                   <strong>
@@ -1207,27 +1188,9 @@ export function UpdatesPage({
                         : t("Not verified"))}
                   </strong>
                 </div>
-                {!isPlex && !isCloudflare && (
-                  <div className="runtime-row">
-                    <span>{t("VPN runtime")}</span>
-                    <span>
-                      {version?.vpn?.version || t("Pinned Gluetun image")}
-                    </span>
-                  </div>
-                )}
                 <div className="runtime-row">
                   <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
                   <span>{latest[app.id] || t("Not checked")}</span>
-                </div>
-                <div className="runtime-row">
-                  <span>{t("Update method")}</span>
-                  <span>
-                    {isCloudflare
-                      ? t("Official release check")
-                      : isPlex
-                        ? t("Managed by MediaHub")
-                        : t("Coordinated fail-closed update")}
-                  </span>
                 </div>
                 <div className="button-row">
                   {(isPlex || isCloudflare) && (
@@ -1237,14 +1200,13 @@ export function UpdatesPage({
                           !!busy || (!isCloudflare && !version?.available)
                         }
                         onClick={() => void check(app)}
+                        aria-label={t("Check release")}
+                        title={t("Check release")}
                       >
                         <RefreshCw
                           className={busy === `check:${app.id}` ? "spin" : ""}
                           size={16}
-                        />{" "}
-                        {busy === `check:${app.id}`
-                          ? t("Checking…")
-                          : t("Check release")}
+                        />
                       </button>
                       {isPlex && (
                         <button
@@ -1263,26 +1225,17 @@ export function UpdatesPage({
                       )}
                     </>
                   )}
-                  <Link to={app.detailPath || "/apps"}>
-                    {t("Open app & recovery →")}
-                  </Link>
                 </div>
-                {isPlex && (
-                  <p className="muted">
-                    {plexChecks[app.id]?.message ||
-                      plexChecks[app.id]?.reason ||
-                      "Check the managed publisher image before updating. Plex server releases alone do not confirm an image update."}
-                  </p>
-                )}
-                {operations[app.id] && (
-                  <OperationProgress
-                    activeOnly
-                    operation={operations[app.id]!}
-                  />
-                )}
+                <details className="update-card-details">
+                  <summary>{t("Open app & recovery →")}</summary>
+                  <Link to={app.detailPath || "/apps"}>{app.name}</Link>
+                </details>
                 {!isPlex && !isCloudflare && (
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
+                    <p className="muted">
+                      {t("VPN runtime")}: {version?.vpn?.version || t("Pinned Gluetun image")}
+                    </p>
                     <p className="muted">
                       {t(
                         "VPN and torrent-client updates require a coordinated, fail-closed deployment. Routine restarts are available from the app page.",
@@ -1293,6 +1246,7 @@ export function UpdatesPage({
                 {isPlex && (
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
+                    <p>{plexChecks[app.id]?.message || plexChecks[app.id]?.reason}</p>
                     <p className="muted">
                       {t(
                         "MediaHub checks the LinuxServer publisher image digest, not Plex's in-server updater. An image release may leave the Plex server version unchanged. A configuration rollback snapshot is created before replacing the runtime. Media files stay separate.",
@@ -1310,10 +1264,10 @@ export function UpdatesPage({
                     </p>
                   </details>
                 )}
-              </Panel>
+              </UpdateCard>
             );
           })}
-      </LayoutGroup>
-    </LayoutGroup>
+      </div>
+    </div>
   );
 }

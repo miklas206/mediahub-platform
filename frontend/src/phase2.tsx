@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { api, uploadMediaFile } from "./api";
 import { droppedMediaFiles, type MediaUploadFile } from "./media-drop";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { bytes, fileFormat } from "./format";
 import type { HostInfo, LogicalStorage } from "./hosts";
 import type { Storage, InstalledAppInfo } from "./contracts";
@@ -93,11 +93,13 @@ export function Panel({
     </section>
   );
 }
+import { NotificationPopup } from "./notification-popup";
+
 export function ErrorBox({ error }: { error: string }) {
   return error ? (
-    <div className="notice" role="alert">
+    <NotificationPopup tone="danger">
       {t(error)}
-    </div>
+    </NotificationPopup>
   ) : null;
 }
 
@@ -513,7 +515,7 @@ export function StorageWorkspace() {
     <LayoutGroup id="phase2-StorageWorkspace-1" className="stack">
       <Panel title={t("Storage locations")}>
         <ErrorBox error={error} />
-        {message && <p className="success">{translateText(message)}</p>}
+        {message && <NotificationPopup tone="success">{translateText(message)}</NotificationPopup>}
         {data?.length ? (
           data.map((item) => (
             <div className="storage-row" key={item.id}>
@@ -1336,9 +1338,9 @@ export function ConfigurationForm({ app }: { app: CatalogApp }) {
       ))}
       <button>{t("Save app configuration")}</button>
       {message && (
-        <p role="status" className="success">
+        <NotificationPopup tone="success">
           {translateText(message)}
-        </p>
+        </NotificationPopup>
       )}
     </form>
   );
@@ -1815,14 +1817,18 @@ export function SettingsExtensions({
   general,
   maintenance,
   security,
+  sections = {},
   advanced = false,
 }: {
   general: ReactNode;
   maintenance: ReactNode;
   security: ReactNode;
+  sections?: Record<string, ReactNode>;
   advanced?: boolean;
 }) {
-  const [tab, setTab] = useState("General");
+  const [parameters, setParameters] = useSearchParams();
+  const tab = parameters.get("section") || "General";
+  const setTab = (value: string) => setParameters({ section: value });
   useEffect(() => {
     if (!advanced && ["Storage", "Network", "Agent", "Advanced"].includes(tab))
       setTab("General");
@@ -1830,21 +1836,19 @@ export function SettingsExtensions({
   const network = useLoad<{ pending: NetworkConfig }>("/network");
   const [edited, setEdited] = useState<NetworkConfig>();
   const [message, setMessage] = useState("");
+  const tabs = [
+    "General",
+    ...(sections.Users ? ["Users"] : []),
+    "Security",
+    ...["Integrations", "Updates"].filter((name) => sections[name]),
+    "Healthcheck",
+    ...["Activity", "Logs"].filter((name) => sections[name]),
+    ...(advanced ? ["Network", "Agent", "Advanced"] : []),
+  ];
   return (
-    <div className="stack">
-      <div className="settings-tabs" role="tablist">
-        {(advanced
-          ? [
-              "General",
-              "Maintenance",
-              "Storage",
-              "Network",
-              "Agent",
-              "Security",
-              "Advanced",
-            ]
-          : ["General", "Maintenance", "Security"]
-        ).map((tabName) => (
+    <div className="settings-content stack">
+      <div className="settings-tabs" role="tablist" aria-label={t("Settings")}>
+        {tabs.map((tabName) => (
           <button
             role="tab"
             aria-selected={tab === tabName}
@@ -1857,8 +1861,8 @@ export function SettingsExtensions({
         ))}
       </div>
       {tab === "General" && general}
-      {tab === "Maintenance" && maintenance}
-      {tab === "Storage" && <StorageWorkspace />}
+      {tab === "Healthcheck" && maintenance}
+      {sections[tab]}
       {tab === "Network" && (
         <LayoutGroup id="settings-network-cards">
           <Panel title={t("Network configuration")}>

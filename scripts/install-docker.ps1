@@ -29,7 +29,7 @@ if ($Update) {
     $updateSource = Join-Path $InstallDirectory ('update-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $updateSource | Out-Null
     $archive = Join-Path $updateSource 'source.zip'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/mediahub-platform/archive/refs/heads/main.zip' -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/fjordcopy/archive/refs/heads/main.zip' -OutFile $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $updateSource
     $source = Join-Path $updateSource 'mediahub-platform-main'
     Invoke-Docker build -f (Join-Path $source 'docker/Agent.Dockerfile') -t mediahub-guided-agent:local $source
@@ -56,7 +56,7 @@ if (Test-Path (Join-Path $localSource 'docker/Dockerfile')) {
     $source = $localSource
 } else {
     $archive = Join-Path $InstallDirectory 'source.zip'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/mediahub-platform/archive/refs/heads/main.zip' -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/fjordcopy/archive/refs/heads/main.zip' -OutFile $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $source
     $source = Join-Path $source 'mediahub-platform-main'
 }

@@ -197,9 +197,11 @@ export function orderedIds(current: string[], saved: string[] = []) {
 export function PageLayout({
   storageKey,
   children,
+  customizable = true,
 }: {
   storageKey: string;
   children: ReactNode;
+  customizable?: boolean;
 }) {
   const key = `mediahub.layout.v1:${storageKey}`;
   const [editing, setEditing] = useState(false);
@@ -338,7 +340,7 @@ export function PageLayout({
         },
       }}
     >
-      <div className="layout-toolbar">
+      {customizable && <div className="layout-toolbar">
         <button
           type="button"
           aria-pressed={editing}
@@ -426,7 +428,7 @@ export function PageLayout({
         <span className="layout-save-status" role="status">
           {translateText(message)}
         </span>
-      </div>
+      </div>}
       {children}
     </Context.Provider>
   );

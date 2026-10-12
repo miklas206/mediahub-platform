@@ -1,6 +1,32 @@
 .appearance-settings {
   min-width: 0;
 }
+.settings-general-compact {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+}
+.appearance-settings.appearance-compact .appearance-controls {
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 12px;
+}
+.appearance-compact .appearance-color-field {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.appearance-settings.appearance-compact .appearance-presets {
+  grid-template-columns: repeat(auto-fit, minmax(min(105px, 100%), 1fr));
+  gap: 8px;
+}
+.appearance-settings.appearance-compact .appearance-presets button {
+  padding: 9px 10px;
+  gap: 6px;
+}
+.appearance-settings.appearance-compact .palette-swatches span {
+  width: 16px;
+  height: 12px;
+}
 .appearance-settings > form {
   min-width: 0;
 }

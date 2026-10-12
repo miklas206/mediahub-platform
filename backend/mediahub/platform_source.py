@@ -55,10 +55,13 @@ async def metadata(client, path):
 
 
 class GitHubSourceProvider:
-    def __init__(self, current_version, installed_commit=None, transport=None):
+    def __init__(
+        self, current_version, installed_commit=None, transport=None, *, source_access=None
+    ):
         self.version = current_version
         self.commit = installed_commit if SHA.fullmatch(installed_commit or "") else None
         self.transport = transport
+        self.source_access = source_access
 
     async def check(self, repository, token=None):
         result = {
@@ -78,13 +81,22 @@ class GitHubSourceProvider:
             "installReady": False,
             "updateMethod": "source",
             "sourceChannel": "main",
-            "privateAccessConfigured": bool(token),
+            "privateAccessConfigured": bool(token or self.source_access),
+            "sourceAccessMethod": "deploy-key"
+            if self.source_access
+            else "token"
+            if token
+            else "public",
         }
         if not repository:
             return {**result, "message": "Choose the GitHub repository to follow its main branch."}
         if not REPOSITORY.fullmatch(repository):
             raise DomainError("invalid_repository", "Invalid GitHub repository", 422)
         try:
+            if self.source_access:
+                commit, project = await self.source_access.metadata(repository)
+                version = tomllib.loads(project.decode())["project"]["version"]
+                return self._checked(result, repository, commit, version)
             async with httpx.AsyncClient(
                 headers=headers(token),
                 timeout=10,
@@ -104,23 +116,7 @@ class GitHubSourceProvider:
                 version = tomllib.loads(base64.b64decode(project["content"]).decode())["project"][
                     "version"
                 ]
-                if not isinstance(version, str) or not re.fullmatch(
-                    r"[0-9]+\.[0-9]+\.[0-9]+", version
-                ):
-                    raise ValueError("Invalid version")
-                available = commit != self.commit
-                return {
-                    **result,
-                    "latestVersion": version,
-                    "latestCommit": commit,
-                    "updateAvailable": available,
-                    "releaseUrl": f"https://github.com/{repository}/commit/{commit}",
-                    "message": (
-                        "New code on main is available; no release is required."
-                        if available
-                        else "MediaHub matches the latest commit on main."
-                    ),
-                }
+                return self._checked(result, repository, commit, version)
         except httpx.HTTPError:
             raise DomainError(
                 "source_provider_unavailable", "GitHub main is temporarily unavailable.", 503
@@ -130,10 +126,32 @@ class GitHubSourceProvider:
                 "invalid_source_metadata", "GitHub main returned invalid source metadata.", 502
             ) from None
 
+    def _checked(self, result, repository, commit, version):
+        if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+            raise ValueError("Invalid version")
+        if not isinstance(commit, str) or not SHA.fullmatch(commit):
+            raise ValueError("Invalid commit")
+        available = commit != self.commit
+        return {
+            **result,
+            "latestVersion": version,
+            "latestCommit": commit,
+            "updateAvailable": available,
+            "releaseUrl": f"https://github.com/{repository}/commit/{commit}",
+            "message": (
+                "New code on main is available; no release is required."
+                if available
+                else "MediaHub matches the latest commit on main."
+            ),
+        }
 
-async def download_source(client, repository, commit, destination, token):
+
+async def download_source(client, repository, commit, destination, token, *, source_access=None):
     if not REPOSITORY.fullmatch(repository or "") or not SHA.fullmatch(commit or ""):
         raise DomainError("invalid_source_metadata", "Invalid source target", 502)
+    if source_access:
+        await source_access.archive(repository, commit, destination)
+        return
     url = f"https://api.github.com/repos/{repository}/tarball/{commit}"
     request_headers = headers(token)
     for attempt in range(2):
