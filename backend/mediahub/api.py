@@ -10,7 +10,12 @@ from sqlalchemy import text
 
 from mediahub import __version__
 from mediahub.auth import COOKIE
-from mediahub.contracts import PlatformSettings, StorageInput, StrictModel, UserPreferences
+from mediahub.contracts import (
+    PlatformSettings,
+    StorageInput,
+    StrictModel,
+    UserPreferences,
+)
 from mediahub.errors import DomainError
 from mediahub.logging import recent_logs
 from mediahub.network import cookie_options
@@ -76,6 +81,7 @@ class ManagedUser(StrictModel):
     password: str = Field(default="", max_length=256)
     role: Literal["administrator", "user"] | None = None
     appRoles: dict[str, Literal["administrator", "user", "viewer", "denied"]] | None = None
+    language: Literal["en", "da"] | None = None
 
 
 @router.get("/users")
@@ -85,12 +91,12 @@ async def users(request: Request, user=Depends(administrator)):
 
 @router.post("/users")
 async def create_user(body: ManagedUser, request: Request, user=Depends(administrator)):
-    return result(services(request).auth.save_user(body.username, body.password, role=body.role, app_roles=body.appRoles))
+    return result(services(request).auth.save_user(body.username, body.password, role=body.role, app_roles=body.appRoles, language=body.language))
 
 
 @router.put("/users/{user_id}")
 async def update_user(user_id: str, body: ManagedUser, request: Request, user=Depends(administrator)):
-    return result(services(request).auth.save_user(body.username, body.password, user_id, body.role, body.appRoles))
+    return result(services(request).auth.save_user(body.username, body.password, user_id, body.role, body.appRoles, body.language))
 
 
 @router.delete("/users/{user_id}")

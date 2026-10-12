@@ -25,8 +25,8 @@ class Exchange(StrictModel):
 
 
 def configured_app(svc, package_id):
-    from mediahub.managed_apps import unavailable
     from mediahub.app_settings import saved_address
+    from mediahub.managed_apps import unavailable
 
     origin = svc.config.sso_app_urls.get(package_id)
     if not origin or unavailable(svc, package_id):
@@ -49,7 +49,8 @@ def identity(svc, db, grant):
         raise DomainError("unauthorized", "User no longer exists", 401)
     svc.auth.authenticate_session_policy(db, user)
     role = svc.auth.app_role(user.id, grant["packageId"])
-    return {"id": user.id, "username": user.username, "role": role}
+    return {"id": user.id, "username": user.username, "role": role,
+            "language": svc.settings.user_preferences(user.id).language}
 
 
 @router.get("/sso/authorize")

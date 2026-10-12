@@ -666,3 +666,11 @@ def test_mapping_edit_never_moves_files(setup_client):
     assert response.json()["data"]["filesMoved"] is False
     assert (root / "one" / "keep.txt").read_text() == "keep"
     assert list((root / "two").iterdir()) == []
+
+
+@pytest.mark.parametrize("language", ["en", "da"])
+def test_bootstrap_saves_chosen_account_language(setup_client, language):
+    response = setup_client.post("/api/v1/setup/administrator", json={"username": "owner", "password": "synthetic-test-password", "language": language})
+    assert response.status_code == 200
+    assert response.json()["data"]["language"] == language
+    assert setup_client.get("/api/v1/auth/me").json()["data"]["language"] == language

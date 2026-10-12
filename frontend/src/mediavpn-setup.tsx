@@ -1,17 +1,18 @@
+import { t } from "./i18n";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ServiceIcon } from "./service-icon";
 
 export function MediaVPNSetupPage() {
   return <div className="stack">
-    <Link to="/"><ArrowLeft size={16} /> Tilbage til apps</Link>
+    <Link to="/"><ArrowLeft size={16} /> {t(" Back to apps")}</Link>
     <h1><ServiceIcon packageId="org.mediahub.mediavpn" /> MediaVPN</h1>
     <section className="panel stack">
-      <h2>Selvstændig VPN-app</h2>
-      <p>MediaVPN styrer WireGuard-profiler, servervalg og port-forwarding. MediaSeed bruger kun MediaVPN, når du selv vælger det i MediaSeed.</p>
-      <p>MediaVPN er endnu ikke installeret eller tilsluttet denne hub. Den friske release har endnu ikke automatisk installation af den selvstændige app.</p>
-      <p>Serverens administrator skal klargøre MediaVPN og registrere dens HTTPS-adresse til hub-login. Derefter vises Åbn app og forbindelsesstatus her.</p>
-      <a href="https://github.com/miklas206/mediavpn" target="_blank" rel="noreferrer"><ExternalLink size={16} /> MediaVPN og installationsvejledning</a>
+      <h2>{t("Independent VPN app")}</h2>
+      <p>{t("MediaVPN manages WireGuard profiles, server selection and port forwarding. MediaSeed only uses MediaVPN when you select it in MediaSeed.")}</p>
+      <p>{t("MediaVPN is not installed or connected to this hub yet. The fresh release does not yet support automatic installation of the independent app.")}</p>
+      <p>{t("The server administrator must provision MediaVPN and register its HTTPS address for hub login. Open app and connection status will then appear here.")}</p>
+      <a href="https://github.com/miklas206/mediavpn" target="_blank" rel="noreferrer"><ExternalLink size={16} /> {t(" MediaVPN and installation guide")}</a>
     </section>
   </div>;
 }

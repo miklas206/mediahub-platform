@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { setLanguage } from "./i18n";
+
+afterEach(() => setLanguage("en"));
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   canStart,
@@ -103,6 +106,7 @@ describe("FjordHub keyed app-info and explicit updates", () => {
       ).toBe(true);
   });
   it("renders Danish acceptance, revisions, no viewer actions and backend-only icons", () => {
+    setLanguage("da");
     const html = renderToStaticMarkup(
       <FjordHubUpdates
         row={{

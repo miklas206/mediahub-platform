@@ -61,8 +61,7 @@ export function FjordFlixDashboardCard({
       </dl>
       {stale && (
         <p role="status" className="fjordflix-warning">
-          Showing last good FjordFlix data · stale
-        </p>
+          {t(" Showing last good FjordFlix data · stale ")}</p>
       )}
       {data.error && <p role="status">{data.error}</p>}
       <div className="plex-recent-media">
@@ -71,7 +70,7 @@ export function FjordFlixDashboardCard({
             <div
               className="plex-posters"
               ref={rail}
-              aria-label="FjordFlix recently added · last 10"
+              aria-label={t("FjordFlix recently added · last 10")}
             >
               {items.map((item, index) => (
                 <Link
@@ -134,8 +133,7 @@ export function FjordFlixDashboardCard({
           className="service-open"
           to={`/integrations/${encodeURIComponent(row.id)}`}
         >
-          View FjordFlix integration
-          <ArrowUpRight size={13} />
+          {t(" View FjordFlix integration ")}<ArrowUpRight size={13} />
         </Link>
       )}
     </article>

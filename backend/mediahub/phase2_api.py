@@ -1,6 +1,7 @@
 import platform
 import re
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -15,13 +16,13 @@ from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.apps.remote_status import RemoteStatusCache
 from mediahub.apps.seedbox import SeedboxInstallation
 from mediahub.auth import COOKIE
-from mediahub.contracts import StorageInput, StrictModel
+from mediahub.contracts import StorageInput, StrictModel, UserPreferences
 from mediahub.db import InstalledApp, Setting, StorageLocation
 from mediahub.errors import DomainError
+from mediahub.mediaseed_api import router as mediaseed_router
 from mediahub.network import cookie_options
 from mediahub.path_policy import DirectoryPolicy
 from mediahub.plex_api import router as plex_router
-from mediahub.mediaseed_api import router as mediaseed_router
 from mediahub.plex_media_api import router as plex_media_router
 from mediahub.seedbox_daily_api import router as daily_router
 from mediahub.seedbox_rss import router as rss_router
@@ -40,6 +41,7 @@ router.include_router(plex_media_router)
 
 
 class Bootstrap(StrictModel):
+    language: Literal["en", "da"] = "en"
     username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=12, max_length=256)
 
@@ -232,13 +234,14 @@ async def setup_admin(body: Bootstrap, request: Request, response: Response):
     cookies = cookie_options(request, svc.config)
     svc.setup.bootstrap(body.username, body.password)
     token, user = svc.auth.login(body.username, body.password, "bootstrap")
+    preferences = svc.settings.save_user_preferences(user["id"], UserPreferences(language=body.language))
     response.set_cookie(
         COOKIE,
         token,
         **cookies,
         max_age=svc.config.session_hours * 3600,
     )
-    return result(user)
+    return result({**user, **preferences.model_dump()})
 
 
 @router.get("/setup/draft")

@@ -444,7 +444,7 @@ export function ServiceOverview({
           >
             <div className="service-tile-title">
               <ServiceIcon packageId={seedbox.packageId} size={32} />
-              <h3>qBittorrent</h3>
+              <h3>{t("qBittorrent")}</h3>
               <StatusBadge
                 status={downloadStatus}
                 label={
@@ -464,7 +464,7 @@ export function ServiceOverview({
               <div>
                 <dd className="service-speed">
                   {bytes(report?.qBittorrent?.downloadSpeed)}
-                  <small>/s</small>
+                  <small>{t("/s")}</small>
                 </dd>
                 <dt>{t("Download speed")}</dt>
               </div>
@@ -492,8 +492,7 @@ export function ServiceOverview({
                         })}
                       />
                       <small>
-                        {bytes(item.dlspeed)}/s
-                        {item.eta > 0 && item.eta < 8640000
+                        {bytes(item.dlspeed)}{t("/s ")}{item.eta > 0 && item.eta < 8640000
                           ? ` · ${uptime(item.eta)}`
                           : ""}
                       </small>
@@ -799,8 +798,7 @@ export function ResourceTrends({
               aria-pressed={range === minutes}
               onClick={() => setRange(minutes)}
             >
-              {minutes} min
-            </button>
+              {minutes} {t(" min ")}</button>
           ))}
         </div>
       </header>

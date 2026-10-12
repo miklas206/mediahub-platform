@@ -1,4 +1,4 @@
-import { translateText, t } from "./i18n";
+import { translateText, t, setLanguage } from "./i18n";
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -120,6 +120,7 @@ export function SetupWizard({
           username: form.get("username"),
           password: form.get("password"),
           ...(hasAdmin ? { secondFactor: form.get("secondFactor") || "" } : {}),
+          ...(!hasAdmin ? { language: form.get("language") || "en" } : {}),
         },
       );
       setCsrf(profile.csrf);
@@ -314,6 +315,7 @@ export function SetupWizard({
                 </p>
               ) : (
                 <form className="admin-form" onSubmit={administrator}>
+                  {!hasAdmin && <label>{t("Language")}<select name="language" defaultValue="en" onChange={event => setLanguage(event.target.value === "da" ? "da" : "en")}><option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>}
                   <label>
                     {t("Username")}
                     <input

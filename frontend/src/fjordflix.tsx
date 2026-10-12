@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState } from "react";
 import { Film } from "lucide-react";
 import { Panel } from "./phase2";
@@ -64,7 +65,7 @@ export function FjordFlixPoster({
           onError={() => setFailed(src)}
         />
       ) : (
-        <span role="img" aria-label="Poster unavailable">
+        <span role="img" aria-label={t("Poster unavailable")}>
           <Film size={32} />
           <small>{item.title || "Untitled"}</small>
         </span>
@@ -91,23 +92,21 @@ export function FjordFlix({
       <div className="fjordflix-content">
         {data.stale && (
           <p role="status" className="fjordflix-warning">
-            Showing last good FjordFlix data · stale
-          </p>
+            {t(" Showing last good FjordFlix data · stale ")}</p>
         )}
         {data.error && <p role="status">{data.error}</p>}
         {data.ok && (
           <>
             <div className="fjordflix-heading">
-              <h3>Recently added · last 10</h3>
+              <h3>{t("Recently added · last 10")}</h3>
               <span className="muted">
-                {data.library_count ?? "—"} titles in library
-              </span>
+                {data.library_count ?? "—"} {t(" titles in library ")}</span>
             </div>
             {data.generated_at && (
-              <small className="muted">Updated {data.generated_at}</small>
+              <small className="muted">{t("Updated ")}{data.generated_at}</small>
             )}
             {!data.items?.length ? (
-              <p>No titles in the library.</p>
+              <p>{t("No titles in the library.")}</p>
             ) : (
               <div className="fjordflix-gallery">
                 {data.items.slice(0, 10).map((item, index) => (
@@ -137,7 +136,7 @@ export function FjordFlix({
                     )}
                     {item.overview && (
                       <details>
-                        <summary>Overview</summary>
+                        <summary>{t("Overview")}</summary>
                         <p>{item.overview}</p>
                       </details>
                     )}
@@ -146,11 +145,11 @@ export function FjordFlix({
               </div>
             )}
             <h3>
-              Current streams{" "}
+              {t(" Current streams")}{" "}
               <span className="muted">({data.streams?.length ?? 0})</span>
             </h3>
             {!data.streams?.length ? (
-              <p>No active streams.</p>
+              <p>{t("No active streams.")}</p>
             ) : (
               <div className="fjordflix-streams">
                 {data.streams.map((stream, index) => (

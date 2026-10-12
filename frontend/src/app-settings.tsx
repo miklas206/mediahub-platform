@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Save, RotateCcw } from "lucide-react";
@@ -26,16 +27,16 @@ export function AppSettingsPage() {
     finally { setBusy(false); }
   }
   return <div className="stack">
-    <Link to="/"><ArrowLeft size={16} /> Tilbage til apps</Link>
-    <h1>{data?.name || "App"}: indstillinger</h1>
+    <Link to="/"><ArrowLeft size={16} /> {t(" Back to apps")}</Link>
+    <h1>{data?.name || "App"}{t(": settings")}</h1>
     {(error || failure) && <NotificationPopup tone="danger">{error || failure}</NotificationPopup>}
     {notice && <NotificationPopup tone="success">{notice}</NotificationPopup>}
     {data && <section className="panel"><form className="settings-form" onSubmit={event => void save(event)}>
-      <label>Ekstern app-adresse<input type="url" maxLength={2048} placeholder="https://app.example.com" value={draft ?? data.externalUrl} onChange={event => setDraft(event.target.value)} disabled={busy} /></label>
-      <dl><dt>Lokal adresse</dt><dd style={{ overflowWrap: "anywhere" }}>{data.localUrl || "Ikke registreret"}</dd>{data.ssoManaged && <><dt>Registreret SSO-adresse</dt><dd style={{ overflowWrap: "anywhere" }}>{data.ssoOrigin}</dd></>}</dl>
-      <p>{"DNS, HTTPS-certifikat og proxy skal pege p\u00e5 appen, f\u00f8r dom\u00e6net kan bruges. Adressen bliver ikke publiceret automatisk."}</p>
-      {data.ssoManaged && <p>{"Den gemte adresse bruges ogs\u00e5 til automatisk hub-login. Nulstil for at bruge appens lokale HTTPS-adresse igen."}</p>}
-      <div className="button-row"><button type="submit" disabled={busy}><Save size={16} /> Gem adresse</button><button type="button" disabled={busy || !data.externalUrl} onClick={() => void save(undefined, true)}><RotateCcw size={16} /> Nulstil</button>{data.configurationPath && <Link to={data.configurationPath}><ExternalLink size={16} /> App-konfiguration</Link>}</div>
+      <label>{t("External app address")}<input type="url" maxLength={2048} placeholder="https://app.example.com" value={draft ?? data.externalUrl} onChange={event => setDraft(event.target.value)} disabled={busy} /></label>
+      <dl><dt>{t("Local address")}</dt><dd style={{ overflowWrap: "anywhere" }}>{data.localUrl || t("Not registered")}</dd>{data.ssoManaged && <><dt>{t("Registered SSO address")}</dt><dd style={{ overflowWrap: "anywhere" }}>{data.ssoOrigin}</dd></>}</dl>
+      <p>{t("DNS, the HTTPS certificate and proxy must point to the app before the domain can be used. The address is not published automatically.")}</p>
+      {data.ssoManaged && <p>{t("The saved address is also used for automatic hub login. Reset to use the app's local HTTPS address again.")}</p>}
+      <div className="button-row"><button type="submit" disabled={busy}><Save size={16} /> {t(" Save address")}</button><button type="button" disabled={busy || !data.externalUrl} onClick={() => void save(undefined, true)}><RotateCcw size={16} /> {t("Reset")}</button>{data.configurationPath && <Link to={data.configurationPath}><ExternalLink size={16} /> {t(" App configuration")}</Link>}</div>
     </form></section>}
   </div>;
 }

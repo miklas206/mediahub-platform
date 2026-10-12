@@ -5,6 +5,7 @@ export type Language = "en" | "da";
 let language: Language = "en";
 const listeners = new Set<() => void>();
 const translations: Record<string, string> = danish;
+const englishSources = new Map(Object.entries(translations).map(([en, da]) => [da, en]));
 const messageTemplates = Object.keys(translations)
   .filter(
     (key) => /\{\w+\}/.test(key) && key.replace(/\{\w+\}/g, "").length >= 12,
@@ -56,8 +57,10 @@ export function t(
   values: Record<string, string | number> = {},
 ) {
   const trimmed = source.trim();
+  const english = Object.prototype.hasOwnProperty.call(translations, trimmed)
+    ? trimmed : englishSources.get(trimmed) || trimmed;
   let translated =
-    translations[trimmed] || translations[trimmed.replace(/\s+/g, " ")];
+    translations[english] || translations[english.replace(/\s+/g, " ")];
   if (language === "da" && !translated && Object.keys(values).length === 0) {
     for (const template of messageTemplates) {
       const match = template.pattern.exec(trimmed);
@@ -80,7 +83,7 @@ export function t(
       ? source.slice(0, source.length - source.trimStart().length) +
         translated +
         source.slice(source.trimEnd().length)
-      : source;
+      : source.replace(trimmed, english);
   return message.replace(/\{(\w+)\}/g, (placeholder, key: string) =>
     Object.prototype.hasOwnProperty.call(values, key)
       ? String(values[key])

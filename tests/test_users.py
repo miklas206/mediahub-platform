@@ -100,3 +100,14 @@ def test_regular_user_is_not_a_hub_administrator(logged_in):
 def test_last_administrator_cannot_be_demoted(logged_in):
     own = logged_in.get("/api/auth/me").json()["data"]["id"]
     assert logged_in.put(f"/api/users/{own}", json={"username": "tester", "role": "user"}).status_code == 409
+
+
+def test_user_language_is_set_at_creation_and_preserved_on_unrelated_edits(logged_in):
+    body = {"username": "LanguageUser", "password": "synthetic-password-123", "language": "da"}
+    created = logged_in.post("/api/users", json=body)
+    assert created.status_code == 200
+    user_id = created.json()["data"]["id"]
+    assert created.json()["data"]["language"] == "da"
+    assert logged_in.put(f"/api/users/{user_id}", json={"username": "LanguageUser"}).json()["data"]["language"] == "da"
+    assert logged_in.put(f"/api/users/{user_id}", json={"username": "LanguageUser", "language": "en"}).json()["data"]["language"] == "en"
+    assert logged_in.put(f"/api/users/{user_id}", json={"username": "LanguageUser", "language": "fr"}).status_code == 422

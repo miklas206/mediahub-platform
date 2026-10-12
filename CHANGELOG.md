@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Complete account-language propagation to MediaSeed and MediaVPN through hub login and subsequent session checks. Choose Danish or English when creating an administrator or managed user; ordinary users can change their own language.
+- Translate remaining hub administration, FjordHub integration, setup, app-overview and error messages. MediaSeed/MediaVPN now localize dialogs, statuses, country names, tracker account/rule information, cleanup, recommendations and extension downloads. Preserve names, file paths, URLs and API values.
+- MediaSeed extension 1.2.2 follows the connected account language, including saved seeding settings, import feedback and context-menu text. Preserve third-party tracker page content when injecting link capture.
+
 - Remove the hardcoded beta badge from release navigation branding. Distinguish GitHub rate limits, rejected credentials and access restrictions in update-check errors without exposing provider response bodies.
 - Fetch current approved publisher images when installing Plex, Jellyfin and the legacy Seedbox runtime, then persist immutable publisher pins. Stop on pull failure instead of silently using cached images; preserve installed versions when restarting or adopting apps. Rebuild new FjordHub installs from current upstream source with fresh base images.
 - Keep MediaVPN visible before configuration and provide an honest setup page; automatic independent MediaVPN/MediaSeed deployment is still separate.

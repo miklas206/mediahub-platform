@@ -254,7 +254,7 @@ export function AppOverviewDetails({
             </div>
             <progress max={1} value={row.progress} aria-label={row.name} />
             <span className="muted">
-              {bytes(row.dlspeed)}/s ·{" "}
+              {bytes(row.dlspeed)}{t("/s ·")}{" "}
               {t(row.state === "metaDL" ? "Fetching metadata" : "Downloading")}
             </span>
           </li>
