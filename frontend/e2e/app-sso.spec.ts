@@ -33,9 +33,7 @@ for (const width of [1440, 390]) {
     await expect(page.getByLabel("Ekstern app-adresse")).toHaveValue("");
     installed = true;
     await page.reload();
-    await page.getByRole("button", { name: "Afinstaller", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByRole("dialog").getByRole("button").first()).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Afinstaller/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/app-settings-${width}.png`, fullPage: true });
   });

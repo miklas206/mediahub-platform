@@ -178,6 +178,7 @@ def test_app_list_uses_one_query_and_preserves_fields(logged_in):
         "isMock": False,
         "detailPath": "/apps/perf-app",
         "openUrl": None,
+        "removable": False,
     }
     assert not any(row["id"] == "perf-removed" for row in rows)
     assert any(row["isMock"] for row in rows)

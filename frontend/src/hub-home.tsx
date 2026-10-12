@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -8,7 +8,8 @@ import {
   Search,
   Settings2,
 } from "lucide-react";
-import type { AppInfo } from "./contracts";
+import { AppUninstall } from "./app-uninstall";
+import type { AppInfo, InstalledAppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
 import type { Integration } from "./integrations";
 import {
@@ -73,6 +74,7 @@ export type HubEntry = {
   action: string;
   external?: boolean;
   settingsPath?: string;
+  removableApp?: InstalledAppInfo;
 };
 
 export type MediaSeedStatus = {
@@ -131,6 +133,7 @@ export function buildHubEntries({
             statusLabel: mediaseedError ? "Status unavailable" : mediaseed.available ? "App available" : "Check connection",
             action: "Open app",
             settingsPath: "/app-settings/org.mediahub.mediaseed",
+            removableApp: apps?.find(app => app.packageId === "org.mediahub.mediaseed" && !app.isMock && app.removable),
           };
         }
       }
@@ -173,6 +176,7 @@ export function buildHubEntries({
         description: definition.description,
         category: definition.category,
         configured,
+        removableApp: installed?.removable ? installed : undefined,
         settingsPath: installed ? `/app-settings/${entry.id}` : undefined,
         external: installed?.externalUrl ? true : undefined,
         path:
@@ -215,6 +219,7 @@ export function buildHubEntries({
         category: "Network",
         path: mediavpn.openUrl || address.href,
         settingsPath: "/app-settings/org.mediahub.mediavpn",
+        removableApp: apps?.find(app => app.packageId === "org.mediahub.mediavpn" && !app.isMock && app.removable),
         configured: true,
         external: true,
         status: mediavpn.available && !mediavpnError ? "healthy" : "unknown",
@@ -241,6 +246,9 @@ export function HubHome({
   updates: number | undefined;
   live: boolean;
 }) {
+  const onAppRemoved = useCallback(() => {
+    window.dispatchEvent(new Event("apps-changed"));
+  }, []);
   const catalog = useData<CatalogApp[]>("/catalog");
   const deployment = useData<FjordHubInstallation | null>(
     "/fjordhub/deployment",
@@ -463,7 +471,12 @@ export function HubHome({
                           <h3>{t(entry.name)}</h3>
                           <p>{t(entry.description)}</p>
                         </div>
-                        {entry.settingsPath && <div className="hub-card-tools"><Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link></div>}
+                        {(entry.settingsPath || entry.removableApp) && (
+                          <div className="hub-card-tools">
+                            {entry.removableApp && <AppUninstall app={entry.removableApp} onRemoved={onAppRemoved} buttonClassName="hub-card-uninstall" showIcon />}
+                            {entry.settingsPath && <Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link>}
+                          </div>
+                        )}
                         {entry.external ? <a
                           className="hub-card-action"
                           href={entry.path}

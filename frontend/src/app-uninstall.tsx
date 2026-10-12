@@ -2,6 +2,7 @@ import { translateText, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { api } from "./api";
 import type { InstalledAppInfo } from "./contracts";
 type Removal = {
@@ -13,9 +14,13 @@ type Removal = {
 export function AppUninstall({
   app,
   onRemoved,
+  buttonClassName,
+  showIcon = false,
 }: {
   app: InstalledAppInfo;
   onRemoved: () => void;
+  buttonClassName?: string;
+  showIcon?: boolean;
 }) {
   const [open, setOpen] = useState(app.state === "removing");
   const [status, setStatus] = useState<Removal>();
@@ -84,12 +89,16 @@ export function AppUninstall({
   return (
     <>
       <button
+        type="button"
+        className={buttonClassName}
+        aria-label={`${removalLabel}: ${translateText(app.name)}`}
         onClick={() => {
           setError("");
           setStatus(undefined);
           setOpen(true);
         }}
       >
+        {showIcon && <Trash2 size={15} aria-hidden="true" />}
         {removalLabel}
       </button>
       {open && (

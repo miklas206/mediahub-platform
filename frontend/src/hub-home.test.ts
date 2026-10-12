@@ -184,3 +184,19 @@ describe("primary MediaHub app hub", () => {
     });
   });
 });
+
+
+describe("home card removal capability", () => {
+  it("offers removal only for an actual supported installation", () => {
+    const statuses = {
+      mediaseed: { configured: true, available: true, url: "https://seed.example" },
+      mediavpn: { configured: true, available: true, url: "https://vpn.example" },
+    };
+    const managed = ["mediaseed", "mediavpn"].map(id => ({ ...seedbox, id: `managed-${id}`, name: id, packageId: `org.mediahub.${id}`, removable: true }));
+    const entries = buildHubEntries({ ...input, ...statuses, apps: managed });
+    expect(entries.filter(entry => entry.removableApp).map(entry => entry.removableApp?.id).sort()).toEqual(["managed-mediaseed", "managed-mediavpn"]);
+    expect(buildHubEntries({ ...input, ...statuses }).every(entry => !entry.removableApp)).toBe(true);
+    expect(buildHubEntries({ ...input, ...statuses, apps: managed.map(app => ({ ...app, isMock: true })) }).every(entry => !entry.removableApp)).toBe(true);
+    expect(buildHubEntries({ ...input, apps: [{ ...seedbox, removable: true }] }).find(entry => entry.id === seedbox.packageId)?.removableApp?.id).toBe(seedbox.id);
+  });
+});

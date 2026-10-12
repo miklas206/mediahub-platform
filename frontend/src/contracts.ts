@@ -7,6 +7,7 @@ export type Health = {
   checks: { name: string; status: string; message: string }[];
 };
 export type AppInfo = {
+  removable?: boolean;
   id: string;
   name: string;
   packageId: string;

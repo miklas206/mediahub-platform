@@ -259,6 +259,9 @@
 }
 .hub-card-tools {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-end;
   padding: 0 20px 10px;
 }
@@ -275,6 +278,25 @@
 .hub-card-tools a:focus-visible {
   background: var(--raised);
   color: var(--accent);
+}
+.hub-card-tools .hub-card-uninstall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+.hub-card-tools .hub-card-uninstall:hover,
+.hub-card-tools .hub-card-uninstall:focus-visible {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-color: var(--danger);
 }
 .hub-card-action {
   display: flex;

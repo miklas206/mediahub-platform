@@ -44,11 +44,8 @@ def describe(svc, package_id):
             raise DomainError("app_not_found", "This app is not installed or connected", 404)
         name = installed.name if installed else {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}.get(package_id, package_id)
         removable = None
-        if installed and not installed.is_mock:
-            adapter = svc.apps.adapters.get(installed.id)
-            definition = getattr(adapter, "definition", None)
-            if getattr(adapter, "managed", False) or hasattr(definition, "binding_key") or package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"}:
-                removable = svc.apps.get(installed.id)
+        if installed and svc.apps.supports_removal(installed):
+            removable = svc.apps.get(installed.id)
     return {
         "packageId": package_id,
         "name": name,

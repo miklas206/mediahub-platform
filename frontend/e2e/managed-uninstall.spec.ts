@@ -16,6 +16,10 @@ for (const width of [1440, 390, 320]) {
       else if (path === "/settings") data = { display_name: "MediaHub", visible_navigation: ["/", "/settings"], dashboard_sections: [], theme: "dark" };
       else if (path === "/updates/summary") data = { count: 0, items: [], notifications: [] };
       else if (path === "/fjordhub/deployment") data = null;
+      else if (path === "/catalog") data = [{ id: "org.mediahub.seedbox", availability: "available" }];
+      else if (path === "/mediaseed/status") data = { configured: !removalRequested, available: true, url: "https://seed.example" };
+      else if (path === "/mediavpn/status") data = { configured: true, available: true, url: "https://vpn.example" };
+      else if (path === "/apps") data = removalRequested ? [{ id: "managed-app", name: "MediaVPN", packageId: "org.mediahub.mediavpn", state: "running", isMock: false, removable: true, health: { status: "healthy", summary: "Synthetic", checks: [] } }] : [{ id: "managed-app", name: "MediaSeed", packageId: "org.mediahub.mediaseed", state: "running", isMock: false, removable: true, health: { status: "healthy", summary: "Synthetic", checks: [] } }];
       else if (path.startsWith("/app-settings/")) data = { name: packageId.endsWith("mediaseed") ? "MediaSeed" : "MediaVPN", externalUrl: "", localUrl: "http://127.0.0.1:18802", removableApp: { id: "managed-app", packageId, state: "running", isMock: false } };
       else if (path === "/apps/managed-app/uninstall") {
         if (packageId.endsWith("mediavpn")) {
@@ -30,16 +34,16 @@ for (const width of [1440, 390, 320]) {
       }
       await route.fulfill({ json: { data, error: null, metadata: {} } });
     });
-    await page.goto(`/app-settings/${packageId}`);
-    await page.getByRole("button", { name: "Afinstaller", exact: true }).click();
+    await page.goto("/");
+    await page.getByRole("button", { name: /^Afinstaller:/ }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(removalRequested).toBe(false);
     await page.getByRole("button", { name: "Bekræft fjernelse", exact: true }).click();
     await expect.poll(() => removalRequested).toBe(true);
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     packageId = "org.mediahub.mediavpn";
-    await page.goto(`/app-settings/${packageId}`);
-    await page.getByRole("button", { name: "Afinstaller", exact: true }).click();
+    await page.goto("/");
+    await page.getByRole("button", { name: /^Afinstaller:/ }).click();
     await expect(page.getByText("Afinstaller MediaSeed først. Dens torrentklient bruger MediaVPN.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Bekræft fjernelse", exact: true })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

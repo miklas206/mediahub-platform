@@ -73,7 +73,9 @@ def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False)
 def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_path, monkeypatch):
     svc, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
     app = logged_in.get("/api/v1/app-settings/" + SEED).json()["data"]["removableApp"]
-    assert app and not app["isMock"]
+    assert app and not app["isMock"] and app["removable"]
+    listed = logged_in.get("/api/v1/apps?include_health=false").json()["data"]
+    assert next(row for row in listed if row["id"] == app["id"])["removable"]
     endpoint = "/api/v1/apps/" + app["id"] + "/uninstall"
     ready = logged_in.get(endpoint).json()["data"]
     assert logged_in.post(endpoint, json={"confirmedInstallationId": "wrong"}).status_code == 409

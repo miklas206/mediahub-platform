@@ -158,6 +158,15 @@ class AppManager:
                 raise DomainError("app_not_found", "App not found", 404)
             return self._serialize(app)
 
+    def supports_removal(self, app):
+        adapter = self.adapters.get(app.id)
+        definition = getattr(adapter, "definition", None)
+        return bool(
+            not app.is_mock and app.state != "uninstalled" and adapter is not None
+            and (getattr(adapter, "managed", False) or hasattr(definition, "binding_key")
+                 or app.package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"})
+        )
+
     def _serialize(self, app):
         return {
             "id": app.id,
@@ -166,6 +175,7 @@ class AppManager:
             "version": app.version,
             "state": app.state,
             "isMock": app.is_mock,
+            "removable": self.supports_removal(app),
             "openUrl": self.config.sso_app_urls[app.package_id] + "/auth/hub/start" if app.package_id in self.config.sso_app_urls else self.config.operator_app_urls.get(app.package_id) if getattr(self.adapters.get(app.id), "managed", False) else None,
             "detailPath": (
                 "/apps/install/" + app.package_id.removeprefix("org.mediahub.")

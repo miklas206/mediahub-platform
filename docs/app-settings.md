@@ -32,8 +32,10 @@ configuration pages remain separate.
 
 ## Managed MediaSeed and MediaVPN removal
 
-For an explicitly registered installation, open the app card's settings icon,
-then **Afinstallation → Afinstaller**. A connected URL alone never enables this.
+For an explicitly registered installation, click the red **Uninstall** button
+on its home card, next to the settings icon. Removal is not inside app settings.
+The button uses the server's `removable` capability; a connected URL alone never
+enables it. The existing identity check and confirmation dialog still apply.
 The hub must have `MEDIAHUB_MANAGED_APPS_POLICY_FILE` pointing to a read-only
 operator policy and `MEDIAHUB_MANAGED_APPS_DOCKER_SOCKET` to its Docker socket.
 This reuses the beta's existing Docker authority; it does not require a new
