@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 from ipaddress import ip_address
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 from mediahub.errors import DomainError
@@ -43,6 +43,35 @@ class AppDependencies:
             root = PurePosixPath(mounts[0]["Source"]).parent
             if not root.is_absolute() or root == PurePosixPath("/") or ".." in root.parts:
                 raise ValueError()
+            # Only inherit storage already explicitly mounted into this owned Core.
+            # Never turn HTTP input into a host bind, nor create missing host paths.
+            storage_binds = []
+            storage_policy = Path("/state/container-apps.json")
+            if storage_policy.is_file():
+                approved = json.loads(storage_policy.read_text())
+                paths = set(approved.get("requiredMounts", {})) | set(
+                    approved.get("requiredFilesystemUuids", {})
+                )
+                if approved.get("hostMountSnapshot") != "/host-evidence/snapshot.json":
+                    raise ValueError()
+                paths.add("/host-evidence")
+                for path in sorted(paths):
+                    candidate = PurePosixPath(path)
+                    if (
+                        not candidate.is_absolute()
+                        or len(candidate.parts) < 3
+                        or ".." in candidate.parts
+                    ):
+                        if path != "/host-evidence":
+                            raise ValueError()
+                    matching = [
+                        m
+                        for m in own["Mounts"]
+                        if m["Type"] == "bind" and m["Source"] == path and m["Destination"] == path
+                    ]
+                    if len(matching) != 1:
+                        raise ValueError()
+                    storage_binds.append(path + ":" + path + ":ro")
             name = "mediahub-app-dependencies"
             previous = await manager.docker("GET", "/containers/" + name + "/json", missing=True)
             if previous:
@@ -76,7 +105,8 @@ class AppDependencies:
                         "Binds": [
                             str(root) + ":" + str(root),
                             "/var/run/docker.sock:/var/run/docker.sock",
-                        ],
+                        ]
+                        + storage_binds,
                         "NetworkMode": "bridge",
                         "Privileged": False,
                         "CapDrop": ["ALL"],

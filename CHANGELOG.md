@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.25
+
+- Add a storage location and existing-folder browser to MediaSeed torrent imports, shared by magnet and file uploads. Report capacity and writable/unavailable state separately for the local volume and approved media/download mounts.
+- Provision approved media binds to both MediaSeed and qBittorrent while retaining existing download volumes, host permissions and all media. Require current host mount evidence and storage identity markers; never create missing host bind directories.
+- Reuse those exact verified binds in MediaVPN's torrent client, refresh it when its storage configuration changes, and support Unicode/spaces in safe download paths without relaxing the VPN gate. Bundle MediaSeed 0.1.1 and MediaVPN 0.1.3.
+
 ## 0.5.24
 
 - Replace Cloudflare tunnel creation/connector/route controls with read-only tunnel inventory and VPN-bound DNS creation. Reject new tunnel creation through the API; retain existing resources and pause legacy scheduled ingress synchronization.

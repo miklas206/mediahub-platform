@@ -13,6 +13,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -191,6 +192,97 @@ def hub_browser_origin(hub_compose, lan):
     return value.rstrip("/")
 
 
+def approved_media_storage(root):
+    """Read only the administrator's host policy; verify the live mount identity."""
+    path = root / "agent/container-apps.json"
+    if not path.exists():
+        return []  # Standalone installations keep their existing local volume.
+    policy = json.loads(path.read_text())
+    snapshot = json.loads(Path(policy["hostMountSnapshot"]).read_text())
+    required = policy.get("requiredMounts", {})
+    uuids = policy.get("requiredFilesystemUuids", {})
+    if (
+        snapshot.get("scope") != "host-mount-namespace"
+        or snapshot.get("available") is not True
+        or not 0 <= time.time() - snapshot["observedAt"] <= 30
+        or not (required or uuids)
+    ):
+        raise ValueError("Media storage mount evidence unavailable")
+    for field, requirements in (("source", required), ("uuid", uuids)):
+        for mount, expected in requirements.items():
+            rows = [r for r in snapshot["mounts"] if r.get("path") == mount]
+            if (
+                len(rows) != 1
+                or rows[0].get(field) != expected
+                or "ro" in rows[0].get("options", [])
+            ):
+                raise ValueError("Media storage mount identity changed")
+    markers = policy.get("storageMarkers", {})
+    if not markers or any(Path(p).read_text().strip() != value for p, value in markers.items()):
+        raise ValueError("Media storage marker changed")
+    locations = []
+    for identifier, value in policy.get("storage", {}).items():
+        if value.get("kind") not in {"movies", "tv", "downloads", "other"}:
+            continue
+        if (
+            not identifier.isascii()
+            or not identifier.replace("-", "").isalnum()
+            or identifier == "local"
+        ):
+            raise ValueError("Invalid storage identifier")
+        source = Path(value["path"])
+        if (
+            not source.is_absolute()
+            or source.resolve(strict=True) != source
+            or not source.is_dir()
+            or not any(source.is_relative_to(Path(p)) for p in set(required) | set(uuids))
+        ):
+            raise ValueError("Unapproved media storage directory")
+        locations.append(
+            {
+                "id": identifier,
+                "label": value["label"],
+                "path": "/downloads/media/" + identifier,
+                "source": str(source),
+            }
+        )
+    return locations
+
+
+def configure_media_storage(cfg, locations):
+    public = [{k: row[k] for k in ("id", "label", "path")} for row in locations]
+    cfg["services"]["app"].setdefault("environment", {})["MEDIASEED_STORAGE_ROOTS"] = json.dumps(
+        public
+    )
+    for service in ("app", "qbittorrent"):
+        if service not in cfg["services"]:
+            if locations:
+                raise ValueError("MediaSeed storage requires its owned torrent service")
+            continue
+        values = cfg["services"][service]
+        volumes = values.setdefault("volumes", [])
+        for row in locations:
+            target = row["path"]
+            existing = [v for v in volumes if isinstance(v, dict) and v.get("target") == target]
+            if existing and (
+                len(existing) != 1
+                or existing[0].get("source") != row["source"]
+                or existing[0].get("type") != "bind"
+            ):
+                raise ValueError("MediaSeed storage mount ownership changed")
+            if not existing:
+                volumes.append(
+                    {
+                        "type": "bind",
+                        "source": row["source"],
+                        "target": target,
+                        "read_only": False,
+                        "bind": {"create_host_path": False},
+                    }
+                )
+        # Both consumers use gid 1000. Host permissions are never changed here.
+
+
 def provision(root, lan, source=SOURCE):
     ip = ipaddress.ip_address(lan)
     if (
@@ -207,8 +299,17 @@ def provision(root, lan, source=SOURCE):
     if hub_compose.get("name") != "mediahub-platform":
         raise ValueError("MediaHub installation ownership changed")
     browser_origin = hub_browser_origin(hub_compose, lan)
+    locations = approved_media_storage(root)
     # Domain changes must invalidate the marker too, without changing internal API URLs.
-    digest = hashlib.sha256((fingerprint(source) + "\0" + browser_origin).encode()).hexdigest()
+    digest = hashlib.sha256(
+        (
+            fingerprint(source)
+            + "\0"
+            + browser_origin
+            + "\0"
+            + json.dumps(locations, sort_keys=True)
+        ).encode()
+    ).hexdigest()
     marker = root / "local-apps/source.json"
     if marker.exists() and json.loads(marker.read_text()).get("fingerprint") == digest:
         return
@@ -310,6 +411,8 @@ def provision(root, lan, source=SOURCE):
             browser_origin
         )
         repair_tls_permissions(folder, cfg)
+        if kind == "mediaseed":
+            configure_media_storage(cfg, locations)
         for service, values in cfg["services"].items():
             if "build" in values:
                 values["build"] = {"context": str(context), "dockerfile": "Dockerfile"}
@@ -323,6 +426,9 @@ def provision(root, lan, source=SOURCE):
             cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] = (
                 "mediahub-mediaseed"
             )
+            cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_STORAGE"] = json.dumps(
+                locations
+            )
         previous_compose = compose_path.read_text() if compose_path.exists() else None
         private(
             compose_path.with_suffix(".before-" + digest[:16] + ".json"),
@@ -330,6 +436,8 @@ def provision(root, lan, source=SOURCE):
         )
         command = ["docker", "compose", "-p", project, "-f", str(compose_path)]
         try:
+            if approved_media_storage(root) != locations:
+                raise ValueError("Approved media storage changed during preparation")
             compose_path.write_text(json.dumps(cfg))
             run(*command, "build", "app")
             if kind == "mediaseed":

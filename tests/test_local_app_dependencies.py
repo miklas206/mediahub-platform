@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,82 @@ def fixture(tmp_path, monkeypatch, running=False):
     monkeypatch.setattr(module.os, "chown", lambda *args: None, raising=False)
     monkeypatch.setattr(module, "prepare", lambda *args: None)
     return root, source, calls, fail
+
+
+def test_approved_storage_checks_mount_identity_and_preserves_local_volume(tmp_path, monkeypatch):
+    root, source, calls, _ = fixture(tmp_path, monkeypatch)
+    media = tmp_path / "media"
+    movies = media / "movies"
+    movies.mkdir(parents=True)
+    marker = media / ".identity"
+    marker.write_text("synthetic-volume")
+    evidence = tmp_path / "snapshot.json"
+    snapshot = {
+        "scope": "host-mount-namespace",
+        "available": True,
+        "observedAt": time.time(),
+        "mounts": [{"path": str(media), "source": "synthetic-device", "options": ["rw"]}],
+    }
+    evidence.write_text(json.dumps(snapshot))
+    (root / "agent").mkdir()
+    policy = {
+        "hostMountSnapshot": str(evidence),
+        "requiredMounts": {str(media): "synthetic-device"},
+        "storageMarkers": {str(marker): "synthetic-volume"},
+        "storage": {
+            "movies": {"label": "Movies", "kind": "movies", "path": str(movies)},
+            "private": {"label": "App data", "kind": "appdata", "path": str(media)},
+        },
+    }
+    (root / "agent/container-apps.json").write_text(json.dumps(policy))
+    path = root / "local-apps/mediaseed/compose.json"
+    cfg = json.loads(path.read_text())
+    original = {"type": "volume", "source": "downloads", "target": "/downloads"}
+    cfg["services"]["app"]["volumes"] = [original.copy()]
+    cfg["services"]["qbittorrent"] = {"volumes": [original.copy()]}
+    path.write_text(json.dumps(cfg))
+    module.provision(root, "192.168.1.50", source)
+    actual = json.loads(path.read_text())
+    for service in ("app", "qbittorrent"):
+        volumes = actual["services"][service]["volumes"]
+        assert volumes[0] == original
+        assert volumes[1]["source"] == str(movies)
+        assert volumes[1]["target"] == "/downloads/media/movies"
+        assert volumes[1]["bind"]["create_host_path"] is False
+        assert len(volumes) == 2
+    vpn = json.loads((root / "local-apps/mediavpn/compose.json").read_text())
+    approved = json.loads(vpn["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_STORAGE"])
+    assert len(approved) == 1 and approved[0]["source"] == str(movies)
+    count = len(calls)
+    marker.write_text("wrong-device")
+    with pytest.raises(ValueError, match="marker changed"):
+        module.provision(root, "192.168.1.50", source)
+    assert len(calls) == count
+
+
+def test_media_storage_rejects_changed_existing_target():
+    cfg = {
+        "services": {
+            "app": {
+                "volumes": [
+                    {"type": "bind", "source": "/unowned", "target": "/downloads/media/movies"}
+                ]
+            },
+            "qbittorrent": {},
+        }
+    }
+    with pytest.raises(ValueError, match="ownership changed"):
+        module.configure_media_storage(
+            cfg,
+            [
+                {
+                    "id": "movies",
+                    "label": "Movies",
+                    "path": "/downloads/media/movies",
+                    "source": "/approved",
+                }
+            ],
+        )
 
 
 @pytest.mark.parametrize("kind,uid", [("mediavpn", 0), ("mediaseed", 1000)])
