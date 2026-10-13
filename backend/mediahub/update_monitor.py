@@ -8,6 +8,7 @@ from sqlalchemy import select
 from mediahub import __version__
 from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.github_metadata import GitHubMetadata
 from mediahub.main_branch_watch import MAIN_CHECK_INTERVAL_SECONDS, MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
 from mediahub.source_git import source_access
@@ -21,7 +22,11 @@ class UpdateMonitor:
         self.lock = asyncio.Lock()
         self.check_task = None
         self.source_access = source_access(getattr(services, "config", None))
-        self.main_watch = MainBranchWatch(source_access=self.source_access)
+        self.github_metadata = GitHubMetadata()
+        self.main_watch = MainBranchWatch(
+            source_access=self.source_access, metadata_cache=self.github_metadata
+        )
+        self.check_finished_at = 0
 
     def _load(self):
         with self.services.sessions() as db:
@@ -91,7 +96,8 @@ class UpdateMonitor:
             "installedVersion": app.get("version"),
             "latestVersion": None,
             "updateAvailable": False,
-            "checkStatus": "failed",
+            "checkStatus": "deferred" if getattr(error, "retry_at", None) else "failed",
+            **({"retryAt": error.retry_at} if getattr(error, "retry_at", None) else {}),
             "errorCode": error.code if isinstance(error, DomainError) else "update_check_timeout",
             "message": error.message[:200]
             if isinstance(error, DomainError)
@@ -146,7 +152,10 @@ class UpdateMonitor:
         installed = self.services.platform_update.installed_source()
         commit = installed.get("commit") if installed.get("repository") == repository else None
         return await GitHubSourceProvider(
-            __version__, commit, source_access=self.source_access
+            __version__,
+            commit,
+            source_access=self.source_access,
+            metadata_cache=self.github_metadata,
         ).check(repository, self.services.release_credentials.token())
 
     async def record_platform(self, result):
@@ -174,12 +183,22 @@ class UpdateMonitor:
     async def check_all(self):
         # Refreshes and scheduled checks share the same in-flight result.
         # A disconnected HTTP request must not cancel the server-side check.
+        if (
+            self.check_task is not None
+            and self.check_task.done()
+            and not self.check_task.cancelled()
+            and self.check_task.exception() is None
+            and time.time() < self.check_finished_at + 60
+        ):
+            return self.check_task.result()
         if self.check_task is None or self.check_task.done():
             self.check_task = asyncio.create_task(self._check_all())
             self.check_task.add_done_callback(
                 lambda task: task.exception() if not task.cancelled() else None
             )
-        return await asyncio.shield(self.check_task)
+        result = await asyncio.shield(self.check_task)
+        self.check_finished_at = time.time()
+        return result
 
     async def _check_all(self):
         async with self.lock:
@@ -199,8 +218,21 @@ class UpdateMonitor:
                     }
                 )
             except DomainError as error:
-                failures += 1
-                items.append(self._failure({"id": "mediahub-core", "name": "MediaHub Core"}, error))
+                failures += not bool(getattr(error, "retry_at", None))
+                failure = self._failure({"id": "mediahub-core", "name": "MediaHub Core"}, error)
+                previous = next(
+                    (item for item in self._load()["items"] if item.get("id") == "mediahub-core"),
+                    {},
+                )
+                if failure["checkStatus"] == "deferred":
+                    failure.update(
+                        {
+                            key: previous.get(key)
+                            for key in ("installedVersion", "latestVersion", "updateAvailable")
+                        }
+                    )
+                    failure["stale"] = bool(previous.get("latestVersion"))
+                items.append(failure)
             try:
                 agent = await self.services.agent_updates.check()
                 items.append(
@@ -211,7 +243,7 @@ class UpdateMonitor:
                 )
             except DomainError as error:
                 if error.code != "agent_host_required":
-                    failures += 1
+                    failures += not bool(getattr(error, "retry_at", None))
                     items.append(
                         self._failure({"id": "seedbox-agent", "name": "Seedbox Agent"}, error)
                     )
@@ -247,6 +279,7 @@ class UpdateMonitor:
             (item for item in self._load()["items"] if item.get("id") == "mediahub-core"), None
         )
         if core is None or core.get("latestVersion") != commit:
+            self.check_finished_at = 0
             await self.check_all()
 
     async def poll(self):

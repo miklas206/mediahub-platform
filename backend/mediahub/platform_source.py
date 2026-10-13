@@ -66,8 +66,12 @@ def check_github_access(response):
         )
 
 
-async def metadata(client, path):
-    response = await client.get("https://api.github.com" + path)
+async def metadata(client, path, metadata_cache=None):
+    response = (
+        await metadata_cache.get(client, path)
+        if metadata_cache
+        else await client.get("https://api.github.com" + path)
+    )
     check_github_access(response)
     if response.status_code != 200:
         raise DomainError(
@@ -80,12 +84,19 @@ async def metadata(client, path):
 
 class GitHubSourceProvider:
     def __init__(
-        self, current_version, installed_commit=None, transport=None, *, source_access=None
+        self,
+        current_version,
+        installed_commit=None,
+        transport=None,
+        *,
+        source_access=None,
+        metadata_cache=None,
     ):
         self.version = current_version
         self.commit = installed_commit if SHA.fullmatch(installed_commit or "") else None
         self.transport = transport
         self.source_access = source_access
+        self.metadata_cache = metadata_cache
 
     async def check(self, repository, token=None):
         result = {
@@ -128,12 +139,16 @@ class GitHubSourceProvider:
                 trust_env=False,
                 transport=self.transport,
             ) as client:
-                head = await metadata(client, f"/repos/{repository}/commits/main")
+                head = await metadata(
+                    client, f"/repos/{repository}/commits/main", self.metadata_cache
+                )
                 commit = head["sha"]
                 if not isinstance(commit, str) or not SHA.fullmatch(commit):
                     raise ValueError("Invalid commit")
                 project = await metadata(
-                    client, f"/repos/{repository}/contents/pyproject.toml?ref={commit}"
+                    client,
+                    f"/repos/{repository}/contents/pyproject.toml?ref={commit}",
+                    self.metadata_cache,
                 )
                 if project.get("encoding") != "base64" or len(project["content"]) > 100000:
                     raise ValueError("Invalid project")

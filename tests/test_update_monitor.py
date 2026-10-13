@@ -151,6 +151,9 @@ def test_refresh_joins_running_check_and_disconnect_does_not_cancel_it():
         assert await refreshed == {"count": 2}
         assert await scheduled == {"count": 2}
         assert await monitor.check_all() == {"count": 2}
+        assert len(calls) == 1
+        monitor.check_finished_at -= 61
+        assert await monitor.check_all() == {"count": 2}
         assert len(calls) == 2
 
     asyncio.run(scenario())
@@ -236,3 +239,28 @@ def test_deferred_source_stays_explicit_and_does_not_clear_alerts(logged_in):
     asyncio.run(svc.updates.record_app(app, {"updateAvailable": False, "message": "Up to date"}))
     assert svc.updates.summary()["notifications"] == []
     assert "checkStatus" not in svc.updates.summary()["items"][0]
+
+
+def test_core_cooldown_keeps_last_verified_commit(logged_in, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from mediahub.errors import DomainError
+
+    svc = logged_in.app.state.services
+    svc.updates._store_results([available_item("a" * 40)])
+    error = DomainError("github_rate_limited", "GitHub rate limit reached", 429)
+    error.retry_at = 9999999999
+    monkeypatch.setattr(svc.updates, "check_platform", AsyncMock(side_effect=error))
+    monkeypatch.setattr(
+        svc.agent_updates,
+        "check",
+        AsyncMock(side_effect=DomainError("agent_host_required", "No host")),
+    )
+    monkeypatch.setattr(svc.apps, "list", lambda: [])
+    result = asyncio.run(svc.updates.check_all())
+    core = result["items"][0]
+    assert core["checkStatus"] == "deferred"
+    assert core["latestVersion"] == "a" * 40
+    assert core["stale"] is True
+    assert core["retryAt"] == 9999999999
+    assert result["lastError"] is None

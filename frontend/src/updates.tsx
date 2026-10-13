@@ -933,10 +933,7 @@ export function UpdatesPage({
   return (
     <div className="stack updates-page">
       {updating && <UpdateRestartNotice disconnected={restarting} />}
-      <ErrorBox error={error || (restarting ? "" : serverError || appsError)} />
-      {!restarting && (
-        <ErrorBox error={platformRelease.error || updateSummary.error} />
-      )}
+      <ErrorBox error={error || (restarting ? "" : serverError || appsError || platformRelease.error || updateSummary.error)} />
       {notice && (
         <NotificationPopup tone="success">
           {translateText(notice)}
@@ -1006,14 +1003,16 @@ export function UpdatesPage({
             </button>
           )}
         </div>
-        {updateSummary.data?.items
-          .filter((item) => item.checkStatus === "failed")
-          .map((item) => (
-            <NotificationPopup tone="danger" key={item.id}>
-              <strong>{item.name}:</strong> {translateText(item.message)}
-              {item.errorCode && <small> ({item.errorCode})</small>}
-            </NotificationPopup>
-          ))}
+        {updateSummary.data?.items.some((item) => item.checkStatus === "failed") && (
+          <details className="update-card-advanced">
+            <summary>{t("Details")}</summary>
+            {updateSummary.data.items.filter((item) => item.checkStatus === "failed").map((item) => (
+              <p key={item.id}><strong>{item.name}:</strong> {translateText(item.message)}
+                {item.errorCode && <small> ({item.errorCode})</small>}
+              </p>
+            ))}
+          </details>
+        )}
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "deferred")
           .map((item) => (

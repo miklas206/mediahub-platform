@@ -12,9 +12,10 @@ MAIN_CHECK_INTERVAL_SECONDS = 15 * 60
 
 
 class MainBranchWatch:
-    def __init__(self, transport=None, clock=time.time, *, source_access=None):
+    def __init__(self, transport=None, clock=time.time, *, source_access=None, metadata_cache=None):
         self.transport, self.clock = transport, clock
         self.source_access = source_access
+        self.metadata_cache = metadata_cache
         self.identity = None
         self.etag = None
         self.commit = None
@@ -47,8 +48,11 @@ class MainBranchWatch:
                 follow_redirects=False,
                 transport=self.transport,
             ) as client:
-                response = await client.get(
-                    f"https://api.github.com/repos/{repository}/commits/main"
+                path = f"/repos/{repository}/commits/main"
+                response = (
+                    await self.metadata_cache.get(client, path)
+                    if self.metadata_cache
+                    else await client.get("https://api.github.com" + path)
                 )
             if response.status_code in (403, 429):
                 delays = [900.0]
@@ -67,6 +71,9 @@ class MainBranchWatch:
                 raise ValueError("Invalid commit metadata")
             self.commit, self.etag = commit, response.headers.get("etag")
             return commit
+        except DomainError as error:
+            self.next_check = max(now + 900, getattr(error, "retry_at", 0))
+            return None
         except (httpx.HTTPError, ValueError, TypeError, AttributeError):
             self.next_check = now + 900
             return None
