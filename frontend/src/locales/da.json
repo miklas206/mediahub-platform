@@ -3548,5 +3548,19 @@
   "Internal": "Intern",
   "Proton port forwarding (NAT-PMP)": "Proton port-forwarding (NAT-PMP)",
   "VPN port {port}": "VPN-port {port}",
-  "Update app": "Opdatér app"
+  "Update app": "Opdatér app",
+  "Confirm action": "Bekræft handling",
+  "Remove configuration?": "Fjern konfiguration?",
+  "Remove deployment?": "Fjern installation?",
+  "Install update?": "Installér opdatering?",
+  "Confirm runtime action": "Bekræft driftshandling",
+  "Confirm Plex update": "Bekræft Plex-opdatering",
+  "Remove torrent?": "Fjern torrent?",
+  "Recheck torrent?": "Kontrollér torrent igen?",
+  "Switch VPN?": "Skift VPN?",
+  "Update all?": "Opdatér alle?",
+  "Update Plex?": "Opdatér Plex?",
+  "Remove GitHub access?": "Fjern GitHub-adgang?",
+  "Install MediaHub update?": "Installér MediaHub-opdatering?",
+  "Delete user?": "Slet bruger?"
 }

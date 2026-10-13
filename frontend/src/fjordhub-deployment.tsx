@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { getLocale, translateText, t } from "./i18n";
 
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ export function FjordHubDeployment({
   visible: boolean;
   onBusy: (busy: boolean) => void;
 }) {
+  const confirm = useConfirm();
   const [job, setJob] = useState<Deployment | null>(null);
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
@@ -139,9 +141,10 @@ export function FjordHubDeployment({
     if (!job || !verified || !password) return;
     if (
       remove &&
-      !window.confirm(
+      !(await confirm(
         "Remove this FjordHub deployment's containers? Active use will stop. The LXC, source, app data and settings are kept.",
-      )
+        { title: "Remove deployment?", confirmLabel: "Remove", danger: true },
+      ))
     )
       return;
     setPending(true);

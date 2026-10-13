@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { translateText, countryName, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 import { LayoutGroup } from "./page-layout";
@@ -61,6 +62,7 @@ export function SeedboxDaily({
   forwarding?: string;
   overviewCards?: ReactNode;
 }) {
+  const confirm = useConfirm();
   const [intervalHours, setIntervalHours] = useState<number | null>(null);
   const [list, setList] = useState<Listing | null>(null),
     [location, setLocation] = useState<Locations | null>(null);
@@ -142,18 +144,20 @@ export function SeedboxDaily({
   async function action(hash: string, action: string) {
     if (
       action === "remove" &&
-      !window.confirm(
+      !(await confirm(
         t("Remove this torrent job? Downloaded files will be kept."),
-      )
+        { title: "Remove torrent?", confirmLabel: "Remove", danger: true },
+      ))
     )
       return;
     if (
       action === "recheck" &&
-      !window.confirm(
+      !(await confirm(
         t(
           "Check the downloaded pieces on disk? This can take a while for large files. Files will not be deleted.",
         ),
-      )
+        { title: "Recheck torrent?", confirmLabel: "Continue" },
+      ))
     )
       return;
     setBusy(true);
@@ -225,12 +229,12 @@ export function SeedboxDaily({
     const selected = country || location?.current?.country || "";
     if (
       !selected ||
-      !window.confirm(
-        t(
-          "Switch VPN to {country}? qBittorrent will stop until all checks pass.",
-          { country: selected },
-        ),
-      )
+      !(await confirm(
+        t("Switch VPN to {country}? qBittorrent will stop until all checks pass.", {
+          country: selected,
+        }),
+        { title: "Switch VPN?", confirmLabel: "Continue" },
+      ))
     )
       return;
     setBusy(true);

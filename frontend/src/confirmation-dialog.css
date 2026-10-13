@@ -1,0 +1,99 @@
+.confirmation-dialog {
+  margin: auto;
+  inset: 0;
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 0;
+  color: var(--text);
+  background: var(--raised);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 16px;
+  box-shadow: 0 24px 90px #0008;
+  animation: confirmation-enter 180ms ease-out;
+}
+.confirmation-dialog::backdrop {
+  background: #020810b8;
+  backdrop-filter: blur(6px);
+}
+.confirmation-dialog.danger {
+  border-color: var(--danger-line);
+}
+.confirmation-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.confirmation-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.confirmation-dialog.danger .confirmation-icon {
+  color: var(--danger);
+}
+.confirmation-brand {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.confirmation-heading h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.confirmation-close {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.confirmation-message {
+  margin: 0;
+  padding: 24px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+}
+@keyframes confirmation-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 480px) {
+  .confirmation-heading,
+  .confirmation-message {
+    padding: 18px;
+  }
+  .confirmation-actions {
+    padding: 14px 18px;
+  }
+  .confirmation-actions > button {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confirmation-dialog {
+    animation: none;
+  }
+}

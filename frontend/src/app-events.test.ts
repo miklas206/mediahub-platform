@@ -1,5 +1,31 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { batchAppHealthRefresh } from "./app-events";
+import { batchAppHealthRefresh, trackLiveConnection } from "./app-events";
+
+it("distinguishes initial connection from failures and reconnects", () => {
+  const source = new EventTarget();
+  const changed = vi.fn();
+  const dispose = trackLiveConnection(source, changed);
+  expect(changed.mock.calls).toEqual([["connecting"]]);
+  source.dispatchEvent(new Event("open"));
+  expect(changed).toHaveBeenLastCalledWith("connected");
+  source.dispatchEvent(new Event("error"));
+  expect(changed).toHaveBeenLastCalledWith("disconnected");
+  source.dispatchEvent(new Event("open"));
+  expect(changed).toHaveBeenLastCalledWith("connected");
+  dispose();
+  changed.mockClear();
+  source.dispatchEvent(new Event("error"));
+  expect(changed).not.toHaveBeenCalled();
+});
+
+it("still reports a real failure before the first connection opens", () => {
+  const source = new EventTarget();
+  const changed = vi.fn();
+  const dispose = trackLiveConnection(source, changed);
+  source.dispatchEvent(new Event("error"));
+  expect(changed.mock.calls).toEqual([["connecting"], ["disconnected"]]);
+  dispose();
+});
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
