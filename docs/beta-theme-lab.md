@@ -115,3 +115,5 @@ The redundant Light theme card has been removed. Five style cards define visual 
 Complete sidebar redesign: inset themed frame, grouped brand header, refined navigation spacing, status/account dock and restrained local clock. Theme-specific glass, soft, terminal, layered and signal skins extend to the sidebar surfaces and avatar. Mobile uses a bounded drawer with its own close button; routes, sign-out and real connection/uptime state are preserved.
 
 Topbar and footer now share the sidebar frame fill and theme-specific geometry. Desktop bars align at 248px with 12px outer margins; mobile uses 8px margins and keeps the footer above the quick-navigation dock. Footer space remains reserved in content.
+
+The approved continuous frame replaces the inset shell: sidebar flush at the left viewport edge, topbar full width of workspace, footer a straight separator. All outer shell corners are square. Navigation uses 0-6px internal rounding by theme; status and profile no longer use individual card backgrounds. Mobile drawer remains bounded, flush at the left, and footer stays above the quick dock.

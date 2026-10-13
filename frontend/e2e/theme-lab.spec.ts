@@ -360,14 +360,15 @@ test("sidebar supports light mode, long account names and short screens", async 
  await page.screenshot({path:"test-results/sidebar-light-short.png",animations:"disabled"});
 });
 
-test("desktop frame bars align with the inset sidebar and share each theme shape", async ({page})=>{
+test("continuous frame aligns flush with the viewport in every theme", async ({page})=>{
  await mockHub(page);await page.setViewportSize({width:1440,height:900});await page.goto("/settings?section=Appearance");
  for (const [name,id] of themes) {
   await page.locator(".theme-choice").filter({hasText:name}).click();
   const sidebar=page.locator(".sidebar"), topbar=page.locator(".topbar"),footer=page.locator(".footer");
   const [s,h,f]=await Promise.all([sidebar.boundingBox(),topbar.boundingBox(),footer.boundingBox()]);
-  expect(h!.y).toBe(s!.y);expect(f!.y+f!.height).toBe(s!.y+s!.height);expect(h!.x).toBe(f!.x);expect(h!.x-s!.x-s!.width).toBe(12);
-  const radii=await Promise.all([sidebar,topbar,footer].map(el=>el.evaluate(node=>getComputedStyle(node).borderTopLeftRadius)));expect(new Set(radii).size).toBe(1);
+  expect(h!.y).toBe(s!.y);expect(f!.y+f!.height).toBe(s!.y+s!.height);expect(h!.x).toBe(f!.x);expect(s!.x).toBe(0);expect(h!.x-s!.x-s!.width).toBe(0);expect(h!.x+h!.width).toBe(1440);expect(f!.x+f!.width).toBe(1440);
+  const radii=await Promise.all([sidebar,topbar,footer].map(el=>el.evaluate(node=>getComputedStyle(node).borderTopLeftRadius)));expect(radii).toEqual(["0px","0px","0px"]);
+  for (const dock of [".sidebar-connection", ".profile"]) { expect(await sidebar.locator(dock).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)"); }
   await page.screenshot({path:`test-results/shell-${id}-1440.png`,animations:"disabled"});
  }
 });
