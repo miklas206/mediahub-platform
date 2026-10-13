@@ -1,0 +1,53 @@
+/* A complete sidebar skin: brand, navigation and account dock share the theme. */
+:root[data-look]:not([data-look="classic"]) .sidebar {
+  --sidebar-radius: 20px; --dock-radius: 13px;
+  width: 224px; inset: 12px auto 12px 12px; height: calc(100dvh - 24px);
+  padding: 20px 14px 12px; border: 1px solid var(--line); border-radius: var(--sidebar-radius);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--surface) 94%, var(--accent)), color-mix(in srgb, var(--bg) 94%, transparent));
+  box-shadow: 0 12px 32px #0002, inset 0 1px #ffffff09;
+}
+:root[data-look]:not([data-look="classic"]) .workspace { margin-left: 248px; }
+.sidebar-heading { display: flex; align-items: center; gap: 6px; padding: 0 2px 20px; border-bottom: 1px solid var(--line); }
+.sidebar-heading .brand { padding: 0; flex: 1; gap: 7px; min-width: 0; font-size: 20px; }
+.sidebar-heading .brand img { width: 29px; height: 29px; }
+.sidebar-heading .brand-beta { font-size: 8px; padding: 3px 4px; border-radius: 4px; letter-spacing: .08em; }
+.sidebar-close { display: none; flex: none; }
+.sidebar .nav-label { display: flex; align-items: center; gap: 12px; padding: 23px 10px 12px; margin: 0; font-size: 9px; letter-spacing: .18em; }
+.sidebar .nav-label::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.sidebar > nav { gap: 8px; padding: 3px 5px 8px; margin-inline: -5px; }
+:root[data-look]:not([data-look="classic"]) .sidebar > nav a { min-height: 47px; font-size: 13px; }
+.sidebar-bottom { display: grid; gap: 10px; padding-top: 20px; }
+.sidebar .sidebar-connection { margin: 0; padding: 12px; border-radius: var(--dock-radius); background: color-mix(in srgb, var(--surface) 78%, transparent); border-color: var(--line); font-size: 11px; gap: 10px; box-shadow: none; }
+.sidebar .sidebar-connection small { font-size: 10px; margin-top: 4px; line-height: 1.4; }
+.sidebar .sidebar-connection.healthy .status-dot { box-shadow: 0 0 0 4px color-mix(in srgb, var(--healthy) 10%, transparent); }
+.sidebar .profile { margin: 0; padding: 12px 9px; border: 1px solid var(--line); border-radius: var(--dock-radius); gap: 9px; background: color-mix(in srgb, var(--raised) 65%, transparent); box-shadow: none; min-width: 0; }
+.sidebar .profile .avatar { width: 33px; height: 33px; flex: none; border: 1px solid var(--accent-line); background: var(--accent-bg); font-size: 13px; }
+.sidebar-identity { flex: 1; min-width: 0; line-height: 1.4; }
+.sidebar-identity strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.sidebar .profile small { font-size: 10px; }
+.sidebar .profile .icon-button { width: 30px; height: 33px; min-height: 0; flex: none; padding: 6px; color: var(--muted); }
+.sidebar .profile .icon-button:hover { color: var(--text); background: var(--accent-bg); }
+.sidebar .sidebar-clock { justify-content: center; gap: 8px; padding: 6px 0 0; font-size: 11px; opacity: .85; }
+:root[data-look="midnight-glass"] .sidebar { border-top-color: var(--accent-line); background: linear-gradient(160deg, color-mix(in srgb, var(--surface) 93%, var(--accent)), color-mix(in srgb, var(--bg) 95%, transparent)); backdrop-filter: blur(24px); }
+:root[data-look="midnight-glass"] .sidebar-heading .brand img { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 25%, transparent)); }
+:root[data-look="soft-orbit"] .sidebar { --sidebar-radius: 26px; --dock-radius: 16px; background: linear-gradient(170deg, color-mix(in srgb, var(--surface) 92%, var(--secondary)), var(--bg)); }
+:root[data-look="soft-orbit"] .sidebar-heading { border-bottom-style: dashed; }
+:root[data-look="soft-orbit"] .sidebar .avatar { border-radius: 11px; }
+:root[data-look="precision-terminal"] .sidebar { --sidebar-radius: 3px; --dock-radius: 3px; background: var(--bg); border-color: var(--accent-line); box-shadow: none; }
+:root[data-look="precision-terminal"] .sidebar-heading { border-bottom-color: var(--accent-line); }
+:root[data-look="precision-terminal"] .sidebar .avatar { border-radius: 2px; }
+:root[data-look="precision-terminal"] .sidebar .sidebar-clock { justify-content: flex-start; padding-inline: 10px; border-top: 1px dashed var(--line); padding-top: 12px; }
+:root[data-look="floating-layers"] .sidebar { --sidebar-radius: 18px; --dock-radius: 11px; background: linear-gradient(160deg, var(--raised), var(--bg)); box-shadow: 5px 0 0 #0002, 0 16px 32px #0003; }
+:root[data-look="floating-layers"] .sidebar .profile { box-shadow: 0 3px 0 #0002, inset 0 1px #ffffff12; }
+:root[data-look="edge-signal"] .sidebar { --sidebar-radius: 3px 22px 3px 3px; --dock-radius: 3px; background: var(--bg); border-left: 3px solid var(--accent); box-shadow: 0 12px 26px #0003; }
+:root[data-look="edge-signal"] .sidebar-heading { border-bottom: 2px solid var(--accent-line); }
+:root[data-look="edge-signal"] .sidebar .avatar { border-radius: 3px 10px 3px 3px; }
+:root[data-appearance-mode="light"]:not([data-look="classic"]) .sidebar { background: linear-gradient(165deg, var(--surface), color-mix(in srgb, var(--bg) 94%, var(--accent))); box-shadow: 0 8px 24px #19314c12; }
+@media (max-height: 620px) { .sidebar-heading { padding-bottom: 12px; } .sidebar .nav-label { padding-top: 14px; } .sidebar-bottom { gap: 7px; padding-top: 12px; } .sidebar .profile, .sidebar .sidebar-connection { padding-block: 8px; } }
+@media (max-width: 760px) {
+  :root[data-look]:not([data-look="classic"]) .sidebar { width: min(280px, calc(100vw - 24px)); inset: 8px auto 8px 8px; height: calc(100dvh - 16px); transform: translateX(calc(-100% - 12px)); padding-top: 16px; }
+  :root[data-look]:not([data-look="classic"]) .sidebar.open { transform: translateX(0); }
+  :root[data-look]:not([data-look="classic"]) .workspace { margin-left: 0; }
+  .sidebar-close { display: inline-flex; }
+  .sidebar-heading .brand { font-size: 20px; }
+}

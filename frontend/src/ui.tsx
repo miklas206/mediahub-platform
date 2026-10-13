@@ -616,7 +616,10 @@ function Shell({
         />
       )}
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <Brand />
+        <div className="sidebar-heading">
+          <Brand />
+          <button type="button" className="icon-button sidebar-close" aria-label={t("Close navigation")} onClick={() => setOpen(false)}><X size={18} /></button>
+        </div>
         <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
@@ -810,8 +813,8 @@ function Shell({
             <span className="avatar">
               {user.username.slice(0, 1).toUpperCase()}
             </span>
-            <div>
-              {user.username}
+            <div className="sidebar-identity" title={user.username}>
+              <strong>{user.username}</strong>
               <small>{t("Administrator")}</small>
             </div>
             <button

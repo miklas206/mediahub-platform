@@ -8,7 +8,7 @@ const themes = [
   ["Edge Signal", "edge-signal", "dark"],
 ] as const;
 
-async function mockHub(page: Page, configured = false) {
+async function mockHub(page: Page, configured = false, username = "Designer") {
   let appearance: unknown = null;
   const writes: unknown[] = [];
   await page.addInitScript(() => {
@@ -36,7 +36,7 @@ async function mockHub(page: Page, configured = false) {
     else if (path === "/auth/me")
       data = {
         id: "theme-user",
-        username: "Designer",
+        username,
         role: "administrator",
         csrf: "test",
         language: "en",
@@ -324,4 +324,33 @@ for (const width of [1440, 390, 320]) test(`appearance controls are visible and 
  await page.getByRole("button",{name:"Defaults",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();
  await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();expect(writes[1]).toMatchObject({appearance:null});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+for (const width of [1440, 390, 320]) test(`themed sidebar account dock and mobile drawer at ${width}px`, async ({page}) => {
+ await mockHub(page); await page.setViewportSize({width,height:800}); await page.goto("/settings?section=Appearance");
+ for (const [name,id] of themes) {
+  await page.locator(".theme-choice").filter({hasText:name}).click();
+  if (width < 761) await page.getByRole("button",{name:"Open navigation",exact:true}).click();
+  const sidebar=page.locator(".sidebar");await expect(sidebar).toBeInViewport();
+  await expect(sidebar.locator(".brand")).toContainText("MediaHub");
+  await expect(sidebar.locator(".sidebar-connection")).toContainText("Core online");
+  await expect(sidebar.locator(".sidebar-identity")).toContainText("Designer");
+  await expect(sidebar.getByRole("button",{name:"Sign out",exact:true})).toBeVisible();
+  await expect.poll(async () => Math.round((await sidebar.boundingBox())!.x)).toBeGreaterThanOrEqual(0);
+  const box=await sidebar.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(width);expect(box!.y+box!.height).toBeLessThanOrEqual(800);
+  expect(await sidebar.evaluate(el => el.scrollWidth<=el.clientWidth)).toBe(true);
+  await page.screenshot({path:`test-results/sidebar-${id}-${width}.png`,animations:"disabled"});
+  if (width < 761) {await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();await expect(sidebar).not.toBeInViewport();}
+ }
+ if (width < 761) {await page.getByRole("button",{name:"Open navigation",exact:true}).click();await page.locator(".sidebar").getByRole("link",{name:"Home",exact:true}).click();await expect(page.locator(".sidebar")).not.toBeInViewport();}
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test("sidebar supports light mode, long account names and short screens", async ({page}) => {
+ await mockHub(page,false,"An administrator with a very long account name");await page.setViewportSize({width:1440,height:480});await page.goto("/settings?section=Appearance");
+ await page.getByLabel("Color mode",{exact:true}).selectOption("light");
+ const sidebar=page.locator(".sidebar");await expect(sidebar.locator(".sidebar-clock")).toBeInViewport();await expect(sidebar.getByRole("button",{name:"Sign out",exact:true})).toBeInViewport();
+ expect(await sidebar.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+ await expect(sidebar.locator(".sidebar-identity")).toHaveAttribute("title","An administrator with a very long account name");
+ await page.screenshot({path:"test-results/sidebar-light-short.png",animations:"disabled"});
 });

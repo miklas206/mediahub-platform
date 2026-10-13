@@ -111,3 +111,5 @@ Sidebar selections differ by theme: glass rail, orbit pill/dot, terminal bracket
 Theme identity refinement: bounded Soft Orbit control rounding prevents circular text cards. Each theme has a distinct system-font stack, icon stroke treatment and surface geometry. Hub sidebar uses different icon glyphs for Home/Overview/Settings, responding to live theme previews. Settings tabs remain visible on Appearance. Shared stylesheet version: ambient-8.
 
 The redundant Light theme card has been removed. Five style cards define visual identity; Color mode independently selects light/dark/system. Changing style preserves the chosen color mode, and the selected style stays indicated in light mode.
+
+Complete sidebar redesign: inset themed frame, grouped brand header, refined navigation spacing, status/account dock and restrained local clock. Theme-specific glass, soft, terminal, layered and signal skins extend to the sidebar surfaces and avatar. Mobile uses a bounded drawer with its own close button; routes, sign-out and real connection/uptime state are preserved.
