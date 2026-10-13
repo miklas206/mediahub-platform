@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allow Plex installation again after verified, data-preserving runtime removal. Require a matching removal receipt and absent owned containers; reuse only the matching owned tmpfs volume and restore encrypted Plex preferences instead of replacing the server identity. Preserve media and persistent app data.
+- Render app removal confirmations as native modal dialogs outside app cards, preventing clipping by themed card effects and restoring keyboard focus after closing.
+
 ## 0.5.9
 
 - Share each account's current theme, custom colors, color mode, density and motion preferences with MediaSeed and MediaVPN through SSO. Apps follow MediaHub by default and support a persistent, per-account app theme override.

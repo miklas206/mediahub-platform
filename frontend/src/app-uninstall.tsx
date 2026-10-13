@@ -1,7 +1,8 @@
 import { translateText, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 
-import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { api } from "./api";
 import type { InstalledAppInfo } from "./contracts";
@@ -23,6 +24,15 @@ export function AppUninstall({
   showIcon?: boolean;
 }) {
   const [open, setOpen] = useState(app.state === "removing");
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const element = dialog.current!;
+    const opener = document.activeElement as HTMLElement | null;
+    element.showModal();
+    element.querySelector<HTMLButtonElement>(".app-removal-cancel")?.focus();
+    return () => { element.close(); if (opener?.isConnected) opener.focus(); };
+  }, [open]);
   const [status, setStatus] = useState<Removal>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,9 +111,10 @@ export function AppUninstall({
         {showIcon && <Trash2 size={15} aria-hidden="true" />}
         {removalLabel}
       </button>
-      {open && (
-        <div
-          role="dialog"
+      {open && createPortal(
+        <dialog
+          ref={dialog}
+          onCancel={(event) => { event.preventDefault(); setOpen(false); }}
           aria-label={t("Remove {value0}", { value0: translateText(app.name) })}
           className="app-removal-dialog"
         >
@@ -147,11 +158,11 @@ export function AppUninstall({
             >
               {t("Confirm removal")}
             </button>
-            <button onClick={() => setOpen(false)}>
+            <button className="app-removal-cancel" onClick={() => setOpen(false)}>
               {working ? t("Close") : t("Cancel")}
             </button>
           </div>
-        </div>
+        </dialog>, document.body
       )}
     </>
   );

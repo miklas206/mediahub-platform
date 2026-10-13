@@ -248,6 +248,17 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   await page.screenshot({ path:`test-results/reference-apps-${width}.png`, animations:"disabled" });
   await page.getByRole("button", {name:"Uninstall: Jellyfin",exact:true}).click();
   await expect(page.getByRole("dialog", {name:"Remove Jellyfin",exact:true})).toContainText("Media files and app data will be kept");
+  const removal = page.getByRole("dialog", {name:"Remove Jellyfin",exact:true});
+  expect(await removal.evaluate(el => el.parentElement === document.body && el.matches(':modal'))).toBe(true);
+  const removalBounds = (await removal.boundingBox())!;
+  expect(removalBounds.x).toBeGreaterThanOrEqual(15);
+  expect(removalBounds.x + removalBounds.width).toBeLessThanOrEqual(width - 15);
+  expect(await removal.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(removal.getByRole('button', {name:'Cancel',exact:true})).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(removal).toHaveCount(0);
+  await expect(page.getByRole("button", {name:"Uninstall: Jellyfin",exact:true})).toBeFocused();
+
   await page.goto("/overview");
   await expect(page.locator(".reference-overview")).toBeVisible();
   await expect(page.locator(".overview-resource-row")).toContainText("8.0%");

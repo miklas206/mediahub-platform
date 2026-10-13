@@ -2836,8 +2836,9 @@ td time {
 .app-removal-dialog {
   position: fixed;
   z-index: 100;
-  inset: 50% auto auto 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
+  color: var(--text);
   width: min(560px, calc(100vw - 32px));
   max-height: 90dvh;
   overflow: auto;
@@ -2846,6 +2847,8 @@ td time {
   border-radius: var(--radius-card);
   background: var(--surface);
   box-shadow:
-    0 0 0 100vmax #03070dbf,
     var(--shadow-overlay);
 }
+
+.app-removal-dialog::backdrop { background: #03070dbf; }
+.app-removal-dialog p { overflow-wrap: anywhere; margin-block: 16px; }

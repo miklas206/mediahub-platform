@@ -363,6 +363,17 @@ class PlexRuntime:
             await self.request("POST", f"/containers/{name}/stop?t=2")
             await self.request("DELETE", f"/containers/{name}")
 
+    async def can_reinstall(self, installation_id):
+        # A retained policy protects ownership and is not proof of a live runtime.
+        # Only a completed, matching removal receipt can authorize reuse.
+        if not Path(self.control.policy_file).exists():
+            return False
+        policy = self.control.policy()
+        if policy.installationId != installation_id:
+            return False
+        status = await self.uninstall_status()
+        return status.get("state") == "succeeded" and status.get("dataPreserved") is True
+
     async def queue_install(self, body: PlexInstallRequest):
         # A cold Plex image can take minutes. Accept before downloading so a
         # browser/proxy timeout cannot cancel provisioning halfway through.
@@ -372,7 +383,7 @@ class PlexRuntime:
         plan = installation_plan(policy, body.installation)
         if plan["planDigest"] != body.reviewedPlanDigest:
             raise DomainError("plex_plan_changed", "Review the current installation plan first", 409)
-        if Path(self.control.policy_file).exists():
+        if Path(self.control.policy_file).exists() and not await self.can_reinstall(body.installation.installationId):
             raise DomainError("plex_already_installed", "Managed Plex is already installed", 409)
         self.operation = {
             "state": "running", "action": "install", "hostId": policy.hostId,
@@ -409,7 +420,8 @@ class PlexRuntime:
                 raise DomainError(
                     "plex_plan_changed", "Review the current installation plan first", 409
                 )
-            if Path(self.control.policy_file).exists():
+            reinstall = await self.can_reinstall(body.installation.installationId)
+            if Path(self.control.policy_file).exists() and not reinstall:
                 raise DomainError(
                     "plex_already_installed", "Managed Plex is already installed", 409
                 )
@@ -434,13 +446,17 @@ class PlexRuntime:
             image = await pull_latest(self.control.socket, "lscr.io/linuxserver/plex")
             plan["container"]["Image"] = publisher_reference(image, "lscr.io/linuxserver/plex")
             existing = await self.request("GET", "/volumes")
-            if any(
-                v["Name"] == plan["runtimeVolume"]["Name"] for v in existing.get("Volumes") or []
-            ):
-                raise DomainError(
-                    "plex_volume_exists", "Existing runtime volume requires recovery", 409
-                )
-            await self.request("POST", "/volumes/create", body=plan["runtimeVolume"])
+            volume = next((v for v in existing.get("Volumes") or []
+                           if v["Name"] == plan["runtimeVolume"]["Name"]), None)
+            if volume is not None:
+                expected = plan["runtimeVolume"]
+                if not reinstall or any(volume.get(key) != expected[key]
+                                        for key in ("Labels", "Driver")) or volume.get("Options") != expected["DriverOpts"]:
+                    raise DomainError(
+                        "plex_volume_exists", "Existing runtime volume requires recovery", 409
+                    )
+            else:
+                await self.request("POST", "/volumes/create", body=plan["runtimeVolume"])
             helper = await self.helper(policy, plan, initialize=True)
             try:
                 root = ET.Element(
@@ -450,7 +466,7 @@ class PlexRuntime:
                     ManualPortMappingMode="1",
                 )
                 content = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-                if policy.reuseEncryptedPreferences:
+                if policy.reuseEncryptedPreferences or reinstall:
                     content = self.vault.get(body.installation.installationId)
                     if ET.fromstring(content).tag != "Preferences":
                         raise DomainError(
@@ -481,6 +497,7 @@ class PlexRuntime:
                 ]
                 save_json(self.state_dir / "plex-plan.json", plan)
                 save_json(Path(self.control.policy_file), guard.model_dump())
+                (self.state_dir / "plex-removal.json").unlink(missing_ok=True)
                 self.control.save_intent(guard, True)
                 await self.request("POST", f"/containers/{plan['name']}/start")
                 self.control.record("installed")

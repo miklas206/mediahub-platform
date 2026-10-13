@@ -9,7 +9,8 @@ from mediahub.errors import DomainError
 from agent.plex_runtime import PlexRuntime
 
 
-def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_path, monkeypatch):
+@pytest.mark.parametrize("reinstall", [False, True])
+def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_path, monkeypatch, reinstall):
     from unittest.mock import AsyncMock, Mock
 
     from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
@@ -41,8 +42,10 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
 
     async def request(method, path, body=None, **kwargs):
         calls.append((method, path))
+        if path.startswith("/containers/json?"):
+            return []
         if path == "/volumes":
-            return {"Volumes": []}
+            return {"Volumes": [{**plan["runtimeVolume"], "Options": plan["runtimeVolume"]["DriverOpts"]}] if reinstall else []}
         if path.startswith("/containers/create"):
             assert body["Image"] == publisher
         if path.endswith("/json"):
@@ -52,6 +55,12 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     runtime.request = request
     spec = PlexInstallation(moviesStorageIds=["movies"], appdataStorageId="appdata")
     plan = installation_plan(policy, spec)
+    if reinstall:
+        from agent.install_files import save_json
+        control.policy_file.write_text("retained ownership policy")
+        control.policy = lambda: SimpleNamespace(installationId=spec.installationId, vpnEnabled=False)
+        save_json(tmp_path / "plex-removal.json", {"installationId": spec.installationId})
+        runtime.vault.put(spec.installationId, b'<Preferences MachineIdentifier="preserved-identity"/>')
     assert plan["container"]["Image"] == "lscr.io/linuxserver/plex:latest"
     async def run():
         result = await runtime.queue_install(PlexInstallRequest(
@@ -69,6 +78,12 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
                           ("DELETE", "/containers/owned-prepare-helper")]
     assert not any("/images/" in path and method == "DELETE" for method, path in calls)
     assert not list(tmp_path.glob(".metadata-*"))
+    if reinstall:
+        assert b'preserved-identity' in runtime.vault.get(spec.installationId)
+        assert not (tmp_path / "plex-removal.json").exists()
+        assert not any(path == "/volumes/create" for _, path in calls)
+        assert not any(method == "DELETE" and path.startswith("/volumes/") for method, path in calls)
+
 
 
 def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkeypatch):
@@ -370,3 +385,28 @@ def test_concurrent_updates_admit_only_one_background_transaction(tmp_path):
         runtime._update.assert_awaited_once()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("receipt,containers,expected", [
+    (None, [], False),
+    ({"installationId": "other-install"}, [], False),
+    ({"installationId": "plex-test"}, [{"Id": "still-present"}], False),
+    ({"installationId": "plex-test"}, [], True),
+])
+def test_reinstall_requires_matching_removal_and_absent_owned_containers(tmp_path, receipt, containers, expected):
+    from unittest.mock import AsyncMock
+
+    from agent.install_files import save_json
+
+    policy_file = tmp_path / "managed.json"
+    policy_file.write_text("retained ownership")
+    control = SimpleNamespace(policy_file=policy_file, policy=lambda: SimpleNamespace(
+        installationId="plex-test", vpnEnabled=False))
+    runtime = PlexRuntime(control, None, tmp_path)
+    runtime.request = AsyncMock(return_value=containers)
+    if receipt is not None:
+        save_json(tmp_path / "plex-removal.json", receipt)
+    assert asyncio.run(runtime.can_reinstall("plex-test")) is expected
+    assert asyncio.run(runtime.can_reinstall("other-install")) is False
+    assert policy_file.read_text() == "retained ownership"
+    assert not any(call.args[0] != "GET" for call in runtime.request.await_args_list)
