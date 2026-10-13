@@ -14,6 +14,7 @@ import secrets
 import shutil
 import subprocess
 import time
+import tomllib
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -410,6 +411,10 @@ def provision(root, lan, source=SOURCE):
         cfg["services"]["app"].setdefault("environment", {})[kind.upper() + "_HUB_BROWSER_URL"] = (
             browser_origin
         )
+        metadata = context / "pyproject.toml"
+        if metadata.is_file():
+            version = tomllib.loads(metadata.read_text())["project"]["version"]
+            cfg["services"]["app"].setdefault("labels", {})["org.mediahub.app.version"] = version
         repair_tls_permissions(folder, cfg)
         if kind == "mediaseed":
             configure_media_storage(cfg, locations)

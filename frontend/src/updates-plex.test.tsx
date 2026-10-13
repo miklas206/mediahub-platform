@@ -60,7 +60,7 @@ describe("Plex image update approval", () => {
     expect(html).toContain('href="/apps/plex"');
     expect(html).toContain("Latest publisher image");
     expect(html).toContain(
-      "Plex server releases alone do not confirm an image update",
+      "MediaHub checks the LinuxServer publisher image digest",
     );
   });
 });

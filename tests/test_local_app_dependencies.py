@@ -285,3 +285,13 @@ def test_failed_build_restores_previous_compose_and_running_intent(tmp_path, mon
     assert path.read_bytes() == previous
     assert any("-d" in call and "app" in call for call in calls)
     assert not (root / "local-apps/source.json").exists()
+
+
+def test_preparation_labels_the_actual_bundled_app_version(tmp_path, monkeypatch):
+    root, source, _, _ = fixture(tmp_path, monkeypatch)
+    for kind, version in (("mediaseed", "0.1.1"), ("mediavpn", "0.1.3")):
+        (source / "bundled" / kind / "pyproject.toml").write_text('[project]\nversion = "' + version + '"\n')
+    module.provision(root, "192.168.1.50", source)
+    for kind, version in (("mediaseed", "0.1.1"), ("mediavpn", "0.1.3")):
+        cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
+        assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == version

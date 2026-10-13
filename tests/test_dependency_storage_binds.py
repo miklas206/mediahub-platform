@@ -29,6 +29,7 @@ def test_helper_inherits_only_existing_approved_core_storage(
     policy.write_text("{}")
     created = []
     own = {
+        "HostConfig": {"GroupAdd": ["1000", "10001", "991"]},
         "Image": "sha256:synthetic",
         "Config": {
             "Labels": {
@@ -72,6 +73,7 @@ def test_helper_inherits_only_existing_approved_core_storage(
     else:
         assert controller.message is None
         binds = created[0]["HostConfig"]["Binds"]
+        assert created[0]["HostConfig"]["GroupAdd"] == ["1000", "10001", "991"]
         assert "/mnt/media:/mnt/media:ro" in binds
         assert "/host-evidence:/host-evidence:ro" in binds
         assert not any("unapproved" in bind for bind in binds)

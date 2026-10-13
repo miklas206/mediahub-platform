@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.26
+
+- Fix automatic app preparation in unprivileged LXCs by inheriting the owned Core container's supplementary groups. Host evidence with an unmapped owner remains protected and readable through its approved group; no host file permissions change.
+- Stamp the actual bundled version on app containers and report it in update checks. Explain Core-delivered updates and show failed/preparing state with an explicit retry action on the Updates page.
+- Recheck bundled app versions after preparation completes. Keep completed client initialization and a deliberately stopped source qBittorrent from marking a healthy VPN-bound MediaSeed installation unknown.
+
 ## 0.5.25
 
 - Add a storage location and existing-folder browser to MediaSeed torrent imports, shared by magnet and file uploads. Report capacity and writable/unavailable state separately for the local volume and approved media/download mounts.

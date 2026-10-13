@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import tarfile
+import tomllib
 from pathlib import Path
 from urllib.parse import quote
 
@@ -62,7 +63,18 @@ class ManagedAdapter:
     async def health(self):
         try:
             rows = await self.manager.containers(self.package)
-            running = bool(rows) and all(
+            # One-shot initialization is expected to exit. With MediaVPN the
+            # original isolated client is deliberately stopped; the owned
+            # VPN-bound replacement is the active torrent service instead.
+            active_clone = any(
+                row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox") == "mediaseed"
+                and row.get("State", {}).get("Running")
+                for row in rows
+            )
+            rows = [row for row in rows if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+                    not in ({"client-init", "qbittorrent"} if active_clone else {"client-init"})]
+            has_app = any(row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app" for row in rows)
+            running = has_app and all(
                 row.get("State", {}).get("Running")
                 and row.get("State", {}).get("Health", {}).get("Status", "healthy") == "healthy"
                 for row in rows
@@ -76,7 +88,26 @@ class ManagedAdapter:
             return Health(status="unknown", summary="App runtime unavailable", checks=[])
 
     async def updateCheck(self):
-        return {"supported": False, "reason": "Managed app updates require an explicit release"}
+        kind = self.package.rsplit(".", 1)[-1]
+        root = Path(__file__).resolve().parents[2]
+        bundled = root / "bundled" / kind / "pyproject.toml"
+        if not bundled.is_file():
+            bundled = root / "docker/bundled" / kind / "pyproject.toml"
+        try:
+            latest = tomllib.loads(bundled.read_text())["project"]["version"]
+            rows = await self.manager.containers(self.package)
+            versions = [row.get("Config", {}).get("Labels", {}).get("org.mediahub.app.version") for row in rows
+                        if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"
+                        and row.get("State", {}).get("Running")]
+            installed = versions[0] if len(versions) == 1 else None
+            dependencies = getattr(self.manager.svc, "app_dependencies", None)
+            state = dependencies.public() if dependencies else {}
+            return {"supported": False, "updateAvailable": False,
+                    "installedVersion": installed, "latestVersion": latest,
+                    "checkStatus": "failed" if state.get("state") == "failed" else "checked" if installed == latest else "unchecked",
+                    "message": state.get("message") or "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
+        except (OSError, ValueError, KeyError, DomainError):
+            return {"supported": False, "checkStatus": "failed", "message": "Bundled app version could not be verified"}
 
 
 class ManagedApps:

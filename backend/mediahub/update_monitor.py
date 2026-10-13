@@ -80,7 +80,7 @@ class UpdateMonitor:
         return {
             "id": app["id"],
             "name": app["name"],
-            "installedVersion": result.get("installedVersion") or app.get("version"),
+            "installedVersion": result.get("installedVersion") or (app.get("version") if app.get("version") != "managed" else None),
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
             "checkStatus": "unsupported"

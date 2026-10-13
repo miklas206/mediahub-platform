@@ -3782,5 +3782,8 @@
   "Too many Cloudflare results; narrow the token scope": "Der er for mange Cloudflare-resultater. Begræns tokenets adgang til færre zoner.",
   "Choose a remotely managed Cloudflare tunnel": "Vælg en tunnel, der administreres via Cloudflare",
   "Choose a supported MediaHub app": "Vælg en understøttet MediaHub-app",
-  "This record points elsewhere; it was not changed": "Denne record peger et andet sted hen og blev ikke ændret"
+  "This record points elsewhere; it was not changed": "Denne record peger et andet sted hen og blev ikke ændret",
+  "This app is updated automatically with MediaHub Core.": "Denne app opdateres automatisk sammen med MediaHub Core.",
+  "App preparation failed. The installed app may still use older code; its data was preserved.": "Klarg\u00f8ring af apps mislykkedes. Den installerede app kan stadig bruge \u00e6ldre kode; dens data er bevaret.",
+  "Retry app preparation": "Pr\u00f8v app-klarg\u00f8ring igen"
 }

@@ -111,6 +111,10 @@ class AppDependencies:
                         "Privileged": False,
                         "CapDrop": ["ALL"],
                         "CapAdd": ["CHOWN", "DAC_OVERRIDE", "FOWNER"],
+                        # LXC bind files can have an unmapped owner. DAC_OVERRIDE
+                        # cannot bypass that boundary; inherit Core's approved
+                        # groups to read the host evidence (gid 10001).
+                        "GroupAdd": own.get("HostConfig", {}).get("GroupAdd", []),
                         "ReadonlyRootfs": True,
                         "Tmpfs": {"/tmp": "rw,nosuid,nodev,size=64m"},
                         "SecurityOpt": ["no-new-privileges:true"],

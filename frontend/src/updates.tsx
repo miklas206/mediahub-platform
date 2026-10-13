@@ -300,6 +300,28 @@ export function UpdatesPage({
   const platform = useLoad<{ version: string }>("/system/status");
   const platformRelease = useLoad<PlatformRelease>("/updates/platform");
   const updateSummary = useLoad<UpdateSummary>("/updates/summary");
+  const prerequisites = useLoad<{ state: string; message?: string | null }>("/managed-install/prerequisites");
+  const preparation = prerequisites.data;
+  const reloadPreparation = prerequisites.reload;
+  const reloadSummary = updateSummary.reload;
+  const previousPreparation = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const previous = previousPreparation.current;
+    previousPreparation.current = preparation?.state;
+    if (previous !== "preparing" || preparation?.state !== "ready") return;
+    void Promise.allSettled((apps || [])
+      .filter(app => ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId))
+      .map(app => api(`/apps/${app.id}/update-check`, "POST")))
+      .then(reloadSummary);
+  }, [preparation?.state, apps, reloadSummary]);
+  useEffect(() => {
+    if (preparation?.state !== "preparing") return;
+    const timer = setTimeout(() => {
+      reloadPreparation();
+      reloadSummary();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [preparation, reloadPreparation, reloadSummary]);
   const privateAccess = useLoad<{ configured: boolean }>(
     "/updates/platform/credentials",
   );
@@ -919,6 +941,20 @@ export function UpdatesPage({
     }
   }
 
+  async function retryAppPreparation() {
+    setBusy("app-preparation");
+    setError("");
+    try {
+      await api("/managed-install/prerequisites/retry", "POST");
+      prerequisites.reload();
+      updateSummary.reload();
+    } catch (caught) {
+      reportError(caught);
+    } finally {
+      setBusy("");
+    }
+  }
+
   const updating =
     operations.platform?.status === "running" ||
     operations.batch?.status === "running";
@@ -1211,12 +1247,14 @@ export function UpdatesPage({
             const version = versions[app.id];
             const isPlex = app.packageId === "org.mediahub.plex";
             const isCloudflare = app.packageId === "org.mediahub.cloudflared";
+            const isBundled = ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId);
+            const bundled = updateSummary.data?.items.find((item) => item.id === app.id);
             return (
               <UpdateCard key={app.id} name={app.name} packageId={app.packageId}>
                 <div className="runtime-row">
                   <span>{t("Installed")}</span>
                   <strong>
-                    {version?.plex?.version ||
+                    {(isBundled ? bundled?.installedVersion : null) || version?.plex?.version ||
                       version?.qBittorrent?.version ||
                       version?.cloudflare?.version ||
                       (isCloudflare
@@ -1230,6 +1268,19 @@ export function UpdatesPage({
                   <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
                   <span>{latest[app.id] || t("Not checked")}</span>
                 </div>
+                {isBundled && (
+                  <>
+                    <p className="muted">{t("This app is updated automatically with MediaHub Core.")}</p>
+                    {prerequisites.data?.state === "failed" && <p>{t("App preparation failed. The installed app may still use older code; its data was preserved.")}</p>}
+                    {prerequisites.data?.state === "preparing" && <p role="status">{t("Preparing app prerequisites; refresh to follow progress")}</p>}
+                    <div className="button-row">
+                      <button disabled={!!busy || prerequisites.data?.state === "preparing"} onClick={() => void check(app)}>
+                        <RefreshCw size={16} />{t("Check release")}
+                      </button>
+                      {prerequisites.data?.state === "failed" && <button disabled={!!busy} onClick={() => void retryAppPreparation()}>{t("Retry app preparation")}</button>}
+                    </div>
+                  </>
+                )}
                 <div className="button-row">
                   {(isPlex || isCloudflare) && (
                     <>
