@@ -409,3 +409,31 @@ for(const width of [1440,390,320]) test(`navigation layouts preview, persist and
  await page.getByRole("button",{name:"Discard changes",exact:true}).click();await expect(page.locator("html")).toHaveAttribute("data-navigation","launcher");
  await page.getByRole("group",{name:"Navigation layout",exact:true}).getByRole("button",{name:/Sidebar/}).click();await expect(page.locator("html")).toHaveAttribute("data-navigation","sidebar");
 });
+
+for (const width of [1440, 390, 320]) test(`MediaVPN setup card retains padding across themes at ${width}px`, async ({page}) => {
+  await mockHub(page);
+  await page.setViewportSize({width,height:1000});
+  const errors:string[]=[]; page.on('pageerror', error=>errors.push(error.message));
+  for (const [name, id] of themes) {
+    await page.goto('/settings?section=Appearance');
+    await page.locator('.theme-choice').filter({hasText:name}).click();
+    await page.getByRole('button',{name:'Save',exact:true}).click();
+    await page.goto('/store/mediavpn');
+    await expect(page.locator('html')).toHaveAttribute('data-look',id);
+    const card=page.locator('.managed-app-setup .panel');
+    await expect(card).toContainText('Independent VPN app');
+    const geometry=await card.evaluate(el=>{
+      const box=el.getBoundingClientRect();
+      const paragraph=el.querySelector('p')!.getBoundingClientRect();
+      return {left:paragraph.left-box.left,right:box.right-paragraph.right,overflow:el.scrollWidth>el.clientWidth};
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(15);
+    expect(geometry.right).toBeGreaterThanOrEqual(15);
+    expect(geometry.overflow).toBe(false);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    const guide=page.locator('.managed-app-guide');
+    await expect(guide).toHaveAttribute('href','https://github.com/miklas206/mediavpn');
+    expect(await guide.evaluate(el=>getComputedStyle(el).alignItems)).toBe('center');
+  }
+  expect(errors).toEqual([]);
+});

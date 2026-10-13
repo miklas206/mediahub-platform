@@ -1,0 +1,8 @@
+.managed-app-setup { max-width: 960px; }
+.managed-app-title { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 26px; }
+.managed-app-title > svg { flex: none; }
+.managed-app-setup .phase-content { display: grid; gap: 16px; overflow-wrap: anywhere; }
+.managed-app-setup .phase-content p { margin: 0; line-height: 1.65; }
+.managed-app-guide { display: inline-flex; align-items: center; gap: 8px; justify-self: start; color: var(--accent); }
+.managed-app-guide > svg { flex: none; }
+.managed-app-guide:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
