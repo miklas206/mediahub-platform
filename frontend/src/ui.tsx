@@ -1458,7 +1458,7 @@ function Logs() {
         </button>
       }
     >
-      <label>
+      <label className="log-source-control">
         {t("Log source")}{" "}
         <select value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="core">{t("MediaHub Core")}</option>

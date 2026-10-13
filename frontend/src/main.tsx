@@ -12,6 +12,7 @@ import "./workspace-redesign.css";
 import "./reference-workspace.css";
 import "./sidebar-themes.css";
 import "./navigation-layouts.css";
+import "./select-controls.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

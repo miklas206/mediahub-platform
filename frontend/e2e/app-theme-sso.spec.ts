@@ -31,6 +31,12 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
  await expect(page.locator('html')).toHaveAttribute('data-theme-source','mediahub');
  await expect(page.locator('.theme-switch select')).toBeVisible();
  await expect(page.locator('.theme-switch select')).toHaveValue('follow-hub');
+ expect(await page.locator('.theme-switch select').evaluate(el=>getComputedStyle(el).appearance)).toBe('base-select');
+ await page.locator('.theme-switch select').click();
+ await expect(page.getByRole('option',{name:'Follow MediaHub',exact:true})).toBeVisible();
+ await page.screenshot({path:test.info().outputPath(`${app}-${width}-theme-picker.png`)});
+ await page.keyboard.press('Escape');
+
  await expect(page.locator('.managed-theme-name')).toHaveText('From MediaHub');
  expect(await page.evaluate(()=>localStorage.getItem('mediahub-app-theme-v2'))).toBe('edge-signal');
  for(const style of styles){
