@@ -11,8 +11,10 @@
 - Deployments and destructive operations require explicit task authorization. Preserve external media mounts and mediefiler. Never copy beta users, app data or VPN credentials into release implicitly.
 - Keep the Apache-2.0 license and original MediaHub attribution. The earlier FjordHub-based attempt remains in Git history and the archive branch for recovery.
 
-# Update channel and beta workflow (2026-10-13)
+# Main development and optional UI beta (2026-10-13)
 
-- Preserve runtime update-channel settings during every beta-to-main promotion: beta follows `miklas206/fjordcopy`; release/main follows `miklas206/mediahub-platform`. Do not copy beta settings/databases or change the release repository when promoting source.
-- For normal beta fixes, commit/push and install on isolated CT106 automatically, then verify installed commit and health. Never deploy production implicitly. When the user says "push til main", promote source and release tags only; the user installs main.
-- Before a beta deployment or main handoff, verify the runtime repository and installed-source marker match that environment. A pushed commit is not an installed update.
+- Normal fixes are implemented, checked, committed and pushed directly to `miklas206/mediahub-platform`. Follow the release version/tag workflow; the user installs main. Do not deploy/restart production without explicit task authorization.
+- `miklas206/fjordcopy` is an optional UI experiment workspace. Use beta for experiments only when the user requests it; synchronizing source does not authorize a beta deployment.
+- Preserve runtime update channels: beta/CT106 follows `miklas206/fjordcopy`; main/CT107 follows `miklas206/mediahub-platform`. Never copy runtime settings, databases, media, users, VPN profiles or credentials between them.
+- Before synchronizing repositories, retain completed authorized fixes in main and preserve recoverable Git history. Copy source only; verify matching tracked trees and report pushed source separately from installed runtime.
+- MediaSeed/MediaVPN work locally using the host's prepared HTTPS LAN origins. A domain is optional and only overrides the local address when explicitly configured in app Settings.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.12
+
+- Verify first-party SSO with local HTTPS IP origins and optional app Settings domain overrides; no public domain is required.
+- Make main the normal development repository and retain fjordcopy for explicitly requested UI experiments, with separate runtime update channels.
+
 - Keep the footer pinned to the viewport bottom in all dock/topbar/launcher layouts, with reserved content space and a separate position for the bottom navigation dock.
 
 - Show persisted uninstall progress for MediaSeed/MediaVPN and an activity bar for apps whose Agents do not report percentages. Preserve data checks and failure progress.

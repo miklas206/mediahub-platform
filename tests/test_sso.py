@@ -52,7 +52,8 @@ def test_revoked_app_access_invalidates_existing_sso_session(logged_in):
     ("mediavpn", "MEDIAVPN", "org.mediahub.mediavpn", "/api/profiles"),
 ])
 @pytest.mark.parametrize("external", [False, True])
-def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, prefix, package, read_path, external):
+@pytest.mark.parametrize("local_ip", [False, True])
+def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, prefix, package, read_path, external, local_ip):
     import importlib
     from pathlib import Path
 
@@ -65,9 +66,10 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     create_app = importlib.import_module(module + ".app").create_app
 
     configure(logged_in)
-    logged_in.app.state.services.config.sso_app_urls[package] = "https://seed.example"
+    local_origin = "https://192.168.1.50:18803" if local_ip else "https://seed.example"
+    logged_in.app.state.services.config.sso_app_urls[package] = local_origin
     monkeypatch.setenv(prefix + "_HUB_URL", "https://127.0.0.1:18765")
-    browser_origin = "https://custom.example" if external else "https://seed.example"
+    browser_origin = "https://custom.example" if external else local_origin
     if external:
         assert logged_in.put("/api/v1/app-settings/" + package, json={"externalUrl": browser_origin}).status_code == 200
     creation = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {package: "viewer"}, "language": "da"})
@@ -75,7 +77,7 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     created = creation.json()["data"]
     with TestClient(logged_in.app, base_url="http://127.0.0.1:18765") as member:
         assert member.post("/api/auth/login", json={"username": "member", "password": "synthetic-password-123"}).status_code == 200
-        app = create_app(tmp_path / "seed", "https://seed.example", hub_transport=httpx.ASGITransport(app=logged_in.app))
+        app = create_app(tmp_path / "seed", local_origin, hub_transport=httpx.ASGITransport(app=logged_in.app))
         with TestClient(app, base_url=browser_origin) as seed:
             assert seed.get("/api/auth/status").json()["loginUrl"] == browser_origin + "/auth/hub/start"
             assert seed.get("/", headers={"Host": "unregistered.example"}).status_code == 400
@@ -118,7 +120,7 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
             assert seed.get("/api/auth/me").json()["themeOverride"] == "edge-signal"
             # The app override never writes into MediaHub preferences, and survives restart.
             assert member.get("/api/auth/me").json()["data"]["appearance"] is None
-            reopened = create_app(tmp_path / "seed", "https://seed.example", hub_transport=httpx.ASGITransport(app=logged_in.app))
+            reopened = create_app(tmp_path / "seed", local_origin, hub_transport=httpx.ASGITransport(app=logged_in.app))
             with TestClient(reopened, base_url=browser_origin) as second_device:
                 second_device.cookies.update(seed.cookies)
                 assert second_device.get("/api/auth/me").json()["themeOverride"] == "edge-signal"
@@ -170,7 +172,7 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
                 start = proxy.get("/auth/hub/start", follow_redirects=False)
                 assert start.status_code == 303
                 assert start.headers["location"].startswith("https://127.0.0.1:18765/api/v1/sso/authorize?")
-            with TestClient(app, base_url="https://seed.example") as local:
+            with TestClient(app, base_url=local_origin) as local:
                 redirect = local.get("/auth/hub/start", follow_redirects=False)
                 assert redirect.status_code == 303
                 assert redirect.headers["location"] == browser_origin + "/auth/hub/start"

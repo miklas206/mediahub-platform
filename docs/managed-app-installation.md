@@ -12,6 +12,20 @@ restart. Existing containers must match the approved project, image, configurati
 and mount bindings. Installation does not delete containers or volumes. Successful
 health checks clear the previous removal state and restore the app registry/SSO.
 
+## Local access and optional domains
+
+A public domain is not required. Use the host LAN IP and the prepared HTTPS app
+ports as the default SSO origins (for example MediaSeed at
+`https://192.168.1.50:18800` and MediaVPN at `https://192.168.1.50:18803`).
+Certificates must cover that IP and be issued by the local authority trusted by
+the hub/apps. Keep TLS and the existing SSO/CSRF protections enabled on LAN.
+
+Only an external URL explicitly saved in that app's Settings overrides the local
+opening/SSO address. Clearing the external URL returns to the local default.
+Do not infer app domains from the hub's public domain or require DNS/Cloudflare
+to install local apps. An unavailable host installer means missing host recipes,
+images, volumes or registrations; it does not mean a domain must be supplied.
+
 ## Host preparation
 
 Install recipes are operator-owned runtime configuration, not promoted source.
