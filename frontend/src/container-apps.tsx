@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   ExternalLink,
   Play,
@@ -90,15 +90,16 @@ export function ContainerAppPage() {
 }
 
 export function ContainerAppSetup({ app }: { app: string }) {
+  const suggested = useLocation().state as {hostId?: string; gpuId?: string} | null;
   const hosts = useLoad<{ id: string; name: string }[]>("/hosts");
   const installed = useLoad<InstalledAppInfo[]>("/apps?include_health=false");
   const registered = installed.data?.find(
     (item) => item.packageId === "org.mediahub." + app,
   );
-  const [host, setHost] = useState("local");
+  const [host, setHost] = useState(suggested?.hostId || "local");
   const [storage, setStorage] = useState<Record<string, string>>({});
   const [timezone, setTimezone] = useState("Europe/Copenhagen");
-  const [gpuId, setGpuId] = useState("");
+  const [gpuId, setGpuId] = useState(app === "jellyfin" ? suggested?.gpuId || "" : "");
   const [preview, setPreview] = useState<Preview>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -387,6 +388,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
                       "Only GPUs shared with this MediaHub host are listed. Prepare GPU access in the Proxmox installation guide first.",
                     )}
                   </small>
+                  <Link to="/settings?section=General&gpuSetup=1">{t("Open GPU setup guide")}</Link>
                 </label>
               )}
               <label>

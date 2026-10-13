@@ -43,6 +43,7 @@ from agent.container_apps import ContainerApps
 from agent.devices import device_report
 from agent.discovery import discovery_report
 from agent.fixtures import containers
+from agent.gpu_setup import GPUSetup
 from agent.plex_control import PlexControl
 from agent.plex_media import PlexMedia
 from agent.plex_runtime import PlexRuntime
@@ -85,6 +86,10 @@ class AgentConfig(BaseSettings):
         if bool(self.tls_cert) != bool(self.tls_key):
             raise ValueError("Agent TLS requires both certificate and key")
         return self
+
+
+class GPUTestRequest(StrictModel):
+    gpuId: str = Field(pattern=r"^[a-zA-Z0-9_.:-]{1,80}$")
 
 
 class PlexVPNImport(StrictModel):
@@ -262,6 +267,7 @@ def create_agent(config: AgentConfig | None = None):
     )
     shared_vpn = SharedVPN(config, container_apps, plex_runtime)
     container_apps.shared_vpn = shared_vpn
+    gpu_setup = GPUSetup(container_apps)
     plex_runtime.shared_vpn = shared_vpn
 
     @asynccontextmanager
@@ -291,6 +297,7 @@ def create_agent(config: AgentConfig | None = None):
             container_monitor.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await container_monitor
+        await gpu_setup.close()
         await container_apps.close()
         if torrent_cleanup:
             torrent_cleanup.cancel()
@@ -439,6 +446,14 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/container-apps/{app_id}/install-options")
     async def container_options(app_id: str):
         return await container_apps.options(app_id)
+
+    @app.get("/v1/gpu-setup")
+    async def gpu_setup_status():
+        return await gpu_setup.status()
+
+    @app.post("/v1/gpu-setup/test", dependencies=[Depends(secure_workflow)], status_code=202)
+    async def gpu_setup_test(body: GPUTestRequest):
+        return await gpu_setup.start(body.gpuId)
 
     @app.post("/v1/container-apps/install-plan", dependencies=[Depends(secure_workflow)])
     async def container_plan(body: ContainerInstallation):

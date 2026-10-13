@@ -34,6 +34,15 @@ guide](https://jellyfin.org/docs/general/post-install/transcoding/hardware-accel
 
 ## Add a GPU to an existing MediaHub LXC
 
+From **v0.5.31**, open **Settings → General → GPU setup** (Danish:
+**Indstillinger → Generelt → GPU-opsætning**). This resumable guide includes
+the preparation command for your LXC, approved GPU detection and a real
+hardware-encoding test with progress and output. The Proxmox host-access step
+still runs in the node shell: MediaHub cannot grant itself new host devices.
+After the LXC returns, refresh detection and run the test inside MediaHub.
+The guide can open Jellyfin installation with the tested host and GPU selected.
+It never changes an existing Jellyfin installation automatically.
+
 A Core update cannot grant new Proxmox devices to an already-running LXC.
 First update MediaHub to **v0.5.29 or newer**. The tool checks that its running
 Core/Agent support GPU grants before stopping anything.

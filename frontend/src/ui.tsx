@@ -8,6 +8,7 @@ import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from ".
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
+import { GPUSetupCard } from "./gpu-setup";
 import { AppearanceSettings } from "./appearance-settings";
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
@@ -1057,6 +1058,9 @@ function Shell({
                               >
                                 <LanguageSettings compact />
                               </div>
+                              {user.role === "administrator" && (
+                                <div data-layout-title="GPU setup"><GPUSetupCard /></div>
+                              )}
                             </LayoutGroup>
                           </LayoutGroup>
                         }

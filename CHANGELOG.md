@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.31
+
+- Add a resumable GPU setup wizard under Settings → General and link it from Jellyfin installation. Show Proxmox preparation steps inside MediaHub, then detect approved devices and carry the tested host/GPU into Jellyfin setup.
+- Run a real synthetic hardware-encoding test through the selected Agent with progress and logs. Use an owned disposable Jellyfin container with no media mounts or networking, exact approved GPU devices, bounded resources and cleanup; never report CPU fallback as GPU success.
+
 ## 0.5.30
 
 - Bundle MediaSeed 0.1.2 with RSS storage-location selection and existing-folder browsing, including mount capacity and Unicode folder names. Persist the location on each feed and use the approved destination for RSS categories and torrent imports.

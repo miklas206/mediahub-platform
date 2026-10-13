@@ -1,0 +1,114 @@
+.gpu-setup {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  background: var(--surface);
+  min-width: 0;
+}
+.gpu-setup-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+.gpu-setup-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.gpu-setup-heading p {
+  margin-bottom: 16px;
+}
+.gpu-setup-heading > button {
+  flex-shrink: 0;
+}
+.gpu-setup .wizard-steps li {
+  border-radius: var(--select-radius, 6px);
+}
+.gpu-setup .wizard-steps li > span {
+  border-radius: var(--select-radius, 6px);
+}
+.gpu-preparation {
+  padding: 18px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--accent-bg);
+  min-width: 0;
+}
+.gpu-command {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--select-radius, 6px);
+  background: var(--bg);
+  font-size: 12px;
+  white-space: pre;
+}
+.gpu-choices {
+  display: grid;
+  gap: 10px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.gpu-choices legend {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.gpu-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--select-radius, 6px);
+  background: var(--surface);
+  cursor: pointer;
+}
+.gpu-choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.gpu-choice:has(input:disabled) {
+  opacity: 0.65;
+  cursor: default;
+}
+.gpu-choice > input {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+.gpu-choice > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gpu-choice small,
+.gpu-setup-note {
+  color: var(--muted);
+}
+.gpu-setup .actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .gpu-setup {
+    padding: 16px;
+  }
+  .gpu-setup-heading {
+    flex-direction: column;
+    gap: 0;
+  }
+  .gpu-setup-heading > button {
+    margin-bottom: 16px;
+  }
+  .gpu-preparation {
+    padding: 12px;
+  }
+  .gpu-command {
+    padding: 10px;
+  }
+}

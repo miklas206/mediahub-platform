@@ -39,6 +39,7 @@ from mediahub.errors import DomainError
 from mediahub.events import EventBus
 from mediahub.fjordhub_api import router as fjordhub_router
 from mediahub.fjordhub_deploy import FjordHubDeploy
+from mediahub.gpu_setup_api import router as gpu_setup_router
 from mediahub.hosts import HostRegistry
 from mediahub.hosts_api import router as hosts_router
 from mediahub.imports import ImportPlanner
@@ -307,6 +308,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(shared_vpn_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
+    app.include_router(gpu_setup_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
     app.include_router(agent_updates_router, prefix="/api/v1")
     app.include_router(fjordhub_router, prefix="/api/v1")
