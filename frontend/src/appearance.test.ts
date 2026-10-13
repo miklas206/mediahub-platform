@@ -13,6 +13,7 @@ import {
   setAppearance,
   setAccountAppearance,
 } from "./appearance";
+import { themePresets } from "./theme-presets";
 
 afterEach(() => {
   setAccountAppearance(null);
@@ -20,6 +21,43 @@ afterEach(() => {
 });
 
 describe("personal appearance", () => {
+  it("reads legacy palettes and validates the new theme preferences", () => {
+    const legacy = {
+      accent: "#22ccff",
+      secondary: "#5566dd",
+      background: "#080c16",
+      depth: 40,
+    };
+    expect(readAppearance(legacy)).toEqual({ ...defaultAppearance, ...legacy });
+    for (const value of [
+      { style: "unknown" },
+      { mode: "unknown" },
+      { density: "unknown" },
+      { reducedMotion: "true" },
+    ])
+      expect(readAppearance({ ...legacy, ...value })).toBeNull();
+  });
+  it("keeps all theme palettes readable in both modes", () => {
+    for (const preset of themePresets)
+      for (const dark of [true, false]) {
+        const tokens = appearanceTokens(
+          preset.value || defaultAppearance,
+          dark,
+        );
+        for (const surface of [
+          "--bg",
+          "--surface",
+          "--raised",
+          "--sidebar",
+          "--accent-bg",
+        ])
+          for (const foreground of ["--text", "--muted", "--accent"])
+            expect(
+              contrastRatio(tokens[surface], tokens[foreground]),
+              `${preset.id}/${surface}/${foreground}`,
+            ).toBeGreaterThanOrEqual(4.5);
+      }
+  });
   it("serializes saves across navigation and isolates pending requests per login", () => {
     const first = beginAppearanceSave();
     expect(first).toBe(getAppearanceSession());

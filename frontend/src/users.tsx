@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { useState, type FormEvent } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "./api";
@@ -7,6 +8,7 @@ import { NotificationPopup } from "./notification-popup";
 type ManagedUser = { id: string; username: string; role: string; createdAt: string; appRoles: Record<string, string> };
 
 export function UsersPage({ currentUserId }: { currentUserId: string }) {
+  const confirm = useConfirm();
   const { data, error, reload } = useData<ManagedUser[]>("/users");
   const apps = useData<{ id: string; packageId: string; name: string; ssoSupported?: boolean }[]>("/apps?include_health=false");
   const [editing, setEditing] = useState<Partial<ManagedUser> | null>(null);
@@ -27,7 +29,11 @@ export function UsersPage({ currentUserId }: { currentUserId: string }) {
     finally { setBusy(false); }
   }
   async function remove(user: ManagedUser) {
-    if (!window.confirm(`Slet brugeren ${user.username}?`)) return;
+    if (!(await confirm(`Slet brugeren ${user.username}?`, {
+      title: "Delete user?",
+      confirmLabel: "Delete user",
+      danger: true,
+    }))) return;
     setBusy(true);
     setFailure("");
     try { await api(`/users/${user.id}`, "DELETE"); reload(); }

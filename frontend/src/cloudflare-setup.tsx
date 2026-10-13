@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { translateText, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 
@@ -451,6 +452,7 @@ function CloudflareSetupEditor({
 }
 
 export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
+  const confirm = useConfirm();
   const stored = useLoad<StoredConfiguration>(
     `/catalog/${packageId}/configuration`,
   );
@@ -472,9 +474,10 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
   };
   const remove = async (profile: TunnelProfile) => {
     if (
-      !window.confirm(
+      !(await confirm(
         `Remove the saved configuration for ${profile.name}? This does not delete anything in Cloudflare.`,
-      )
+        { title: "Remove configuration?", confirmLabel: "Remove", danger: true },
+      ))
     )
       return;
     setBusy(true);

@@ -322,6 +322,9 @@ export function HubHome({
           </h1>
           <p>{t("Your apps, media and services. Together in one place.")}</p>
         </div>
+        <div className="hub-theme-art" aria-hidden="true">
+          <span><Box size={34} /></span><span><Activity size={26} /></span><span><Box size={22} /></span>
+        </div>
       </header>
       <div className="hub-status-strip" aria-label={t("Hub status")}>
         <span>

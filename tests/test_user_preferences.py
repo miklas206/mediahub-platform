@@ -47,7 +47,32 @@ APPEARANCE = {
     "secondary": "#5566dd",
     "background": "#080c16",
     "depth": 40,
+    "style": "classic",
+    "mode": "inherit",
+    "density": "comfortable",
+    "reducedMotion": False,
 }
+
+
+def test_legacy_palette_gets_safe_theme_defaults(logged_in):
+    legacy = {key: APPEARANCE[key] for key in ("accent", "secondary", "background", "depth")}
+    response = logged_in.put("/api/v1/auth/preferences", json={"appearance": legacy})
+    assert response.status_code == 200
+    assert response.json()["data"]["appearance"] == APPEARANCE
+
+
+@pytest.mark.parametrize("style", ["midnight-glass", "soft-orbit", "precision-terminal", "floating-layers", "edge-signal"])
+def test_beta_theme_and_layout_persist(logged_in, style):
+    value = {**APPEARANCE, "style": style, "mode": "light", "density": "compact", "reducedMotion": True}
+    response = logged_in.put("/api/v1/auth/preferences", json={"appearance": value})
+    assert response.status_code == 200
+    assert logged_in.get("/api/v1/auth/me").json()["data"]["appearance"] == value
+
+
+@pytest.mark.parametrize("field,value", [("style", "bad"), ("mode", "bad"), ("density", "bad"), ("reducedMotion", "true")])
+def test_invalid_theme_preferences_are_rejected(logged_in, field, value):
+    response = logged_in.put("/api/v1/auth/preferences", json={"appearance": {**APPEARANCE, field: value}})
+    assert response.status_code == 422
 
 
 def test_appearance_saves_for_one_account_and_survives_a_new_service(logged_in):
@@ -126,7 +151,9 @@ def test_saved_appearance_is_returned_after_signing_in_again(logged_in):
 
 def test_hex_colours_are_normalized_and_depth_boundaries_are_accepted(logged_in):
     appearance = {
-        key: value.upper() if isinstance(value, str) else 0 for key, value in APPEARANCE.items()
+        **APPEARANCE,
+        **{key: APPEARANCE[key].upper() for key in ("accent", "secondary", "background")},
+        "depth": 0,
     }
     response = logged_in.put("/api/v1/auth/preferences", json={"appearance": appearance})
     assert response.status_code == 200

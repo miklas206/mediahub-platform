@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { translateText, getLocale, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 import { useRuntimeSnapshot } from "./use-service-snapshot";
@@ -960,6 +961,7 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
   );
 }
 export function AppRuntimePage() {
+  const confirm = useConfirm();
   const { appId } = useParams();
   const [searchParams] = useSearchParams();
   const section = seedboxSection(searchParams.get("section"));
@@ -983,9 +985,10 @@ export function AppRuntimePage() {
   const act = async (action: string) => {
     if (
       action !== "test-vpn" &&
-      !window.confirm(
+      !(await confirm(
         `${action}: this can interrupt ${data?.view === "plex" ? t("Plex playback") : t("Seedbox transfers")}. Continue?`,
-      )
+        { title: "Confirm runtime action" },
+      ))
     )
       return;
     setBusy(true);
@@ -1036,15 +1039,14 @@ export function AppRuntimePage() {
   };
   const plexUpdate = async (rollback = false) => {
     if (
-      !window.confirm(
+      !(await confirm(
         rollback
-          ? t(
-              "Restore the previous Plex version and database? Media files are not changed.",
-            )
+          ? t("Restore the previous Plex version and database? Media files are not changed.")
           : t(
               "Update Plex? Active playback will stop. A configuration rollback snapshot is saved first.",
             ),
-      )
+        { title: "Confirm Plex update" },
+      ))
     )
       return;
     setBusy(true);

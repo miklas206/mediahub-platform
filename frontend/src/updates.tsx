@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { translateText, t } from "./i18n";
 
 import { UpdateRestartNotice } from "./update-restart-notice";
@@ -263,6 +264,7 @@ export function UpdatesPage({
   apps: AppInfo[] | undefined;
   appsError?: string;
 }) {
+  const confirm = useConfirm();
   const platform = useLoad<{ version: string }>("/system/status");
   const platformRelease = useLoad<PlatformRelease>("/updates/platform");
   const updateSummary = useLoad<UpdateSummary>("/updates/summary");
@@ -313,9 +315,10 @@ export function UpdatesPage({
   async function installAll() {
     if (!apps || !batchPlan.tasks.length || busy) return;
     if (
-      !window.confirm(
+      !(await confirm(
         `Update ${batchPlan.tasks.map((task) => task.name).join(", ")}? Plex playback may pause. Updates continue on the server if you leave or close this page. Core updates last.${batchPlan.manual.length ? ` Manual updates remain: ${batchPlan.manual.map((item) => item.name).join(", ")}.` : ""}`,
-      )
+        { title: "Update all?", confirmLabel: "Update all" },
+      ))
     )
       return;
     commandGeneration.current += 1;
@@ -556,9 +559,10 @@ export function UpdatesPage({
     if (busy || !versions[id]?.available || !plexUpdateReady(plexChecks[id]))
       return;
     if (
-      !window.confirm(
+      !(await confirm(
         "Update Plex? Playback will pause. Media files are not changed; a configuration rollback snapshot is created first.",
-      )
+        { title: "Update Plex?", confirmLabel: "Update Plex" },
+      ))
     )
       return;
     const task = operationTask(
@@ -653,7 +657,11 @@ export function UpdatesPage({
   }
 
   async function removePrivateAccess() {
-    if (!window.confirm("Remove private GitHub release access from MediaHub?"))
+    if (!(await confirm("Remove private GitHub release access from MediaHub?", {
+      title: "Remove GitHub access?",
+      confirmLabel: "Remove access",
+      danger: true,
+    })))
       return;
     const task = operationTask(
       "Remove private GitHub access",
@@ -820,9 +828,10 @@ export function UpdatesPage({
   async function installPlatform() {
     if (
       !release?.latestVersion ||
-      !window.confirm(
+      !(await confirm(
         `Install MediaHub ${release.latestVersion}${release.latestCommit ? ` / ${release.latestCommit.slice(0, 7)} from main` : ""}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}${release.fastUpdateAvailable ? "Fast update is selected automatically when possible: Core restarts, while an unchanged Agent keeps running. Otherwise both services are rebuilt and restarted. " : "Core and the local Agent may restart. "}Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
-      )
+        { title: "Install MediaHub update?", confirmLabel: "Install update" },
+      ))
     )
       return;
     commandGeneration.current += 1;

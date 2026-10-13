@@ -1,3 +1,4 @@
+import { useConfirm } from "./confirmation-dialog";
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { NotificationPopup } from "./notification-popup";
@@ -105,6 +106,7 @@ export function FjordHubUpdates({
   row: Integration;
   administrator: boolean;
 }) {
+  const confirm = useConfirm();
   const [view, setView] = useState<UpdateView>({
     app_info: row.snapshot.app_info || {},
     app_info_stale: row.snapshot.app_info_stale ?? true,
@@ -173,9 +175,10 @@ export function FjordHubUpdates({
     if (inFlight.current) return;
     if (
       action === "start" &&
-      !window.confirm(
+      !(await confirm(
         `Start opdatering af ${view.app_info[id]?.name || id}? FjordHub kan genstarte.`,
-      )
+        { title: "Install update?", confirmLabel: "Install update" },
+      ))
     )
       return;
     inFlight.current = true;

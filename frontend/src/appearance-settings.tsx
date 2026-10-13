@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import { Check, Palette, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { api } from "./api";
 import { t, translateText } from "./i18n";
+import { NotificationPopup } from "./notification-popup";
+import { useConfirm } from "./confirmation-dialog";
+import { themePresets } from "./theme-presets";
 import {
   clearAppearancePreview,
+  appearanceTokens,
   applySavedAppearance,
   beginAppearanceSave,
   defaultAppearance,
@@ -64,12 +74,14 @@ const same = (a: Appearance | null, b: Appearance | null) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
+  const confirm = useConfirm();
   const saved = useAppearance();
   const [draft, setDraft] = useState(saved);
   const [inputs, setInputs] = useState(saved || defaultAppearance);
   const busy = useAppearanceSaving();
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [toastPreview, setToastPreview] = useState(0);
   const mounted = useRef(true);
   useEffect(() => {
     setDraft(saved);
@@ -87,14 +99,25 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
   }, []);
   const invalid = fields.some(([key]) => !isHexColor(inputs[key]));
   const dirty = !same(saved, draft) || invalid;
-  const availablePresets = saved && !presets.some((preset) => same(saved, preset.value))
-    ? [...presets, { name: "Saved palette", value: saved }]
-    : presets;
+  const availablePresets =
+    saved && !presets.some((preset) => same(saved, preset.value))
+      ? [...presets, { name: "Saved palette", value: saved }]
+      : presets;
   function choose(value: Appearance | null) {
     setDraft(value);
     setInputs(value || defaultAppearance);
     setError("");
     setMessage("");
+  }
+  function choosePalette(value: Appearance | null) {
+    const current = draft || defaultAppearance;
+    choose({
+      ...(value || defaultAppearance),
+      style: current.style,
+      mode: current.mode,
+      density: current.density,
+      reducedMotion: current.reducedMotion,
+    });
   }
   function changeColor(key: (typeof fields)[number][0], value: string) {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -130,19 +153,172 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
     }
   }
   return (
-    <section className={`panel appearance-settings${compact ? " appearance-compact" : ""}`}>
+    <section
+      className={`panel appearance-settings${compact ? " appearance-compact" : ""}`}
+    >
       <header className="panel-heading">
         <h2>
           <Palette size={18} />
-          {t(compact ? "Color palettes" : "Colors and shades")}
+          {t("Themes and appearance")}
         </h2>
       </header>
       <form onSubmit={(event) => void save(event)}>
-        {!compact && <p className="appearance-description">
+        <p className="appearance-description">
           {t(
-            "Make MediaHub your own. Preview changes here, then save them for your account on all devices.",
+            "Try the beta themes. Changes preview instantly; save to keep them for your account.",
           )}
-        </p>}
+        </p>
+        <div className="theme-gallery" role="group" aria-label={t("Themes")}>
+          {themePresets.map((preset) => {
+            const palette = appearanceTokens(
+              preset.value || defaultAppearance,
+              preset.value?.mode !== "light",
+            );
+            return (
+              <button
+                type="button"
+                className="theme-choice"
+                key={preset.id}
+                disabled={busy}
+                aria-pressed={(draft?.style || "classic") === preset.id}
+                onClick={() =>
+                  choose(
+                    preset.value
+                      ? {
+                          ...preset.value,
+                          reducedMotion: draft?.reducedMotion ?? false,
+                        }
+                      : null,
+                  )
+                }
+              >
+                <span
+                  className="theme-mini"
+                  data-style={preset.id}
+                  aria-hidden="true"
+                  style={
+                    {
+                      "--sample-bg": palette["--bg"],
+                      "--sample-surface": palette["--surface"],
+                      "--sample-raised": palette["--raised"],
+                      "--sample-accent": palette["--accent"],
+                    } as CSSProperties
+                  }
+                >
+                  <span className="theme-mini-nav">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span className="theme-mini-content">
+                    <i />
+                    <span>
+                      <i />
+                      <i />
+                    </span>
+                    <i />
+                  </span>
+                  {(draft?.style || "classic") === preset.id && (
+                    <span className="theme-selected">
+                      <Check size={13} />
+                    </span>
+                  )}
+                </span>
+                <strong>{preset.name}</strong>
+                <small>{t(preset.description)}</small>
+              </button>
+            );
+          })}
+        </div>
+        <div className="theme-options">
+          <label>
+            {t("Color mode")}
+            <select
+              aria-label={t("Color mode")}
+              disabled={busy}
+              value={draft?.mode || "inherit"}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...(current || defaultAppearance),
+                  mode: event.target.value as Appearance["mode"],
+                }))
+              }
+            >
+              <option value="inherit">{t("Follow workspace")}</option>
+              <option value="dark">{t("Dark")}</option>
+              <option value="light">{t("Light")}</option>
+              <option value="system">{t("System")}</option>
+            </select>
+          </label>
+          <label>
+            {t("Layout density")}
+            <select
+              aria-label={t("Layout density")}
+              disabled={busy}
+              value={draft?.density || "comfortable"}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...(current || defaultAppearance),
+                  density: event.target.value as Appearance["density"],
+                }))
+              }
+            >
+              <option value="comfortable">{t("Comfortable")}</option>
+              <option value="compact">{t("Compact")}</option>
+            </select>
+          </label>
+          <label className="theme-motion">
+            <input
+              type="checkbox"
+              disabled={busy}
+              checked={draft?.reducedMotion ?? false}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...(current || defaultAppearance),
+                  reducedMotion: event.target.checked,
+                }))
+              }
+            />
+            {t("Reduce motion")}
+          </label>
+        </div>
+        <div className="theme-try-actions">
+          <button
+            type="button"
+            onClick={() =>
+              void confirm(
+                t(
+                  "This is a theme preview. No settings or services will be changed.",
+                ),
+                { title: "Theme preview", confirmLabel: "Looks good" },
+              )
+            }
+          >
+            {t("Preview dialog")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setToastPreview((current) => current + 1)}
+          >
+            {t("Preview notification")}
+          </button>
+          <button type="button" disabled={busy} onClick={() => choose(null)}>
+            <RotateCcw size={14} />
+            {t("MediaHub defaults")}
+          </button>
+        </div>
+        {toastPreview > 0 && (
+          <NotificationPopup key={toastPreview} tone="info">
+            {t("Theme preview · this is how notifications look.")}
+          </NotificationPopup>
+        )}
+        {!compact && (
+          <p className="appearance-description">
+            {t(
+              "Make MediaHub your own. Preview changes here, then save them for your account on all devices.",
+            )}
+          </p>
+        )}
         <div
           className="appearance-presets"
           role="group"
@@ -153,8 +329,17 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               key={preset.name}
               type="button"
               disabled={busy}
-              aria-pressed={same(draft, preset.value)}
-              onClick={() => choose(preset.value)}
+              aria-pressed={[
+                "accent",
+                "secondary",
+                "background",
+                "depth",
+              ].every(
+                (key) =>
+                  (draft || defaultAppearance)[key as keyof Appearance] ===
+                  (preset.value || defaultAppearance)[key as keyof Appearance],
+              )}
+              onClick={() => choosePalette(preset.value)}
             >
               <span className="palette-swatches" aria-hidden="true">
                 {[
@@ -202,69 +387,76 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
             </div>
           ))}
         </div>
-        {!compact && <>
-        <div className="appearance-depth">
-          <label htmlFor="appearance-depth">
-            <SlidersHorizontal size={15} />
-            {t("Shade intensity")}
-            <output htmlFor="appearance-depth">
-              {(draft || defaultAppearance).depth}%
-            </output>
-          </label>
-          <input
-            id="appearance-depth"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={(draft || defaultAppearance).depth}
-            disabled={busy}
-            onChange={(event) => {
-              setDraft((current) => ({
-                ...(current || defaultAppearance),
-                depth: Number(event.target.value),
-              }));
-              setMessage("");
-            }}
-          />
-          <small>
-            {t(
-              "Backgrounds and cards follow your chosen tone in both light and dark mode. Text contrast adjusts automatically.",
-            )}
-          </small>
-        </div>
-        <div className="appearance-preview" aria-label={t("Color preview")}>
-          <div className="appearance-preview-head">
-            <strong>MediaHub</strong>
-            <span className="badge healthy">
-              <Check size={12} />
-              {t("Healthy")}
-            </span>
-          </div>
-          <div className="appearance-preview-card">
-            <Palette size={21} />
-            <div>
-              <strong>{t("Your personal palette")}</strong>
-              <small>{t("Buttons, cards and charts use your colors.")}</small>
+        {!compact && (
+          <>
+            <div className="appearance-depth">
+              <label htmlFor="appearance-depth">
+                <SlidersHorizontal size={15} />
+                {t("Shade intensity")}
+                <output htmlFor="appearance-depth">
+                  {(draft || defaultAppearance).depth}%
+                </output>
+              </label>
+              <input
+                id="appearance-depth"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={(draft || defaultAppearance).depth}
+                disabled={busy}
+                onChange={(event) => {
+                  setDraft((current) => ({
+                    ...(current || defaultAppearance),
+                    depth: Number(event.target.value),
+                  }));
+                  setMessage("");
+                }}
+              />
+              <small>
+                {t(
+                  "Backgrounds and cards follow your chosen tone in both light and dark mode. Text contrast adjusts automatically.",
+                )}
+              </small>
             </div>
-          </div>
-          <div className="appearance-preview-actions" aria-hidden="true">
-            <span className="preview-primary">{t("Primary")}</span>
-            <span className="preview-secondary">{t("Secondary")}</span>
-            <span className="preview-warning">{t("Warning")}</span>
-            <span className="preview-error">{t("Error")}</span>
-          </div>
-        </div>
-        <p className="appearance-description">
-          {t(
-            "Green, yellow and red keep their meaning for online status, warnings and errors.",
-          )}
-        </p>
-        </>}
+            <div className="appearance-preview" aria-label={t("Color preview")}>
+              <div className="appearance-preview-head">
+                <strong>MediaHub</strong>
+                <span className="badge healthy">
+                  <Check size={12} />
+                  {t("Healthy")}
+                </span>
+              </div>
+              <div className="appearance-preview-card">
+                <Palette size={21} />
+                <div>
+                  <strong>{t("Your personal palette")}</strong>
+                  <small>
+                    {t("Buttons, cards and charts use your colors.")}
+                  </small>
+                </div>
+              </div>
+              <div className="appearance-preview-actions" aria-hidden="true">
+                <span className="preview-primary">{t("Primary")}</span>
+                <span className="preview-secondary">{t("Secondary")}</span>
+                <span className="preview-warning">{t("Warning")}</span>
+                <span className="preview-error">{t("Error")}</span>
+              </div>
+            </div>
+            <p className="appearance-description">
+              {t(
+                "Green, yellow and red keep their meaning for online status, warnings and errors.",
+              )}
+            </p>
+          </>
+        )}
         {error && (
-          <p role="alert" className="notice appearance-description">
+          <NotificationPopup tone="danger">
             {translateText(error)}
-          </p>
+          </NotificationPopup>
+        )}
+        {message && (
+          <NotificationPopup tone="success">{t(message)}</NotificationPopup>
         )}
         <div className="appearance-actions">
           <button
@@ -281,20 +473,24 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
           >
             {t("Discard changes")}
           </button>
-          {!compact && <button
-            type="button"
-            disabled={busy || draft === null}
-            onClick={() => choose(null)}
-          >
-            <RotateCcw size={14} />
-            {t("MediaHub defaults")}
-          </button>}
+          {!compact && (
+            <button
+              type="button"
+              disabled={busy || draft === null}
+              onClick={() => choose(null)}
+            >
+              <RotateCcw size={14} />
+              {t("MediaHub defaults")}
+            </button>
+          )}
           <span role="status">
             {message
               ? t(message)
               : dirty
                 ? t("Preview · Save to keep your changes")
-                : compact ? "" : t("Saved for your account on all devices.")}
+                : compact
+                  ? ""
+                  : t("Saved for your account on all devices.")}
           </span>
         </div>
       </form>

@@ -1,10 +1,25 @@
 import { useEffect, useSyncExternalStore } from "react";
+import "./theme-styles.css";
+
+export const themeStyles = [
+  "classic",
+  "midnight-glass",
+  "soft-orbit",
+  "precision-terminal",
+  "floating-layers",
+  "edge-signal",
+] as const;
+export type ThemeStyle = (typeof themeStyles)[number];
 
 export type Appearance = {
   accent: string;
   secondary: string;
   background: string;
   depth: number;
+  style?: ThemeStyle;
+  mode?: "inherit" | "dark" | "light" | "system";
+  density?: "comfortable" | "compact";
+  reducedMotion?: boolean;
 };
 
 export const defaultAppearance: Appearance = {
@@ -12,6 +27,10 @@ export const defaultAppearance: Appearance = {
   secondary: "#797df2",
   background: "#19314c",
   depth: 40,
+  style: "classic",
+  mode: "inherit",
+  density: "comfortable",
+  reducedMotion: false,
 };
 export const isHexColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value);
 
@@ -24,7 +43,14 @@ export function readAppearance(value: unknown): Appearance | null {
     ) ||
     !Number.isInteger(item.depth) ||
     item.depth! < 0 ||
-    item.depth! > 100
+    item.depth! > 100 ||
+    (item.style !== undefined && !themeStyles.includes(item.style)) ||
+    (item.mode !== undefined &&
+      !["inherit", "dark", "light", "system"].includes(item.mode)) ||
+    (item.density !== undefined &&
+      !["comfortable", "compact"].includes(item.density)) ||
+    (item.reducedMotion !== undefined &&
+      typeof item.reducedMotion !== "boolean")
   )
     return null;
   return {
@@ -32,6 +58,10 @@ export function readAppearance(value: unknown): Appearance | null {
     secondary: item.secondary!.toLowerCase(),
     background: item.background!.toLowerCase(),
     depth: item.depth!,
+    style: item.style || "classic",
+    mode: item.mode || "inherit",
+    density: item.density || "comfortable",
+    reducedMotion: item.reducedMotion ?? false,
   };
 }
 
@@ -214,12 +244,23 @@ export function applyAppearance() {
   for (const key of appliedKeys) root.style.removeProperty(key);
   appliedKeys = [];
   const value = preview === undefined ? saved : preview;
+  delete root.dataset.look;
+  delete root.dataset.appearanceMode;
+  delete root.dataset.density;
+  delete root.dataset.reducedMotion;
   if (!value) return;
-  const mode = root.dataset.theme || "dark";
+  const mode =
+    value.mode && value.mode !== "inherit"
+      ? value.mode
+      : root.dataset.theme || "dark";
   const dark =
     mode === "dark" ||
     (mode === "system" &&
       !window.matchMedia("(prefers-color-scheme: light)").matches);
+  root.dataset.look = value.style || "classic";
+  root.dataset.appearanceMode = dark ? "dark" : "light";
+  root.dataset.density = value.density || "comfortable";
+  root.dataset.reducedMotion = String(value.reducedMotion ?? false);
   const tokens = appearanceTokens(value, dark);
   for (const [key, color] of Object.entries(tokens))
     root.style.setProperty(key, color);

@@ -35,6 +35,13 @@ class AppearancePreferences(StrictModel):
     secondary: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
     background: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
     depth: int = Field(strict=True, ge=0, le=100)
+    style: Literal[
+        "classic", "midnight-glass", "soft-orbit", "precision-terminal",
+        "floating-layers", "edge-signal",
+    ] = "classic"
+    mode: Literal["inherit", "dark", "light", "system"] = "inherit"
+    density: Literal["comfortable", "compact"] = "comfortable"
+    reducedMotion: bool = Field(default=False, strict=True)
 
     @field_validator("accent", "secondary", "background")
     @classmethod

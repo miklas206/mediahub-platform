@@ -112,7 +112,7 @@ import type {
 import type { AgentStatus } from "./phase2-types";
 
 import { useData } from "./use-data";
-import { batchAppHealthRefresh } from "./app-events";
+import { batchAppHealthRefresh, trackLiveConnection, type LiveConnectionState } from "./app-events";
 
 const SetupWizard = lazy(() =>
   import("./wizard").then((module) => ({ default: module.SetupWizard })),
@@ -493,7 +493,8 @@ function Shell({
 }) {
   const [open, setOpen] = useState(false);
   const [metrics, setMetrics] = useState<Metrics>();
-  const [live, setLive] = useState(false);
+  const [connection, setConnection] = useState<LiveConnectionState>("connecting");
+  const live = connection === "connected";
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [displayName, setDisplayName] = useState("MediaHub");
@@ -537,15 +538,13 @@ function Shell({
   }, []);
   useEffect(() => {
     const source = new EventSource("/api/v1/events/stream");
+    const stopTracking = trackLiveConnection(source, setConnection);
     source.onopen = () => {
-      setLive(true);
       // Live events are not replayed after a restart or temporary disconnect.
       reloadUpdateSummary();
     };
-    source.onerror = () => setLive(false);
     source.addEventListener("system.status", (event) => {
       setMetrics(JSON.parse((event as MessageEvent).data));
-      setLive(true);
     });
     const appHealth = batchAppHealthRefresh(() => {
       setRevision((n) => n + 1);
@@ -568,6 +567,7 @@ function Shell({
       window.dispatchEvent(new Event("session-expired"));
     });
     return () => {
+      stopTracking();
       appHealth.dispose();
       source.close();
     };
@@ -923,7 +923,7 @@ function Shell({
             </div>
           )}
           {error && <Notice>{translateText(error)}</Notice>}
-          {!live && location.pathname !== "/updates" && (
+          {connection === "disconnected" && location.pathname !== "/updates" && (
             <Notice tone="warning">
               {t(
                 "Live connection interrupted. Reconnecting automatically; displayed metrics may be stale.",
