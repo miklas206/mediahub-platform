@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   List,
   Activity,
+  SunMoon,
 } from "lucide-react";
 import { api } from "./api";
 import { t, translateText } from "./i18n";
@@ -336,61 +337,73 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
                 />
               </div>
             </div>
+            <div className="appearance-option appearance-mode">
+              <SunMoon size={20} />
+              <label>
+                <strong>{t("Color mode")}</strong>
+                <select
+                  aria-label={t("Color mode")}
+                  disabled={busy}
+                  value={draft?.mode || "inherit"}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...(current || defaultAppearance),
+                      mode: event.target.value as Appearance["mode"],
+                    }))
+                  }
+                >
+                  <option value="inherit">{t("Follow workspace")}</option>
+                  <option value="dark">{t("Dark")}</option>
+                  <option value="light">{t("Light")}</option>
+                  <option value="system">{t("System")}</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
-        {dirty && (
-          <div className="appearance-quick-save">
-            <button
-              type="submit"
-              className="primary"
-              disabled={busy || invalid}
-            >
-              {t(busy ? "Saving…" : "Save")}
-            </button>
-            <button type="button" disabled={busy} onClick={() => choose(saved)}>
-              {t("Discard changes")}
-            </button>
-          </div>
-        )}
+        <div className="theme-try-actions">
+          <button
+            type="button"
+            onClick={() =>
+              void confirm(
+                t(
+                  "This is a theme preview. No settings or services will be changed.",
+                ),
+                { title: "Theme preview", confirmLabel: "Looks good" },
+              )
+            }
+          >
+            {t("Preview dialog")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setToastPreview((current) => current + 1)}
+          >
+            {t("Preview notification")}
+          </button>
+        </div>
+        <div className="appearance-quick-save">
+          <button
+            type="submit"
+            className="primary"
+            disabled={busy || invalid || !dirty}
+          >
+            {t(busy ? "Saving…" : "Save")}
+          </button>
+          <button
+            type="button"
+            disabled={busy || !dirty}
+            onClick={() => choose(saved)}
+          >
+            {t("Discard changes")}
+          </button>
+          <button type="button" disabled={busy} onClick={() => choose(null)}>
+            <RotateCcw size={14} />
+            {t("Defaults")}
+          </button>
+        </div>
         <details className="appearance-advanced">
-          <summary>{t("Advanced appearance")}</summary>
-          <div className="theme-options">
-            <label>
-              {t("Color mode")}
-              <select
-                aria-label={t("Color mode")}
-                disabled={busy}
-                value={draft?.mode || "inherit"}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...(current || defaultAppearance),
-                    mode: event.target.value as Appearance["mode"],
-                  }))
-                }
-              >
-                <option value="inherit">{t("Follow workspace")}</option>
-                <option value="dark">{t("Dark")}</option>
-                <option value="light">{t("Light")}</option>
-                <option value="system">{t("System")}</option>
-              </select>
-            </label>
-            <label>
-              {t("Layout density")}
-              <select
-                aria-label={t("Layout density")}
-                value={draft?.density || "comfortable"}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...(current || defaultAppearance),
-                    density: event.target.value as Appearance["density"],
-                  }))
-                }
-              >
-                <option value="comfortable">{t("Comfortable")}</option>
-                <option value="compact">{t("Compact")}</option>
-              </select>
-            </label>
-          </div>
+          <summary>{t("Advanced coloring")}</summary>
           <div
             className="appearance-presets"
             role="group"
@@ -527,38 +540,6 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               </p>
             </>
           )}
-
-          <div className="theme-try-actions">
-            <button
-              type="button"
-              onClick={() => choose({ ...defaultAppearance })}
-            >
-              {t("MediaHub Classic")}
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                void confirm(
-                  t(
-                    "This is a theme preview. No settings or services will be changed.",
-                  ),
-                  { title: "Theme preview", confirmLabel: "Looks good" },
-                )
-              }
-            >
-              {t("Preview dialog")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setToastPreview((current) => current + 1)}
-            >
-              {t("Preview notification")}
-            </button>
-            <button type="button" onClick={() => choose(null)}>
-              <RotateCcw size={14} />
-              {t("MediaHub defaults")}
-            </button>
-          </div>
         </details>
         {error && (
           <NotificationPopup tone="danger">

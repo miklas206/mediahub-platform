@@ -90,6 +90,7 @@ for (const width of [1440, 390, 320]) {
     page,
   }) => {
     const { writes } = await mockHub(page);
+    const backgrounds = new Set<string>();
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.setViewportSize({ width, height: 1000 });
@@ -98,6 +99,7 @@ for (const width of [1440, 390, 320]) {
       const panel = page.locator(".appearance-settings");
       await panel.locator(".theme-choice").filter({ hasText: name }).click();
       await expect(page.locator("html")).toHaveAttribute("data-look", id);
+      backgrounds.add(await page.evaluate(() => getComputedStyle(document.body,"::before").backgroundImage + getComputedStyle(document.body,"::after").backgroundImage));
       await expect(page.locator("html")).toHaveAttribute(
         "data-appearance-mode",
         mode,
@@ -146,7 +148,7 @@ for (const width of [1440, 390, 320]) {
         .click();
       await expect(
         panel.getByRole("button", { name: "Save", exact: true }),
-      ).toHaveCount(0);
+      ).toBeDisabled();
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-look", id);
       await expect(page.locator(".hub-app-card").first()).toBeVisible();
@@ -166,6 +168,7 @@ for (const width of [1440, 390, 320]) {
         animations: "disabled",
       });
     }
+    expect(backgrounds.size).toBe(5);
     expect(writes).toHaveLength(5);
     expect(errors).toEqual([]);
   });
@@ -184,8 +187,8 @@ test("discard restores saved theme and palette changes retain its layout and mot
   await panel.getByRole("checkbox", { name: "Reduce motion" }).check();
   await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = true; });
   await panel
-    .getByLabel("Layout density", { exact: true })
-    .selectOption("compact");
+    .getByRole("checkbox", { name: /Compact layout/ })
+    .check();
   await panel.getByRole("button", { name: "Violet", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-look", "soft-orbit");
   await expect(page.locator("html")).toHaveAttribute(
@@ -196,7 +199,7 @@ test("discard restores saved theme and palette changes retain its layout and mot
   await panel.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
     panel.getByRole("button", { name: "Save", exact: true }),
-  ).toHaveCount(0);
+  ).toBeDisabled();
   await panel
     .locator(".theme-choice")
     .filter({ hasText: "Edge Signal" })
@@ -243,7 +246,7 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   await page.locator(".theme-light-choice").click();
   await expect(page.locator("html")).toHaveAttribute("data-appearance-mode","light");
   await page.getByRole("button",{name:"Save",exact:true}).click();
-  await expect(page.getByRole("button",{name:"Save",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
   await page.reload();
   await expect(page.locator(".theme-light-choice")).toHaveAttribute("aria-pressed","true");
   expect(writes).toHaveLength(1);
@@ -280,8 +283,23 @@ for (const width of [1440, 390, 320]) test(`custom accent wheel previews, cancel
  await page.getByRole("slider",{name:"Brightness",exact:true}).focus();await page.keyboard.press("Home");await expect(page.getByRole("textbox",{name:"Hex color",exact:true})).toHaveValue("#000000");
  await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("invalid");await expect(page.getByRole("button",{name:"Done",exact:true})).toBeDisabled();
  await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("#123456");await page.screenshot({path:`test-results/custom-color-wheel-${width}.png`,animations:"disabled"});
- await page.getByRole("button",{name:"Done",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Done",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
  expect(writes).toHaveLength(1);expect(writes[0]).toMatchObject({appearance:{accent:"#123456"}});
  await page.reload();await page.getByRole("button",{name:"Choose custom color",exact:true}).click();await expect(page.getByRole("textbox",{name:"Hex color",exact:true})).toHaveValue("#123456");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+for (const width of [1440, 390, 320]) test(`appearance controls are visible and defaults save at ${width}px`, async ({page}) => {
+ const {writes}=await mockHub(page);await page.setViewportSize({width,height:1000});await page.goto("/settings?section=Appearance");
+ const advanced=page.locator(".appearance-advanced");await expect(advanced.locator("summary")).toHaveText("Advanced coloring");
+ await expect(page.getByLabel("Layout density",{exact:true})).toHaveCount(0);
+ await expect(page.getByRole("button",{name:"MediaHub Classic",exact:true})).toHaveCount(0);
+ await expect(page.getByLabel("Color mode",{exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Preview dialog",exact:true})).toBeVisible();
+ await expect(page.locator(".appearance-quick-save").getByRole("button",{name:"Defaults",exact:true})).toBeVisible();
+ await page.getByLabel("Color mode",{exact:true}).selectOption("system");await page.getByRole("button",{name:"Save",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();expect(writes[0]).toMatchObject({appearance:{mode:"system"}});
+ await page.getByRole("button",{name:"Defaults",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();expect(writes[1]).toMatchObject({appearance:null});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
