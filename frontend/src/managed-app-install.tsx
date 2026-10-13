@@ -27,7 +27,7 @@ export function ManagedAppInstallPage({
   const [failure, setFailure] = useState("");
   const running =
     busy || ["accepted", "running"].includes(data?.operation.state || "");
-  const succeeded = data?.operation.state === "succeeded";
+  const succeeded = data?.operation.state === "succeeded" && data.alreadyRunning;
   useEffect(() => {
     if (!running) return;
     const timer = window.setTimeout(reload, 2500);

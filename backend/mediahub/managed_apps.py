@@ -272,6 +272,9 @@ class ManagedApps:
                         "confirmation_required", "Exact installation confirmation required", 409
                     )
                 return await self.status(package)
+            active = self.tasks.get(package)
+            if active and not active.done():
+                raise DomainError("operation_busy", "Another app operation is running", 409)
             rows, confirmation = await self.preflight(package)
             if saved and saved["state"] == "failed":
                 confirmation = saved["confirmation"]
@@ -342,7 +345,8 @@ class ManagedApps:
                         "installation_changed", "Installation changed during removal", 409
                     )
                 has_client = any(
-                    row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox") == "mediaseed"
+                    row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox")
+                    == "mediaseed"
                     for row in current
                 )
                 # An enabled controller may be waiting for VPN health and have
@@ -386,6 +390,10 @@ class ManagedApps:
                     app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
                     if app:
                         app.state = "uninstalled"
+                (
+                    self.svc.config.data_dir
+                    / ("managed-install-" + package.rsplit(".", 1)[-1] + ".json")
+                ).unlink(missing_ok=True)
                 self.svc.events.record(
                     "app.uninstalled", package, "Managed runtime removed; persistent data preserved"
                 )

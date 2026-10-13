@@ -72,6 +72,8 @@ def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False)
 
 def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_path, monkeypatch):
     svc, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+    install_journal = svc.config.data_dir / "managed-install-mediaseed.json"
+    install_journal.write_text(json.dumps({"state": "succeeded"}))
     app = logged_in.get("/api/v1/app-settings/" + SEED).json()["data"]["removableApp"]
     assert app and not app["isMock"] and app["removable"]
     listed = logged_in.get("/api/v1/apps?include_health=false").json()["data"]
@@ -89,6 +91,7 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
         result = await manager.status(SEED)
         assert result["state"] == "succeeded" and result["dataPreserved"]
         assert not rows
+        assert not install_journal.exists()
         assert (await manager.remove(SEED, ready["installationId"]))["state"] == "succeeded"
         await manager.initialize()
 
