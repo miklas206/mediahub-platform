@@ -4,10 +4,13 @@ import { NotificationPopup } from "./notification-popup";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { OperationProgress, type OperationState } from "./operation-progress";
 import { api } from "./api";
 import type { InstalledAppInfo } from "./contracts";
 type Removal = {
   state: string;
+  progress?: number;
+  phase?: string;
   installationId?: string;
   mode?: string;
   message?: string;
@@ -97,6 +100,18 @@ export function AppUninstall({
     }
   };
   const working = busy || ["accepted", "running"].includes(status?.state || "");
+  const phase = ["preparing", "removing", "verifying"].indexOf(status?.phase || "preparing");
+  const operation: OperationState = {
+    title: `${removalLabel} ${translateText(app.name)}`,
+    status: status?.state === "failed" ? "error" : "running",
+    progress: busy ? 0 : status?.progress ?? 0,
+    indeterminate: !busy && typeof status?.progress !== "number",
+    message: status?.state === "failed" ? status.message || "Removal could not be verified." : t("Removing runtime on the server... You can leave this page and return."),
+    steps: typeof status?.progress === "number" ? ["Checking ownership", "Stopping and removing containers", "Checking preserved data"].map((label, index) => ({
+      label, state: index < phase ? "complete" : index > phase ? "pending" : status?.state === "failed" ? "error" : "running",
+    })) : [],
+    details: [],
+  };
   return (
     <>
       <button
@@ -145,12 +160,8 @@ export function AppUninstall({
               {translateText(status.message)}
             </NotificationPopup>
           )}
-          {working && (
-            <p role="status">
-              {t(
-                "Removing runtime on the server... You can leave this page and return.",
-              )}
-            </p>
+          {(working || status?.state === "failed") && (
+            <OperationProgress operation={operation} />
           )}
           <div className="runtime-toolbar">
             <button

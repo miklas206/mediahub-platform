@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show persisted uninstall progress for MediaSeed/MediaVPN and an activity bar for apps whose Agents do not report percentages. Preserve data checks and failure progress.
+
 ## 0.5.11
 
 - Center the installation boxes and their headings consistently across MediaVPN, MediaSeed, Plex, container apps, Cloudflare, FjordHub and the legacy Seedbox guide.

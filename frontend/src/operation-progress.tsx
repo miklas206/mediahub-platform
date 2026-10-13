@@ -20,6 +20,7 @@ export type OperationState = {
   title: string;
   status: "running" | "success" | "error" | "deferred";
   progress: number;
+  indeterminate?: boolean;
   message: string;
   steps: OperationStep[];
   details: string[];
@@ -99,15 +100,15 @@ export function OperationProgress({
           <h3>{translateText(operation.title)}</h3>
           <p>{translateText(operation.message)}</p>
         </div>
-        <strong>{progress}%</strong>
+        <strong>{operation.indeterminate ? t("Working...") : `${progress}%`}</strong>
       </div>
       <div
-        className="operation-progress-track"
+        className={`operation-progress-track${operation.indeterminate ? " indeterminate" : ""}`}
         role="progressbar"
         aria-label={operation.title}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={operation.connectionLost ? undefined : progress}
+        aria-valuenow={operation.connectionLost || operation.indeterminate ? undefined : progress}
         aria-valuetext={
           operation.connectionLost
             ? t("Last known progress: {value0}%. Waiting for connection.", {
@@ -116,7 +117,7 @@ export function OperationProgress({
             : undefined
         }
       >
-        <span style={{ width: `${progress}%` }} />
+        <span style={{ width: operation.indeterminate ? "35%" : `${progress}%` }} />
       </div>
       {operation.connectionLost && (
         <p className="muted">

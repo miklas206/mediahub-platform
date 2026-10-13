@@ -48,3 +48,11 @@ describe("Update progress visibility", () => {
     ).not.toContain('role="progressbar"');
   });
 });
+
+it("shows activity without inventing a percentage for older Agents", () => {
+  const html = renderToStaticMarkup(<OperationProgress operation={{...operation, indeterminate: true}} />);
+  expect(html).toContain('role="progressbar"');
+  expect(html).not.toContain('aria-valuenow');
+  expect(html).not.toContain('90%');
+  expect(html).toContain('Working...');
+});

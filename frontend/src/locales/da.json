@@ -3645,5 +3645,9 @@
   "Preparing installation": "Klargør installation",
   "Checking app health": "Kontrollerer appens status",
   "Registering app and hub login": "Registrerer app og hub-login",
-  "Starting app containers": "Starter appens containere"
+  "Starting app containers": "Starter appens containere",
+  "Working...": "Arbejder...",
+  "Checking ownership": "Kontrollerer ejerskab",
+  "Stopping and removing containers": "Stopper og fjerner containere",
+  "Checking preserved data": "Kontrollerer bevarede data"
 }

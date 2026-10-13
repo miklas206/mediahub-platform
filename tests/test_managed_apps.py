@@ -84,6 +84,15 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
     assert not any(method != "GET" for method, _ in calls)
     svc.config.sso_app_urls[SEED] = "https://seed.example"
 
+    stages = []
+    original_save = manager.save
+
+    def capture(package, job):
+        stages.append((job.get("progress"), job.get("phase"), job["state"]))
+        original_save(package, job)
+
+    monkeypatch.setattr(manager, "save", capture)
+
     async def remove():
         result = await manager.remove(SEED, ready["installationId"])
         assert result["state"] == "accepted"
@@ -96,6 +105,9 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
         await manager.initialize()
 
     asyncio.run(remove())
+    assert stages == [(0, "preparing", "accepted"), (5, "preparing", "running"),
+                      (10, "removing", "running"), (80, "removing", "running"),
+                      (90, "verifying", "running"), (100, "complete", "succeeded")]
     assert "SECRET" not in manager.journal(SEED).read_text()
     assert logged_in.get("/api/v1/mediaseed/status").json()["data"]["configured"] is False
     assert not any(app["packageId"] == SEED for app in logged_in.get("/api/v1/apps").json()["data"])
@@ -174,6 +186,8 @@ def test_failure_keeps_snapshot_and_can_retry(logged_in, tmp_path, monkeypatch):
         await manager.remove(SEED, ready["installationId"])
         await manager.tasks[SEED]
         assert (await manager.status(SEED))["state"] == "failed"
+        assert (await manager.status(SEED))["progress"] == 10
+        assert (await manager.status(SEED))["phase"] == "removing"
         assert rows and any(app["packageId"] == SEED for app in svc.apps.list())
         await manager.remove(SEED, ready["installationId"])
         await manager.tasks[SEED]

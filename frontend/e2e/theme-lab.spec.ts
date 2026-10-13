@@ -523,3 +523,30 @@ for (const width of [1440,320]) test(`all app setup boxes are centered at ${widt
  }
  expect(errors).toEqual([]);
 });
+
+for (const width of [1440,320]) test(`uninstall progress and older Agent activity at ${width}px`,async({page})=>{
+ await mockHub(page,true);
+ await page.setViewportSize({width,height:1000});
+ let state='ready'; let progress:number|undefined=undefined;
+ await page.route('**/api/v1/apps/**/uninstall',async route=>{
+  if(route.request().method()==='POST') {state='running'; progress=50;}
+  return route.fulfill({json:{data:{state,progress,phase:'removing',installationId:'synthetic-installation'}}});
+ });
+ await page.goto('/');
+ await page.getByRole('button',{name:'Uninstall: Jellyfin',exact:true}).click();
+ await page.getByRole('button',{name:'Confirm removal',exact:true}).click();
+ const modal=page.getByRole('dialog',{name:'Remove Jellyfin',exact:true});
+ const bar=modal.getByRole('progressbar');
+ await expect(bar).toHaveAttribute('aria-valuenow','50');
+ await expect(modal).toContainText('Checking preserved data');
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Uninstall: Jellyfin',exact:true}).click();
+ await expect(bar).toHaveAttribute('aria-valuenow','50');
+ progress=undefined;
+ await expect(bar).not.toHaveAttribute('aria-valuenow',/.+/,{timeout:6000});
+ await expect(modal).toContainText('Working...');
+ expect(await modal.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+ state='failed';progress=80;
+ await expect(bar).toHaveAttribute('aria-valuenow','80',{timeout:6000});
+ await expect(modal.getByRole('button',{name:'Confirm removal',exact:true})).toBeEnabled();
+});

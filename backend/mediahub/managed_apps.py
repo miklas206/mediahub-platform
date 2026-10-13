@@ -290,6 +290,8 @@ class ManagedApps:
             }
             job = {
                 "state": "accepted",
+                "progress": 0,
+                "phase": "preparing",
                 "installationId": self.policy[package].installationId,
                 "confirmation": confirmation,
                 "containers": rows,
@@ -335,7 +337,7 @@ class ManagedApps:
     async def run(self, package, job):
         async with self.lock:
             try:
-                job["state"] = "running"
+                job.update(state="running", progress=5, phase="preparing")
                 self.save(package, job)
                 # Revalidate before any writes, including the controller disconnect.
                 current, _ = await self.preflight(package)
@@ -358,12 +360,16 @@ class ManagedApps:
                 )
                 if has_client or vpn_present:
                     await self.disconnect_client(self.policy[package])
-                for row in job["containers"]:
+                job.update(progress=10, phase="removing")
+                self.save(package, job)
+                for index, row in enumerate(job["containers"]):
                     identifier = row["Id"]
                     actual = await self.docker(
                         "GET", "/containers/" + identifier + "/json", missing=True
                     )
                     if actual is None:
+                        job["progress"] = 10 + round(70 * (index + 1) / max(1, len(job["containers"])))
+                        self.save(package, job)
                         continue
                     if actual.get("Config", {}).get("Labels") != row.get("Config", {}).get(
                         "Labels"
@@ -375,17 +381,16 @@ class ManagedApps:
                     await self.docker(
                         "DELETE", "/containers/" + identifier + "?force=false&v=false"
                     )
+                    job["progress"] = 10 + round(70 * (index + 1) / max(1, len(job["containers"])))
+                    self.save(package, job)
+                job.update(progress=90, phase="verifying")
+                self.save(package, job)
                 if await self.containers(package):
                     raise DomainError(
                         "removal_unverified", "App containers remain after removal", 409
                     )
                 for volume in job["volumes"]:
                     await self.docker("GET", "/volumes/" + quote(volume, safe=""))
-                job.update(
-                    state="succeeded",
-                    dataPreserved=True,
-                    message="Appen er afinstalleret. Data er bevaret.",
-                )
                 with self.svc.sessions.begin() as db:
                     app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
                     if app:
@@ -397,6 +402,12 @@ class ManagedApps:
                 self.svc.events.record(
                     "app.uninstalled", package, "Managed runtime removed; persistent data preserved"
                 )
+                job.update(
+                    state="succeeded", progress=100, phase="complete",
+                    dataPreserved=True,
+                    message="Appen er afinstalleret. Data er bevaret.",
+                )
+
             except DomainError as error:
                 job.update(state="failed", message=error.message)
             except Exception:

@@ -2852,3 +2852,10 @@ td time {
 
 .app-removal-dialog::backdrop { background: #03070dbf; }
 .app-removal-dialog p { overflow-wrap: anywhere; margin-block: 16px; }
+
+.operation-progress.running .operation-progress-track.indeterminate > span { animation: removal-activity 1.8s ease-in-out infinite alternate; }
+@keyframes removal-activity { from { transform: translateX(0); } to { transform: translateX(185%); } }
+@media (prefers-reduced-motion: reduce) { .operation-progress-track.indeterminate > span { animation: none; } }
+[data-reduced-motion="true"] .operation-progress-track.indeterminate > span { animation: none; }
+.app-removal-dialog .operation-progress { margin-block: 18px; }
+.app-removal-dialog .operation-progress-heading strong { flex-shrink: 0; }
