@@ -51,3 +51,27 @@
   .sidebar-close { display: inline-flex; }
   .sidebar-heading .brand { font-size: 20px; }
 }
+
+/* The top and bottom bars use the same frame language as the sidebar. */
+:root[data-look]:not([data-look="classic"]) {
+  --frame-radius: 20px;
+  --frame-fill: linear-gradient(160deg, color-mix(in srgb, var(--surface) 93%, var(--accent)), color-mix(in srgb, var(--bg) 95%, transparent));
+  --frame-shadow: 0 8px 24px #0002, inset 0 1px #ffffff09;
+}
+:root[data-look="soft-orbit"] { --frame-radius: 26px; --frame-fill: linear-gradient(170deg, color-mix(in srgb, var(--surface) 92%, var(--secondary)), var(--bg)); }
+:root[data-look="precision-terminal"] { --frame-radius: 3px; --frame-fill: var(--bg); --frame-shadow: none; }
+:root[data-look="floating-layers"] { --frame-radius: 18px; --frame-fill: linear-gradient(160deg, var(--raised), var(--bg)); --frame-shadow: 0 3px 0 #0002, 0 8px 24px #0003; }
+:root[data-look="edge-signal"] { --frame-radius: 3px 22px 3px 3px; --frame-fill: var(--bg); }
+:root[data-appearance-mode="light"]:not([data-look="classic"]) { --frame-fill: linear-gradient(165deg, var(--surface), color-mix(in srgb, var(--bg) 94%, var(--accent))); --frame-shadow: 0 8px 24px #19314c12; }
+:root[data-look]:not([data-look="classic"]) .sidebar { background: var(--frame-fill); border-radius: var(--frame-radius); }
+:root[data-look]:not([data-look="classic"]) :is(.topbar, .footer) { background: var(--frame-fill); border: 1px solid var(--line); border-radius: var(--frame-radius); box-shadow: var(--frame-shadow); backdrop-filter: blur(20px); }
+:root[data-look]:not([data-look="classic"]) .topbar { margin: 12px 12px 0 0; min-height: 64px; padding: 10px 20px; }
+:root[data-look]:not([data-look="classic"]) .footer { left: 248px; right: 12px; bottom: 12px; min-height: 44px; align-items: center; padding: 12px 20px; gap: 12px; }
+:root[data-look="precision-terminal"] :is(.topbar, .footer) { border-color: var(--accent-line); backdrop-filter: none; }
+:root[data-look="edge-signal"] :is(.topbar, .footer) { border-left: 3px solid var(--accent); }
+:root[data-look]:not([data-look="classic"]) .main-content:has(> .footer) { padding-bottom: 94px; }
+@media (max-width: 760px) {
+  :root[data-look]:not([data-look="classic"]) .topbar { margin: 8px 8px 0; padding: 8px 10px; min-height: 60px; height: auto; gap: 8px; }
+  :root[data-look]:not([data-look="classic"]) .footer { left: 8px; right: 8px; bottom: calc(71px + env(safe-area-inset-bottom)); padding: 9px 12px; min-height: 44px; gap: 3px; align-items: flex-start; font-size: 10px; }
+  :root[data-look]:not([data-look="classic"]) .main-content:has(> .footer) { padding-bottom: 160px; }
+}

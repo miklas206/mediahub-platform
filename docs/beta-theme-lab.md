@@ -113,3 +113,5 @@ Theme identity refinement: bounded Soft Orbit control rounding prevents circular
 The redundant Light theme card has been removed. Five style cards define visual identity; Color mode independently selects light/dark/system. Changing style preserves the chosen color mode, and the selected style stays indicated in light mode.
 
 Complete sidebar redesign: inset themed frame, grouped brand header, refined navigation spacing, status/account dock and restrained local clock. Theme-specific glass, soft, terminal, layered and signal skins extend to the sidebar surfaces and avatar. Mobile uses a bounded drawer with its own close button; routes, sign-out and real connection/uptime state are preserved.
+
+Topbar and footer now share the sidebar frame fill and theme-specific geometry. Desktop bars align at 248px with 12px outer margins; mobile uses 8px margins and keeps the footer above the quick-navigation dock. Footer space remains reserved in content.
