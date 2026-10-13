@@ -134,6 +134,12 @@ for (const width of [1440, 390, 320]) {
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-look", id);
       await expect(page.locator(".hub-app-card").first()).toBeVisible();
+      await page.evaluate(async () => {
+        const background = getComputedStyle(document.body, "::before").backgroundImage;
+        await Promise.all([...background.matchAll(/url\("([^"]+)"\)/g)].map(async match => {
+          const image = new Image(); image.src = match[1]; await image.decode();
+        }));
+      });
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,

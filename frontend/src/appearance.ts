@@ -248,7 +248,12 @@ export function applyAppearance() {
   delete root.dataset.appearanceMode;
   delete root.dataset.density;
   delete root.dataset.reducedMotion;
-  if (!value) return;
+  if (!value) {
+    root.dataset.look = "midnight-glass";
+    const mode = root.dataset.theme || "dark";
+    root.dataset.appearanceMode = mode === "light" || (mode === "system" && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+    return;
+  }
   const mode =
     value.mode && value.mode !== "inherit"
       ? value.mode

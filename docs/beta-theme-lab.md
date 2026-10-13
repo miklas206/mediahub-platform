@@ -28,23 +28,31 @@ The account appearance contract adds validated `style`, `mode`, `density` and
 `reducedMotion` fields. Existing four-field palettes load with compatible defaults;
 no database schema migration is required. Other users' preferences are unaffected.
 
-This round covers MediaHub Home, Overview, Settings, shared cards, confirmations and
-notifications. MediaSeed and MediaVPN retain their independent applications; their
-concept screenshots are references for subsequent iterations.
+The second iteration also redesigns the independent MediaSeed and MediaVPN workspaces.
+MediaHub has compact horizontal app cards, a stronger hero and clearer section hierarchy.
+MediaSeed separates RSS, tracker and VPN forms from their lists/verification panels;
+MediaVPN uses a connection-card grid and a clear empty state. Existing actions, real
+status, authentication, torrent storage and fail-closed network behavior are preserved.
+
+The default look is now Midnight Glass. Scenic environments differ visibly: original
+vector waves, a generated snowy panorama, a terminal grid, layered ridges and an amber
+coastal horizon. These are original assets inspired by the references. Ambient movement
+respects reduced motion. No decorative image is required for controls to remain usable.
+
+MediaHub passes the selected named theme only to its own MediaSeed/MediaVPN app links.
+Each independent app also has a header theme selector remembered in that browser.
+Custom hub palette colors remain hub account preferences.
 
 ## Deployment and rollback
 
-Deploy only to the existing beta CT106. Keep the previous Core image, Compose file
-and a consistent SQLite backup. Recreate only the Core service; retain its mounts,
-environment, account database, keys and rollback data. The independent app services
-and production MediaHub are outside this deployment.
+Deploy only to the existing beta CT106. Keep previous images, Compose files and
+consistent SQLite snapshots for all three apps. Recreate only their application
+services; retain mounts, environment, keys, accounts, profiles and rollback data.
+Do not restart proxies, torrent clients or VPN tunnels.
 
-Frontend assets and `backend/mediahub/contracts.py` are the runtime changes. For a
-layered deployment, use the verified existing Core image as a base and copy the
-built frontend and that contract file; label the image with the source commit.
-
-Before rolling back to code predating these appearance fields, strip the four new
-keys from **only** the nested `appearance` object in saved `user.preferences:*`
-settings, or keep the compatible new contract in the rollback image. Do not restore
-an old database over newer unrelated account/app changes. Reverting the theme via
-the UI requires no runtime rollback and is the preferred way to compare looks.
+Core requires only the built frontend over the existing compatible Core image.
+Independent apps require their current complete Python package and static assets:
+the prior installed images predate account-language support. The existing additive
+language migration has focused migration/authentication tests. A rollback can use
+the previous images with the additional language columns retained; do not overwrite
+newer unrelated account or application data with an old database snapshot.

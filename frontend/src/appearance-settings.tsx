@@ -180,7 +180,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
                 className="theme-choice"
                 key={preset.id}
                 disabled={busy}
-                aria-pressed={(draft?.style || "classic") === preset.id}
+                aria-pressed={(draft?.style || "midnight-glass") === preset.id}
                 onClick={() =>
                   choose(
                     preset.value
@@ -218,7 +218,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
                     </span>
                     <i />
                   </span>
-                  {(draft?.style || "classic") === preset.id && (
+                  {(draft?.style || "midnight-glass") === preset.id && (
                     <span className="theme-selected">
                       <Check size={13} />
                     </span>

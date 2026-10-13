@@ -15,7 +15,7 @@ export const themePresets: ThemePreset[] = [
     id: "classic",
     name: "MediaHub Classic",
     description: "The familiar MediaHub look.",
-    value: null,
+    value: { ...defaultAppearance },
   },
   {
     id: "midnight-glass",

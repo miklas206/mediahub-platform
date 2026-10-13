@@ -21,6 +21,17 @@ import { appStatusLabel } from "./seedbox-status";
 import { t } from "./i18n";
 import { useData } from "./use-data";
 import "./hub-home.css";
+import { useAppearance, type ThemeStyle } from "./appearance";
+
+export function themedAppUrl(path: string, packageId: string, style: ThemeStyle) {
+  if (!["org.mediahub.seedbox", "org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(packageId)) return path;
+  try {
+    const url = new URL(path);
+    if (!["http:", "https:"].includes(url.protocol)) return path;
+    url.searchParams.set("mediahub_theme", style);
+    return url.href;
+  } catch { return path; }
+}
 
 const hubApps = {
   "org.mediahub.seedbox": {
@@ -246,6 +257,7 @@ export function HubHome({
   updates: number | undefined;
   live: boolean;
 }) {
+  const appearance = useAppearance();
   const onAppRemoved = useCallback(() => {
     window.dispatchEvent(new Event("apps-changed"));
   }, []);
@@ -445,7 +457,7 @@ export function HubHome({
                         key={entry.id}
                         data-app-id={entry.id}
                       >
-                        <div className="hub-card-top">
+                        <div className="hub-card-main">
                           <span
                             className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
                           >
@@ -455,6 +467,12 @@ export function HubHome({
                               <ServiceIcon packageId={entry.id} size={32} />
                             )}
                           </span>
+                          <div className="hub-card-copy">
+                            <span className="hub-app-category">{t(entry.category)}</span>
+                            <h3>{t(entry.name)}</h3>
+                            <p>{t(entry.description)}</p>
+                          </div>
+                        </div>
                           <span
                             className={`hub-app-status ${entry.status}`}
                             title={
@@ -466,14 +484,6 @@ export function HubHome({
                             <span />
                             {t(entry.statusLabel)}
                           </span>
-                        </div>
-                        <div className="hub-card-copy">
-                          <span className="hub-app-category">
-                            {t(entry.category)}
-                          </span>
-                          <h3>{t(entry.name)}</h3>
-                          <p>{t(entry.description)}</p>
-                        </div>
                         {(entry.settingsPath || entry.removableApp) && (
                           <div className="hub-card-tools">
                             {entry.removableApp && <AppUninstall app={entry.removableApp} onRemoved={onAppRemoved} buttonClassName="hub-card-uninstall" showIcon />}
@@ -482,7 +492,7 @@ export function HubHome({
                         )}
                         {entry.external ? <a
                           className="hub-card-action"
-                          href={entry.path}
+                          href={themedAppUrl(entry.path, entry.id, appearance?.style || "midnight-glass")}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`${t(entry.action)} · ${t(entry.name)}`}

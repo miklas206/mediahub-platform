@@ -8,6 +8,7 @@ import "./styles.css";
 import "./phase2.css";
 import "./security.css";
 import "./checkboxes.css";
+import "./workspace-redesign.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildHubEntries } from "./hub-home";
+import { buildHubEntries, themedAppUrl } from "./hub-home";
 import type { AppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
 import type { Integration } from "./integrations";
+
+it("passes only the selected theme to independent MediaHub apps without losing their URL", () => {
+  const url = new URL(themedAppUrl("https://seed.example/app?view=rss#feeds", "org.mediahub.seedbox", "edge-signal"));
+  expect(url.origin).toBe("https://seed.example");
+  expect(url.pathname).toBe("/app");
+  expect(url.searchParams.get("view")).toBe("rss");
+  expect(url.searchParams.get("mediahub_theme")).toBe("edge-signal");
+  expect(url.hash).toBe("#feeds");
+  expect(themedAppUrl("https://plex.example/", "org.mediahub.plex", "soft-orbit")).toBe("https://plex.example/");
+  expect(themedAppUrl("javascript:alert(1)", "org.mediahub.seedbox", "soft-orbit")).toBe("javascript:alert(1)");
+});
 
 const catalog = [
   "seedbox",
