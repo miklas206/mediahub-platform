@@ -135,6 +135,10 @@ def test_install_requires_https_csrf_and_rejects_client_docker_specs(
     csrf = logged_in.headers.pop("X-MediaHub-CSRF")
     assert logged_in.post("https://127.0.0.1:18765" + endpoint, json=body).status_code == 403
     logged_in.headers["X-MediaHub-CSRF"] = csrf
+    action = AsyncMock(return_value={"state": "accepted", "dataPreserved": True})
+    monkeypatch.setattr(installer, "install", action)
+    assert logged_in.post("https://127.0.0.1:18765" + endpoint, json=body).status_code == 202
+    action.assert_awaited_once_with(PACKAGE, body["planDigest"])
 
 
 def test_install_without_host_preparation_reports_unavailable(logged_in):
