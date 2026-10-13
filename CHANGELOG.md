@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.15
+
+- Include Docker Buildx in Core/Agent images and provide writable private builder configuration for automatic app/relay preparation, including the read-only host helper.
+
 ## 0.5.14
 
 - Share one selected MediaVPN provider connection with MediaSeed and owned Plex/Jellyfin apps, including paired Linux Docker Agents. Keep private relay identities host-local, preserve web ports and block direct internet fallback for selected apps.

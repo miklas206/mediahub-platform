@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
     && chmod 0644 /etc/apt/keyrings/docker.asc \
     && printf 'Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: bookworm\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' > /etc/apt/sources.list.d/docker.sources \
-    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin \
     && apt-get clean
 # Use the shared media group as the primary GID: mergerfs may not resolve
 # Docker-only supplementary groups when checking write access. Keep UID 10001

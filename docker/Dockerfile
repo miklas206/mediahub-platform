@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
     && chmod 0644 /etc/apt/keyrings/docker.asc \
     && printf 'Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: bookworm\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n' > /etc/apt/sources.list.d/docker.sources \
-    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/*
 # Match the Agent's dependency layer so Docker can reuse it for both images.
 COPY requirements.lock ./

@@ -74,6 +74,8 @@ class SharedVPN:
         tag = "mediahub-vpn-relay:" + fingerprint[:16]
         image = await self.request("GET", "/images/" + tag + "/json", missing=True)
         if not image:
+            builder_config = self.directory / "docker-builder"
+            builder_config.mkdir(mode=0o700, exist_ok=True)
             process = await asyncio.create_subprocess_exec(
                 "docker",
                 "--host",
@@ -87,6 +89,7 @@ class SharedVPN:
                 str(source),
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
+                env={**os.environ, "DOCKER_CONFIG": str(builder_config)},
             )
             try:
                 await asyncio.wait_for(process.wait(), 600)
