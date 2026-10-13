@@ -17,7 +17,9 @@ spec.loader.exec_module(module)
 def fixture(tmp_path, monkeypatch, running=False):
     root, source = tmp_path / "hub", tmp_path / "source"
     root.mkdir()
-    (root / "compose.json").write_text('{"name":"mediahub-platform"}')
+    (root / "compose.json").write_text(
+        '{"name":"mediahub-platform","services":{"core":{"environment":{}}}}'
+    )
     (root / "data").mkdir()
     policy = {}
     for kind in ("mediavpn", "mediaseed"):
@@ -118,6 +120,61 @@ def test_preparation_helper_change_invalidates_success_marker(tmp_path):
     previous = module.fingerprint(tmp_path)
     helper.write_text("version two")
     assert previous != module.fingerprint(tmp_path)
+
+
+@pytest.mark.parametrize("public", [None, "https://hub.example.com"])
+def test_browser_login_uses_configured_hub_origin_without_changing_private_api(
+    tmp_path, monkeypatch, public
+):
+    root, source, calls, _ = fixture(tmp_path, monkeypatch)
+    env = {"MEDIAHUB_BASE_URL": "https://192.168.1.50:18765"}
+    if public:
+        env["MEDIAHUB_PUBLIC_URL"] = public
+    (root / "compose.json").write_text(
+        json.dumps({"name": "mediahub-platform", "services": {"core": {"environment": env}}})
+    )
+    for kind in ("mediavpn", "mediaseed"):
+        path = root / "local-apps" / kind / "compose.json"
+        cfg = json.loads(path.read_text())
+        cfg["services"]["app"]["environment"][kind.upper() + "_HUB_URL"] = (
+            "https://192.168.1.50:18765"
+        )
+        path.write_text(json.dumps(cfg))
+    module.provision(root, "192.168.1.50", source)
+    for kind in ("mediavpn", "mediaseed"):
+        cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
+        actual = cfg["services"]["app"]["environment"]
+        assert actual[kind.upper() + "_HUB_URL"] == "https://192.168.1.50:18765"
+        assert actual[kind.upper() + "_HUB_BROWSER_URL"] == (public or "https://192.168.1.50:18765")
+    assert not any("-d" in call for call in calls)
+    count = len(calls)
+    env["MEDIAHUB_PUBLIC_URL"] = "https://new-hub.example.com"
+    (root / "compose.json").write_text(
+        json.dumps({"name": "mediahub-platform", "services": {"core": {"environment": env}}})
+    )
+    module.provision(root, "192.168.1.50", source)
+    assert len(calls) > count
+    cfg = json.loads((root / "local-apps/mediavpn/compose.json").read_text())
+    assert (
+        cfg["services"]["app"]["environment"]["MEDIAVPN_HUB_BROWSER_URL"]
+        == "https://new-hub.example.com"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://hub.example",
+        "https://user:password@hub.example",
+        "https://hub.example/path",
+        "https://hub.example/?redirect=elsewhere",
+        "//hub.example",
+    ],
+)
+def test_browser_login_rejects_invalid_public_origin(url):
+    cfg = {"services": {"core": {"environment": {"MEDIAHUB_PUBLIC_URL": url}}}}
+    with pytest.raises(ValueError):
+        module.hub_browser_origin(cfg, "192.168.1.50")
 
 
 def test_updates_install_prerequisites_but_do_not_start_stopped_apps(tmp_path, monkeypatch):

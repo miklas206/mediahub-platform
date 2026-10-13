@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.21
+
+- Pass MediaHub's configured public HTTPS origin to MediaVPN and MediaSeed browser SSO, falling back to the configured local Hub origin when no public URL exists. Preserve the private internal Hub API address and local app URLs.
+- Apply browser-login origin changes to existing managed Compose apps and invalidate the preparation marker when the configured Hub domain changes. Reject credential-bearing, non-HTTPS and path/query-bearing login origins.
+
 ## 0.5.20
 
 - Fix MediaVPN HTTPS proxy certificate access: match private TLS directory/file ownership to the actual Compose consumer, preserving existing certificate/key bytes, read-only mounts and dropped capabilities. Repair existing managed TLS binds as well as fresh installations.

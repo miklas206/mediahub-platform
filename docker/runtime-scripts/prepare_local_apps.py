@@ -14,6 +14,7 @@ import secrets
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from prepare_managed_install import prepare
 
@@ -166,6 +167,30 @@ def repair_tls_permissions(folder, cfg):
     )
 
 
+def hub_browser_origin(hub_compose, lan):
+    env = hub_compose["services"]["core"].get("environment", {})
+    value = (
+        env.get("MEDIAHUB_PUBLIC_URL")
+        or env.get("MEDIAHUB_BASE_URL")
+        or "https://" + lan + ":18765"
+    )
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or any(ord(c) < 33 for c in value)
+        or "\\" in value
+    ):
+        raise ValueError("Managed app browser login requires a configured HTTPS hub origin")
+    _ = parsed.port
+    return value.rstrip("/")
+
+
 def provision(root, lan, source=SOURCE):
     ip = ipaddress.ip_address(lan)
     if (
@@ -181,7 +206,9 @@ def provision(root, lan, source=SOURCE):
     hub_compose = json.loads((root / "compose.json").read_text())
     if hub_compose.get("name") != "mediahub-platform":
         raise ValueError("MediaHub installation ownership changed")
-    digest = fingerprint(source)
+    browser_origin = hub_browser_origin(hub_compose, lan)
+    # Domain changes must invalidate the marker too, without changing internal API URLs.
+    digest = hashlib.sha256((fingerprint(source) + "\0" + browser_origin).encode()).hexdigest()
     marker = root / "local-apps/source.json"
     if marker.exists() and json.loads(marker.read_text()).get("fingerprint") == digest:
         return
@@ -279,6 +306,9 @@ def provision(root, lan, source=SOURCE):
                     if volume.get("target") == "/config/routes.yaml":
                         volume["source"] = str(folder / "hub-proxy.yaml")
             cfg["services"]["app"]["restart"] = "unless-stopped"
+        cfg["services"]["app"].setdefault("environment", {})[kind.upper() + "_HUB_BROWSER_URL"] = (
+            browser_origin
+        )
         repair_tls_permissions(folder, cfg)
         for service, values in cfg["services"].items():
             if "build" in values:
