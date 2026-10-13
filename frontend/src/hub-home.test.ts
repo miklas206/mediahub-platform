@@ -65,7 +65,7 @@ const input = {
 it("recognizes managed MediaSeed as the installed Seedbox without an external address", () => {
   const managed = { ...seedbox, id: "managed-seed", packageId: "org.mediahub.mediaseed", name: "MediaSeed", removable: true };
   const entry = buildHubEntries({ ...input, apps: [managed] }).find(row => row.id === "org.mediahub.seedbox");
-  expect(entry).toMatchObject({configured:true,path:managed.detailPath,settingsPath:"/app-settings/org.mediahub.mediaseed",removableApp:managed});
+  expect(entry).toMatchObject({name:"MediaSeed",configured:true,path:managed.detailPath,settingsPath:"/app-settings/org.mediahub.mediaseed",removableApp:managed});
   expect(entry?.statusLabel).not.toBe("Not set up");
 });
 
@@ -100,7 +100,7 @@ describe("primary MediaHub app hub", () => {
         (entry) => !entry.configured && entry.statusLabel === "Not set up",
       ),
     ).toBe(true);
-    expect(entries.find((entry) => entry.name === "Seedbox")?.path).toBe(
+    expect(entries.find((entry) => entry.name === "MediaSeed")?.path).toBe(
       "/store/mediaseed",
     );
     expect(entries.find((entry) => entry.name === "Jellyfin")?.path).toBe(
@@ -124,7 +124,7 @@ describe("primary MediaHub app hub", () => {
       ],
     });
     expect(entries[0]).toMatchObject({
-      name: "Seedbox",
+      name: "MediaSeed",
       configured: true,
       path: "/apps/seedbox-real",
       status: "healthy",
@@ -157,7 +157,7 @@ describe("primary MediaHub app hub", () => {
       appsError: "Offline",
       integrations: [integration],
     });
-    expect(entries.find((entry) => entry.name === "Seedbox")).toMatchObject({
+    expect(entries.find((entry) => entry.name === "MediaSeed")).toMatchObject({
       configured: true,
       status: "unknown",
       statusLabel: "Status unavailable",

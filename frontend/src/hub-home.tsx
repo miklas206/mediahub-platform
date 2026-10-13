@@ -44,7 +44,7 @@ export function themedAppUrl(
 
 const hubApps = {
   "org.mediahub.seedbox": {
-    name: "Seedbox",
+    name: "MediaSeed",
     description: "Torrents, VPN and automatic feeds.",
     setup: "/store/mediaseed",
     category: "Downloads",

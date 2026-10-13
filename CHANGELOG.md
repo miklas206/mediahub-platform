@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.28
+
+- Keep the home-page app card named MediaSeed before installation and after removal, as well as while installed or connected. Retain the existing package aliases and setup paths.
+
 ## 0.5.27
 
 - Show installation progress for Jellyfin and the shared container-app installer immediately after acceptance and through server status after a page reload. Use an indeterminate bar during publisher-image download, followed by explicit storage, creation and startup phases.
