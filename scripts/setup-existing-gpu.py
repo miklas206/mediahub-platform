@@ -81,6 +81,10 @@ def main():
     helper = "/root/mediahub-gpu-tool-" + token + ".py"
     if not args.test_only:
         choices = discover()
+        if not choices:
+            raise ValueError(
+                "No ready GPU detected. Check the GPU diagnostics above; no LXC changes were made"
+            )
         for gpu in choices:
             print(gpu["id"] + "  " + gpu["name"])
         selected_id = args.gpu or input("GPU ID to share (Enter cancels): ").strip()

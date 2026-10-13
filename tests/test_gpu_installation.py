@@ -194,9 +194,16 @@ def test_proxmox_discovery_excludes_non_gpu_devices(monkeypatch):
         "which",
         lambda command: "/usr/bin/nvidia-smi" if command == "nvidia-smi" else None,
     )
-    monkeypatch.setattr(
-        proxmox_gpu, "run", lambda *args: NVIDIA["uuid"] + ", NVIDIA RTX 3070 Ti, 0"
-    )
+
+    def query(*args):
+        assert args == (
+            "nvidia-smi",
+            "--query-gpu=uuid,name,pci.bus_id",
+            "--format=csv,noheader,nounits",
+        )
+        return NVIDIA["uuid"] + ", NVIDIA RTX 3070 Ti, 00000000:0D:00.0"
+
+    monkeypatch.setattr(proxmox_gpu, "run", query)
 
     class Device:
         def __init__(self, path):
@@ -207,6 +214,10 @@ def test_proxmox_discovery_excludes_non_gpu_devices(monkeypatch):
 
         def glob(self, pattern):
             return []
+
+        def read_text(self):
+            assert self.path == "/proc/driver/nvidia/gpus/0000:0d:00.0/information"
+            return "GPU UUID: " + NVIDIA["uuid"] + "\nDevice Minor: 0\n"
 
         def exists(self):
             return self.path in NVIDIA["devices"]
@@ -222,6 +233,32 @@ def test_proxmox_discovery_excludes_non_gpu_devices(monkeypatch):
 
     monkeypatch.setattr(proxmox_gpu, "Path", Device)
     assert proxmox_gpu.discover() == [NVIDIA | {"name": "NVIDIA RTX 3070 Ti"}]
+
+
+@pytest.mark.parametrize("kind", ["valid", "wrong-uuid", "missing", "bad-bus", "missing-minor"])
+def test_nvidia_device_minor_requires_kernel_uuid_match(tmp_path, monkeypatch, kind):
+    directory = tmp_path / "gpu-information"
+    directory.mkdir()
+    content = "GPU UUID: " + ("GPU-other" if kind == "wrong-uuid" else NVIDIA["uuid"]) + "\n"
+    if kind != "missing-minor":
+        content += "Device Minor: 7\n"
+    if kind != "missing":
+        (directory / "information").write_text(content)
+
+    class KernelPath:
+        def __init__(self, value):
+            self.value = value
+
+        def __truediv__(self, value):
+            return KernelPath(self.value + "/" + value)
+
+        def read_text(self):
+            assert self.value == "/proc/driver/nvidia/gpus/0000:0d:00.0/information"
+            return (directory / "information").read_text()
+
+    monkeypatch.setattr(proxmox_gpu, "Path", KernelPath)
+    bus = "../../bad" if kind == "bad-bus" else "00000000:0D:00.0"
+    assert proxmox_gpu.nvidia_minor(NVIDIA["uuid"], bus) == ("7" if kind == "valid" else None)
 
 
 def test_proxmox_gpu_mapping_keeps_tun_and_uses_free_slot(tmp_path, monkeypatch):

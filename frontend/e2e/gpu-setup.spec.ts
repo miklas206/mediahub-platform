@@ -40,7 +40,7 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await page.getByLabel("MediaHub LXC ID").fill("107");
     await expect(page.getByLabel("Proxmox GPU preparation command")).toContainText("--ctid 107");
-    await expect(page.getByLabel("Proxmox GPU preparation command")).toContainText("v0.5.31");
+    await expect(page.getByLabel("Proxmox GPU preparation command")).toContainText("v0.5.33");
     await page.getByLabel("MediaHub LXC ID").fill("107; reboot");
     await expect(page.getByLabel("Proxmox GPU preparation command")).toHaveCount(0);
     await page.getByLabel("MediaHub LXC ID").fill("107");

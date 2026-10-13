@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.33
+
+- Fix NVIDIA discovery incorrectly reporting a missing Proxmox driver because `minor_number` is not a supported nvidia-smi query field. Query the PCI bus ID and verify the UUID/device minor against kernel GPU information; never assume the GPU index equals its device node.
+- Point the in-app preparation command at the corrected GPU tools and stop with diagnostics when no ready GPUs are detected.
+
 ## 0.5.32
 
 - Fix Core reporting 0.5.28 in releases 0.5.29-31, which caused the host updater to reject requests against the newer installed-version marker. Add a release consistency regression check.

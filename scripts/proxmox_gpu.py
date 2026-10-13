@@ -16,6 +16,24 @@ def run(*args):
     return subprocess.check_output(list(map(str, args)), text=True).strip()
 
 
+def nvidia_minor(uuid, bus):
+    """Resolve the device node from kernel evidence, never from the GPU index."""
+    match = re.fullmatch(r"([0-9a-fA-F]{4,8}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-7])", bus)
+    if not match:
+        return None
+    domain, slot, device, function = match.groups()
+    pci = f"{int(domain, 16):04x}:{slot.lower()}:{device.lower()}.{function}"
+    try:
+        information = (Path("/proc/driver/nvidia/gpus") / pci / "information").read_text()
+    except OSError:
+        return None
+    kernel_uuid = re.search(r"^GPU UUID:\s*(GPU-[a-fA-F0-9-]+)\s*$", information, re.M)
+    minor = re.search(r"^Device Minor:\s*([0-9]+)\s*$", information, re.M)
+    if not kernel_uuid or kernel_uuid.group(1) != uuid or not minor:
+        return None
+    return minor.group(1)
+
+
 def discover():
     gpus = []
     for render in sorted(Path("/sys/class/drm").glob("renderD*")):
@@ -41,7 +59,7 @@ def discover():
     if shutil.which("nvidia-smi"):
         try:
             rows = run(
-                "nvidia-smi", "--query-gpu=uuid,name,minor_number", "--format=csv,noheader,nounits"
+                "nvidia-smi", "--query-gpu=uuid,name,pci.bus_id", "--format=csv,noheader,nounits"
             )
         except subprocess.CalledProcessError:
             print(
@@ -57,8 +75,17 @@ def discover():
         ]
         shared += sorted(Path("/dev/nvidia-caps").glob("nvidia-cap*"))
         for row in csv.reader(rows.splitlines(), skipinitialspace=True):
-            uuid, name, minor = [value.strip() for value in row]
-            if not re.fullmatch(r"GPU-[a-fA-F0-9-]{8,60}", uuid) or not minor.isdigit():
+            if len(row) != 3:
+                continue
+            uuid, name, bus = [value.strip() for value in row]
+            if not re.fullmatch(r"GPU-[a-fA-F0-9-]{8,60}", uuid):
+                continue
+            minor = nvidia_minor(uuid, bus)
+            if minor is None:
+                print(
+                    "NVIDIA device mapping could not be verified against the host kernel.",
+                    file=sys.stderr,
+                )
                 continue
             nodes = [Path("/dev/nvidia" + minor)] + [p for p in shared if p.exists()]
             if (
