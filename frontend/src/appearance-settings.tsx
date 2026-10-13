@@ -169,7 +169,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
           )}
         </p>
         <div className="theme-gallery" role="group" aria-label={t("Themes")}>
-          {themePresets.map((preset) => {
+          {[...themePresets.filter((preset) => preset.id !== "classic"), ...themePresets.filter((preset) => preset.id === "classic")].map((preset) => {
             const palette = appearanceTokens(
               preset.value || defaultAppearance,
               preset.value?.mode !== "light",

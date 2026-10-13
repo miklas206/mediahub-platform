@@ -34,10 +34,18 @@ MediaSeed separates RSS, tracker and VPN forms from their lists/verification pan
 MediaVPN uses a connection-card grid and a clear empty state. Existing actions, real
 status, authentication, torrent storage and fail-closed network behavior are preserved.
 
-The default look is now Midnight Glass. Scenic environments differ visibly: original
-vector waves, a generated snowy panorama, a terminal grid, layered ridges and an amber
-coastal horizon. These are original assets inspired by the references. Ambient movement
-respects reduced motion. No decorative image is required for controls to remain usable.
+The default look is Midnight Glass. The latest iteration removes scenic wallpaper
+from all active themes and their thumbnails. Subtle low-opacity radial light fields
+create depth; Midnight and Floating use very slow drift. Each theme also changes
+button shape, hover/press feedback and dialog/toast entry behavior. Reduced motion
+removes these transitions and animations. Precision uses direct minimal feedback;
+Soft Orbit uses rounded controls and soft lift; Edge Signal uses crisp underline
+feedback. Existing notification auto-close and pause-on-hover/focus remain intact.
+
+Appearance presents five compact theme cards, with Classic below, then grouped
+interface controls. MediaSeed's Downloads view has measured transfer/count cards,
+a compact torrent table and a real RSS summary rail. Missing torrent data displays
+an em dash rather than fabricated zero rates. No VPN or torrent actions are started.
 
 MediaHub passes the selected named theme only to its own MediaSeed/MediaVPN app links.
 Each independent app also has a header theme selector remembered in that browser.

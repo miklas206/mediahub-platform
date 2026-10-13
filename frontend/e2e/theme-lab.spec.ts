@@ -102,6 +102,13 @@ for (const width of [1440, 390, 320]) {
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true);
+      const interaction = await page.evaluate(() => {
+        const button = document.querySelector('.theme-try-actions button')!;
+        return { radius: getComputedStyle(button).borderRadius, feedback: getComputedStyle(document.documentElement).getPropertyValue('--toast-enter').trim() };
+      });
+      expect(interaction.feedback).toBe(({ 'midnight-glass': 'feedback-glass', 'soft-orbit': 'feedback-soft', 'precision-terminal': 'feedback-terminal', 'floating-layers': 'feedback-float', 'edge-signal': 'feedback-edge' })[id]);
+      expect(interaction.radius).not.toBe('0px');
+      await page.screenshot({ path: `test-results/theme-${id}-appearance-${width}.png`, animations: "disabled" });
       await panel
         .getByRole("button", { name: "Preview dialog", exact: true })
         .click();
