@@ -161,17 +161,15 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
       finishAppearanceSave(session);
     }
   }
-  const light = draft?.mode === "light";
   const selectedStyle = draft?.style || "midnight-glass";
   const quickThemes = themePresets.filter((preset) => preset.id !== "classic");
-  const preview = (preset: (typeof themePresets)[number], isLight = false) => {
+  const preview = (preset: (typeof themePresets)[number]) => {
     const value = preset.value || defaultAppearance;
-    const palette = appearanceTokens(value, !isLight);
+    const palette = appearanceTokens(value, true);
     return (
       <span
         className="theme-mini"
         data-style={preset.id}
-        data-light={isLight || undefined}
         aria-hidden="true"
         style={
           {
@@ -215,17 +213,18 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               className="theme-choice"
               key={preset.id}
               disabled={busy}
-              aria-pressed={!light && selectedStyle === preset.id}
+              aria-pressed={selectedStyle === preset.id}
               onClick={() =>
                 choose({
                   ...preset.value!,
+                  mode: draft?.mode || preset.value!.mode,
                   reducedMotion: draft?.reducedMotion ?? false,
                 })
               }
             >
               <span className="theme-preview-frame">
                 {preview(preset)}
-                {!light && selectedStyle === preset.id && (
+                {selectedStyle === preset.id && (
                   <span className="theme-selected">
                     <Check size={13} />
                   </span>
@@ -235,37 +234,6 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               <small>{t(preset.description)}</small>
             </button>
           ))}
-          <button
-            type="button"
-            className="theme-choice theme-light-choice"
-            disabled={busy}
-            aria-pressed={light}
-            onClick={() =>
-              choose({
-                ...themePresets.find(
-                  (preset) => preset.id === "midnight-glass",
-                )!.value!,
-                mode: "light",
-                reducedMotion: draft?.reducedMotion ?? false,
-              })
-            }
-          >
-            <span className="theme-preview-frame">
-              {preview(
-                themePresets.find((preset) => preset.id === "midnight-glass")!,
-                true,
-              )}
-              {light && (
-                <span className="theme-selected">
-                  <Check size={13} />
-                </span>
-              )}
-            </span>
-            <strong>{t("Light")}</strong>
-            <small>
-              {t("A clean and bright option for well-lit environments.")}
-            </small>
-          </button>
         </div>
         <div className="appearance-interface">
           <h2 className="appearance-section-label">{t("Interface options")}</h2>

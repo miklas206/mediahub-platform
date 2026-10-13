@@ -109,7 +109,7 @@ for (const width of [1440, 390, 320]) {
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true);
-      await expect(panel.locator(".theme-gallery > .theme-choice")).toHaveCount(6);
+      await expect(panel.locator(".theme-gallery > .theme-choice")).toHaveCount(5);
       await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = true; });
       const interaction = await page.evaluate(() => {
         const button = document.querySelector('.theme-try-actions button')!;
@@ -261,12 +261,15 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   await page.screenshot({path:`test-results/general-clean-${width}.png`,animations:"disabled"});
   await page.getByRole("tab", {name:"Appearance",exact:true}).click();
   await expect(page.getByRole("heading", {name:"Appearance",exact:true})).toBeVisible();
-  await page.locator(".theme-light-choice").click();
+  await page.getByLabel("Color mode",{exact:true}).selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-appearance-mode","light");
   await page.getByRole("button",{name:"Save",exact:true}).click();
   await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
   await page.reload();
-  await expect(page.locator(".theme-light-choice")).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByLabel("Color mode",{exact:true})).toHaveValue("light");
+  await page.locator(".theme-choice").filter({hasText:"Soft Orbit"}).click();
+  await expect(page.locator("html")).toHaveAttribute("data-appearance-mode","light");
+  await expect(page.locator(".theme-choice").filter({hasText:"Soft Orbit"})).toHaveAttribute("aria-pressed","true");
   expect(writes).toHaveLength(1);
 });
 
@@ -288,8 +291,6 @@ test("interface switches have the intended compact switch geometry", async ({pag
 for (const width of [1440, 390, 320]) test(`custom accent wheel previews, cancels and saves at ${width}px`, async ({page}) => {
  const {writes}=await mockHub(page);await page.setViewportSize({width,height:1000});await page.goto("/settings?section=Appearance");
  await page.locator(".theme-choice").filter({hasText:"Midnight Glass"}).click();
- const light=page.locator(".theme-light-choice"), first=page.locator(".theme-choice").first();
- const sizes=await Promise.all([first.boundingBox(),light.boundingBox()]);expect(Math.abs(sizes[0]!.width-sizes[1]!.width)).toBeLessThan(1);expect(Math.abs(sizes[0]!.height-sizes[1]!.height)).toBeLessThan(1);
  await page.getByRole("button",{name:"Choose custom color",exact:true}).click();
  const dialog=page.getByRole("dialog",{name:"Choose custom color",exact:true});await expect(dialog).toBeVisible();
  await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("#123456");
