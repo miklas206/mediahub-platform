@@ -72,14 +72,14 @@ describe("account language", () => {
       "mediahub er tilsluttet.",
     );
     expect(translateText("5 of 5 locations are available.")).toBe(
-      "5 af 5 placeringer er tilg?ngelige.",
+      "5 af 5 placeringer er tilgængelige.",
     );
     expect(translateText("4 apps are healthy.")).toBe("4 apps er sunde.");
     expect(translateText("1 app needs attention.")).toBe(
-      "1 app kr?ver opm?rksomhed.",
+      "1 app kræver opmærksomhed.",
     );
     expect(translateText("2 apps need attention.")).toBe(
-      "2 apps kr?ver opm?rksomhed.",
+      "2 apps kræver opmærksomhed.",
     );
     expect(translateText("1 app is healthy.")).toBe("1 app er sund.");
   });
@@ -94,4 +94,14 @@ describe("account language", () => {
     expect(countryName(wireValue)).toBe("Denmark");
     expect(t("Remote app: healthy")).toBe("Remote app: healthy");
   });
+});
+
+
+it("normalizes legacy Danish messages for English accounts and preserves values", () => {
+  setLanguage("en");
+  expect(t("Bruger")).toBe("User");
+  expect(t("Ingen adgang")).toBe("No access");
+  expect(t("Delete {name}", {name: "User & File.mkv"})).toBe("Delete User & File.mkv");
+  setLanguage("da");
+  expect(t("Delete {name}", {name: "User & File.mkv"})).toBe("Slet User & File.mkv");
 });

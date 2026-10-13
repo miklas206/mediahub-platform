@@ -60,7 +60,9 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     import httpx
     from fastapi.testclient import TestClient
 
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / module))
+    roots = (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[3])
+    app_root = next(root / module for root in roots if (root / module / module / "app.py").exists())
+    monkeypatch.syspath_prepend(str(app_root))
     create_app = importlib.import_module(module + ".app").create_app
 
     configure(logged_in)
@@ -69,7 +71,7 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     browser_origin = "https://custom.example" if external else "https://seed.example"
     if external:
         assert logged_in.put("/api/v1/app-settings/" + package, json={"externalUrl": browser_origin}).status_code == 200
-    creation = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {package: "viewer"}})
+    creation = logged_in.post("/api/users", json={"username": "member", "password": "synthetic-password-123", "appRoles": {package: "viewer"}, "language": "da"})
     assert creation.status_code == 200
     created = creation.json()["data"]
     with TestClient(logged_in.app, base_url="http://127.0.0.1:18765") as member:
@@ -89,6 +91,10 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
             assert callback.status_code == 303
             assert seed.get("/api/auth/me").json()["username"] == "member"
             assert seed.get("/api/auth/me").json()["role"] == "viewer"
+            assert seed.get("/api/auth/me").json()["language"] == "da"
+            member.headers["X-MediaHub-CSRF"] = member.get("/api/auth/me").json()["data"]["csrf"]
+            assert member.put("/api/v1/auth/preferences", json={"language": "en"}).status_code == 200
+            assert seed.get("/api/auth/me").json()["language"] == "en"
             # Hub overview grants are read-only, package-bound and recheck roles.
             from sqlalchemy import select
             from mediahub.auth import digest

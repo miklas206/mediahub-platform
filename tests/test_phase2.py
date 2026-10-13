@@ -304,6 +304,27 @@ def test_administrator_setup_requires_no_token_and_cannot_be_reused(setup_client
     ]  # user alone is not setup
 
 
+def test_setup_does_not_select_or_install_apps(setup_client):
+    bootstrap(setup_client)
+    svc = setup_client.app.state.services
+    draft = setup_client.get("/api/v1/setup/draft").json()["data"]["draft"]
+    draft["selected_apps"] = ["org.mediahub.plex"]
+    state = save(setup_client, draft)
+    assert state["draft"]["selected_apps"] == []
+    denied = setup_client.post("/api/v1/plex/install", json={
+        "installation": {"moviesStorageIds": ["movies"], "appdataStorageId": "appdata"},
+        "reviewedPlanDigest": "a" * 64,
+    })
+    assert denied.status_code == 409
+    assert denied.json()["error"]["code"] == "setup_required"
+    with pytest.raises(DomainError, match="Finish MediaHub setup"):
+        svc.setup.require_complete()
+    assert setup_client.post("/api/v1/setup/apply", json={"revision": state["revision"]}).status_code == 200
+    svc.setup.require_complete()
+    assert setup_client.get("/api/v1/apps").json()["data"] == []
+    assert not any("/plex/" in path for _, path in svc.agent.calls)
+
+
 def test_setup_resume_revision_and_completion(setup_client):
     bootstrap(setup_client)
     root = setup_client.storage_root
@@ -645,3 +666,11 @@ def test_mapping_edit_never_moves_files(setup_client):
     assert response.json()["data"]["filesMoved"] is False
     assert (root / "one" / "keep.txt").read_text() == "keep"
     assert list((root / "two").iterdir()) == []
+
+
+@pytest.mark.parametrize("language", ["en", "da"])
+def test_bootstrap_saves_chosen_account_language(setup_client, language):
+    response = setup_client.post("/api/v1/setup/administrator", json={"username": "owner", "password": "synthetic-test-password", "language": language})
+    assert response.status_code == 200
+    assert response.json()["data"]["language"] == language
+    assert setup_client.get("/api/v1/auth/me").json()["data"]["language"] == language

@@ -182,7 +182,7 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
             }
         )
     container = {
-        "Image": policy.image,
+        "Image": "lscr.io/linuxserver/plex:latest",
         "User": f"{policy.uid}:{policy.gid}",
         "Labels": labels,
         "Env": [

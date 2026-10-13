@@ -155,7 +155,7 @@ export function buildHubEntries({
           return {
             id: entry.id,
             name: "MediaSeed",
-            description: "Independent Seedbox app · preview",
+            description: "Independent Seedbox app",
             category: definition.category,
             path: mediaseed.openUrl || address.href,
             configured: true,
@@ -260,7 +260,7 @@ export function buildHubEntries({
       entries.push({
         id: "org.mediahub.mediavpn",
         name: "MediaVPN",
-        description: "WireGuard connections · preview",
+        description: "WireGuard connections",
         category: "Network",
         path: mediavpn.openUrl || address.href,
         settingsPath: "/app-settings/org.mediahub.mediavpn",
@@ -282,9 +282,20 @@ export function buildHubEntries({
       });
     }
   }
-  return entries.sort(
-    (left, right) => Number(right.configured) - Number(left.configured),
-  );
+  if (!entries.some(entry => entry.id === "org.mediahub.mediavpn")) {
+    entries.push({
+      id: "org.mediahub.mediavpn",
+      name: "MediaVPN",
+      description: "WireGuard connections",
+      category: "Network",
+      path: "/store/mediavpn",
+      configured: false,
+      status: "unknown",
+      statusLabel: mediavpnError ? "Status unavailable" : "Not set up",
+      action: "Set up",
+    });
+  }
+  return entries.sort((left, right) => Number(right.configured) - Number(left.configured));
 }
 
 export function HubHome({

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.5.8
+
+- Promote the tested beta workspace to release: compact app cards and Overview, five distinct themes with abstract ambient backgrounds, custom accent wheel, and independent light/dark mode.
+- Keep all five account-selectable navigation layouts: sidebar, top navigation, top dock, bottom dock and compact menu. Preserve existing account preferences and default navigation.
+- Include all main fixes through 68b679c: shared GitHub metadata/cooldowns, active update progress, in-app confirmations, reconnect grace, account localization and safe app installation.
+- Update code in place; retain release users, secrets, app configuration, external storage mounts and media. Never import beta databases or credentials.
+
+
+- Complete account-language propagation to MediaSeed and MediaVPN through hub login and subsequent session checks. Choose Danish or English when creating an administrator or managed user; ordinary users can change their own language.
+- Translate remaining hub administration, FjordHub integration, setup, app-overview and error messages. MediaSeed/MediaVPN now localize dialogs, statuses, country names, tracker account/rule information, cleanup, recommendations and extension downloads. Preserve names, file paths, URLs and API values.
+- MediaSeed extension 1.2.2 follows the connected account language, including saved seeding settings, import feedback and context-menu text. Preserve third-party tracker page content when injecting link capture.
+
+- Remove the hardcoded beta badge from release navigation branding. Distinguish GitHub rate limits, rejected credentials and access restrictions in update-check errors without exposing provider response bodies.
+- Fetch current approved publisher images when installing Plex, Jellyfin and the legacy Seedbox runtime, then persist immutable publisher pins. Stop on pull failure instead of silently using cached images; preserve installed versions when restarting or adopting apps. Rebuild new FjordHub installs from current upstream source with fresh base images.
+- Keep MediaVPN visible before configuration and provide an honest setup page; automatic independent MediaVPN/MediaSeed deployment is still separate.
+- Remove the new Proxmox bootstrap source workspace after successful installation with a resolved-path guard; stop prefetching an old Plex image during Core setup. Retain runtime images, media, app data and rollback records.
+
 - Show official Jellyfin, Prowlarr, Radarr, Sonarr and autobrr artwork with retained licenses. Accept FjordHub's token-granted, app-specific public registry icons through the bounded local proxy without forwarding Bearer credentials to GitHub; share proxy icons on the FjordFlix dashboard and preserve safe fallbacks.
 
 - Add Jellyfin, Prowlarr, Radarr, Sonarr and optional autobrr to the App Store with a shared HTTPS/admin/CSRF-protected container installation page. Use immutable images, operator-approved host/storage policy, reviewed plan digests, non-root containers, private LAN ports, persistent configuration, ownership-checked actions and data-preserving removal. Generate policy for new Linux installs; existing hosts need explicit operator preparation. Container state is not application health. Tracker configuration, external-client integration and the proposed automatic download queue remain separate and disabled.

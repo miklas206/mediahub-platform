@@ -1,4 +1,5 @@
 import { useConfirm } from "./confirmation-dialog";
+import { t, getLocale } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { NotificationPopup } from "./notification-popup";
@@ -79,24 +80,24 @@ export function canStart(
 }
 
 function statusLabel(status: UpdateStatus | undefined) {
-  if (!status) return "Status ikke bekræftet";
+  if (!status) return t("Status not confirmed");
   if (status.running)
     return status.stale
-      ? "Opdatering i gang · afventer forbindelse"
-      : "Opdatering i gang";
-  if (status.stale) return "Sidste kendte status · forældet";
+      ? t("Update in progress · waiting for connection")
+      : t("Update in progress");
+  if (status.stale) return t("Last known status · stale");
   if (!status.ok || ["failed", "error"].includes(status.state || ""))
-    return "Opdatering mislykkedes";
-  if (status.update_available) return "Opdatering tilgængelig";
-  return "Ingen opdatering tilgængelig";
+    return t("Update failed");
+  if (status.update_available) return t("Update available");
+  return t("No update available");
 }
 
 function stamp(value: string | number | undefined) {
-  if (value === undefined) return "Ikke bekræftet";
+  if (value === undefined) return t("Not confirmed");
   const date = new Date(typeof value === "number" ? value * 1000 : value);
   return Number.isNaN(date.getTime())
-    ? "Ikke bekræftet"
-    : date.toLocaleString("da-DK");
+    ? t("Not confirmed")
+    : date.toLocaleString(getLocale());
 }
 
 export function FjordHubUpdates({
@@ -225,17 +226,13 @@ export function FjordHubUpdates({
       className="fjordhub-update-panel stack"
       aria-label="FjordHub-opdateringer"
     >
-      <h3>Appoplysninger og opdateringer</h3>
+      <h3>{t("App information and updates")}</h3>
       <p className="muted">
-        Status kontrolleres hvert 45. sekund og hvert 5. sekund under
-        opdatering. Kun dit valg starter installation.
-      </p>
+        {t(" Status is checked every 45 seconds and every 5 seconds during updates. Installation starts only when you choose it. ")}</p>
       {error && <NotificationPopup tone="danger">{error}</NotificationPopup>}
       {!ids.length && (
         <p>
-          Ingen appoplysninger eller opdateringsadgang. Vælg adgang på det
-          eksisterende token i FjordHub; ældre servere kan mangle API-støtte.
-        </p>
+          {t(" App information or update access is unavailable. Enable access on the existing FjordHub token; older servers may lack API support. ")}</p>
       )}
       {ids.map((id) => {
         const info = metadata[id],
@@ -261,27 +258,24 @@ export function FjordHubUpdates({
             <small>
               {info?.installed
                 ? `Installeret${info.port ? ` · Port ${info.port}` : ""}`
-                : "Installation ikke bekræftet"}
+                : t("Installation not confirmed")}
               {!info?.permissions.updates && " · Ingen opdateringsrettighed"}
             </small>
             {status && (
               <>
                 <small>
-                  Installeret revision: {status.current_rev || "Ukendt"} ·
-                  Seneste revision: {status.remote_rev || "Ukendt"}
+                  {t(" Installed revision: ")}{status.current_rev || t("Unknown")} {t(" · Latest revision: ")}{status.remote_rev || t("Unknown")}
                 </small>
                 <small>
-                  Versionskontrol: {stamp(status.checked_at)} · Start:{" "}
-                  {stamp(status.started_at)} · Afsluttet:{" "}
+                  {t(" Version check: ")}{stamp(status.checked_at)} {t(" · Started:")}{" "}
+                  {stamp(status.started_at)} {t(" · Finished:")}{" "}
                   {stamp(status.finished_at)}
                 </small>
               </>
             )}
             {status?.accepted && status.running && (
               <p role="status">
-                Start accepteret (202) — ikke færdig. Afventer bekræftet
-                resultat.
-              </p>
+                {t(" Start accepted (202) — not finished. Waiting for a confirmed result. ")}</p>
             )}
             {administrator && info?.permissions.updates && (
               <div className="button-row">
@@ -291,13 +285,12 @@ export function FjordHubUpdates({
                   }
                   onClick={() => void act(id, "check")}
                 >
-                  Kontrollér version
-                </button>
+                  {t(" Check version ")}</button>
                 <button
                   disabled={!!busy || !canStart(info, status, stale)}
                   onClick={() => void act(id, "start")}
                 >
-                  {busy === id ? "Behandler…" : "Opdatér app"}
+                  {busy === id ? t("Processing…") : t("Update app")}
                 </button>
               </div>
             )}
@@ -305,7 +298,7 @@ export function FjordHubUpdates({
         );
       })}
       <small className="muted">
-        Seneste statuspoll: {stamp(view.polled_at)}
+        {t(" Last status poll: ")}{stamp(view.polled_at)}
       </small>
     </section>
   );

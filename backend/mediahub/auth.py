@@ -33,7 +33,7 @@ class AuthService:
             return db.scalar(select(User.id).limit(1)) is None
 
     def create_admin(self, username: str, password: str):
-        username = username.strip().lower()
+        username = username.strip()
         if not username or len(username) > 80 or len(password) < 12 or len(password) > 256:
             raise DomainError(
                 "invalid_credentials", "Use a username and a 12–256 character password"
@@ -45,7 +45,12 @@ class AuthService:
 
     def users(self):
         with self.sessions() as db:
-            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id)} for user in db.scalars(select(User).order_by(User.username))]
+            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": self.account_language(db, user.id)} for user in db.scalars(select(User).order_by(User.username))]
+
+    @staticmethod
+    def account_language(db, user_id):
+        row = db.scalar(select(Setting).where(Setting.key == "user.preferences:" + user_id))
+        return row.value.get("language", "en") if row else "en"
 
     @staticmethod
     def app_roles(db, user_id):
@@ -67,8 +72,8 @@ class AuthService:
     def public_user(user):
         return {"id": user.id, "username": user.username, "role": user.role, "createdAt": user.created_at}
 
-    def save_user(self, username, password, user_id=None, role=None, app_roles=None):
-        username = username.strip().lower()
+    def save_user(self, username, password, user_id=None, role=None, app_roles=None, language=None):
+        username = username.strip()
         if not username or len(username) > 80 or (password and not 12 <= len(password) <= 256) or (not user_id and not password):
             raise DomainError("invalid_credentials", "Use a username and a 12-256 character password")
         with self.sessions.begin() as db:
@@ -97,6 +102,16 @@ class AuthService:
                     user.password_hash = hasher.hash(password)
                     db.execute(delete(Session).where(Session.user_id == user.id))
             db.flush()
+            if language is not None:
+                if language not in {"en", "da"}:
+                    raise DomainError("invalid_language", "Choose Danish or English", 422)
+                key = "user.preferences:" + user.id
+                row = db.scalar(select(Setting).where(Setting.key == key))
+                if row:
+                    row.value = {**row.value, "language": language}
+                else:
+                    db.add(Setting(key=key, value={"language": language}))
+                db.flush()
             if app_roles is not None:
                 key = "app_roles:" + user.id
                 row = db.scalar(select(Setting).where(Setting.key == key))
@@ -105,7 +120,7 @@ class AuthService:
                 else:
                     db.add(Setting(key=key, value=app_roles))
                 db.flush()
-            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id)}
+            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": self.account_language(db, user.id)}
 
     def delete_user(self, user_id, actor_id):
         with self.sessions.begin() as db:
@@ -139,7 +154,7 @@ class AuthService:
         clock = self.throttle("login:" + client)
         self.throttle("account:" + username.strip().lower())
         with self.sessions.begin() as db:
-            user = db.scalar(select(User).where(User.username == username.strip().lower()))
+            user = db.scalar(select(User).where(User.username == username.strip()))
             try:
                 valid = hasher.verify(user.password_hash if user else DUMMY_HASH, password)
             except (VerificationError, InvalidHashError):

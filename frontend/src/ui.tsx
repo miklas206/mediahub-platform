@@ -70,6 +70,7 @@ import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
 import { UsersPage } from "./users";
 import { AppSettingsPage } from "./app-settings";
+import { MediaVPNSetupPage } from "./mediavpn-setup";
 import {
   AppRuntimePage,
   DeviceDiagnostics,
@@ -357,8 +358,8 @@ export function Application() {
 
 function MemberApps({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
   const apps = useData<{ id: string; name: string; openUrl?: string }[]>("/apps?include_health=false");
-  if (user.totpRequired && !user.totpEnabled) return <main className="page stack"><Suspense fallback={<Loading />}><SecuritySettings /></Suspense><button onClick={() => window.location.reload()}>Forts\u00e6t</button></main>;
-  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><button onClick={() => void onLogout()}>Log ud</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>Mine apps</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{"\u00c5bn app"}</a> : <span>Loginintegration ikke konfigureret</span>}</article>)}</div></section></main>;
+  if (user.totpRequired && !user.totpEnabled) return <main className="page stack"><Suspense fallback={<Loading />}><SecuritySettings /></Suspense><button onClick={() => window.location.reload()}>{t("Continue")}</button></main>;
+  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><LanguageSettings compact /><button onClick={() => void onLogout()}>{t("Sign out")}</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>{t("My apps")}</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{t("Open app")}</a> : <span>{t("Login integration not configured")}</span>}</article>)}</div></section></main>;
 }
 
 function Login({
@@ -477,7 +478,6 @@ function Brand() {
       <span>
         Media<span>Hub</span>
       </span>
-      <small className="brand-beta">beta</small>
     </div>
   );
 }
@@ -979,6 +979,7 @@ function Shell({
                     element={<FjordHubUninstallPage />}
                   />
                   <Route path="/store" element={<Navigate to="/" replace />} />
+                  <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"

@@ -67,11 +67,21 @@ printf 'deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com
 apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker
-git clone --depth 1 https://github.com/miklas206/fjordcopy.git /opt/mediahub-source
+INSTALL_SOURCE=$(mktemp -d /var/tmp/mediahub-install.XXXXXXXX)
+git clone --depth 1 https://github.com/miklas206/mediahub-platform.git "$INSTALL_SOURCE/source"
 ADDRESS=$(ip -4 -o addr show dev eth0 scope global | awk '{split($4, address, "/"); print address[1]; exit}')
 [ -n "$ADDRESS" ] || { echo 'DHCP did not provide an IPv4 address.' >&2; exit 1; }
-python3 /opt/mediahub-source/scripts/install_linux.py --root /opt/mediahub --lan-ip "$ADDRESS" \
+python3 "$INSTALL_SOURCE/source/scripts/install_linux.py" --root /opt/mediahub --lan-ip "$ADDRESS" \
     --storage /storage --storage-identities /etc/mediahub-storage-identities.json --yes
+python3 - "$INSTALL_SOURCE" <<'MEDIAHUB_INSTALL_CLEANUP'
+import re, shutil, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+if (root.parent != Path('/var/tmp') or not re.fullmatch(r'mediahub-install\.[A-Za-z0-9]{8}', root.name)
+        or root.is_symlink() or root.resolve() != root):
+    raise SystemExit('Unsafe installation workspace; cleanup stopped.')
+shutil.rmtree(root)
+MEDIAHUB_INSTALL_CLEANUP
 MEDIAHUB_GUEST
 printf 'New MediaHub LXC: %s. Public CA: pct pull %s /opt/mediahub/trust/ca.pem /root/mediahub-public-ca.pem\n' "$CTID" "$CTID"
 printf 'Create your administrator in the setup wizard. Keep the server private until setup is claimed.\n'

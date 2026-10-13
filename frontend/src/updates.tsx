@@ -257,6 +257,38 @@ function UpdateCard({ name, packageId, children }: { name: string; packageId?: s
   );
 }
 
+export function UpdatesProgress({
+  operations,
+}: {
+  operations: Record<string, OperationState | undefined>;
+}) {
+  const entries = Object.entries(operations).filter(
+    (entry): entry is [string, OperationState] => !!entry[1],
+  );
+  return (
+    <>
+      {entries
+        .filter(([, operation]) => operation.status === "running")
+        .map(([id, operation]) => (
+          <OperationProgress key={id} operation={operation} />
+        ))}
+      <section className="updates-console" aria-label={t("Console")}>
+        <details>
+          <summary><Terminal size={17} />{t("Console")}</summary>
+          <div className="updates-console-content">
+            {entries.map(([id, operation]) => (
+              <div key={id}>
+                <h3>{translateText(operation.title)}</h3>
+                <OperationProgress statusOnly operation={operation} />
+              </div>
+            ))}
+          </div>
+        </details>
+      </section>
+    </>
+  );
+}
+
 export function UpdatesPage({
   apps,
   appsError = "",
@@ -901,28 +933,13 @@ export function UpdatesPage({
   return (
     <div className="stack updates-page">
       {updating && <UpdateRestartNotice disconnected={restarting} />}
-      <ErrorBox error={error || (restarting ? "" : serverError || appsError)} />
-      {!restarting && (
-        <ErrorBox error={platformRelease.error || updateSummary.error} />
-      )}
+      <ErrorBox error={error || (restarting ? "" : serverError || appsError || platformRelease.error || updateSummary.error)} />
       {notice && (
         <NotificationPopup tone="success">
           {translateText(notice)}
         </NotificationPopup>
       )}
-      <section className="updates-console" aria-label={t("Console")}>
-        <details open={updating || undefined}>
-          <summary><Terminal size={17} />{t("Console")}</summary>
-          <div className="updates-console-content">
-            {Object.entries(operations).filter(([, operation]) => operation).map(([id, operation]) => (
-              <div key={id}>
-                <h3>{translateText(operation!.title)}</h3>
-                <OperationProgress activeOnly operation={operation!} />
-              </div>
-            ))}
-          </div>
-        </details>
-      </section>
+      <UpdatesProgress operations={operations} />
       <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
           <div className="button-row">
@@ -986,14 +1003,16 @@ export function UpdatesPage({
             </button>
           )}
         </div>
-        {updateSummary.data?.items
-          .filter((item) => item.checkStatus === "failed")
-          .map((item) => (
-            <NotificationPopup tone="danger" key={item.id}>
-              <strong>{item.name}:</strong> {translateText(item.message)}
-              {item.errorCode && <small> ({item.errorCode})</small>}
-            </NotificationPopup>
-          ))}
+        {updateSummary.data?.items.some((item) => item.checkStatus === "failed") && (
+          <details className="update-card-advanced">
+            <summary>{t("Details")}</summary>
+            {updateSummary.data.items.filter((item) => item.checkStatus === "failed").map((item) => (
+              <p key={item.id}><strong>{item.name}:</strong> {translateText(item.message)}
+                {item.errorCode && <small> ({item.errorCode})</small>}
+              </p>
+            ))}
+          </details>
+        )}
         {updateSummary.data?.items
           .filter((item) => item.checkStatus === "deferred")
           .map((item) => (

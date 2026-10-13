@@ -294,6 +294,15 @@ class PlexControl:
         }
 
     async def status(self):
+        operation = self.runtime.operation if self.runtime else {}
+        if (operation.get("action") == "install" and operation.get("state") in {"running", "failed"}
+                and (not self.policy_file or not Path(self.policy_file).exists())):
+            return {
+                "installationId": operation["installationId"], "hostId": operation["hostId"],
+                "observedAt": time.time(), "health": "unknown", "agentOnline": True,
+                "dockerHealthy": False, "plex": {"running": False},
+                "operation": operation, "control": {"operation": operation}, "checks": [],
+            }
         policy = self.policy()
         data = await self.inspect(policy)
         mounted = await self.storage_verified(policy)

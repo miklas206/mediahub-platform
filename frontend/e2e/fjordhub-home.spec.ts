@@ -228,8 +228,11 @@ for (const width of [1440, 390]) {
       childUpdate.getByRole("button", { name: "Opdatér app" }),
     ).toBeEnabled();
     expect(starts).toBe(0);
-    page.once("dialog", (dialog) => dialog.accept());
     await childUpdate.getByRole("button", { name: "Opdatér app" }).click();
+    const confirmation = page.getByRole("dialog");
+    await expect(confirmation).toContainText("FjordFlix");
+    expect(starts).toBe(0);
+    await confirmation.getByRole("button", { name: /Install/ }).click();
     await expect(childUpdate.getByRole("status")).toContainText(
       "Start accepteret (202)",
     );

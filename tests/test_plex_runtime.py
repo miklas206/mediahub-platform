@@ -9,6 +9,120 @@ from mediahub.errors import DomainError
 from agent.plex_runtime import PlexRuntime
 
 
+def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock, Mock
+
+    from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
+
+    from agent.plex_install import PlexInstallPolicy, installation_plan
+
+    policy = PlexInstallPolicy(
+        hostId="local", bindAddress="192.168.1.10",
+        image="lscr.io/linuxserver/plex@sha256:" + "a" * 64,
+        initImage="sha256:" + "b" * 64,
+        storage={kind: {"label": kind, "kind": kind, "path": str(tmp_path / kind)}
+                 for kind in ("movies", "tv", "appdata")},
+        hostMountSnapshot=str(tmp_path / "snapshot"),
+        requiredFilesystemUuids={str(tmp_path): "verified-media"},
+        storageMarkers={str(tmp_path / "marker"): "verified-media"},
+    )
+    control = SimpleNamespace(
+        lock=asyncio.Lock(), socket="unused", policy_file=tmp_path / "managed.json",
+        storage_verified=AsyncMock(return_value=True), save_intent=Mock(), record=Mock(),
+    )
+    runtime = PlexRuntime(control, None, tmp_path)
+    runtime.policy = lambda: policy
+    runtime.helper = AsyncMock(return_value="owned-prepare-helper")
+    runtime.archive_write = AsyncMock()
+    publisher = "lscr.io/linuxserver/plex@sha256:" + "c" * 64
+    pull = AsyncMock(return_value={"Id": "sha256:" + "d" * 64, "RepoDigests": [publisher]})
+    monkeypatch.setattr("agent.plex_runtime.pull_latest", pull)
+    calls = []
+
+    async def request(method, path, body=None, **kwargs):
+        calls.append((method, path))
+        if path == "/volumes":
+            return {"Volumes": []}
+        if path.startswith("/containers/create"):
+            assert body["Image"] == publisher
+        if path.endswith("/json"):
+            return {"Mounts": []}
+        return {}
+
+    runtime.request = request
+    spec = PlexInstallation(moviesStorageIds=["movies"], appdataStorageId="appdata")
+    plan = installation_plan(policy, spec)
+    assert plan["container"]["Image"] == "lscr.io/linuxserver/plex:latest"
+    async def run():
+        result = await runtime.queue_install(PlexInstallRequest(
+            installation=spec, reviewedPlanDigest=plan["planDigest"],
+        ))
+        pull.assert_not_awaited()
+        await runtime.install_task
+        assert runtime.operation["state"] == "succeeded"
+        return result
+
+    result = asyncio.run(run())
+    assert result["state"] == "accepted"
+    pull.assert_awaited_once_with("unused", "lscr.io/linuxserver/plex")
+    assert calls[-2:] == [("POST", "/containers/owned-prepare-helper/stop?t=2"),
+                          ("DELETE", "/containers/owned-prepare-helper")]
+    assert not any("/images/" in path and method == "DELETE" for method, path in calls)
+    assert not list(tmp_path.glob(".metadata-*"))
+
+
+def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from agent.plex_control import PlexControl
+
+    control = SimpleNamespace(lock=asyncio.Lock(), policy_file=tmp_path / "missing.json")
+    runtime = PlexRuntime(control, None, tmp_path)
+    runtime.policy = lambda: SimpleNamespace(hostId="local")
+    monkeypatch.setattr("agent.plex_runtime.installation_plan", lambda *args: {"planDigest": "reviewed"})
+    runtime.install = AsyncMock(side_effect=DomainError("download_failed", "Image download failed", 503))
+    body = SimpleNamespace(installation=SimpleNamespace(installationId="plex-test"), reviewedPlanDigest="reviewed")
+
+    async def run():
+        assert (await runtime.queue_install(body))["state"] == "accepted"
+        with pytest.raises(DomainError, match="Another Plex operation"):
+            await runtime.queue_install(body)
+        await runtime.install_task
+
+    asyncio.run(run())
+    restarted = PlexRuntime(control, None, tmp_path)
+    assert restarted.operation["state"] == "failed"
+    report = asyncio.run(PlexControl.status(SimpleNamespace(runtime=restarted, policy_file=control.policy_file)))
+    assert report["health"] == "unknown"
+    assert report["operation"]["message"] == "Image download failed"
+
+
+@pytest.mark.parametrize("status,path,code", [
+    (404, "/images/approved-image/json", "plex_image_missing"),
+    (500, "/images/approved-image/json", "plex_provision_failed"),
+    (404, "/containers/plex/json", "plex_provision_failed"),
+])
+def test_missing_install_image_has_actionable_error_without_docker_details(
+    tmp_path, monkeypatch, status, path, code
+):
+    import httpx
+
+    original = httpx.AsyncClient
+
+    def client(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(
+            lambda request: httpx.Response(status, json={"message": "private-runtime-detail"})
+        )
+        return original(**kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    runtime = PlexRuntime(SimpleNamespace(socket="unused"), None, tmp_path)
+    with pytest.raises(DomainError) as error:
+        asyncio.run(runtime.request("GET", path))
+    assert error.value.code == code
+    assert "private-runtime-detail" not in str(error.value)
+
+
 def archive(content, kind=tarfile.REGTYPE):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as stream:

@@ -11,6 +11,50 @@ from agent.install_files import read_json, save_json
 from agent.seedbox_install_driver import ProductionInstallDriver
 
 
+def test_new_install_pulls_both_publishers_before_storage_probe(tmp_path, monkeypatch):
+    item = driver(tmp_path)
+    item.runtime.binding = lambda: (SimpleNamespace(workRoot=str(tmp_path)), spec(provider="protonvpn"))
+    item.runtime.socket = "test-socket"
+    item.runtime.storage_guard = AsyncMock()
+    item.runtime.device_guard = AsyncMock()
+    item.runtime.container.side_effect = httpx.HTTPStatusError(
+        "missing", request=httpx.Request("GET", "http://docker/container"),
+        response=httpx.Response(404),
+    )
+    item.runtime.request.return_value = httpx.Response(200, json={"MemTotal": 8 * 1024**3})
+    item.review = lambda: {"digest": "reviewed"}
+    item.credentials = lambda: SimpleNamespace(vpnConfig="synthetic-wireguard")
+    monkeypatch.setattr("agent.seedbox_install_driver.verify_ram_directory", lambda _: None)
+    monkeypatch.setattr("agent.seedbox_install_driver.VPNProfileRegistry", lambda: SimpleNamespace(
+        get=lambda _: SimpleNamespace(validate=lambda _: None),
+    ))
+    pulled = []
+
+    async def pull(socket, repository):
+        pulled.append(repository)
+        return {"Id": "sha256:" + "a" * 64, "RepoDigests": [repository + "@sha256:" + "c" * 64]}
+
+    async def probe(**kwargs):
+        assert pulled == ["qmcgaw/gluetun", "lscr.io/linuxserver/qbittorrent"]
+        assert item.runtime.resolved_images["vpnImage"] == "qmcgaw/gluetun@sha256:" + "c" * 64
+
+    item.runtime.write_probe = probe
+    monkeypatch.setattr("agent.seedbox_install_driver.pull_latest", pull)
+    # Avoid binding a real host port in this synthetic preflight.
+    monkeypatch.setattr("agent.seedbox_install_driver.socket", SimpleNamespace(
+        socket=lambda *args: SimpleNamespaceContext(), AF_INET=2, SOCK_STREAM=1,
+    ))
+    assert asyncio.run(item.preflight("reviewed"))["state"] == "passed"
+
+
+class SimpleNamespaceContext:
+    def __enter__(self):
+        return SimpleNamespace(bind=lambda _: None)
+
+    def __exit__(self, *args):
+        return False
+
+
 def driver(tmp_path):
     runtime = SimpleNamespace(
         binding=lambda: (SimpleNamespace(workRoot=str(tmp_path)), spec()),

@@ -60,6 +60,7 @@ def host_fingerprint(body: SSHAddress):
 
 @router.post("")
 def start(body: DeployRequest, request: Request):
+    services(request).setup.require_complete()
     return result(services(request).fjordhub_deploy.start(body))
 
 

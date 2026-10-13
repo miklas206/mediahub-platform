@@ -93,7 +93,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
         <Panel title={t("Plex is starting")}>
           <p>
             {t(
-              "Installation accepted. Plex is checking its account and libraries.",
+              "Installation accepted. The latest Plex image is downloading in the background. Open the app to follow installation status.",
             )}
           </p>
           <Link to="/apps">{t("View installed apps")}</Link>

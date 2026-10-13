@@ -7,8 +7,31 @@ import httpx
 import pytest
 from mediahub.errors import DomainError
 from mediahub.platform_source import GitHubSourceProvider, download_source, normalize_source
+from mediahub.platform_updates import GitHubReleaseProvider
 
 COMMIT = "a" * 40
+
+
+@pytest.mark.parametrize("provider", [GitHubSourceProvider, GitHubReleaseProvider])
+@pytest.mark.parametrize(
+    "status,headers,code",
+    [
+        (401, {}, "github_credentials_rejected"),
+        (403, {}, "github_access_denied"),
+        (403, {"x-ratelimit-remaining": "0"}, "github_rate_limited"),
+        (403, {"retry-after": "60"}, "github_rate_limited"),
+        (429, {}, "github_rate_limited"),
+    ],
+)
+def test_github_access_errors_distinguish_throttling(provider, status, headers, code):
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(status, headers=headers, text="private provider details")
+    )
+    with pytest.raises(DomainError) as error:
+        asyncio.run(provider("0.5.5", transport=transport).check("owner/repo"))
+    assert error.value.code == code
+    assert error.value.status == (429 if code == "github_rate_limited" else 409)
+    assert "private provider details" not in error.value.message
 
 
 @pytest.mark.parametrize("installed,available", [("b" * 40, True), (COMMIT, False), (None, True)])

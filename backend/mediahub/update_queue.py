@@ -121,7 +121,7 @@ class UpdateQueue:
             return await self.svc.platform_update.install(checked)
         adapter = self.svc.apps.adapter(item["id"])
         client = adapter.client_factory(adapter.host_id)
-        if not client.config.agent_url.startswith("https://"):
+        if not client.trusted_transport:
             raise DomainError("agent_tls_required", "Plex requires a trusted HTTPS Agent", 409)
         return await client.request("POST", "/v1/plex/update")
 

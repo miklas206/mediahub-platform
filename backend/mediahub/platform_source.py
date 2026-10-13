@@ -37,14 +37,42 @@ def headers(token=None):
     return value
 
 
-async def metadata(client, path):
-    response = await client.get("https://api.github.com" + path)
-    if response.status_code in (401, 403):
+def check_github_access(response):
+    """Separate provider throttling from rejected credentials without exposing its body."""
+    limited = response.status_code == 429 or (
+        response.status_code == 403
+        and (
+            response.headers.get("x-ratelimit-remaining") == "0"
+            or "retry-after" in response.headers
+        )
+    )
+    if limited:
+        raise DomainError(
+            "github_rate_limited",
+            "GitHub's request limit was reached. Wait before checking for updates again.",
+            429,
+        )
+    if response.status_code == 401:
         raise DomainError(
             "github_credentials_rejected",
-            "GitHub rejected access or its rate limit was reached.",
+            "GitHub rejected the access credentials. Replace stored GitHub access in Updates.",
             409,
         )
+    if response.status_code == 403:
+        raise DomainError(
+            "github_access_denied",
+            "GitHub denied this request. Check repository access; a temporary GitHub restriction is also possible.",
+            409,
+        )
+
+
+async def metadata(client, path, metadata_cache=None):
+    response = (
+        await metadata_cache.get(client, path)
+        if metadata_cache
+        else await client.get("https://api.github.com" + path)
+    )
+    check_github_access(response)
     if response.status_code != 200:
         raise DomainError(
             "source_provider_unavailable",
@@ -56,12 +84,19 @@ async def metadata(client, path):
 
 class GitHubSourceProvider:
     def __init__(
-        self, current_version, installed_commit=None, transport=None, *, source_access=None
+        self,
+        current_version,
+        installed_commit=None,
+        transport=None,
+        *,
+        source_access=None,
+        metadata_cache=None,
     ):
         self.version = current_version
         self.commit = installed_commit if SHA.fullmatch(installed_commit or "") else None
         self.transport = transport
         self.source_access = source_access
+        self.metadata_cache = metadata_cache
 
     async def check(self, repository, token=None):
         result = {
@@ -104,12 +139,16 @@ class GitHubSourceProvider:
                 trust_env=False,
                 transport=self.transport,
             ) as client:
-                head = await metadata(client, f"/repos/{repository}/commits/main")
+                head = await metadata(
+                    client, f"/repos/{repository}/commits/main", self.metadata_cache
+                )
                 commit = head["sha"]
                 if not isinstance(commit, str) or not SHA.fullmatch(commit):
                     raise ValueError("Invalid commit")
                 project = await metadata(
-                    client, f"/repos/{repository}/contents/pyproject.toml?ref={commit}"
+                    client,
+                    f"/repos/{repository}/contents/pyproject.toml?ref={commit}",
+                    self.metadata_cache,
                 )
                 if project.get("encoding") != "base64" or len(project["content"]) > 100000:
                     raise ValueError("Invalid project")

@@ -71,7 +71,7 @@ describe("primary MediaHub app hub", () => {
     const entries = buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" } });
     expect(entries.find((entry) => entry.id === "org.mediahub.mediavpn")).toMatchObject({ name: "MediaVPN", path: "http://192.168.1.111:18802/", external: true, configured: true, statusLabel: "App available" });
     expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" }, mediavpnError: "Offline" }).find((entry) => entry.name === "MediaVPN")?.status).toBe("unknown");
-    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "javascript:alert(1)" } }).some((entry) => entry.name === "MediaVPN")).toBe(false);
+    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "javascript:alert(1)" } }).find((entry) => entry.name === "MediaVPN")).toMatchObject({ configured: false, path: "/store/mediavpn" });
   });
   it("opens the separate MediaSeed instead of the old Seedbox wizard", () => {
     const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" } });
@@ -86,7 +86,8 @@ describe("primary MediaHub app hub", () => {
   });
   it("exposes the supported MediaHub apps with real setup paths before installation", () => {
     const entries = buildHubEntries(input);
-    expect(entries).toHaveLength(5);
+    expect(entries).toHaveLength(6);
+    expect(entries.find(entry => entry.name === "MediaVPN")).toMatchObject({ configured: false, path: "/store/mediavpn", action: "Set up" });
     expect(
       entries.every(
         (entry) => !entry.configured && entry.statusLabel === "Not set up",
@@ -127,7 +128,7 @@ describe("primary MediaHub app hub", () => {
   });
   it("keeps FjordHub as one peer app and its child apps inside FjordHub", () => {
     const entries = buildHubEntries({ ...input, integrations: [integration] });
-    expect(entries).toHaveLength(5);
+    expect(entries).toHaveLength(6);
     expect(entries.find((entry) => entry.name === "FjordHub")).toMatchObject({
       configured: true,
       path: "/integrations/fjordhub-one",
@@ -180,7 +181,7 @@ describe("primary MediaHub app hub", () => {
       ],
       deployment: { state: "succeeded", uninstall: { state: "removed" } },
     });
-    expect(entries).toHaveLength(5);
+    expect(entries).toHaveLength(6);
     expect(entries.find((entry) => entry.name === "FjordHub")?.configured).toBe(
       false,
     );

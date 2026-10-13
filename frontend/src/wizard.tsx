@@ -1,4 +1,4 @@
-import { translateText, t } from "./i18n";
+import { translateText, t, setLanguage } from "./i18n";
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -11,7 +11,7 @@ import {
 import { api, setCsrf } from "./api";
 import { SecuritySettings } from "./security";
 import { PlatformVersion } from "./platform-version";
-import { PlexInstallPage } from "./plex-install";
+import { adjacentSetupStep, normalizeSetupStep } from "./wizard-flow";
 import type { User } from "./contracts";
 import {
   defaultDraft,
@@ -21,7 +21,6 @@ import {
   type SetupState,
 } from "./phase2-types";
 import {
-  CatalogPage,
   DiscoveryPanel,
   ErrorBox,
   NetworkForm,
@@ -41,6 +40,8 @@ const steps = [
   "Apply",
   "Complete",
 ];
+const visibleSteps = steps.map((name, step) => ({ name, step })).filter(({ step }) => step !== 6);
+
 export function SetupWizard({
   user,
   hasAdmin,
@@ -63,7 +64,7 @@ export function SetupWizard({
     if (user) {
       api<SetupState>("/setup/draft")
         .then((state) => {
-          setDraft(state.draft);
+          setDraft({ ...state.draft, step: normalizeSetupStep(state.draft.step), selected_apps: [] });
           setRevision(state.revision);
         })
         .catch((e) => setError(e.message));
@@ -80,10 +81,10 @@ export function SetupWizard({
     if (user) {
       const state = await api<SetupState>("/setup/draft", "PUT", {
         revision,
-        draft: next,
+        draft: { ...next, selected_apps: [] },
       });
       setRevision(state.revision);
-      setDraft(state.draft);
+      setDraft({ ...state.draft, step: normalizeSetupStep(state.draft.step), selected_apps: [] });
     } else setDraft(next);
   };
   const move = async (step: number) => {
@@ -119,6 +120,7 @@ export function SetupWizard({
           username: form.get("username"),
           password: form.get("password"),
           ...(hasAdmin ? { secondFactor: form.get("secondFactor") || "" } : {}),
+          ...(!hasAdmin ? { language: form.get("language") || "en" } : {}),
         },
       );
       setCsrf(profile.csrf);
@@ -166,19 +168,19 @@ export function SetupWizard({
         </div>
         <p className="eyebrow">{t("INSTALLATION")}</p>
         <ol>
-          {steps.map((name, index) => (
+          {visibleSteps.map(({ name, step }, index) => (
             <li
               key={name}
               className={
-                draft.step === index
+                draft.step === step
                   ? "current"
-                  : draft.step > index
+                  : draft.step > step
                     ? "done"
                     : ""
               }
             >
               <span>
-                {draft.step > index ? <Check size={14} /> : index + 1}
+                {draft.step > step ? <Check size={14} /> : index + 1}
               </span>
               {t(name)}
             </li>
@@ -197,9 +199,9 @@ export function SetupWizard({
         <header>
           <span>
             {t("SETUP · STEP ")}
-            {draft.step + 1}
+            {visibleSteps.findIndex(({ step }) => step === draft.step) + 1}
             {t(" OF ")}
-            {steps.length}
+            {visibleSteps.length}
           </span>
           <span>
             <PlatformVersion />
@@ -313,6 +315,7 @@ export function SetupWizard({
                 </p>
               ) : (
                 <form className="admin-form" onSubmit={administrator}>
+                  {!hasAdmin && <label>{t("Language")}<select name="language" defaultValue="en" onChange={event => setLanguage(event.target.value === "da" ? "da" : "en")}><option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>}
                   <label>
                     {t("Username")}
                     <input
@@ -486,49 +489,6 @@ export function SetupWizard({
               />
             </Panel>
           )}
-          {draft.step === 6 && (
-            <div className="stack">
-              <Panel title={t("Your first media app")}>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={draft.selected_apps.includes("org.mediahub.plex")}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        selected_apps: e.target.checked
-                          ? [
-                              ...new Set([
-                                ...draft.selected_apps,
-                                "org.mediahub.plex",
-                              ]),
-                            ]
-                          : draft.selected_apps.filter(
-                              (id) => id !== "org.mediahub.plex",
-                            ),
-                      })
-                    }
-                  />
-                  {t("Install Plex now · optional")}
-                </label>
-                <p>
-                  {t(
-                    "Plex works on its own. You do not need a Seedbox or VPN to enjoy your own local media.",
-                  )}
-                </p>
-              </Panel>
-              {draft.selected_apps.includes("org.mediahub.plex") && (
-                <PlexInstallPage embedded />
-              )}
-              <details>
-                <summary>{t("Optional apps and advanced catalog")}</summary>
-                <CatalogPage
-                  selected={draft.selected_apps}
-                  onSelect={(ids) => setDraft({ ...draft, selected_apps: ids })}
-                />
-              </details>
-            </div>
-          )}
           {draft.step === 7 && (
             <div className="stack">
               <Panel title={t("Review your configuration")}>
@@ -546,8 +506,6 @@ export function SetupWizard({
                   <dd>
                     {draft.network.listen_host}:{draft.network.port}
                   </dd>
-                  <dt>{t("Selected apps")}</dt>
-                  <dd>{draft.selected_apps.join(", ") || t("None")}</dd>
                   <dt>{t("Selected imports")}</dt>
                   <dd>{draft.selected_imports.length}</dd>
                 </dl>
@@ -569,7 +527,7 @@ export function SetupWizard({
                     <p>
                       <strong>
                         {t(
-                          "Applying Core settings does not move media or change apps. Any app installed in the previous step is managed separately.",
+                          "Finish MediaHub setup first. Install your apps from the hub afterwards. Your existing media stays in place.",
                         )}
                       </strong>
                     </p>
@@ -636,7 +594,7 @@ export function SetupWizard({
           )}
           {draft.step > 0 && draft.step < 9 && (
             <footer className="wizard-footer">
-              <button disabled={busy} onClick={() => move(draft.step - 1)}>
+              <button disabled={busy} onClick={() => move(adjacentSetupStep(draft.step, -1))}>
                 <ArrowLeft size={16} />
                 {t("Back")}
               </button>
@@ -649,7 +607,7 @@ export function SetupWizard({
                 <button
                   className="primary"
                   disabled={busy || (draft.step === 3 && totpEnabled === undefined) || (draft.step === 7 && !review?.canApply)}
-                  onClick={() => move(draft.step + 1)}
+                  onClick={() => move(adjacentSetupStep(draft.step, 1))}
                 >
                   {t(draft.step === 3 && !totpEnabled ? "Continue without 2FA" : "Continue ")}
                   <ArrowRight size={16} />

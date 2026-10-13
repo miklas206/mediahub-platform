@@ -124,6 +124,7 @@ class RuntimeStatus(PublicModel):
     installationId: str
     hostId: str
     health: str
+    operation: Operation | None = None
     agentOnline: bool = False
     dockerHealthy: bool = False
     vpn: VPNStatus = Field(default_factory=VPNStatus)

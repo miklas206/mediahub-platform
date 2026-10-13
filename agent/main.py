@@ -274,6 +274,7 @@ def create_agent(config: AgentConfig | None = None):
             optimizer_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await optimizer_task
+        await plex_runtime.close()
         await plex.close()
         await control.close()
         cleanup.cancel()
@@ -461,7 +462,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.post("/v1/plex/install", dependencies=[Depends(secure_workflow)], status_code=202)
     async def plex_install(body: PlexInstallRequest):
-        return await plex_runtime.install(body)
+        return await plex_runtime.queue_install(body)
 
     @app.post("/v1/plex/actions/{action}", dependencies=[Depends(secure_workflow)])
     async def plex_action(action: str):
