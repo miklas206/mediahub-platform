@@ -22,7 +22,10 @@ class UpdateMonitor:
         self.lock = asyncio.Lock()
         self.check_task = None
         self.source_access = source_access(getattr(services, "config", None))
-        self.github_metadata = GitHubMetadata()
+        data_dir = getattr(getattr(services, "config", None), "data_dir", None)
+        self.github_metadata = GitHubMetadata(
+            state_file=data_dir / "github-cooldowns.json" if data_dir else None
+        )
         self.main_watch = MainBranchWatch(
             source_access=self.source_access, metadata_cache=self.github_metadata
         )
@@ -80,7 +83,9 @@ class UpdateMonitor:
             "installedVersion": result.get("installedVersion") or app.get("version"),
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
-            "checkStatus": "unsupported" if result.get("supported") is False else result.get("checkStatus") or ("checked" if latest else "unchecked"),
+            "checkStatus": "unsupported"
+            if result.get("supported") is False
+            else result.get("checkStatus") or ("checked" if latest else "unchecked"),
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
             **{
                 key: result[key]
@@ -167,8 +172,11 @@ class UpdateMonitor:
             {
                 "id": "mediahub-core",
                 "name": "MediaHub Core",
-                "checkStatus": "checked" if result.get("latestCommit") or result.get("latestVersion") else "unchecked",
+                "checkStatus": "checked"
+                if result.get("latestCommit") or result.get("latestVersion")
+                else "unchecked",
                 "installedVersion": result.get("installedVersion"),
+                "checkedAt": time.time(),
                 "latestVersion": result.get("latestCommit") or result.get("latestVersion"),
                 "updateAvailable": bool(result.get("updateAvailable")),
                 "message": str(result.get("message") or "Checked")[:200],
@@ -212,8 +220,11 @@ class UpdateMonitor:
                     {
                         "id": "mediahub-core",
                         "name": "MediaHub Core",
-                        "checkStatus": "checked" if platform.get("latestCommit") or platform.get("latestVersion") else "unchecked",
+                        "checkStatus": "checked"
+                        if platform.get("latestCommit") or platform.get("latestVersion")
+                        else "unchecked",
                         "installedVersion": platform.get("installedVersion"),
+                        "checkedAt": time.time(),
                         "latestVersion": platform.get("latestCommit")
                         or platform.get("latestVersion"),
                         "updateAvailable": bool(platform.get("updateAvailable")),
@@ -231,7 +242,12 @@ class UpdateMonitor:
                     failure.update(
                         {
                             key: previous.get(key)
-                            for key in ("installedVersion", "latestVersion", "updateAvailable")
+                            for key in (
+                                "installedVersion",
+                                "latestVersion",
+                                "updateAvailable",
+                                "checkedAt",
+                            )
                         }
                     )
                     failure["stale"] = bool(previous.get("latestVersion"))

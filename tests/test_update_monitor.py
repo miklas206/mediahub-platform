@@ -247,7 +247,7 @@ def test_core_cooldown_keeps_last_verified_commit(logged_in, monkeypatch):
     from mediahub.errors import DomainError
 
     svc = logged_in.app.state.services
-    svc.updates._store_results([available_item("a" * 40)])
+    svc.updates._store_results([{**available_item("a" * 40), "checkedAt": 123000}])
     error = DomainError("github_rate_limited", "GitHub rate limit reached", 429)
     error.retry_at = 9999999999
     monkeypatch.setattr(svc.updates, "check_platform", AsyncMock(side_effect=error))
@@ -263,6 +263,7 @@ def test_core_cooldown_keeps_last_verified_commit(logged_in, monkeypatch):
     assert core["latestVersion"] == "a" * 40
     assert core["stale"] is True
     assert core["retryAt"] == 9999999999
+    assert core["checkedAt"] == 123000
     assert result["lastError"] is None
 
 

@@ -197,7 +197,7 @@ function platformOperation(value: PlatformOperation): OperationState {
 }
 
 function checkedAt(value: number | null | undefined) {
-  if (!value) return "Not checked yet";
+  if (!value) return t("Not checked yet");
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -1021,16 +1021,24 @@ export function UpdatesPage({
             <p className="muted" role="status" key={item.id}>
               <strong>{item.name}:</strong>{" "}
               {t(
-                "GitHub rate limit: update check deferred until {time}. Tunnel operation is unaffected.",
+                item.id === "mediahub-core"
+                  ? "GitHub rate limit: update check deferred until {time}. MediaHub keeps running."
+                  : "GitHub rate limit: update check deferred until {time}. Tunnel operation is unaffected.",
                 { time: checkedAt(item.retryAt) },
               )}
               {item.latestVersion && (
                 <>
                   {" "}
                   {t(
-                    "Last verified release: {version} (stale, checked {time})",
+                    item.id === "mediahub-core"
+                      ? item.checkedAt
+                        ? "Last verified commit: {version} (stale, checked {time})"
+                        : "Last verified commit: {version} (stale)"
+                      : item.checkedAt
+                        ? "Last verified release: {version} (stale, checked {time})"
+                        : "Last verified release: {version} (stale)",
                     {
-                      version: item.latestVersion,
+                      version: item.id === "mediahub-core" ? item.latestVersion.slice(0, 7) : item.latestVersion,
                       time: checkedAt(item.checkedAt),
                     },
                   )}

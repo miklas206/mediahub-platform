@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import math
 import time
 from email.utils import parsedate_to_datetime
 
@@ -9,11 +10,42 @@ from mediahub.errors import DomainError
 
 
 class GitHubMetadata:
-    def __init__(self, clock=time.time):
+    def __init__(self, clock=time.time, *, state_file=None):
         self.clock = clock
         self.lock = asyncio.Lock()
         self.cache = {}
         self.cooldowns = {}
+        self.state_file = state_file
+        if state_file and state_file.exists():
+            from agent.install_files import read_json
+
+            try:
+                raw = read_json(state_file)
+                for key, deadline in list(raw.get("cooldowns", {}).items())[:64]:
+                    if (
+                        len(key) == 64
+                        and isinstance(deadline, (int, float))
+                        and math.isfinite(deadline)
+                        and deadline > self.clock()
+                    ):
+                        self.cooldowns[bytes.fromhex(key)] = deadline
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass
+
+    def persist_cooldowns(self):
+        if self.state_file:
+            from agent.install_files import save_json
+
+            save_json(
+                self.state_file,
+                {
+                    "cooldowns": {
+                        key.hex(): deadline
+                        for key, deadline in self.cooldowns.items()
+                        if deadline > self.clock()
+                    }
+                },
+            )
 
     async def get(self, client, path):
         identity = hashlib.sha256(client.headers.get("Authorization", "").encode()).digest()
@@ -55,6 +87,7 @@ class GitHubMetadata:
                     if len(deadlines) == 1:
                         deadlines.append(now + 3600)
                     error.retry_at = self.cooldowns[identity] = max(deadlines)
+                    self.persist_cooldowns()
                 raise
             if response.status_code == 200:
                 # Pinned project metadata is immutable; main is deliberately cached briefly.

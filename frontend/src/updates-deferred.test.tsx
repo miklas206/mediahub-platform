@@ -39,6 +39,17 @@ function render() {
   );
 }
 describe("deferred Cloudflare update checks", () => {
+  it("shows a stale Core commit without an invented check time or tunnel message", () => {
+    setLanguage("da");
+    state.items = [{id:"mediahub-core", name:"MediaHub Core", checkStatus:"deferred", retryAt:123456,
+      stale:true, latestVersion:"a".repeat(40), updateAvailable:true}];
+    const html = render();
+    expect(html).toContain("MediaHub kører videre");
+    expect(html).toContain("Senest verificerede commit: aaaaaaa");
+    expect(html).not.toContain("Not checked yet");
+    expect(html).not.toContain("Tunnelen fungerer uændret");
+    expect(html).not.toContain("a".repeat(40));
+  });
   it("shows translated cooldown and stale release without claiming success or hiding real errors", () => {
     setLanguage("da");
     state.items = [

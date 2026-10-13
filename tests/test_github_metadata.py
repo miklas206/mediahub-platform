@@ -9,6 +9,36 @@ from mediahub.main_branch_watch import MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
 
 
+def test_cooldown_survives_restart_without_storing_credentials(tmp_path):
+    async def run():
+        now = [1000]
+        calls = []
+
+        def handle(request):
+            calls.append(request)
+            return httpx.Response(429, headers={"x-ratelimit-reset": "4600"})
+
+        path = tmp_path / "github-cooldowns.json"
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handle),
+            headers={"Authorization": "Bearer synthetic-secret"},
+        ) as client:
+            for cache in [GitHubMetadata(lambda: now[0], state_file=path), None]:
+                cache = cache or GitHubMetadata(lambda: now[0], state_file=path)
+                with pytest.raises(DomainError) as error:
+                    await cache.get(client, "/repos/owner/repo/commits/main")
+                assert error.value.retry_at == 4600
+            assert len(calls) == 1
+            assert "synthetic-secret" not in path.read_text()
+            now[0] = 4600
+            restarted = GitHubMetadata(lambda: now[0], state_file=path)
+            with pytest.raises(DomainError):
+                await restarted.get(client, "/repos/owner/repo/commits/main")
+            assert len(calls) == 2
+
+    asyncio.run(run())
+
+
 def test_core_agent_and_watcher_share_requests_then_refresh_after_ttl():
     async def run():
         now = [1000]

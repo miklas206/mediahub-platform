@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.22
+
+- Persist GitHub metadata rate-limit cooldowns across Core restarts, keyed by credential digest without storing credentials. Keep existing shared requests, five-minute metadata caching, 15-minute main checks and configurable full-check interval.
+- Preserve the last successful Core check timestamp during deferred checks. Show concise stale commit information with Core-specific guidance and translated missing-time text instead of a tunnel message or an invented timestamp.
+
 ## 0.5.21
 
 - Pass MediaHub's configured public HTTPS origin to MediaVPN and MediaSeed browser SSO, falling back to the configured local Hub origin when no public URL exists. Preserve the private internal Hub API address and local app URLs.
