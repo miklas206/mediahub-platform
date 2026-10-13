@@ -66,6 +66,60 @@ def fixture(tmp_path, monkeypatch, running=False):
     return root, source, calls, fail
 
 
+@pytest.mark.parametrize("kind,uid", [("mediavpn", 0), ("mediaseed", 1000)])
+def test_existing_tls_identity_is_readable_by_its_consumer_without_replacing_keys(
+    tmp_path, monkeypatch, kind, uid
+):
+    folder = tmp_path / kind
+    tls = folder / "tls"
+    tls.mkdir(parents=True)
+    (tls / "cert.pem").write_bytes(b"public certificate sentinel")
+    (tls / "key.pem").write_bytes(b"private key sentinel")
+    chowns = []
+    monkeypatch.setattr(
+        module.os,
+        "chown",
+        lambda path, owner, group: chowns.append((Path(path).name, owner, group)),
+        raising=False,
+    )
+    service = {
+        "volumes": [{"type": "bind", "source": str(tls), "target": "/app-tls", "read_only": True}],
+        "cap_drop": ["ALL"],
+    }
+    cfg = {"services": {"sso-proxy" if kind == "mediavpn" else "app": service}}
+    module.repair_tls_permissions(folder, cfg)
+    assert chowns == [("tls", uid, uid), ("cert.pem", uid, uid), ("key.pem", uid, uid)]
+    assert (tls / "key.pem").read_bytes() == b"private key sentinel"
+    assert (tls / "cert.pem").read_bytes() == b"public certificate sentinel"
+    assert service["cap_drop"] == ["ALL"]
+    assert service["volumes"][0]["read_only"] is True
+    assert service["labels"]["org.mediahub.tls.identity"].startswith("owner-v1-" + str(uid))
+
+
+def test_tls_permission_repair_rejects_changed_bind_source(tmp_path):
+    folder = tmp_path / "mediavpn"
+    cfg = {
+        "services": {
+            "sso-proxy": {
+                "volumes": [{"type": "bind", "source": "/unowned/tls", "target": "/app-tls"}]
+            }
+        }
+    }
+    with pytest.raises(ValueError, match="mount ownership changed"):
+        module.repair_tls_permissions(folder, cfg)
+
+
+def test_preparation_helper_change_invalidates_success_marker(tmp_path):
+    (tmp_path / "bundled").mkdir()
+    (tmp_path / "bundled/source.json").write_text("unchanged app source")
+    (tmp_path / "scripts").mkdir()
+    helper = tmp_path / "scripts/prepare_local_apps.py"
+    helper.write_text("version one")
+    previous = module.fingerprint(tmp_path)
+    helper.write_text("version two")
+    assert previous != module.fingerprint(tmp_path)
+
+
 def test_updates_install_prerequisites_but_do_not_start_stopped_apps(tmp_path, monkeypatch):
     root, source, calls, _ = fixture(tmp_path, monkeypatch)
     media = tmp_path / "existing-movie.mkv"

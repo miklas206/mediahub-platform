@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.20
+
+- Fix MediaVPN HTTPS proxy certificate access: match private TLS directory/file ownership to the actual Compose consumer, preserving existing certificate/key bytes, read-only mounts and dropped capabilities. Repair existing managed TLS binds as well as fresh installations.
+- Include preparation helper changes in the app preparation fingerprint and add a public certificate/owner migration label so running TLS consumers are recreated on the user-installed update instead of retaining a failed certificate store.
+
 ## 0.5.19
 
 - Allow MediaSeed removal when the owned MediaVPN controller is stopped and its torrent settings are verified disabled, including the never-started default with no settings file. Do not contact an inactive controller or start it as a side effect.

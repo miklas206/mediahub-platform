@@ -47,6 +47,15 @@ def bundle_root(source):
 
 def fingerprint(source=SOURCE):
     files = sorted(p for p in bundle_root(source).rglob("*") if p.is_file())
+    # Preparation-only fixes must run even when the bundled app source is unchanged.
+    files += [
+        p
+        for p in (
+            source / "scripts/prepare_local_apps.py",
+            source / "scripts/prepare_managed_install.py",
+        )
+        if p.is_file()
+    ]
     return hashlib.sha256(
         b"".join(
             p.relative_to(source).as_posix().encode()
@@ -57,14 +66,31 @@ def fingerprint(source=SOURCE):
     ).hexdigest()
 
 
+def tls_permissions(tls, uid, gid):
+    if tls.is_symlink() or not tls.is_dir():
+        raise ValueError("Unsafe app TLS directory")
+    for name in ("cert.pem", "key.pem"):
+        path = tls / name
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Incomplete app TLS identity; no key was replaced")
+    tls.chmod(0o700)
+    os.chown(tls, uid, gid)
+    for name in ("cert.pem", "key.pem"):
+        path = tls / name
+        path.chmod(0o600)
+        os.chown(path, uid, gid)
+
+
 def certificate(root, folder, lan):
     tls = folder / "tls"
+    uid = 0 if folder.name == "mediavpn" else 1000
     if (tls / "cert.pem").exists() and (tls / "key.pem").exists():
+        tls_permissions(tls, uid, uid)
         return
     if tls.exists() and list(tls.iterdir()):
         raise ValueError("Incomplete app TLS identity; repair it without replacing keys")
     tls.mkdir(mode=0o700, exist_ok=True)
-    os.chown(tls, 1000, 1000)
+    os.chown(tls, uid, uid)
     extension = folder / "certificate.ext"
     private(
         extension,
@@ -105,9 +131,39 @@ def certificate(root, folder, lan):
         "-out",
         tls / "cert.pem",
     )
-    for path in tls.iterdir():
-        path.chmod(0o600)
-        os.chown(path, 1000, 1000)
+    tls_permissions(tls, uid, uid)
+
+
+def repair_tls_permissions(folder, cfg):
+    kind = folder.name
+    service = cfg["services"].get("sso-proxy" if kind == "mediavpn" else "app", {})
+    mounts = [
+        v
+        for v in service.get("volumes", [])
+        if isinstance(v, dict) and v.get("target") == "/app-tls"
+    ]
+    if not mounts:
+        return  # Legacy/custom setups without a managed TLS bind keep their own identity.
+    tls = folder / "tls"
+    if len(mounts) != 1 or mounts[0].get("type") != "bind" or mounts[0].get("source") != str(tls):
+        raise ValueError("Managed app TLS mount ownership changed")
+    user = str(service.get("user") or ("0:0" if kind == "mediavpn" else "1000:1000"))
+    user = {"root": "0:0", "mediaseed": "1000:1000"}.get(user, user)
+    parts = user.split(":")
+    if len(parts) > 2 or not all(part.isdigit() for part in parts):
+        raise ValueError("App TLS consumer needs an explicit numeric user")
+    uid, gid = int(parts[0]), int(parts[-1])
+    tls_permissions(tls, uid, gid)
+    # Traefik does not reload certificates merely because file ownership changed.
+    # Compose must recreate a running consumer once for this migration.
+    service.setdefault("labels", {})["org.mediahub.tls.identity"] = (
+        "owner-v1-"
+        + str(uid)
+        + "-"
+        + str(gid)
+        + "-"
+        + hashlib.sha256((tls / "cert.pem").read_bytes()).hexdigest()
+    )
 
 
 def provision(root, lan, source=SOURCE):
@@ -223,6 +279,7 @@ def provision(root, lan, source=SOURCE):
                     if volume.get("target") == "/config/routes.yaml":
                         volume["source"] = str(folder / "hub-proxy.yaml")
             cfg["services"]["app"]["restart"] = "unless-stopped"
+        repair_tls_permissions(folder, cfg)
         for service, values in cfg["services"].items():
             if "build" in values:
                 values["build"] = {"context": str(context), "dockerfile": "Dockerfile"}
