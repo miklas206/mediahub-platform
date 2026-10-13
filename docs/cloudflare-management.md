@@ -9,7 +9,37 @@ Management endpoints require HTTPS, administrator access and CSRF for mutations.
 
 Permissions: account Cloudflare Tunnel Edit (Cloudflare Tunnel Write in the API),
 and Zone Read plus DNS Edit on the selected DNS zones. A connector token is not an
-account API token. Only tunnels created and recorded by this MediaHub can be managed.
+account API token. Tunnels must be created through MediaHub or explicitly selected
+from the discovered remotely managed tunnels before MediaHub can manage them.
+
+## API discovery
+
+Connecting an API token automatically fetches the account's accessible zones,
+existing DNS records and Cloudflare tunnels. Lists are paginated; exceeding the
+bounded fetch limit is reported rather than silently hiding records. TXT and other
+non-address record contents are not copied into MediaHub. Partial failures retain
+the previous inventory with an incomplete/access warning and disable publishing
+in the connected UI. The inventory is cached for five minutes, including failures;
+explicit refresh bypasses this cache at most once every 30 seconds. Normal UI
+status polling therefore does not repeatedly query Cloudflare.
+
+The connected UI replaces manual zone IDs, target IP/port and CA paths with domain,
+record, tunnel and app choices. It hides the legacy monitoring editor while API
+access is connected. New hostnames are generated from the chosen app/domain.
+Existing proxied CNAME records may be selected when they already target the chosen
+tunnel. Records pointing elsewhere are listed but never automatically converted
+or overwritten. Origin resolution remains server-side, using current managed app
+ports or the paired Agent; missing app setup is shown next to the selection.
+
+Zone Read is required to list domains; DNS Read or Edit is required to list records.
+DNS Edit and Cloudflare Tunnel Edit are required for the corresponding write actions.
+Tunnel Read is sufficient for discovery. The UI distinguishes successful read
+checks from unverified write permissions and reports the account/zone scope and
+permission needed when Cloudflare rejects a request. VPN integration does not
+require granting Cloudflare access to Proton credentials or WireGuard private keys.
+Cloudflare routes continue to use local web origins, never VPN public IPs or torrent
+forwarding ports. The existing DNS-only API remains available for compatibility;
+manual IP entry is not exposed in the connected app UI.
 
 ## Connector
 
@@ -58,11 +88,15 @@ unknown hosts remain rejected. No wildcard browser host is accepted.
 
 Disconnect account removes local API credentials and stops reconciliation. It does
 not delete tunnels, DNS records or existing connectors. Existing monitor profiles
-remain independent. There is no automatic import, deletion or replacement of
-existing manually administered tunnels in this release.
+remain independent. Discovery alone does not grant ownership or change remote
+resources. Explicit tunnel selection only records that tunnel locally; unrelated
+ingress rules and existing DNS records remain protected from replacement.
 
 API contract:
 - GET /api/v1/cloudflare/manage: redacted account, tunnel and route status.
+- POST /api/v1/cloudflare/manage/discover: refresh cached API inventory.
+- POST /api/v1/cloudflare/manage/tunnels/<uuid>/adopt: select an existing remotely managed tunnel.
+- POST /api/v1/cloudflare/manage/routes/discovered: publish using selected IDs or a generated hostname.
 - PUT/DELETE /api/v1/cloudflare/manage/credentials: connect/rotate/disconnect.
 - POST /api/v1/cloudflare/manage/tunnels: create a remote tunnel.
 - POST /api/v1/cloudflare/manage/tunnels/<uuid>/token: no-store token download.

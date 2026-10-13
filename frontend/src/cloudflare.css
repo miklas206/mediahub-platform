@@ -122,3 +122,14 @@
 .cloudflare-management-form label { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .cloudflare-management-form input, .cloudflare-management-form select { width: 100%; min-width: 0; }
 .cloudflare-profile-list article { overflow-wrap: anywhere; flex-wrap: wrap; gap: 12px; }
+
+.cloudflare-requirements { margin-block: 1rem; }
+.cloudflare-requirements li { margin-block: .5rem; }
+.cloudflare-access-issue {
+  padding: 1rem;
+  margin-block: .75rem;
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius, 8px);
+  background: var(--warning-bg);
+  overflow-wrap: anywhere;
+}

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.16
+
+- Discover Cloudflare domains, existing DNS records and remotely managed tunnels automatically after API connection, with complete bounded pagination, five-minute caching and permission-specific recovery guidance.
+- Replace connected manual IP/port, zone ID and certificate-path forms with domain, record, tunnel and app selections. Resolve app origins server-side, generate new app hostnames and hide the legacy monitoring editor while connected.
+- Allow explicit selection of existing remote tunnels without changing unrelated routes. Preserve conflicting DNS records, retain previous inventory during partial failures and disable publishing until discovery access is restored. Distinguish read checks from action-specific write permissions and explain shared VPN/Agent requirements.
+
 ## 0.5.15
 
 - Include Docker Buildx in Core/Agent images and provide writable private builder configuration for automatic app/relay preparation, including the read-only host helper.

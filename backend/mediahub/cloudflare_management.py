@@ -85,6 +85,13 @@ class RouteMode(StrictModel):
     autoSync: bool
 
 
+class DiscoveredRoute(StrictModel):
+    tunnelId: UUID
+    zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
+    packageId: str = Field(max_length=120)
+    recordId: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{32}$")
+
+
 class DNSRecord(StrictModel):
     zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
     hostname: str = Field(min_length=3, max_length=253)
@@ -113,6 +120,7 @@ class CloudflareManagement:
         self.lock = asyncio.Lock()
         self.store = SecretStore((svc.config.data_dir / "cloudflare-secrets").resolve())
         self.retry_at = 0.0
+        self.discovery_at = 0.0
         self.monitor_routes(self.state())
         for route in self.state()["routes"]:
             if route["packageId"] == "mediahub" and route.get("lastApplied"):
@@ -183,9 +191,22 @@ class CloudflareManagement:
                     429,
                 )
             if response.status_code in {401, 403}:
+                permission = (
+                    "Zone > DNS > " + ("Read or Edit" if method == "GET" else "Edit")
+                    if "/dns_records" in path
+                    else "Account > Cloudflare Tunnel > "
+                    + (
+                        "Read or Edit"
+                        if method == "GET" and not path.endswith("/token")
+                        else "Edit"
+                    )
+                    if "/cfd_tunnel" in path
+                    else "Zone > Zone > Read"
+                )
                 raise DomainError(
                     "cloudflare_permissions",
-                    "Cloudflare rejected the API token or its permissions",
+                    "Cloudflare rejected this request. Check the token, account/zone scope and permission: "
+                    + permission,
                     409,
                 )
             response.raise_for_status()
@@ -210,17 +231,198 @@ class CloudflareManagement:
             token = body.token.get_secret_value().strip()
             await self.call(
                 "GET",
-                "/accounts/" + body.accountId + "/cfd_tunnel",
-                params={"is_deleted": "false", "per_page": 1},
+                "/zones",
+                params={"account.id": body.accountId, "per_page": 1},
                 token=token,
             )
             if self.configured():
                 self.store.replace("api_token", token.encode())
             else:
                 self.store.put("api_token", token.encode())
+            if state["accountId"] != body.accountId:
+                state.pop("discovery", None)
             state["accountId"] = body.accountId
             self.save(state)
+            self.discovery_at = 0.0
+            await self.discover_locked()
             return self.public()
+
+    async def pages(self, path, params=None, per_page=50):
+        """Fetch complete lists; fail explicitly rather than silently truncating them."""
+        rows = []
+        for page in range(1, 101):
+            batch = await self.call(
+                "GET", path, params={**(params or {}), "page": page, "per_page": per_page}
+            )
+            if not isinstance(batch, list):
+                raise DomainError("cloudflare_api", "Cloudflare returned an invalid list", 502)
+            rows.extend(batch)
+            if len(batch) < per_page:
+                return rows
+        raise DomainError(
+            "cloudflare_list_limit", "Too many Cloudflare results; narrow the token scope", 409
+        )
+
+    async def discover(self, force=False):
+        async with self.lock:
+            now = time.monotonic()
+            # Explicit refresh can bypass the five-minute cache, at most once per 30 seconds.
+            if self.configured() and (
+                now >= self.discovery_at or (force and now >= self.discovery_at - 270)
+            ):
+                await self.discover_locked()
+            return self.public()
+
+    async def discover_locked(self):
+        state = self.state()
+        previous = state.get("discovery", {})
+        discovery = {
+            "zones": [],
+            "records": [],
+            "tunnels": [],
+            "issues": [],
+            "checkedAt": int(time.time()),
+            "complete": True,
+            "apps": [],
+        }
+        # Cache both successes and failures: UI polling never floods Cloudflare.
+        self.discovery_at = time.monotonic() + 300
+
+        async def fetch(key, path, params, permission, per_page=50):
+            try:
+                return await self.pages(path, params, per_page)
+            except DomainError as error:
+                discovery["complete"] = False
+                discovery["issues"].append(
+                    {
+                        "resource": key,
+                        "permission": permission,
+                        "message": error.message,
+                        "code": error.code,
+                    }
+                )
+                return None
+
+        zones = await fetch(
+            "zones",
+            "/zones",
+            {"account.id": state["accountId"]},
+            "Zone > Zone > Read (selected domains)",
+        )
+        if zones is None:
+            discovery["zones"] = previous.get("zones", [])
+            discovery["records"] = previous.get("records", [])
+        else:
+            for zone in zones:
+                discovery["zones"].append({"id": zone["id"], "name": zone["name"]})
+                records = await fetch(
+                    zone["name"],
+                    "/zones/" + zone["id"] + "/dns_records",
+                    {},
+                    "Zone > DNS > Read / Edit: " + zone["name"],
+                    100,
+                )
+                if records is None:
+                    discovery["records"].extend(
+                        row for row in previous.get("records", []) if row["zoneId"] == zone["id"]
+                    )
+                else:
+                    discovery["records"].extend(
+                        {
+                            "id": row["id"],
+                            "zoneId": zone["id"],
+                            "name": row["name"],
+                            "type": row["type"],
+                            "content": row.get("content", "")
+                            if row["type"] in {"A", "AAAA", "CNAME"}
+                            else "",
+                            "proxied": row.get("proxied", False),
+                        }
+                        for row in records
+                    )
+        tunnels = await fetch(
+            "tunnels",
+            "/accounts/" + state["accountId"] + "/cfd_tunnel",
+            {"is_deleted": "false"},
+            "Account > Cloudflare Tunnel > Read / Edit",
+        )
+        discovery["tunnels"] = (
+            previous.get("tunnels", [])
+            if tunnels is None
+            else [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "remote": row.get("config_src") == "cloudflare",
+                }
+                for row in tunnels
+            ]
+        )
+        for package, name in APPS.items():
+            try:
+                origin = await self.origin(package)
+                discovery["apps"].append(
+                    {"packageId": package, "name": name, "origin": origin, "message": ""}
+                )
+            except DomainError as error:
+                discovery["apps"].append(
+                    {"packageId": package, "name": name, "origin": None, "message": error.message}
+                )
+        state["discovery"] = discovery
+        self.save(state)
+
+    async def adopt(self, tunnel):
+        async with self.lock:
+            state = self.state()
+            # Explicit selection only; merely discovering tunnels grants no management ownership.
+            remote = await self.call(
+                "GET", "/accounts/" + state["accountId"] + "/cfd_tunnel/" + tunnel
+            )
+            if remote.get("deleted_at") or remote.get("config_src") != "cloudflare":
+                raise DomainError(
+                    "tunnel_configuration", "Choose a remotely managed Cloudflare tunnel", 409
+                )
+            if not any(row["id"] == tunnel for row in state["tunnels"]):
+                if len(state["tunnels"]) >= 8:
+                    raise DomainError(
+                        "tunnel_limit", "At most eight managed tunnels are supported", 409
+                    )
+                state["tunnels"].append({"id": str(UUID(remote["id"])), "name": remote["name"]})
+                self.save(state)
+            return self.public()
+
+    async def bind_discovered(self, body):
+        # Resolve IDs to authoritative names server-side, never accept an origin/IP from the browser.
+        zone = await self.call("GET", "/zones/" + body.zoneId)
+        if body.packageId not in APPS:
+            raise DomainError("app_unknown", "Choose a supported MediaHub app", 422)
+        if body.recordId:
+            record = await self.call(
+                "GET", "/zones/" + body.zoneId + "/dns_records/" + body.recordId
+            )
+            if (
+                record["type"] != "CNAME"
+                or not record.get("proxied")
+                or record["content"].rstrip(".") != str(body.tunnelId) + ".cfargotunnel.com"
+            ):
+                raise DomainError(
+                    "dns_conflict", "This record points elsewhere; it was not changed", 409
+                )
+            name = record["name"]
+        else:
+            label = {
+                "mediahub": "mediahub",
+                "org.mediahub.mediaseed": "seed",
+                "org.mediahub.mediavpn": "vpn",
+                "org.mediahub.plex": "plex",
+                "org.mediahub.jellyfin": "jellyfin",
+            }[body.packageId]
+            name = label + "." + zone["name"]
+        return await self.bind(
+            RouteInput(
+                tunnelId=body.tunnelId, zoneId=body.zoneId, hostname=name, packageId=body.packageId
+            )
+        )
 
     def public(self):
         return {
@@ -564,8 +766,23 @@ class CloudflareManagement:
 
 
 @router.get("")
-def status(request: Request):
-    return result(services(request).cloudflare_management.public())
+async def status(request: Request):
+    return result(await services(request).cloudflare_management.discover())
+
+
+@router.post("/discover")
+async def discover(request: Request):
+    return result(await services(request).cloudflare_management.discover(force=True))
+
+
+@router.post("/tunnels/{tunnel_id}/adopt")
+async def adopt(tunnel_id: UUID, request: Request):
+    return result(await services(request).cloudflare_management.adopt(str(tunnel_id)))
+
+
+@router.post("/routes/discovered")
+async def bind_discovered(body: DiscoveredRoute, request: Request):
+    return result(await services(request).cloudflare_management.bind_discovered(body))
 
 
 @router.put("/credentials")

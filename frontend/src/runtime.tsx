@@ -22,6 +22,7 @@ import "./runtime.css";
 import { SeedboxDaily } from "./seedbox-daily";
 import { SeedboxRSSSettings } from "./seedbox-rss-settings";
 import { SeedboxWebUI } from "./seedbox-webui";
+import { CloudflareManagementPanel } from "./cloudflare-management";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
@@ -961,6 +962,7 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
   );
 }
 export function AppRuntimePage() {
+  const [cloudflareApiConnected, setCloudflareApiConnected] = useState<boolean>();
   const confirm = useConfirm();
   const { appId } = useParams();
   const [searchParams] = useSearchParams();
@@ -1071,7 +1073,8 @@ export function AppRuntimePage() {
           className="layout-card"
           data-layout-title="Saved Cloudflare configuration"
         >
-          <CloudflareSetupManager onSaved={reload} />
+          <CloudflareManagementPanel onConfigured={setCloudflareApiConnected} />
+          {cloudflareApiConnected === false && <CloudflareSetupManager onSaved={reload} />}
         </div>
       )}
       {data?.view === "cloudflare" && (

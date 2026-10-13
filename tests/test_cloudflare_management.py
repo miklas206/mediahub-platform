@@ -45,6 +45,8 @@ def managed(logged_in, monkeypatch):
             return {"id": TUNNEL} if method == "POST" else []
         if path.endswith("/token"):
             return "connector-private-token"
+        if path == "/zones":
+            return [{"id": ZONE, "name": "example.com"}]
         if path == "/zones/" + ZONE:
             return {"name": "example.com"}
         if path.endswith("/dns_records"):

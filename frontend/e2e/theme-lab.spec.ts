@@ -583,7 +583,7 @@ for (const width of [1440,320]) test(`uninstall progress and older Agent activit
 for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${width}px`,async({page})=>{
  await mockHub(page);
  await page.setViewportSize({width,height:1100});
- const state={configured:false,accountId:'',tunnels:[] as {id:string;name:string}[],routes:[] as {id:string;hostname:string;packageId:string;tunnelId:string;autoSync:boolean;lastApplied:string;status:string;message:string}[],apps:[{packageId:'mediahub',name:'MediaHub'}]};
+ const state={configured:false,accountId:'',tunnels:[] as {id:string;name:string}[],routes:[] as {id:string;hostname:string;packageId:string;tunnelId:string;autoSync:boolean;lastApplied:string;status:string;message:string}[],apps:[{packageId:'mediahub',name:'MediaHub'}],discovery:{zones:[{id:'b'.repeat(32),name:'example.com'}],records:[{id:'c'.repeat(32),zoneId:'b'.repeat(32),name:'hub.example.com',type:'CNAME',content:'11111111-2222-4333-8444-555555555555.cfargotunnel.com',proxied:true}],tunnels:[],issues:[],complete:true,checkedAt:123,apps:[{packageId:'mediahub',name:'MediaHub',origin:'https://192.168.1.50:18765',message:''}]}};
  const tunnelId='11111111-2222-4333-8444-555555555555';
  await page.route('**/api/v1/cloudflare/manage**',async route=>{
   const path=new URL(route.request().url()).pathname;
@@ -592,7 +592,7 @@ for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${w
    const body=route.request().postDataJSON();
    if(path.endsWith('/credentials')){state.configured=true;state.accountId=body.accountId;}
    else if(path.endsWith('/tunnels'))state.tunnels.push({id:tunnelId,name:body.name});
-   else if(path.endsWith('/routes')){expect(body.autoSync).toBe(true);state.routes.push({...body,id:'route-1',lastApplied:'https://192.168.1.50:18765',status:'synced',message:'App route is up to date'});}
+   else if(path.endsWith('/routes/discovered')){expect(body.recordId).toBe('c'.repeat(32));expect(body).not.toHaveProperty('hostname');expect(body).not.toHaveProperty('origin');state.routes.push({...body,hostname:'hub.example.com',autoSync:true,id:'route-1',lastApplied:'https://192.168.1.50:18765',status:'synced',message:'App route is up to date'});}
    else if(path.endsWith('/sync'))state.routes[0].lastApplied='https://192.168.1.60:19765';
    else if(path.endsWith('/route-1'))state.routes[0].autoSync=body.autoSync;
   }
@@ -603,11 +603,13 @@ for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${w
  await page.getByLabel('Cloudflare account ID',{exact:true}).fill('a'.repeat(32));
  await page.getByLabel('Cloudflare API token',{exact:true}).fill('synthetic-test-value-12345');
  await page.getByRole('button',{name:'Connect account',exact:true}).click();
- await expect(page.getByLabel('Cloudflare API token',{exact:true})).toHaveValue('');
- await page.getByLabel('New tunnel name',{exact:true}).fill('Home tunnel');
+ await expect(page.getByLabel('Cloudflare API token',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Assisted Cloudflare setup',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Create tunnel',exact:true}).click();
- await page.getByLabel('Cloudflare zone ID',{exact:true}).fill('b'.repeat(32));
- await page.getByLabel('Public hostname',{exact:true}).fill('hub.example.com');
+ await page.getByRole('combobox',{name:'Domain',exact:true}).selectOption('b'.repeat(32));
+ await expect(page.getByText('hub.example.com',{exact:true}).first()).toBeVisible();
+ await page.getByRole('combobox',{name:'Public hostname',exact:true}).selectOption('c'.repeat(32));
+ await expect(page.getByLabel('Connector CA path',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Link app and publish hostname',exact:true}).click();
  await expect(page.locator('.cloudflare-profile-list').last()).toContainText('hub.example.com');
  await expect(page.locator('.cloudflare-profile-list').last()).toContainText('https://192.168.1.50:18765');
@@ -621,15 +623,23 @@ for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${w
  expect((await downloaded).suggestedFilename()).toBe('cloudflared-token.txt');
  await page.getByRole('button',{name:'Install connector on MediaHub',exact:true}).click();
  await expect(page.getByRole('status').filter({hasText:'Connector started on the MediaHub host'})).toBeVisible();
- await page.getByText('Create a DNS record without a tunnel',{exact:true}).click();
- await page.getByLabel('DNS zone ID',{exact:true}).fill('b'.repeat(32));
- await page.getByLabel('Hostname',{exact:true}).fill('direct.example.com');
- await page.getByRole('combobox',{name:'Record type',exact:true}).selectOption('AAAA');
- await page.getByLabel('Target address',{exact:true}).fill('2001:db8::1');
- await page.getByRole('button',{name:'Create DNS record',exact:true}).click();
- await expect(page.getByRole('status').filter({hasText:'DNS record created'})).toBeVisible();
+ await expect(page.getByLabel('Target address',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Refresh domains and records',exact:true}).click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(errors).toEqual([]);
+});
+
+test('Cloudflare partial access keeps records visible and blocks publishing',async({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width:320,height:1000});
+ await page.route('**/api/v1/cloudflare/manage**',route=>route.fulfill({json:{data:{configured:true,accountId:'a'.repeat(32),tunnels:[{id:'11111111-2222-4333-8444-555555555555',name:'Existing tunnel'}],routes:[],apps:[{packageId:'mediahub',name:'MediaHub'}],discovery:{zones:[{id:'b'.repeat(32),name:'example.com'}],records:[{id:'c'.repeat(32),zoneId:'b'.repeat(32),name:'old.example.com',type:'A',content:'203.0.113.1',proxied:false}],tunnels:[],complete:false,checkedAt:123,issues:[{resource:'example.com',permission:'Zone > DNS > Read / Edit',message:'Missing DNS permission',code:'cloudflare_permissions'}],apps:[{packageId:'mediahub',name:'MediaHub',origin:'https://192.168.1.50:18765',message:''}]}}}}));
+ await page.goto('/store/cloudflare');
+ await expect(page.getByText('Required access:',{exact:false})).toBeVisible();
+ await expect(page.getByText('old.example.com',{exact:true}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:'Link app and publish hostname',exact:true})).toBeDisabled();
+ await expect(page.getByLabel('Cloudflare account ID',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Assisted Cloudflare setup',{exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
 for (const width of [1440,320]) test(`footer stays at viewport bottom across navigation and themes at ${width}px`,async({page})=>{

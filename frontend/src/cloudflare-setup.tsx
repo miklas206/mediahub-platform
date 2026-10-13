@@ -452,6 +452,7 @@ function CloudflareSetupEditor({
 }
 
 export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
+  const management = useLoad<{ configured: boolean }>("/cloudflare/manage");
   const confirm = useConfirm();
   const stored = useLoad<StoredConfiguration>(
     `/catalog/${packageId}/configuration`,
@@ -476,7 +477,11 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
     if (
       !(await confirm(
         `Remove the saved configuration for ${profile.name}? This does not delete anything in Cloudflare.`,
-        { title: "Remove configuration?", confirmLabel: "Remove", danger: true },
+        {
+          title: "Remove configuration?",
+          confirmLabel: "Remove",
+          danger: true,
+        },
       ))
     )
       return;
@@ -506,6 +511,7 @@ export function CloudflareSetupManager({ onSaved }: { onSaved: () => void }) {
       setBusy(false);
     }
   };
+  if (!management.data || management.data.configured) return null;
   if (!stored.data)
     return (
       <Panel title={t("Cloudflare configuration")}>

@@ -25,53 +25,58 @@ import {
 
 export function CloudflareStorePage() {
   const [saved, setSaved] = useState(false);
+  const [apiConnected, setApiConnected] = useState<boolean>();
   return (
     <div className="stack store-install-page">
       <Link className="text-link" to="/">
         {t("Back to MediaHub")}
       </Link>
-      <CloudflareManagementPanel />
-      <Panel title={t("What MediaHub can prepare")}>
-        <div className="store-discovery-grid">
-          <div>
-            <Check size={18} />
-            <strong>{t("Detected automatically")}</strong>
-            <p>
+      <CloudflareManagementPanel onConfigured={setApiConnected} />
+      {apiConnected === false && (
+        <>
+          <Panel title={t("What MediaHub can prepare")}>
+            <div className="store-discovery-grid">
+              <div>
+                <Check size={18} />
+                <strong>{t("Detected automatically")}</strong>
+                <p>
+                  {t(
+                    "The current private MediaHub address, HTTPS protocol and the health endpoints used after setup.",
+                  )}
+                </p>
+              </div>
+              <div>
+                <PackagePlus size={18} />
+                <strong>{t("You provide")}</strong>
+                <p>
+                  {t(
+                    "The tunnel name, public hostname and any optional local metrics URL. Cloudflare itself provides the connector token for a new tunnel.",
+                  )}
+                </p>
+              </div>
+              <div>
+                <ShieldCheck size={18} />
+                <strong>{t("Never requested")}</strong>
+                <p>
+                  {t(
+                    "Monitoring works without an API token. Tunnel creation and automatic app routes require an optional scoped Cloudflare API token. TLS certificate verification stays enabled.",
+                  )}
+                </p>
+              </div>
+            </div>
+          </Panel>
+          {saved && (
+            <div className="success store-success" role="status">
+              <Check size={18} />
               {t(
-                "The current private MediaHub address, HTTPS protocol and the health endpoints used after setup.",
+                "Cloudflare Tunnel is now registered. Future visits show saved profiles and “Edit configuration” instead of repeating first-time setup.",
               )}
-            </p>
-          </div>
-          <div>
-            <PackagePlus size={18} />
-            <strong>{t("You provide")}</strong>
-            <p>
-              {t(
-                "The tunnel name, public hostname and any optional local metrics URL. Cloudflare itself provides the connector token for a new tunnel.",
-              )}
-            </p>
-          </div>
-          <div>
-            <ShieldCheck size={18} />
-            <strong>{t("Never requested")}</strong>
-            <p>
-              {t(
-                "Monitoring works without an API token. Tunnel creation and automatic app routes require an optional scoped Cloudflare API token. TLS certificate verification stays enabled.",
-              )}
-            </p>
-          </div>
-        </div>
-      </Panel>
-      {saved && (
-        <div className="success store-success" role="status">
-          <Check size={18} />
-          {t(
-            "Cloudflare Tunnel is now registered. Future visits show saved profiles and “Edit configuration” instead of repeating first-time setup.",
+              <Link to="/apps">{t("Open installed apps →")}</Link>
+            </div>
           )}
-          <Link to="/apps">{t("Open installed apps →")}</Link>
-        </div>
+          <CloudflareSetupManager onSaved={() => setSaved(true)} />
+        </>
       )}
-      <CloudflareSetupManager onSaved={() => setSaved(true)} />
     </div>
   );
 }
