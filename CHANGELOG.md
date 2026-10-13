@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.23
+
+- Configure MediaVPN with the actual managed MediaSeed Compose project and bundle MediaVPN 0.1.2. Resolve app and torrent services by verified project/service labels instead of hard-coded preview container names.
+- Verify named-volume ownership before stopping the source torrent client or preparing its VPN-bound replacement. Reuse existing configuration, downloads and read-only client secrets; retain the legacy standalone project default and existing VPN/port readiness checks.
+
 ## 0.5.22
 
 - Persist GitHub metadata rate-limit cooldowns across Core restarts, keyed by credential digest without storing credentials. Keep existing shared requests, five-minute metadata caching, 15-minute main checks and configurable full-check interval.

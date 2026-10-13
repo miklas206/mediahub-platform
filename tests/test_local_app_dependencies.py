@@ -183,6 +183,10 @@ def test_updates_install_prerequisites_but_do_not_start_stopped_apps(tmp_path, m
     media.write_bytes(b"synthetic media sentinel")
     module.provision(root, "192.168.1.50", source)
     assert any("build" in call and "app" in call for call in calls)
+    vpn = json.loads((root / "local-apps/mediavpn/compose.json").read_text())
+    assert (
+        vpn["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] == "mediahub-mediaseed"
+    )
     assert not any("-d" in call for call in calls)
     assert all("--volumes" not in call and "down" not in call for call in calls)
     key = root / "local-apps/mediavpn/data/integrations/mediahub.token"

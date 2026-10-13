@@ -320,6 +320,9 @@ def provision(root, lan, source=SOURCE):
                 values["image"] = image["RepoDigests"][0]
         if kind == "mediavpn":
             cfg["services"]["app"]["environment"]["MEDIAVPN_SHARED_ADDRESS"] = lan
+            cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] = (
+                "mediahub-mediaseed"
+            )
         previous_compose = compose_path.read_text() if compose_path.exists() else None
         private(
             compose_path.with_suffix(".before-" + digest[:16] + ".json"),
