@@ -317,6 +317,9 @@ def test_source_rejects_wrong_repository_or_digest(tmp_path, monkeypatch, wrong_
 
 
 def runtime(tmp_path, monkeypatch, handler, token="github_pat_test_read_only_123456789"):
+    # Release fixtures target 0.5.0; staging behavior must not depend on the
+    # current production release number.
+    monkeypatch.setattr(runtime_module, "__version__", "0.4.0")
     spool = tmp_path / "updates"
     spool.mkdir(mode=0o700)
     spool.chmod(0o700)

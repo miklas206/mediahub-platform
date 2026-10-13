@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.32
+
+- Fix Core reporting 0.5.28 in releases 0.5.29-31, which caused the host updater to reject requests against the newer installed-version marker. Add a release consistency regression check.
+- Add narrowly scoped host-helper recovery for those versions, requiring the installed source commit, running Core revision and project metadata to agree. Keep rejection of unrelated version/commit mismatches and show an actionable version-error diagnostic.
+
 ## 0.5.31
 
 - Add a resumable GPU setup wizard under Settings → General and link it from Jellyfin installation. Show Proxmox preparation steps inside MediaHub, then detect approved devices and carry the tested host/GPU into Jellyfin setup.

@@ -25,6 +25,21 @@ authenticated administrator action and retains the transactional rollback model.
 
 ## One-time transition from release checks
 
+### Recovery from the 0.5.28 runtime-version mismatch
+
+Releases 0.5.29–0.5.31 contained a stale runtime version string (0.5.28).
+The host marker correctly recorded the newer project version, so subsequent
+requests were rejected before any running services changed. Release 0.5.32
+corrects the string and tests version consistency.
+
+An affected host first needs the reviewed **0.5.32 or newer host helper**:
+run `sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --refresh-helper`
+from that checkout, then check and install the latest main update in MediaHub.
+Refreshing the helper preserves repository trust and does not restart containers.
+The helper accepts only the known historical mismatch, and only if the request's
+installed commit, root-owned source marker, running Core image revision and its
+project metadata all agree. Unrelated stale versions/commits remain rejected.
+
 Existing installations need both this Core version and the updated host helper.
 From the reviewed checkout on the MediaHub Linux host, run
 `sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --repository OWNER/REPO`.

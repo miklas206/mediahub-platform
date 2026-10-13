@@ -275,6 +275,59 @@ def test_version_comparison_accepts_only_stable_semantic_versions():
             raise AssertionError(f"accepted unsafe version: {invalid}")
 
 
+@pytest.mark.parametrize(
+    "mismatch", [None, "commit", "revision", "project", "reported", "role", "future"]
+)
+def test_legacy_version_recovery_requires_matching_running_source(tmp_path, monkeypatch, mismatch):
+    updater, root, commands = fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(updater, "_trusted_source", lambda: "example/mediahub")
+    monkeypatch.setattr(
+        updater, "installed_source", lambda: {"repository": "example/mediahub", "commit": "a" * 40}
+    )
+    request = {"schemaVersion": 3, "fromVersion": "0.5.28", "fromCommit": "a" * 40}
+    labels = {
+        "org.opencontainers.image.revision": "a" * 40,
+        "com.docker.compose.project": "mediahub-platform",
+        "com.docker.compose.service": "core",
+    }
+    versions = {"reported": "0.5.28", "project": "0.5.29"}
+    if mismatch == "commit":
+        request["fromCommit"] = "b" * 40
+    elif mismatch == "revision":
+        labels["org.opencontainers.image.revision"] = "b" * 40
+    elif mismatch == "project":
+        versions["project"] = "0.5.30"
+    elif mismatch == "reported":
+        versions["reported"] = "0.5.27"
+    elif mismatch == "role":
+        labels["com.docker.compose.service"] = "agent"
+
+    def runner(args, capture=True):
+        commands.append(args)
+        if args[:2] == ["docker", "inspect"]:
+            return json.dumps(labels)
+        if args[:2] == ["docker", "exec"]:
+            return json.dumps(versions)
+        return "container-core"
+
+    updater.runner = runner
+    assert updater._legacy_version_request(
+        request, "0.5.32" if mismatch == "future" else "0.5.29"
+    ) is (mismatch is None)
+    assert not any("stop" in args or "up" in args for args in commands)
+
+
+def test_unrelated_version_mismatch_is_actionable_and_never_stops_services(tmp_path, monkeypatch):
+    updater, root, commands = fixture(tmp_path, monkeypatch)
+    updater.test_request["fromVersion"] = "0.2.0"
+    updater.process()
+    status = json.loads((root / "updates/status.json").read_text())
+    assert status["state"] == "failed"
+    assert "Installed version does not match" in status["message"]
+    assert "refresh-helper" in status["message"]
+    assert not any("stop" in args for args in commands)
+
+
 def test_successful_transaction_updates_both_images_and_trusted_version(tmp_path, monkeypatch):
     updater, root, commands = fixture(tmp_path, monkeypatch)
     updater.process()

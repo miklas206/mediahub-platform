@@ -46,6 +46,18 @@ class BuildSpaceError(ValueError):
         )
 
 
+class InstalledVersionError(ValueError):
+    """Fixed diagnostic for the known stale runtime-version update rejection."""
+
+    def __init__(self):
+        super().__init__(
+            "Installed version does not match the update request. "
+            "Running services were not changed. Refresh the host updater from a reviewed "
+            "MediaHub checkout using scripts/enable_source_updates.py --root /opt/mediahub "
+            "--refresh-helper, then check for updates again."
+        )
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -86,7 +98,11 @@ class HostUpdater:
         return (
             compose.get("name") == "mediahub-platform"
             and "agent" not in compose.get("services", {})
-            and compose.get("services", {}).get("core", {}).get("environment", {}).get("MEDIAHUB_RUNTIME_MODE") == "embedded"
+            and compose.get("services", {})
+            .get("core", {})
+            .get("environment", {})
+            .get("MEDIAHUB_RUNTIME_MODE")
+            == "embedded"
         )
 
     @staticmethod
@@ -735,10 +751,14 @@ class HostUpdater:
                     capture=False,
                 )
                 images[role] = image_id
-            self.pending_build_cache = None if embedded else {
-                "agentFingerprint": fingerprint,
-                "agentImage": images["agent"],
-            }
+            self.pending_build_cache = (
+                None
+                if embedded
+                else {
+                    "agentFingerprint": fingerprint,
+                    "agentImage": images["agent"],
+                }
+            )
             return images
         finally:
             shutil.rmtree(workspace)
@@ -795,6 +815,45 @@ class HostUpdater:
         ):
             raise ValueError("Invalid installed source marker")
         return value
+
+    def _legacy_version_request(self, request, installed):
+        # Releases 0.5.29-31 shipped __version__=0.5.28. Accept only that
+        # historical mismatch, with independent root marker + running image
+        # revision + running project metadata evidence. All other mismatches
+        # retain the normal rejection, including concurrent/stale requests.
+        if (
+            request.get("schemaVersion") != 3
+            or request.get("fromVersion") != "0.5.28"
+            or installed not in {"0.5.29", "0.5.30", "0.5.31"}
+        ):
+            return False
+        source = self.installed_source()
+        if (
+            source.get("repository") != self._trusted_source()
+            or not source.get("commit")
+            or request.get("fromCommit") != source["commit"]
+        ):
+            return False
+        identifier = self._compose_command("ps", "-q", "core").strip()
+        if not identifier or "\n" in identifier:
+            return False
+        labels = json.loads(
+            self.command("docker", "inspect", "--format", "{{json .Config.Labels}}", identifier)
+        )
+        if (
+            not isinstance(labels, dict)
+            or labels.get("org.opencontainers.image.revision") != source["commit"]
+            or labels.get("com.docker.compose.project") != "mediahub-platform"
+            or labels.get("com.docker.compose.service") != "core"
+        ):
+            return False
+        probe = (
+            "import json,tomllib,mediahub; from pathlib import Path; "
+            "p=tomllib.loads(Path('/app/pyproject.toml').read_text()); "
+            "print(json.dumps({'reported':mediahub.__version__, 'project':p['project']['version']}))"
+        )
+        versions = json.loads(self.command("docker", "exec", identifier, "python", "-c", probe))
+        return versions == {"reported": request["fromVersion"], "project": installed}
 
     def write_installed_source(self, source):
         path = self.updates / "installed-source.json"
@@ -1076,7 +1135,11 @@ class HostUpdater:
                 ]
                 installed = self._trusted_file(self.installed_version, 128).strip()
                 if request["fromVersion"] != installed:
-                    raise ValueError("Installed version does not match the update request")
+                    if not self._legacy_version_request(request, installed):
+                        raise InstalledVersionError()
+                    self._append_log(
+                        "Verified legacy Core version mismatch against the installed commit and running image"
+                    )
                 if manifest.get("schemaVersion") == 3:
                     previous_source = self.installed_source()
                     previous_commit = (
@@ -1115,7 +1178,9 @@ class HostUpdater:
                 self.status("installing", 70, "Stopping changed services for a safe snapshot")
                 compose = self._read_json(self.compose, 2 * 1024 * 1024)
                 required = {"core", "proxy"} if self._embedded() else {"core", "agent"}
-                if compose.get("name") != "mediahub-platform" or not required.issubset(compose.get("services", {})):
+                if compose.get("name") != "mediahub-platform" or not required.issubset(
+                    compose.get("services", {})
+                ):
                     raise ValueError("Compose ownership validation failed")
                 self._backup_preflight()
                 services_stopped = True
@@ -1168,7 +1233,7 @@ class HostUpdater:
                         "failed",
                         100,
                         str(error)
-                        if isinstance(error, BuildSpaceError)
+                        if isinstance(error, (BuildSpaceError, InstalledVersionError))
                         else "Update was rejected before any running service was changed",
                     )
                     return
