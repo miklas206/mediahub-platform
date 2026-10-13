@@ -2,7 +2,7 @@ import {
   defaultAppearance,
   type Appearance,
   type ThemeStyle,
-} from "./appearance";
+} from "./appearance-tokens";
 
 export type ThemePreset = {
   id: ThemeStyle;

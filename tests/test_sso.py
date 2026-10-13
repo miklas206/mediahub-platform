@@ -3,7 +3,6 @@ import hashlib
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-
 from mediahub.db import InstalledApp
 
 
@@ -95,11 +94,54 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
             member.headers["X-MediaHub-CSRF"] = member.get("/api/auth/me").json()["data"]["csrf"]
             assert member.put("/api/v1/auth/preferences", json={"language": "en"}).status_code == 200
             assert seed.get("/api/auth/me").json()["language"] == "en"
+            appearance = {"accent": "#d044e8", "secondary": "#797df2", "background": "#19314c", "depth": 40,
+                          "style": "precision-terminal", "mode": "light", "density": "compact", "reducedMotion": True, "navigation": "dock-top"}
+            assert member.put("/api/v1/auth/preferences", json={"appearance": appearance}).status_code == 200
+            identity = seed.get("/api/auth/me").json()
+            assert identity["managed"] is True
+            assert identity["appearance"] == appearance
+            assert identity["theme"] == logged_in.app.state.services.settings.get().theme
+            appearance = {**appearance, "style": "soft-orbit", "accent": "#52a1c7", "mode": "system"}
+            assert member.put("/api/v1/auth/preferences", json={"appearance": appearance}).status_code == 200
+            assert seed.get("/api/auth/me").json()["appearance"] == appearance
+            # Per-user settings never become another user's theme.
+            assert logged_in.get("/api/auth/me").json()["data"]["appearance"] is None
+            assert member.put("/api/v1/auth/preferences", json={"appearance": None}).status_code == 200
+            assert seed.get("/api/auth/me").json()["appearance"] is None
+
+            assert seed.get("/api/auth/me").json()["themeOverride"] is None
+            assert seed.put("/api/auth/preferences", json={"themeOverride": "edge-signal"}).status_code == 403
+            seed.headers["X-MediaSeed-CSRF" if module == "mediaseed" else "X-MediaVPN-CSRF"] = seed.get("/api/auth/me").json()["csrf"]
+            assert seed.put("/api/auth/preferences", json={"themeOverride": "invalid"}).status_code == 422
+            assert seed.put("/api/auth/preferences", json={"themeOverride": "edge-signal", "user_id": "someone-else"}).status_code == 422
+            assert seed.put("/api/auth/preferences", json={"themeOverride": "edge-signal"}).status_code == 200
+            assert seed.get("/api/auth/me").json()["themeOverride"] == "edge-signal"
+            # The app override never writes into MediaHub preferences, and survives restart.
+            assert member.get("/api/auth/me").json()["data"]["appearance"] is None
+            reopened = create_app(tmp_path / "seed", "https://seed.example", hub_transport=httpx.ASGITransport(app=logged_in.app))
+            with TestClient(reopened, base_url=browser_origin) as second_device:
+                second_device.cookies.update(seed.cookies)
+                assert second_device.get("/api/auth/me").json()["themeOverride"] == "edge-signal"
+            with TestClient(app, base_url=browser_origin) as another_user:
+                another_start = another_user.get("/auth/hub/start", follow_redirects=False)
+                another_url = urlsplit(another_start.headers["location"])
+                another_auth = logged_in.get(another_url.path + "?" + another_url.query, follow_redirects=False)
+                another_callback = urlsplit(another_auth.headers["location"])
+                assert another_user.get(another_callback.path + "?" + another_callback.query, follow_redirects=False).status_code == 303
+                another_identity = another_user.get("/api/auth/me").json()
+                assert another_identity["themeOverride"] is None
+                another_user.headers["X-MediaSeed-CSRF" if module == "mediaseed" else "X-MediaVPN-CSRF"] = another_identity["csrf"]
+                assert another_user.put("/api/auth/preferences", json={"themeOverride": "soft-orbit"}).status_code == 200
+                assert seed.get("/api/auth/me").json()["themeOverride"] == "edge-signal"
+            assert seed.put("/api/auth/preferences", json={"themeOverride": None}).status_code == 200
+            assert seed.get("/api/auth/me").json()["themeOverride"] is None
+
             # Hub overview grants are read-only, package-bound and recheck roles.
-            from sqlalchemy import select
+            import time
+
             from mediahub.auth import digest
             from mediahub.db import Session, Setting
-            import time
+            from sqlalchemy import select
             token = "o" * 64
             svc = logged_in.app.state.services
             with svc.sessions.begin() as db:

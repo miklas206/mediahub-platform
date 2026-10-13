@@ -49,8 +49,11 @@ def identity(svc, db, grant):
         raise DomainError("unauthorized", "User no longer exists", 401)
     svc.auth.authenticate_session_policy(db, user)
     role = svc.auth.app_role(user.id, grant["packageId"])
+    preferences = svc.settings.user_preferences(user.id)
     return {"id": user.id, "username": user.username, "role": role,
-            "language": svc.settings.user_preferences(user.id).language}
+            "language": preferences.language,
+            "appearance": preferences.appearance.model_dump(mode="json") if preferences.appearance else None,
+            "theme": svc.settings.get().theme}
 
 
 @router.get("/sso/authorize")
