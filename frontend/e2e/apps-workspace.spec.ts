@@ -72,12 +72,13 @@ test("Seedbox measured stats and RSS rail never fabricate missing client data", 
   await page.setViewportSize({ width: 1440, height: 1100 });
   let available = true;
   const row = { hash: "a".repeat(40), name: "Synthetic long torrent title for layout validation", progress: .71, size: 4e9, dlspeed: 1024, upspeed: 2048, ratio: .4, state: "downloading", seeding_time: 0 };
+  let previewRows = [row];
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname.replace("/api/", "");
     let data: unknown = [];
     if (path === "auth/status") data = { needsSetup: false, managed: false };
     if (path === "auth/me") data = { csrf: "synthetic", username: "Designer", role: "administrator", language: "en" };
-    if (path === "dashboard") data = { runtime: { ready: false, downloadsEnabled: false }, torrents: available ? [row] : null, queue: null };
+    if (path === "dashboard") data = { runtime: { ready: false, downloadsEnabled: false }, torrents: available ? previewRows : null, queue: null };
     if (path === "client") data = { name: "qBittorrent", version: "test" };
     if (path === "feeds") data = [{ id: "synthetic", name: "Documentaries", paused: true, folder: "releases", ratio: 1 }];
     await route.fulfill({ json: data });
@@ -87,6 +88,10 @@ test("Seedbox measured stats and RSS rail never fabricate missing client data", 
   await expect(page.locator("#seed-upload-speed")).toHaveText("2.0 KiB/s");
   await expect(page.locator("#seed-torrent-count")).toHaveText("1");
   await expect(page.locator("#feed-preview")).toContainText("Documentaries");
+  previewRows = Array.from({length:8}, (_,index) => ({...row, hash: index.toString(16).padStart(40,"a"), name: `Synthetic media transfer ${index+1}`, progress: index>4 ? 1 : .15 + index*.13, state: index>4 ? "uploading" : "downloading"}));
+  await page.locator("#refresh").click();
+  await expect(page.locator("#seed-torrent-count")).toHaveText("8");
+  await expect(page.locator(".torrent")).toHaveCount(8);
   await page.screenshot({ path: "test-results/seedbox-compact-populated.png", animations: "disabled" });
   await page.locator("#open-rss").click();
   await expect(page.locator("#feeds")).toBeVisible();

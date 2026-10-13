@@ -211,3 +211,10 @@ describe("home card removal capability", () => {
     expect(buildHubEntries({ ...input, apps: [{ ...seedbox, removable: true }] }).find(entry => entry.id === seedbox.packageId)?.removableApp?.id).toBe(seedbox.id);
   });
 });
+
+
+it("passes the explicit Light choice only to a first-party app", () => {
+  const url = new URL(themedAppUrl("https://example.test/open?a=1", "org.mediahub.mediaseed", "midnight-glass", "light"));
+  expect(url.searchParams.get("mediahub_mode")).toBe("light");
+  expect(url.searchParams.get("a")).toBe("1");
+});

@@ -4,7 +4,7 @@ The five experimental styles draw on the user's October 13 concept images. They
 share MediaHub's existing pages, navigation and real application state. No example
 metrics, application installations or decorative connection status are added.
 
-Open **Settings → General → Themes and appearance**. A theme previews immediately.
+Open **Settings → Appearance**. A theme previews immediately.
 Use **Preview dialog** and **Preview notification** to compare feedback. **Save
 colors** saves the full appearance to the current account; **Discard changes** or
 leaving Settings restores the saved look. **MediaHub defaults** previews the
@@ -13,7 +13,7 @@ original appearance, which can then be saved.
 | Theme | Direction |
 | --- | --- |
 | Midnight Glass | Navy surfaces, cyan edges, restrained lighting |
-| Soft Orbit | Light pearl, lavender, rounded cards and soft shadows |
+| Soft Orbit | Soft dark blue, gentle light, rounded cards and soft shadows |
 | Precision Terminal | Matte graphite, mint accents, compact technical details |
 | Floating Layers | Slate surfaces, blue accents and layered depth |
 | Edge Signal | Neutral charcoal, amber and crisp borders |
@@ -64,3 +64,26 @@ the prior installed images predate account-language support. The existing additi
 language migration has focused migration/authentication tests. A rollback can use
 the previous images with the additional language columns retained; do not overwrite
 newer unrelated account or application data with an old database snapshot.
+
+## Reference workspace revision
+
+The dedicated Appearance page now follows the supplied compact composition: five
+actual UI miniatures, a separate Light choice, compact-layout/reduced-motion switches
+and accent dots. Custom palettes, color fields, Classic and preview actions remain
+under Advanced appearance. Save/discard still applies account preferences; Light uses
+the existing midnight-glass style with light mode, so no contract/schema change is needed.
+
+Home is a unified Apps & Services catalog with counted category/status filters and
+consistent icon/title/status/description/action anatomy. A visible Uninstall button
+uses the existing identity-checked removal flow only for removable apps. It preserves
+existing media/app-data notices and never invokes removal from a theme selection.
+
+Overview uses the same compact vocabulary: aggregate service status, CPU/RAM/storage,
+connected apps, active downloads and recent activity. Independent-app observations
+must be fresh and verified before aggregate health is green. A missing media-capacity
+observation falls back to Core disk metrics with the explicit Core storage label.
+
+MediaSeed places its live transfer metrics above navigation and renders compact
+number/name/progress/speed/status/action rows beside RSS. Connection details remain
+under VPN; blocked-download guidance and server-side enforcement are preserved.
+Sparkline paths use real observed samples and stay empty until multiple samples exist.

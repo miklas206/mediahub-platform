@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Activity,
-  ArrowRight,
-  Box,
-  RefreshCw,
-  Search,
-  Settings2,
-} from "lucide-react";
+import { Activity, Search, Settings2 } from "lucide-react";
 import { AppUninstall } from "./app-uninstall";
 import type { AppInfo, InstalledAppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
@@ -21,16 +14,32 @@ import { appStatusLabel } from "./seedbox-status";
 import { t } from "./i18n";
 import { useData } from "./use-data";
 import "./hub-home.css";
-import { useAppearance, type ThemeStyle } from "./appearance";
+import { useAppearance, type ThemeStyle, type Appearance } from "./appearance";
 
-export function themedAppUrl(path: string, packageId: string, style: ThemeStyle) {
-  if (!["org.mediahub.seedbox", "org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(packageId)) return path;
+export function themedAppUrl(
+  path: string,
+  packageId: string,
+  style: ThemeStyle,
+  mode?: Appearance["mode"],
+) {
+  if (
+    ![
+      "org.mediahub.seedbox",
+      "org.mediahub.mediaseed",
+      "org.mediahub.mediavpn",
+    ].includes(packageId)
+  )
+    return path;
   try {
     const url = new URL(path);
     if (!["http:", "https:"].includes(url.protocol)) return path;
     url.searchParams.set("mediahub_theme", style);
+    if (mode === "light") url.searchParams.set("mediahub_mode", "light");
+    else url.searchParams.delete("mediahub_mode");
     return url.href;
-  } catch { return path; }
+  } catch {
+    return path;
+  }
 }
 
 const hubApps = {
@@ -125,13 +134,24 @@ export function buildHubEntries({
   const entries: HubEntry[] = catalog
     .filter(
       (entry) =>
-        entry.availability === "available" && entry.id !== "org.mediahub.windows-share" && Object.hasOwn(hubApps, entry.id),
+        entry.availability === "available" &&
+        entry.id !== "org.mediahub.windows-share" &&
+        Object.hasOwn(hubApps, entry.id),
     )
     .map((entry) => {
       const definition = hubApps[entry.id as keyof typeof hubApps];
-      if (entry.id === "org.mediahub.seedbox" && mediaseed?.configured && mediaseed.url && URL.canParse(mediaseed.url)) {
+      if (
+        entry.id === "org.mediahub.seedbox" &&
+        mediaseed?.configured &&
+        mediaseed.url &&
+        URL.canParse(mediaseed.url)
+      ) {
         const address = new URL(mediaseed.url);
-        if (["http:", "https:"].includes(address.protocol) && !address.username && !address.password) {
+        if (
+          ["http:", "https:"].includes(address.protocol) &&
+          !address.username &&
+          !address.password
+        ) {
           return {
             id: entry.id,
             name: "MediaSeed",
@@ -140,11 +160,21 @@ export function buildHubEntries({
             path: mediaseed.openUrl || address.href,
             configured: true,
             external: true,
-            status: mediaseed.available && !mediaseedError ? "healthy" : "unknown",
-            statusLabel: mediaseedError ? "Status unavailable" : mediaseed.available ? "App available" : "Check connection",
+            status:
+              mediaseed.available && !mediaseedError ? "healthy" : "unknown",
+            statusLabel: mediaseedError
+              ? "Status unavailable"
+              : mediaseed.available
+                ? "App available"
+                : "Check connection",
             action: "Open app",
             settingsPath: "/app-settings/org.mediahub.mediaseed",
-            removableApp: apps?.find(app => app.packageId === "org.mediahub.mediaseed" && !app.isMock && app.removable),
+            removableApp: apps?.find(
+              (app) =>
+                app.packageId === "org.mediahub.mediaseed" &&
+                !app.isMock &&
+                app.removable,
+            ),
           };
         }
       }
@@ -222,7 +252,11 @@ export function buildHubEntries({
     .sort((left, right) => Number(right.configured) - Number(left.configured));
   if (mediavpn?.configured && mediavpn.url && URL.canParse(mediavpn.url)) {
     const address = new URL(mediavpn.url);
-    if (["http:", "https:"].includes(address.protocol) && !address.username && !address.password) {
+    if (
+      ["http:", "https:"].includes(address.protocol) &&
+      !address.username &&
+      !address.password
+    ) {
       entries.push({
         id: "org.mediahub.mediavpn",
         name: "MediaVPN",
@@ -230,16 +264,27 @@ export function buildHubEntries({
         category: "Network",
         path: mediavpn.openUrl || address.href,
         settingsPath: "/app-settings/org.mediahub.mediavpn",
-        removableApp: apps?.find(app => app.packageId === "org.mediahub.mediavpn" && !app.isMock && app.removable),
+        removableApp: apps?.find(
+          (app) =>
+            app.packageId === "org.mediahub.mediavpn" &&
+            !app.isMock &&
+            app.removable,
+        ),
         configured: true,
         external: true,
         status: mediavpn.available && !mediavpnError ? "healthy" : "unknown",
-        statusLabel: mediavpnError ? "Status unavailable" : mediavpn.available ? "App available" : "Check connection",
+        statusLabel: mediavpnError
+          ? "Status unavailable"
+          : mediavpn.available
+            ? "App available"
+            : "Check connection",
         action: "Open app",
       });
     }
   }
-  return entries.sort((left, right) => Number(right.configured) - Number(left.configured));
+  return entries.sort(
+    (left, right) => Number(right.configured) - Number(left.configured),
+  );
 }
 
 export function HubHome({
@@ -247,7 +292,6 @@ export function HubHome({
   appsError,
   integrations,
   integrationsError,
-  updates,
   live,
 }: {
   apps: AppInfo[] | undefined;
@@ -271,7 +315,7 @@ export function HubHome({
   const reloadMediaSeed = mediaseed.reload;
   const reloadMediaVPN = mediavpn.reload;
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "configured" | "setup">("all");
+  const [filter, setFilter] = useState("all");
   useEffect(() => {
     const refresh = () => {
       reloadDeployment();
@@ -288,7 +332,7 @@ export function HubHome({
   const entries = buildHubEntries({
     catalog: catalog.data || [],
     apps,
-    appsError,
+    appsError: appsError || (!live ? t("Reconnecting") : ""),
     integrations,
     integrationsError,
     deployment: deployment.data,
@@ -298,7 +342,6 @@ export function HubHome({
     mediavpn: mediavpn.data,
     mediavpnError: mediavpn.error,
   });
-  const configured = entries.filter((entry) => entry.configured).length;
   const cards: HubEntry[] = [
     ...entries,
     {
@@ -316,7 +359,11 @@ export function HubHome({
   const visible = cards.filter(
     (entry) =>
       (filter === "all" ||
-        (filter === "configured" ? entry.configured : !entry.configured)) &&
+        (filter === "running"
+          ? entry.configured && entry.status === "healthy"
+          : filter === "setup"
+            ? !entry.configured
+            : entry.category === filter)) &&
       [entry.name, t(entry.name), t(entry.description), t(entry.category)]
         .join(" ")
         .toLocaleLowerCase()
@@ -326,64 +373,30 @@ export function HubHome({
     catalog.error || appsError || integrationsError || deployment.error;
   return (
     <div className="hub-home">
-      <header className="hub-heading">
-        <div>
-          <p className="eyebrow">{t("YOUR APP HUB")}</p>
-          <h1>
-            MediaHub <span className="hub-beta">beta</span>
-          </h1>
-          <p>{t("Your apps, media and services. Together in one place.")}</p>
-        </div>
-        <div className="hub-theme-art" aria-hidden="true">
-          <span><Box size={34} /></span><span><Activity size={26} /></span><span><Box size={22} /></span>
-        </div>
+      <header className="reference-page-title">
+        <h1>{t("Apps & Services")}</h1>
+        <p>{t("Install, configure and manage your media stack.")}</p>
       </header>
-      <div className="hub-status-strip" aria-label={t("Hub status")}>
-        <span>
-          <span className={`status-dot ${live ? "healthy" : "unknown"}`} />
-          {t(live ? "Hub connected" : "Reconnecting")}
-        </span>
-        <span>
-          <Box size={15} />
-          {apps && !appsError
-            ? t("{count} configured apps", { count: configured })
-            : t("Checking apps")}
-        </span>
-        <Link to="/updates">
-          <RefreshCw size={15} />
-          {updates === undefined
-            ? t("Check updates")
-            : updates
-              ? t("{count} updates available", { count: updates })
-              : t("Updates")}
-          <ArrowRight size={14} />
-        </Link>
-      </div>
-      <section className="hub-app-section" aria-labelledby="hub-apps-heading">
-        <div className="hub-app-toolbar">
-          <div>
-            <h2 id="hub-apps-heading">{t("Your apps")}</h2>
-            <p>{t("Open an app or choose one to set up.")}</p>
-          </div>
-          <label className="hub-search">
-            <Search size={17} />
-            <span className="sr-only">{t("Find an app")}</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("Find an app")}
-              type="search"
-            />
-          </label>
-        </div>
+      <section className="hub-app-section" aria-label={t("Apps & Services")}>
+        <label className="hub-search">
+          <Search size={17} />
+          <span className="sr-only">{t("Find an app")}</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("Search apps...")}
+            type="search"
+          />
+        </label>
         <div className="hub-filters" role="group" aria-label={t("Filter apps")}>
-          {(
-            [
-              ["all", "All apps"],
-              ["configured", "Ready to open"],
-              ["setup", "Available to set up"],
-            ] as const
-          ).map(([key, label]) => (
+          {[
+            ["all", "All apps"],
+            ["running", "Running"],
+            ["setup", "Available to set up"],
+            ["Media", "Media"],
+            ["Downloads", "Downloads"],
+            ["Network", "Network"],
+          ].map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -392,6 +405,19 @@ export function HubHome({
               onClick={() => setFilter(key)}
             >
               {t(label)}
+              <span>
+                {
+                  cards.filter(
+                    (entry) =>
+                      key === "all" ||
+                      (key === "running"
+                        ? entry.configured && entry.status === "healthy"
+                        : key === "setup"
+                          ? !entry.configured
+                          : entry.category === key),
+                  ).length
+                }
+              </span>
             </button>
           ))}
         </div>
@@ -432,87 +458,81 @@ export function HubHome({
             ))}
           </div>
         ) : (
-          <div className="hub-app-groups">
-            {[true, false].map((isConfigured) => {
-              const group = visible.filter(
-                (entry) => entry.configured === isConfigured,
-              );
-              if (!group.length) return null;
-              return (
-                <section
-                  key={String(isConfigured)}
-                  aria-labelledby={`hub-group-${isConfigured}`}
-                >
-                  <h3
-                    className="hub-group-heading"
-                    id={`hub-group-${isConfigured}`}
-                  >
-                    {t(isConfigured ? "Added apps" : "Available to set up")}
-                    <span>{group.length}</span>
-                  </h3>
-                  <div className="hub-app-grid">
-                    {group.map((entry) => (
-                      <article
-                        className={`hub-app-card ${entry.configured ? "configured" : "setup"}`}
-                        key={entry.id}
-                        data-app-id={entry.id}
-                      >
-                        <div className="hub-card-main">
-                          <span
-                            className={`hub-app-icon ${entry.id === "healthcheck" ? "healthcheck" : ""}`}
-                          >
-                            {entry.id === "healthcheck" ? (
-                              <Activity size={29} />
-                            ) : (
-                              <ServiceIcon packageId={entry.id} size={32} />
-                            )}
-                          </span>
-                          <div className="hub-card-copy">
-                            <span className="hub-app-category">{t(entry.category)}</span>
-                            <h3>{t(entry.name)}</h3>
-                            <p>{t(entry.description)}</p>
-                          </div>
-                        </div>
-                          <span
-                            className={`hub-app-status ${entry.status}`}
-                            title={
-                              entry.statusDetail
-                                ? t(entry.statusDetail)
-                                : undefined
-                            }
-                          >
-                            <span />
-                            {t(entry.statusLabel)}
-                          </span>
-                        {(entry.settingsPath || entry.removableApp) && (
-                          <div className="hub-card-tools">
-                            {entry.removableApp && <AppUninstall app={entry.removableApp} onRemoved={onAppRemoved} buttonClassName="hub-card-uninstall" showIcon />}
-                            {entry.settingsPath && <Link to={entry.settingsPath} title={`Indstillinger: ${entry.name}`} aria-label={`Indstillinger: ${entry.name}`}><Settings2 size={18} /></Link>}
-                          </div>
-                        )}
-                        {entry.external ? <a
-                          className="hub-card-action"
-                          href={themedAppUrl(entry.path, entry.id, appearance?.style || "midnight-glass")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`${t(entry.action)} · ${t(entry.name)}`}
-                        >
-                          <span>{t(entry.action)}</span>
-                          <ArrowRight size={17} />
-                        </a> : <Link
-                          className="hub-card-action"
-                          to={entry.path}
-                          aria-label={`${t(entry.action)} · ${t(entry.name)}`}
-                        >
-                          <span>{t(entry.action)}</span>
-                          <ArrowRight size={17} />
-                        </Link>}
-                      </article>
-                    ))}
+          <div className="hub-app-grid reference-app-grid">
+            {visible.map((entry) => (
+              <article
+                className={`hub-app-card ${entry.configured ? "configured" : "setup"}`}
+                key={entry.id}
+                data-app-id={entry.id}
+              >
+                <div className="hub-card-main">
+                  <span className="hub-app-icon">
+                    {entry.id === "healthcheck" ? (
+                      <Activity size={29} />
+                    ) : (
+                      <ServiceIcon packageId={entry.id} size={32} />
+                    )}
+                  </span>
+                  <div className="hub-card-copy">
+                    <h3>{t(entry.name)}</h3>
+                    <span
+                      className={`hub-app-status ${entry.status}`}
+                      title={
+                        entry.statusDetail ? t(entry.statusDetail) : undefined
+                      }
+                    >
+                      <span />
+                      {t(entry.statusLabel)}
+                    </span>
                   </div>
-                </section>
-              );
-            })}
+                </div>
+                <p className="hub-card-description">{t(entry.description)}</p>
+                <div className="hub-card-footer">
+                  {entry.external ? (
+                    <a
+                      className="hub-card-action"
+                      href={themedAppUrl(
+                        entry.path,
+                        entry.id,
+                        appearance?.style || "midnight-glass",
+                        appearance?.mode,
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${t(entry.action)} · ${t(entry.name)}`}
+                    >
+                      {t(entry.action)}
+                    </a>
+                  ) : (
+                    <Link
+                      className="hub-card-action"
+                      to={entry.path}
+                      aria-label={`${t(entry.action)} · ${t(entry.name)}`}
+                    >
+                      {t(entry.action)}
+                    </Link>
+                  )}
+                  {entry.settingsPath && (
+                    <Link
+                      className="hub-card-settings"
+                      to={entry.settingsPath}
+                      title={`${t("Settings")}: ${entry.name}`}
+                      aria-label={`${t("Settings")}: ${entry.name}`}
+                    >
+                      <Settings2 size={16} />
+                    </Link>
+                  )}
+                </div>
+                {entry.removableApp && (
+                  <AppUninstall
+                    app={entry.removableApp}
+                    onRemoved={onAppRemoved}
+                    buttonClassName="hub-card-uninstall"
+                    showIcon
+                  />
+                )}
+              </article>
+            ))}
           </div>
         )}
         {!!catalog.data && !visible.length && (

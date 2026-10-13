@@ -1,3 +1,5 @@
+import { ReferenceOverview } from "./reference-overview";
+import { ArrowRight } from "lucide-react";
 import { serviceSnapshots } from "./service-snapshots";
 import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
@@ -8,17 +10,12 @@ import { LanguageSettings } from "./language-settings";
 import { AppearanceSettings } from "./appearance-settings";
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
-  ServiceOverview,
   useServiceReports,
-  ResourceTrends,
-  useMetricHistory,
 } from "./control-center";
 import { WorkspaceSearch } from "./workspace-search";
 import { ServiceIcon } from "./service-icon";
 import { useDashboardData } from "./dashboard-data";
 import { LayoutGroup, PageLayout } from "./page-layout";
-import { DashboardTorrents } from "./dashboard-torrents";
-import { DashboardUploads } from "./dashboard-uploads";
 import { appStatusLabel } from "./seedbox-status";
 import {
   seedboxSections,
@@ -901,11 +898,11 @@ function Shell({
                   {title === "Overview" ? t("CONTROL ROOM") : t("WORKSPACE")}
                 </span>
                 <h1>
-                  {translateText(title)}
+                  {location.pathname === "/settings" && new URLSearchParams(location.search).get("section") === "Appearance" ? t("Appearance") : translateText(title)}
                 </h1>
                 <p>
-                  {title === "Overview"
-                    ? t("Your media. Your server. Together.")
+                  {location.pathname === "/settings" && new URLSearchParams(location.search).get("section") === "Appearance" ? t("Make MediaHub feel like home.") : title === "Overview"
+                    ? t("Your media stack, all in one place.")
                     : translateText(pageDescription(title))}
                 </p>
               </div>
@@ -1049,19 +1046,10 @@ function Shell({
                                 <LanguageSettings compact />
                               </div>
                             </LayoutGroup>
-                            <LayoutGroup
-                              id="settings-appearance-cards"
-                              className="settings-appearance-group stack"
-                            >
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Colors and shades"
-                              >
-                                <AppearanceSettings compact />
-                              </div>
-                            </LayoutGroup>
+                            <Link className="primary appearance-entry" to="/settings?section=Appearance">{t("Appearance")}<ArrowRight size={16}/></Link>
                           </LayoutGroup>
                         }
+                        appearance={<AppearanceSettings compact />}
                         maintenance={<MaintenancePage />}
                         security={<SecuritySettings />}
                         sections={{
@@ -1142,47 +1130,9 @@ function Dashboard({
   const seedbox = apps?.find((a) => a.packageId === "org.mediahub.seedbox");
   const reports = useServiceReports(apps);
   const dashboardData = useDashboardData(seedbox?.id);
-  const samples = useMetricHistory(m);
   if (!m) return <Loading />;
-  const cards: { id: DashboardSection; content: ReactNode }[] = [
-    {
-      id: "apps",
-      content: (
-        <Section title={t("Your apps")}>
-          <ServiceOverview compact apps={apps} reports={reports} live={live} failed={!!error} dashboard={dashboardData} />
-        </Section>
-      ),
-    },
-    {
-      id: "system",
-      content: <ResourceTrends metrics={m} samples={samples} live={live} />,
-    },
-    {
-      id: "torrents",
-      content: <DashboardTorrents apps={apps} data={dashboardData} />,
-    },
-    {
-      id: "uploads",
-      content: <DashboardUploads apps={apps} data={dashboardData} />,
-    },
-  ];
-  return (
-    <>
-      {error && <Notice>{translateText(error)}</Notice>}
-      <div className="dashboard-grid overview-grid">
-        {cards.filter(({ id }) => id === "apps" || id === "system" || seedbox).map(({ id, content }) => (
-            <div
-              className="dashboard-card"
-              key={id}
-              data-section={id}
-              data-layout-title={dashboardChoices.find((choice) => choice[0] === id)?.[1]}
-            >
-              {content}
-            </div>
-          ))}
-      </div>
-    </>
-  );
+  return <ReferenceOverview metrics={m} apps={apps} reports={reports} dashboard={dashboardData} live={live} failed={!!error}/>;
+
 }
 
 export function Apps({

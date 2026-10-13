@@ -1815,12 +1815,14 @@ export function ImportSummary() {
 
 export function SettingsExtensions({
   general,
+  appearance,
   maintenance,
   security,
   sections = {},
   advanced = false,
 }: {
   general: ReactNode;
+  appearance?: ReactNode;
   maintenance: ReactNode;
   security: ReactNode;
   sections?: Record<string, ReactNode>;
@@ -1838,6 +1840,7 @@ export function SettingsExtensions({
   const [message, setMessage] = useState("");
   const tabs = [
     "General",
+    ...(appearance ? ["Appearance"] : []),
     ...(sections.Users ? ["Users"] : []),
     "Security",
     ...["Integrations", "Updates"].filter((name) => sections[name]),
@@ -1861,6 +1864,7 @@ export function SettingsExtensions({
         ))}
       </div>
       {tab === "General" && general}
+      {tab === "Appearance" && appearance}
       {tab === "Healthcheck" && maintenance}
       {sections[tab]}
       {tab === "Network" && (
