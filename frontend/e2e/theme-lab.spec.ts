@@ -550,3 +550,29 @@ for (const width of [1440,320]) test(`uninstall progress and older Agent activit
  await expect(bar).toHaveAttribute('aria-valuenow','80',{timeout:6000});
  await expect(modal.getByRole('button',{name:'Confirm removal',exact:true})).toBeEnabled();
 });
+
+for (const width of [1440,320]) test(`footer stays at viewport bottom across navigation and themes at ${width}px`,async({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width,height:1000});
+ await page.goto('/settings?section=Appearance');
+ for(const [name] of themes) for(const [navigation,label] of [['topbar','Top navigation'],['dock-top','Top dock'],['dock-bottom','Bottom dock'],['launcher','Compact menu']]) {
+  await page.locator('.theme-choice').filter({hasText:name}).click();
+  await page.getByRole('group',{name:'Navigation layout',exact:true}).getByRole('button',{name:new RegExp(label)}).click();
+  const check=async()=>{
+   const footer=await page.locator('.footer').boundingBox();
+   expect(footer).not.toBeNull();
+   expect(Math.abs(footer!.y+footer!.height-1000)).toBeLessThanOrEqual(1);
+   expect(footer!.x).toBe(0);
+   expect(footer!.width).toBe(width);
+   if(navigation==='dock-bottom') {
+    const dock=(await page.locator('.shell-navigation-dock').boundingBox())!;
+    expect(dock.y+dock.height).toBeLessThanOrEqual(footer!.y);
+   }
+  };
+  await expect(page.locator('html')).toHaveAttribute('data-navigation',navigation);
+  await check();
+  await page.evaluate(()=>{document.querySelector('main')!.style.minHeight='2000px';window.scrollTo(0,500);});
+  await check();
+  await page.evaluate(()=>{document.querySelector('main')!.style.minHeight='';window.scrollTo(0,0);});
+ }
+});

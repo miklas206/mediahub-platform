@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep the footer pinned to the viewport bottom in all dock/topbar/launcher layouts, with reserved content space and a separate position for the bottom navigation dock.
+
 - Show persisted uninstall progress for MediaSeed/MediaVPN and an activity bar for apps whose Agents do not report percentages. Preserve data checks and failure progress.
 
 ## 0.5.11
