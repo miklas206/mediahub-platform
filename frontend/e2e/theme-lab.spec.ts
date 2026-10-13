@@ -79,6 +79,7 @@ async function mockHub(page: Page, configured = false, username = "Designer") {
     else if (path === "/app-overview") data = { mediaseed:{status:"ok",data:{ready:true,checkedAt:Date.now()/1000,torrents:[{hash:"a".repeat(40),name:"Synthetic download",progress:.71,state:"downloading",dlspeed:12e6,upspeed:0}]}},mediavpn:{status:"unconfigured"} };
     else if (path === "/events/history") data = [{id:"test-event",timestamp:new Date().toISOString(),source:"System",event:"synthetic",message:"Synthetic activity for layout verification",severity:"info"}];
     else if (path.endsWith("/uninstall")) data = {state:"ready",installationId:"synthetic-installation",message:"Synthetic uninstall preview"};
+    else if (path.startsWith("/managed-install/")) data = {planDigest:"a".repeat(64),alreadyRunning:false,operation:{state:"idle"}};
     else if (path === "/system/status") data = { version: "beta-test" };
     await route.fulfill({ json: { data } });
   });
@@ -431,9 +432,7 @@ for (const width of [1440, 390, 320]) test(`MediaVPN setup card retains padding 
     expect(geometry.right).toBeGreaterThanOrEqual(15);
     expect(geometry.overflow).toBe(false);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    const guide=page.locator('.managed-app-guide');
-    await expect(guide).toHaveAttribute('href','https://github.com/miklas206/mediavpn');
-    expect(await guide.evaluate(el=>getComputedStyle(el).alignItems)).toBe('center');
+    await expect(page.getByRole('button',{name:'Install MediaVPN',exact:true})).toBeVisible();
   }
   expect(errors).toEqual([]);
 });
@@ -458,4 +457,26 @@ for (const width of [1440, 390, 320]) test(`themed removal content remains insid
     expect(inside).toBe(true);
     await page.keyboard.press('Escape');
   }
+});
+
+for (const kind of ['mediaseed','mediavpn']) for (const width of [1440,320]) test(`${kind} approved installation flow at ${width}px`, async ({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width,height:1000});
+ let state='idle'; let posts=0;
+ await page.route('**/api/v1/managed-install/**',async route=>{
+   if(route.request().method()==='POST') {
+     expect(route.request().postDataJSON()).toEqual({planDigest:'a'.repeat(64)});
+     posts++;state='succeeded';
+     return route.fulfill({json:{data:{state:'accepted'}}});
+   }
+   return route.fulfill({json:{data:{planDigest:'a'.repeat(64),alreadyRunning:state==='succeeded',operation:{state}}}});
+ });
+ await page.goto('/store/'+kind);
+ const name=kind==='mediaseed'?'MediaSeed':'MediaVPN';
+ await page.getByRole('button',{name:'Install '+name,exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'App installed and running'})).toBeVisible();
+ expect(posts).toBe(1);
+ await page.reload();
+ await expect(page.getByRole('button',{name:'Verify app installation',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

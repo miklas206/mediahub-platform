@@ -94,7 +94,7 @@ describe("primary MediaHub app hub", () => {
       ),
     ).toBe(true);
     expect(entries.find((entry) => entry.name === "Seedbox")?.path).toBe(
-      "/apps/install/seedbox",
+      "/store/mediaseed",
     );
     expect(entries.find((entry) => entry.name === "Jellyfin")?.path).toBe(
       "/apps/install/jellyfin",

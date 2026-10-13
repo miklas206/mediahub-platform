@@ -3628,5 +3628,18 @@
   "Proton port forwarding (NAT-PMP)": "Proton port-forwarding (NAT-PMP)",
   "VPN port {port}": "VPN-port {port}",
   "Update app": "Opdatér app",
-  "Some components have not been checked or do not support automatic update checks": "Nogle komponenter er ikke kontrolleret eller understøtter ikke automatisk opdateringskontrol"
+  "Some components have not been checked or do not support automatic update checks": "Nogle komponenter er ikke kontrolleret eller understøtter ikke automatisk opdateringskontrol",
+  "Install MediaSeed to manage torrents, RSS feeds and tracker accounts. Downloads stay blocked until a VPN connection is verified.": "Installer MediaSeed til torrents, RSS-feeds og tracker-konti. Downloads forbliver blokeret, indtil en VPN-forbindelse er verificeret.",
+  "Install the app on this MediaHub host. Existing accounts, settings, VPN profiles and downloads are preserved. Hub login and your theme are available in the app.": "Installer appen på denne MediaHub-server. Eksisterende konti, indstillinger, VPN-profiler og downloads bevares. Hub-login og dit tema er tilgængeligt i appen.",
+  "Starting app containers. You can leave this page and return to follow progress.": "Starter appens containere. Du kan forlade siden og vende tilbage for at følge fremdriften.",
+  "App installed and running": "Appen er installeret og kører",
+  "Verify app installation": "Kontroller app-installation",
+  "Install {value0}": "Installer {value0}",
+  "App installation failed; app data was preserved": "App-installationen fejlede; appdata er bevaret",
+  "This host has not prepared the app installer": "App-installation er ikke klargjort på denne server",
+  "Register the app HTTPS address before installation": "Registrer appens HTTPS-adresse før installation",
+  "App health check failed; app data was preserved": "Appens sundhedskontrol fejlede; appdata er bevaret",
+  "App did not become healthy; app data was preserved": "Appen blev ikke klar; appdata er bevaret",
+  "Review the app installation again": "Kontroller app-installationen igen",
+  "Existing app container ownership or image differs": "Den eksisterende appcontainers ejerskab eller image er anderledes"
 }

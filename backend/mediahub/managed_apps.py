@@ -27,6 +27,7 @@ class Installation(StrictModel):
     runtimeLabels: dict[str, str] = Field(default_factory=dict)
     integrationUrl: str | None = None
     integrationTokenFile: Path | None = None
+    installFile: Path | None = None
 
     @field_validator("runtimeLabels")
     @classmethod
@@ -121,7 +122,7 @@ class ManagedApps:
 
         save_json(self.journal(package), value)
 
-    async def docker(self, method, path, missing=False):
+    async def docker(self, method, path, missing=False, body=None):
         socket = self.svc.config.managed_apps_docker_socket
         if not socket:
             raise DomainError(
@@ -134,7 +135,7 @@ class ManagedApps:
                 timeout=45,
                 trust_env=False,
             ) as client:
-                response = await client.request(method, path)
+                response = await client.request(method, path, json=body)
             if missing and response.status_code == 404:
                 return None
             if response.status_code == 304 and method == "POST" and "/stop?" in path:

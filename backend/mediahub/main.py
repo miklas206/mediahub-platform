@@ -112,6 +112,10 @@ def create_app(config: Config | None = None) -> FastAPI:
 
         svc.managed_apps = ManagedApps(svc)
         await svc.managed_apps.initialize()
+        from mediahub.managed_install import ManagedInstaller
+
+        svc.managed_installer = ManagedInstaller(svc)
+        await svc.managed_installer.initialize()
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -281,6 +285,9 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app.include_router(router, prefix="/api/v1")
     app.include_router(app_settings_router, prefix="/api/v1")
+    from mediahub.managed_install import router as managed_install_router
+
+    app.include_router(managed_install_router, prefix="/api/v1")
     app.include_router(sso_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")

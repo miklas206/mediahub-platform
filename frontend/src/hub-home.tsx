@@ -46,7 +46,7 @@ const hubApps = {
   "org.mediahub.seedbox": {
     name: "Seedbox",
     description: "Torrents, VPN and automatic feeds.",
-    setup: "/apps/install/seedbox",
+    setup: "/store/mediaseed",
     category: "Downloads",
   },
   "org.mediahub.plex": {

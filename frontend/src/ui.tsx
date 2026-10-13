@@ -70,6 +70,7 @@ import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
 import { UsersPage } from "./users";
 import { AppSettingsPage } from "./app-settings";
+import { ManagedAppInstallPage } from "./managed-app-install";
 import { MediaVPNSetupPage } from "./mediavpn-setup";
 import {
   AppRuntimePage,
@@ -980,6 +981,7 @@ function Shell({
                   />
                   <Route path="/store" element={<Navigate to="/" replace />} />
                   <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
+                  <Route path="/store/mediaseed" element={<ManagedAppInstallPage kind="mediaseed" />} />
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"

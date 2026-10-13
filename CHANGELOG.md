@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add host-approved, administrator/HTTPS/CSRF-protected installation and reinstall flows for independent MediaSeed and MediaVPN, including persistent progress, immutable image/ownership checks, retained data and registry/SSO restoration. Route Seedbox setup to the independent app instead of the legacy dedicated-Agent installer. Host preparation remains environment-specific; never promote beta recipes or credentials into main.
+
 ## 0.5.10
 
 - Allow Plex installation again after verified, data-preserving runtime removal. Require a matching removal receipt and absent owned containers; reuse only the matching owned tmpfs volume and restore encrypted Plex preferences instead of replacing the server identity. Preserve media and persistent app data.
