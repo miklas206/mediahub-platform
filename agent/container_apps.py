@@ -18,6 +18,8 @@ from mediahub.contracts import StrictModel
 from mediahub.errors import DomainError
 from pydantic import Field, field_validator
 
+from agent.gpu import GPUGrant, apply_gpu, verify_gpu
+from agent.gpu import available as gpu_available
 from agent.install_files import read_json, save_json
 from agent.install_images import publisher_reference, pull_latest
 from agent.plex_control import PlexControl
@@ -48,6 +50,7 @@ class ContainerPolicy(StrictModel):
     requiredMounts: dict[str, str] = Field(default_factory=dict)
     requiredFilesystemUuids: dict[str, str] = Field(default_factory=dict)
     storageMarkers: dict[str, str]
+    gpus: list[GPUGrant] = Field(default_factory=list, max_length=16)
 
     @field_validator("bindAddress")
     @classmethod
@@ -86,7 +89,7 @@ class ContainerApps:
             approved = PlexInstallPolicy.model_validate(
                 read_json(Path(self.approved_host_policy_file))
             ).model_dump()
-            values = {key: approved[key] for key in ContainerPolicy.model_fields}
+            values = {key: approved[key] for key in ContainerPolicy.model_fields if key in approved}
             if os.name == "posix" and os.geteuid() != 0:
                 values["uid"] = os.geteuid()
             values["storage"] = {
@@ -153,7 +156,15 @@ class ContainerApps:
 
     async def options(self, app):
         definition, policy = self.app(app), self.policy()
+        gpu_choices = []
+        if app == "jellyfin":
+            info = await self.request("GET", "/info") if any(g.vendor == "nvidia" for g in policy.gpus) else {}
+            for gpu in policy.gpus:
+                ready = gpu_available(gpu) and (gpu.vendor != "nvidia" or "nvidia" in info.get("Runtimes", {}))
+                gpu_choices.append({"id": gpu.id, "name": gpu.name, "vendor": gpu.vendor, "available": ready,
+                                    "method": {"nvidia": "NVIDIA NVENC", "intel": "Intel Quick Sync (QSV)", "amd": "VA-API"}[gpu.vendor]})
         return {
+            "gpus": gpu_choices,
             "hostId": policy.hostId,
             "name": definition["name"],
             "port": definition["port"],
@@ -253,18 +264,27 @@ class ContainerApps:
                 "Ulimits": [{"Name": "core", "Soft": 0, "Hard": 0}],
             },
         }
+        if spec.gpuId:
+            grant = next((g for g in policy.gpus if g.id == spec.gpuId), None)
+            if spec.app != "jellyfin" or grant is None:
+                raise DomainError("gpu_not_approved", "Choose a GPU approved for this Jellyfin host", 403)
+            if grant.vendor == "nvidia":
+                info = await self.request("GET", "/info")
+                if "nvidia" not in info.get("Runtimes", {}):
+                    raise DomainError("gpu_runtime_missing", "Prepare NVIDIA Container Toolkit on the MediaHub host first", 409)
+            apply_gpu(container, grant)
         if linuxserver:
             container["HostConfig"]["Tmpfs"] = {
                 "/run": f"rw,exec,nosuid,nodev,size=64m,uid={policy.uid},gid={policy.gid}"
             }
         digest = hashlib.sha256(
-            json.dumps({"spec": spec.model_dump(), "container": container}, sort_keys=True).encode()
+            json.dumps({"spec": spec.model_dump(exclude_none=True), "container": container}, sort_keys=True).encode()
         ).hexdigest()
         return {
             "name": name,
             "container": container,
             "planDigest": digest,
-            "installation": spec.model_dump(),
+            "installation": spec.model_dump(exclude_none=True),
             "url": f"http://{policy.bindAddress}:{definition['port']}",
         }
 
@@ -274,6 +294,7 @@ class ContainerApps:
         plan = await self.build_plan(spec)
         return {
             "planDigest": plan["planDigest"],
+            "gpuId": spec.gpuId,
             "installation": plan["installation"],
             "url": plan["url"],
             "dataPreserved": True,
@@ -407,7 +428,8 @@ class ContainerApps:
         )
         labels = inspected.get("Config", {}).get("Labels", {})
         if (
-            any(labels.get(key) != value for key, value in expected["Labels"].items())
+            not verify_gpu(inspected, expected)
+            or any(labels.get(key) != value for key, value in expected["Labels"].items())
             or inspected.get("Image") != record.get("imageId")
             or mounts != actual
             or inspected.get("Config", {}).get("User") != expected["User"]
@@ -478,6 +500,8 @@ class ContainerApps:
                 raise DomainError("not_installed", "Container is missing", 409)
             self.verify(inspected, record)
             if action in {"start", "restart"}:
+                if not self.gpu_ready(record):
+                    raise DomainError("gpu_unavailable", "The installation GPU is no longer approved or accessible", 409)
                 if self.shared_vpn and not await self.shared_vpn.ready(app, inspected):
                     raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409)
                 if not await self.storage_control.storage_verified(self.policy()):
@@ -498,6 +522,20 @@ class ContainerApps:
             self.operations.pop(app, None)
             return {"state": "accepted", "dataPreserved": True}
 
+    def gpu_ready(self, record):
+        gpu_id = record.get("installation", {}).get("gpuId")
+        if not gpu_id:
+            return True
+        grant = next((g for g in self.policy().gpus if g.id == gpu_id), None)
+        if not grant or not gpu_available(grant):
+            return False
+        expected = record["container"]["HostConfig"]
+        if {d["PathOnHost"] for d in expected.get("Devices", [])} != set(grant.devices):
+            return False
+        if grant.vendor == "nvidia":
+            return (expected.get("DeviceRequests") or [{}])[0].get("DeviceIDs") == [grant.uuid]
+        return True
+
     async def monitor(self):
         while True:
             for app in CONTAINER_APPS:
@@ -514,7 +552,7 @@ class ContainerApps:
                         if inspected is None:
                             continue
                         self.verify(inspected, record)
-                        ready = await self.storage_control.storage_verified(self.policy())
+                        ready = self.gpu_ready(record) and await self.storage_control.storage_verified(self.policy())
                         if self.shared_vpn:
                             ready = ready and await self.shared_vpn.ready(app, inspected)
                         running = inspected["State"].get("Running")

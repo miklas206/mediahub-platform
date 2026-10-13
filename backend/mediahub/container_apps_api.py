@@ -50,7 +50,7 @@ async def plan(body: ContainerInstallation, request: Request):
     installable_app(body.app)
     return result(
         await target(request, body.hostId).request(
-            "POST", "/v1/container-apps/install-plan", body.model_dump()
+            "POST", "/v1/container-apps/install-plan", body.model_dump(exclude_none=True)
         )
     )
 
@@ -70,7 +70,7 @@ async def install(body: ContainerInstallRequest, request: Request):
                 "installation_exists", "Remove the existing installation before changing host", 409
             )
     response = await target(request, spec.hostId).request(
-        "POST", "/v1/container-apps/install", body.model_dump()
+        "POST", "/v1/container-apps/install", body.model_dump(exclude_none=True)
     )
     package = "org.mediahub." + spec.app
     with svc.sessions.begin() as db:

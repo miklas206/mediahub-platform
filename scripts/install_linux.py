@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--root", default="/opt/mediahub")
     parser.add_argument("--lan-ip")
     parser.add_argument("--storage")
+    parser.add_argument("--gpu-policy", type=Path, help="Root-owned inventory of explicitly shared GPUs (optional)")
     parser.add_argument("--yes", action="store_true", help="Confirm new installation and use default storage folders")
     parser.add_argument("--storage-identities", type=Path, help="Root-owned Proxmox-generated disk identity file for this LXC")
     parser.add_argument(
@@ -111,6 +112,13 @@ def main():
         if not shutil.which(executable):
             raise ValueError(f"Install prerequisite first: {executable}")
     command("docker", "compose", "version")
+    from gpu_setup import compose_gpu, read_inventory, validate_devices
+    gpus = read_inventory(args.gpu_policy) if args.gpu_policy else []
+    validate_devices(gpus)
+    if any(g["vendor"] == "nvidia" for g in gpus):
+        info = json.loads(command("docker", "info", "--format", "{{json .}}"))
+        if "nvidia" not in info.get("Runtimes", {}):
+            raise ValueError("Prepare NVIDIA Container Toolkit with scripts/gpu_setup.py before installing")
     if not Path("/sys/fs/cgroup/cgroup.controllers").exists():
         raise ValueError("A cgroup v2 host is required for swap and resource limits")
     root = safe_path(args.root)
@@ -346,6 +354,7 @@ def main():
     }
     container_policy["uid"] = 10001
     container_policy["gid"] = 1000
+    container_policy["gpus"] = gpus
     container_policy["storage"] = {
         kind: {"label": kind.title(), "kind": kind, "path": str(path)}
         for kind, path in folders.items() if kind in {"appdata", "movies", "tv", "downloads"}
@@ -447,6 +456,7 @@ def main():
 
         compose, routing = hub_stack(compose, root)
         new_file(root / "hub-proxy.json", json.dumps(routing, indent=2), 0o644)
+    compose_gpu(compose, gpus)
     new_file(root / "compose.json", json.dumps(compose, indent=2))
     from prepare_local_apps import provision
     provision(root, address, SOURCE)

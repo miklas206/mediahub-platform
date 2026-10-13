@@ -3792,5 +3792,9 @@
   "Starting app container": "Starter app-container",
   "Container started": "Container startet",
   "App container did not stay running": "App-containeren stoppede igen efter opstart",
-  "Downloading and starting container": "Henter og starter container"
+  "Downloading and starting container": "Henter og starter container",
+  "GPU transcoding": "GPU-transcoding",
+  "CPU only (no GPU)": "Kun CPU (ingen GPU)",
+  "Only GPUs shared with this MediaHub host are listed. Prepare GPU access in the Proxmox installation guide first.": "Kun GPU’er, der er delt med denne MediaHub-vært, vises. Klargør først GPU-adgangen via Proxmox-installationsguiden.",
+  "GPU access is configured. In Jellyfin Dashboard → Playback → Transcoding, select NVIDIA NVENC, Intel QSV or VAAPI to match your GPU, then save.": "GPU-adgangen er konfigureret. Vælg NVIDIA NVENC, Intel QSV eller VAAPI til din GPU i Jellyfins kontrolpanel → Afspilning → Transcoding, og gem."
 }

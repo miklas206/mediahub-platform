@@ -28,12 +28,20 @@ type Options = {
   port: number;
   slots: { id: string; required: boolean; readOnly: boolean }[];
   storage: { id: string; label: string; kind: string }[];
+  gpus?: {
+    id: string;
+    name: string;
+    vendor: string;
+    available: boolean;
+    method: string;
+  }[];
 };
 type Installation = {
   app: string;
   hostId: string;
   storageIds: Record<string, string>;
   timezone: string;
+  gpuId?: string;
 };
 type Preview = {
   planDigest: string;
@@ -44,7 +52,13 @@ type Preview = {
 export type ContainerAppStatus = {
   state: string;
   url?: string;
-  operation?: { state: string; message?: string; phase?: string; progress?: number; indeterminate?: boolean };
+  operation?: {
+    state: string;
+    message?: string;
+    phase?: string;
+    progress?: number;
+    indeterminate?: boolean;
+  };
   installation: Installation;
 };
 
@@ -84,6 +98,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const [host, setHost] = useState("local");
   const [storage, setStorage] = useState<Record<string, string>>({});
   const [timezone, setTimezone] = useState("Europe/Copenhagen");
+  const [gpuId, setGpuId] = useState("");
   const [preview, setPreview] = useState<Preview>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -139,6 +154,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
             Object.entries(storage).filter(([, value]) => value),
           ),
           timezone,
+          ...(gpuId ? { gpuId } : {}),
         }),
       );
     } catch (failure) {
@@ -157,8 +173,16 @@ export function ContainerAppSetup({ app }: { app: string }) {
         confirmedPlanDigest: preview.planDigest,
       });
       setAccepted(true);
-      setStatus({state: "installing", installation: preview.installation,
-        operation: {state: "installing", phase: "preparing", progress: 5, message: "Preparing installation"}});
+      setStatus({
+        state: "installing",
+        installation: preview.installation,
+        operation: {
+          state: "installing",
+          phase: "preparing",
+          progress: 5,
+          message: "Preparing installation",
+        },
+      });
       installed.reload();
       setRefresh((value) => value + 1);
     } catch (failure) {
@@ -186,6 +210,8 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const showSetup = !needsStatus || failed;
   const ready =
     !!options.data &&
+    (!gpuId ||
+      options.data.gpus?.some((gpu) => gpu.id === gpuId && gpu.available)) &&
     options.data.slots.every((slot) => !slot.required || storage[slot.id]);
   const running = status?.state === "running";
   return (
@@ -209,6 +235,13 @@ export function ContainerAppSetup({ app }: { app: string }) {
         <section className="phase-content" aria-label={t("Container status")}>
           <h2>{t("Container status")}</h2>
           <ContainerInstallProgress app={app} status={status} />
+          {status?.installation.gpuId && (
+            <p>
+              {t(
+                "GPU access is configured. In Jellyfin Dashboard → Playback → Transcoding, select NVIDIA NVENC, Intel QSV or VAAPI to match your GPU, then save.",
+              )}
+            </p>
+          )}
           <p role="status">
             {translateText(
               status?.operation?.state === "failed"
@@ -283,6 +316,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
                   onChange={(event) => {
                     setHost(event.target.value);
                     setStorage({});
+                    setGpuId("");
                     setPreview(undefined);
                   }}
                 >
@@ -325,6 +359,36 @@ export function ContainerAppSetup({ app }: { app: string }) {
                   </select>
                 </label>
               ))}
+              {app === "jellyfin" && (
+                <label>
+                  {t("GPU transcoding")}
+                  <select
+                    value={gpuId}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setGpuId(event.target.value);
+                      setPreview(undefined);
+                    }}
+                  >
+                    <option value="">{t("CPU only (no GPU)")}</option>
+                    {options.data?.gpus?.map((gpu) => (
+                      <option
+                        key={gpu.id}
+                        value={gpu.id}
+                        disabled={!gpu.available}
+                      >
+                        {gpu.name} · {gpu.method}
+                        {!gpu.available ? " · " + t("Unavailable") : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    {t(
+                      "Only GPUs shared with this MediaHub host are listed. Prepare GPU access in the Proxmox installation guide first.",
+                    )}
+                  </small>
+                </label>
+              )}
               <label>
                 {t("Timezone")}
                 <input
@@ -350,6 +414,16 @@ export function ContainerAppSetup({ app }: { app: string }) {
                 <dd>{preview.installation.hostId}</dd>
                 <dt>{t("Address")}</dt>
                 <dd>{preview.url}</dd>
+                {app === "jellyfin" && (
+                  <>
+                    <dt>{t("GPU transcoding")}</dt>
+                    <dd>
+                      {options.data?.gpus?.find(
+                        (gpu) => gpu.id === preview.installation.gpuId,
+                      )?.name || t("CPU only (no GPU)")}
+                    </dd>
+                  </>
+                )}
               </dl>
               <table>
                 <thead>

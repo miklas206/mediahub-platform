@@ -100,7 +100,7 @@ own runtime configuration and a user-provided VPN profile.
 2. Download and review the installer:
 
 ```sh
-curl -fL https://raw.githubusercontent.com/miklas206/fjordcopy/main/scripts/install-proxmox.sh -o /root/mediahub-install-proxmox.sh
+curl -fL https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/install-proxmox.sh -o /root/mediahub-install-proxmox.sh
 less /root/mediahub-install-proxmox.sh
 ```
 
@@ -120,6 +120,7 @@ bash /root/mediahub-install-proxmox.sh
 | Template storage | Storage for the downloaded Debian template, normally `local`. |
 | Network bridge | Your LAN bridge, normally `vmbr0`. |
 | Container hostname | Name of the new guest, normally `mediahub`. |
+| GPU ID | Optional GPU from the detected list, or Enter for CPU only. See [GPU setup](gpu-transcoding.md). |
 | Type INSTALL | Confirm the new guest with 6 CPU cores, 16384 MiB RAM and no swap. |
 
 Review free storage and RAM before confirming. Thin-provisioned storage may be

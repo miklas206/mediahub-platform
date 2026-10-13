@@ -23,7 +23,25 @@ done
 ip link show "$BRIDGE" >/dev/null
 pvesm status --storage "$STORAGE" --content rootdir
 pvesm status --storage "$TEMPLATE_STORAGE" --content vztmpl
+GPU_WORK=$(mktemp -d /var/tmp/mediahub-gpu.XXXXXXXX)
+GPU_HELPER="$GPU_WORK/proxmox_gpu.py"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [ -f "$SCRIPT_DIR/proxmox_gpu.py" ]; then
+    cp -- "$SCRIPT_DIR/proxmox_gpu.py" "$GPU_HELPER"
+else
+    curl -fsSL https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/proxmox_gpu.py -o "$GPU_HELPER"
+fi
+printf '\nAvailable GPUs (optional; shared with this LXC, not reassigned from the host):\n'
+python3 "$GPU_HELPER" --list
+GPU_ID=${MEDIAHUB_GPU:-}
+if [ -z "$GPU_ID" ]; then
+    read -r -p 'GPU ID to share with MediaHub [Enter = CPU only]: ' GPU_ID
+fi
+if [ -n "$GPU_ID" ]; then
+    python3 "$GPU_HELPER" --check --gpu "$GPU_ID"
+fi
 printf '%s\n' "New LXC $CTID ($HOSTNAME): 6 cores, 16384 MiB RAM, 32 GiB NEW system disk and 32 GiB NEW data disk, DHCP."
+printf 'GPU: %s\n' "${GPU_ID:-None (CPU only)}"
 printf '%s\n' 'App storage is prepared on the NEW data disk. No existing disks or media folders are attached.'
 printf '%s\n' 'This installs Core and Agent, not an existing Seedbox migration. Check storage capacity above before accepting.'
 read -r -p 'Type INSTALL to create this new container: ' CONFIRM
@@ -45,7 +63,13 @@ pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" --hostname "$HOSTNAME" \
     --rootfs "$STORAGE:32" --mp0 "$STORAGE:32,mp=/storage,backup=1" \
     --dev0 path=/dev/net/tun,uid=0,gid=0,mode=0600 \
     --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,ip6=manual,firewall=1" --onboot 1
+if [ -n "$GPU_ID" ]; then
+    python3 "$GPU_HELPER" --gpu "$GPU_ID" --ctid "$CTID" --inventory "$GPU_WORK/inventory.json"
+fi
 pct start "$CTID"
+if [ -n "$GPU_ID" ]; then
+    pct push "$CTID" "$GPU_WORK/inventory.json" /etc/mediahub-gpus.json --perms 0600
+fi
 pct exec "$CTID" -- sh -c 'test -c /dev/net/tun && test -r /dev/net/tun && test -w /dev/net/tun' || {
     echo 'The new MediaHub LXC cannot access TUN. Installation stopped before installing apps; inspect its device configuration.' >&2
     exit 1
@@ -71,8 +95,13 @@ INSTALL_SOURCE=$(mktemp -d /var/tmp/mediahub-install.XXXXXXXX)
 git clone --depth 1 https://github.com/miklas206/mediahub-platform.git "$INSTALL_SOURCE/source"
 ADDRESS=$(ip -4 -o addr show dev eth0 scope global | awk '{split($4, address, "/"); print address[1]; exit}')
 [ -n "$ADDRESS" ] || { echo 'DHCP did not provide an IPv4 address.' >&2; exit 1; }
+GPU_ARGS=()
+if [ -f /etc/mediahub-gpus.json ]; then
+    python3 "$INSTALL_SOURCE/source/scripts/gpu_setup.py" --inventory /etc/mediahub-gpus.json
+    GPU_ARGS=(--gpu-policy /etc/mediahub-gpus.json)
+fi
 python3 "$INSTALL_SOURCE/source/scripts/install_linux.py" --root /opt/mediahub --lan-ip "$ADDRESS" \
-    --storage /storage --storage-identities /etc/mediahub-storage-identities.json --yes
+    --storage /storage --storage-identities /etc/mediahub-storage-identities.json --yes "${GPU_ARGS[@]}"
 python3 - "$INSTALL_SOURCE" <<'MEDIAHUB_INSTALL_CLEANUP'
 import re, shutil, sys
 from pathlib import Path

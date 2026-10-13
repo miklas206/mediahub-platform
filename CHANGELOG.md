@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.5.29
+
+- Add optional GPU discovery/selection to the Proxmox installation guide. Share only approved render/NVIDIA nodes, stage matching NVIDIA host driver libraries read-only and prepare the guest Docker NVIDIA runtime without changing host kernel drivers.
+- Add an explicit GPU transcoding choice to Jellyfin installation and include the device selection in reviewed plans. Preserve GPU requests and supplemental groups through restart and VPN recreation; reject unavailable or revoked grants.
+- Document preparation of existing MediaHub guests and the separate Jellyfin hardware-acceleration setting. Keep CPU-only plan digests and requests compatible with existing installations and Agents.
+- Add a guided existing-instance GPU tool with explicit downtime confirmation and a diagnostics-only mode. Verify controller device access and an actual synthetic hardware encode in an isolated official Jellyfin container; report failure without CPU fallback and clean up only the owned test container.
+
 ## 0.5.28
 
 - Keep the home-page app card named MediaSeed before installation and after removal, as well as while installed or connected. Retain the existing package aliases and setup paths.

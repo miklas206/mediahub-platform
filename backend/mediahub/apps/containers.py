@@ -58,6 +58,7 @@ class ContainerInstallation(StrictModel):
     hostId: str = Field(min_length=1, max_length=80)
     storageIds: dict[str, str] = Field(default_factory=dict, max_length=4)
     timezone: str = Field(default="Europe/Copenhagen", min_length=1, max_length=80)
+    gpuId: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.:-]{1,80}$")
 
     @field_validator("timezone")
     @classmethod
