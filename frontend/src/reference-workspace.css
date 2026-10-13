@@ -65,9 +65,6 @@
 .settings-content {
   max-width: none;
 }
-.settings-content:has(.reference-appearance) > .settings-tabs {
-  display: none;
-}
 .reference-appearance {
   padding: 0;
   background: none;
@@ -732,3 +729,21 @@
 :root[data-appearance-mode="light"]:not([data-look="classic"]) .sidebar > nav a.active { background: color-mix(in srgb, var(--surface) 88%, var(--accent)); border-color: var(--accent-line); box-shadow: 0 2px 6px #19314c12, inset 3px 0 var(--accent); }
 @media (prefers-reduced-motion: reduce) { :root[data-look] .sidebar > nav a, :root[data-look] .sidebar > nav a > svg { transition: none; transform: none !important; } }
 :root[data-reduced-motion="true"] .sidebar > nav a, :root[data-reduced-motion="true"] .sidebar > nav a > svg { transition: none; transform: none !important; }
+
+/* Card buttons must keep a text-safe silhouette, even in rounded themes. */
+:root[data-look="soft-orbit"] .reference-appearance .theme-choice { border-radius: 16px; }
+:root[data-look="midnight-glass"] .reference-appearance .theme-choice { border-radius: 8px 18px 8px 8px; }
+:root[data-look="precision-terminal"] .reference-appearance .theme-choice { border-radius: 2px; }
+:root[data-look="floating-layers"] .reference-appearance .theme-choice { border-radius: 12px; }
+:root[data-look="edge-signal"] .reference-appearance .theme-choice { border-radius: 2px 16px 2px 2px; }
+.theme-nav-icon { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; flex: none; }
+.theme-nav-icon > svg { display: none; width: 19px; height: 19px; }
+.theme-nav-icon > .nav-icon-default { display: block; }
+:root:is([data-look="soft-orbit"], [data-look="precision-terminal"], [data-look="floating-layers"], [data-look="edge-signal"]) .theme-nav-icon > .nav-icon-default { display: none; }
+:root[data-look="soft-orbit"] .theme-nav-icon > .nav-icon-soft-orbit,
+:root[data-look="precision-terminal"] .theme-nav-icon > .nav-icon-precision-terminal,
+:root[data-look="floating-layers"] .theme-nav-icon > .nav-icon-floating-layers,
+:root[data-look="edge-signal"] .theme-nav-icon > .nav-icon-edge-signal { display: block; }
+:root[data-look="soft-orbit"] .theme-nav-icon { background: var(--accent-bg); border-radius: 7px; width: 25px; height: 25px; }
+:root[data-look="floating-layers"] .theme-nav-icon { background: var(--raised); border: 1px solid var(--accent-line); border-radius: 6px; width: 27px; height: 27px; box-shadow: 0 2px 0 #0003; }
+:root[data-look="edge-signal"] .theme-nav-icon { border-left: 2px solid var(--accent); padding-left: 4px; width: 25px; }

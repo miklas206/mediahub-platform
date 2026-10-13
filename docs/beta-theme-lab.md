@@ -107,3 +107,5 @@ Appearance refinement: each theme now has its own more visible abstract animated
 Color mode and dialog/notification previews are outside Advanced coloring. Compact layout is the single density control. Save, Discard changes and Defaults remain visible together; Defaults is a preview until Save. The redundant Classic button has been removed.
 
 Sidebar selections differ by theme: glass rail, orbit pill/dot, terminal brackets, raised layered tab and signal underline/chevron. Light has a clean flat selection. Current-page semantics, keyboard focus and reduced motion are retained.
+
+Theme identity refinement: bounded Soft Orbit control rounding prevents circular text cards. Each theme has a distinct system-font stack, icon stroke treatment and surface geometry. Hub sidebar uses different icon glyphs for Home/Overview/Settings, responding to live theme previews. Settings tabs remain visible on Appearance. Shared stylesheet version: ambient-8.

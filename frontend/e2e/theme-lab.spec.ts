@@ -118,6 +118,14 @@ for (const width of [1440, 390, 320]) {
       expect(interaction.feedback).toBe(({ 'midnight-glass': 'feedback-glass', 'soft-orbit': 'feedback-soft', 'precision-terminal': 'feedback-terminal', 'floating-layers': 'feedback-float', 'edge-signal': 'feedback-edge' })[id]);
       expect(interaction.radius).not.toBe('0px');
       await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = false; });
+      await expect(page.getByRole("tablist", {name:"Settings",exact:true})).toBeVisible();
+      await expect(page.getByRole("tab", {name:"Appearance",exact:true})).toHaveAttribute("aria-selected","true");
+      const cardShape = await panel.locator(".theme-choice").first().evaluate(el => ({radius:parseFloat(getComputedStyle(el).borderTopLeftRadius),width:el.clientWidth}));
+      expect(cardShape.radius).toBeLessThan(cardShape.width / 3);
+      if (width === 1440) {
+        const expectedClass = id === "midnight-glass" ? "nav-icon-default" : `nav-icon-${id}`;
+        await expect(page.locator('.sidebar > nav a[aria-current="page"] .'+expectedClass)).toBeVisible();
+      }
       const selectedNav = page.locator('.sidebar > nav a[aria-current="page"]');
       await expect(selectedNav).toHaveCount(1);
       await expect(selectedNav).toContainText("Settings");
@@ -307,6 +315,9 @@ for (const width of [1440, 390, 320]) test(`appearance controls are visible and 
  await expect(page.getByLabel("Color mode",{exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Preview dialog",exact:true})).toBeVisible();
  await expect(page.locator(".appearance-quick-save").getByRole("button",{name:"Defaults",exact:true})).toBeVisible();
+ await page.getByRole("tab",{name:"General",exact:true}).click();
+ await expect(page.getByRole("combobox",{name:"Language",exact:true})).toBeVisible();
+ await page.getByRole("tab",{name:"Appearance",exact:true}).click();
  await page.getByLabel("Color mode",{exact:true}).selectOption("system");await page.getByRole("button",{name:"Save",exact:true}).click();
  await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();expect(writes[0]).toMatchObject({appearance:{mode:"system"}});
  await page.getByRole("button",{name:"Defaults",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();

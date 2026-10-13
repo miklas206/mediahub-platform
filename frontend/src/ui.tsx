@@ -1,3 +1,4 @@
+import { ThemeNavIcon } from "./theme-nav-icon";
 import { ReferenceOverview } from "./reference-overview";
 import { serviceSnapshots } from "./service-snapshots";
 import { NotificationPopup } from "./notification-popup";
@@ -627,7 +628,7 @@ function Shell({
                 <div className="nav-app-group" key={path}>
                   <div className="nav-app-heading">
                     <NavLink to={path}>
-                      <Icon size={19} />
+                      <ThemeNavIcon path={path} fallback={Icon} />
                       <span>
                         {typeof label === "string"
                           ? t(label)
@@ -754,7 +755,7 @@ function Shell({
               ) : path === "/storage" ? (
                 <div className="nav-app-group" key={path}>
                   <NavLink to={path}>
-                    <Icon size={19} />
+                    <ThemeNavIcon path={path} fallback={Icon} />
                     <span>{t("Storage")}</span>
                   </NavLink>
                   <div className="app-shortcuts storage-shortcuts">
@@ -772,7 +773,7 @@ function Shell({
                 </div>
               ) : (
                 <NavLink end={path === "/"} key={path} to={path}>
-                  <Icon size={19} />
+                  <ThemeNavIcon path={path} fallback={Icon} />
                   <span>
                     {typeof label === "string"
                       ? t(label)
