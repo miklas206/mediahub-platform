@@ -53,15 +53,15 @@ function savedDraft(): Draft {
   return blank;
 }
 
-export function gpuPreparationCommand(ctid: string) {
+export function gpuPreparationCommand(ctid: string, repair = false) {
   if (!/^[1-9][0-9]{2,8}$/.test(ctid)) return "";
   return `(
   set -e
-  install -d -m 700 /root/mediahub-gpu-tools-v0.5.33
+  install -d -m 700 /root/mediahub-gpu-tools-v0.5.34
   for script in setup-existing-gpu.py proxmox_gpu.py gpu_setup.py; do
-    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.33/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.33/$script"
+    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.34/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.34/$script"
   done
-  python3 /root/mediahub-gpu-tools-v0.5.33/setup-existing-gpu.py --ctid ${ctid}
+  python3 /root/mediahub-gpu-tools-v0.5.34/setup-existing-gpu.py --ctid ${ctid}${repair ? " --repair-video-access" : ""}
 )`;
 }
 
@@ -108,6 +108,7 @@ function GPUWizard() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [repair, setRepair] = useState(false);
   const hosts = useLoad<{ id: string; name: string }[]>("/hosts");
   const status = useLoad<Status>(
     `/gpu-setup?host=${encodeURIComponent(draft.hostId)}`,
@@ -117,7 +118,7 @@ function GPUWizard() {
   const running = starting || report?.state === "running";
   const verified =
     !!gpu?.available && report?.gpuId === gpu.id && report.verified;
-  const command = gpuPreparationCommand(draft.ctid);
+  const command = gpuPreparationCommand(draft.ctid, repair);
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(draft));
@@ -291,9 +292,26 @@ function GPUWizard() {
               </label>
               <p>
                 {t(
-                  "In Proxmox, select the node containing this LXC and open Shell. Run the command below, choose a GPU and confirm the displayed LXC. The tool stops and restarts that LXC; media and app data are preserved.",
+                  repair
+                    ? "In Proxmox, open the node Shell, run the repair command below and confirm the displayed LXC."
+                    : "In Proxmox, select the node containing this LXC and open Shell. Run the command below, choose a GPU and confirm the displayed LXC. The tool stops and restarts that LXC; media and app data are preserved.",
                 )}
               </p>
+              <label className="gpu-repair-choice">
+                <input
+                  type="checkbox"
+                  checked={repair}
+                  onChange={(event) => setRepair(event.target.checked)}
+                />
+                {t("Repair GPU access after an earlier setup")}
+              </label>
+              {repair && (
+                <p className="muted">
+                  {t(
+                    "Repair keeps the LXC and Docker running, removes unnecessary NVIDIA administrative devices and recreates only MediaHub Core/Agent before testing.",
+                  )}
+                </p>
+              )}
               {command ? (
                 <>
                   <pre

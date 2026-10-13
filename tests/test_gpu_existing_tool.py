@@ -11,6 +11,94 @@ from test_gpu_installation import INTEL, NVIDIA
 from scripts import gpu_setup, proxmox_gpu
 
 
+def test_repair_wizard_only_recreates_controllers(tmp_path, monkeypatch):
+    tool = existing_tool(monkeypatch)
+    monkeypatch.setattr(
+        tool, "Path", lambda value: tmp_path if value == "/etc/pve" else Path(value)
+    )
+    calls = []
+
+    def run(*args):
+        calls.append(args)
+        if args[:2] == ("pct", "status"):
+            return "status: running"
+        if "cat" in args:
+            return json.dumps({"services": {"core": {}, "proxy": {}}})
+        return ""
+
+    monkeypatch.setattr(tool, "run", run)
+    monkeypatch.setattr(tool, "guest", lambda *args: calls.append(args))
+    monkeypatch.setattr(
+        sys, "argv", ["setup-existing-gpu.py", "--ctid", "107", "--repair-video-access", "--yes"]
+    )
+    tool.main()
+    assert not any("shutdown" in call or "start" in call or "restart" in call for call in calls)
+    recreated = [call for call in calls if "up" in call]
+    assert len(recreated) == 1 and recreated[0][-2:] == ("--no-deps", "core")
+    assert any("--repair-video-access" in call for call in calls)
+    assert "--test-only" in calls[-1]
+
+
+def test_video_grants_remove_admin_nodes_without_changing_input_or_uuid():
+    legacy = NVIDIA | {
+        "devices": NVIDIA["devices"]
+        + ["/dev/nvidia-caps/nvidia-cap1", "/dev/nvidia-modeset", "/dev/nvidia-uvm-tools"]
+    }
+    assert gpu_setup.video_grants([legacy, INTEL]) == [NVIDIA, INTEL]
+    assert "/dev/nvidia-caps/nvidia-cap1" in legacy["devices"]
+
+
+def test_video_repair_preserves_storage_other_services_and_backups(tmp_path, monkeypatch):
+    legacy = NVIDIA | {"devices": NVIDIA["devices"] + ["/dev/nvidia-caps/nvidia-cap1"]}
+    (tmp_path / "agent").mkdir()
+    inventory = tmp_path / "inventory.json"
+    policy = tmp_path / "agent/container-apps.json"
+    compose = tmp_path / "compose.json"
+    inventory.write_text(json.dumps([legacy]))
+    policy.write_text(json.dumps({"gpus": [legacy], "storage": ["keep-media"]}))
+    compose.write_text(
+        json.dumps(
+            {
+                "name": "mediahub-platform",
+                "services": {
+                    "core": {
+                        "devices": [p + ":" + p + ":rw" for p in legacy["devices"]]
+                        + ["/dev/net/tun:/dev/net/tun"],
+                        "volumes": ["/media:/media:ro"],
+                    },
+                    "proxy": {"image": "unchanged"},
+                },
+            }
+        )
+    )
+    before = {p: p.read_bytes() for p in [inventory, policy, compose]}
+    original_lstat = Path.lstat
+
+    def root_metadata(path):
+        meta = original_lstat(path)
+        if path in before:
+            return SimpleNamespace(st_mode=0o100600, st_uid=10001 if path == policy else 0)
+        return meta
+
+    monkeypatch.setattr(Path, "lstat", root_metadata)
+    monkeypatch.setattr(gpu_setup, "read_inventory", lambda _: [legacy])
+    monkeypatch.setattr(gpu_setup, "validate_devices", lambda grants: None)
+    monkeypatch.setattr(gpu_setup, "compose_gpu", lambda value, grants: value)
+    monkeypatch.setattr(gpu_setup.os, "fchown", lambda *args: None, raising=False)
+    monkeypatch.setattr(gpu_setup.os, "fchmod", lambda *args: None, raising=False)
+    gpu_setup.repair_video_access(tmp_path, inventory)
+    assert json.loads(inventory.read_text()) == [NVIDIA]
+    assert json.loads(policy.read_text()) == {"gpus": [NVIDIA], "storage": ["keep-media"]}
+    result = json.loads(compose.read_text())
+    assert result["services"]["proxy"] == {"image": "unchanged"}
+    assert result["services"]["core"]["volumes"] == ["/media:/media:ro"]
+    assert "/dev/net/tun:/dev/net/tun" in result["services"]["core"]["devices"]
+    assert not any("nvidia-cap" in p for p in result["services"]["core"]["devices"])
+    for path, content in before.items():
+        backups = list(path.parent.glob(path.name + ".before-video-repair-*"))
+        assert len(backups) == 1 and backups[0].read_bytes() == content
+
+
 @pytest.mark.parametrize(
     "grant,encoder",
     [(NVIDIA, "h264_nvenc"), (INTEL, "h264_qsv"), (INTEL | {"vendor": "amd"}, "h264_vaapi")],

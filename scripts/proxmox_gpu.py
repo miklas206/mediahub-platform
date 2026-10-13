@@ -70,10 +70,7 @@ def discover():
         shared = [
             Path("/dev/nvidiactl"),
             Path("/dev/nvidia-uvm"),
-            Path("/dev/nvidia-uvm-tools"),
-            Path("/dev/nvidia-modeset"),
         ]
-        shared += sorted(Path("/dev/nvidia-caps").glob("nvidia-cap*"))
         for row in csv.reader(rows.splitlines(), skipinitialspace=True):
             if len(row) != 3:
                 continue

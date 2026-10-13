@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.34
+
+- Limit NVIDIA video grants to the selected GPU, control and UVM devices. Administrative capability and display nodes are not required for ordinary NVENC/CUDA and can be root-only after NVIDIA runtime initialization.
+- Add an explicit repair mode for existing GPU setups. Back up and reduce the matching inventory/policy/controller mappings, retain external media mounts and other services, recreate only Core/Agent with no dependencies and run hardware verification without stopping the LXC or Docker.
+- Show the repair choice inside the GPU guide and report the actual denied device names when controller access fails.
+
 ## 0.5.33
 
 - Fix NVIDIA discovery incorrectly reporting a missing Proxmox driver because `minor_number` is not a supported nvidia-smi query field. Query the PCI bus ID and verify the UUID/device minor against kernel GPU information; never assume the GPU index equals its device node.

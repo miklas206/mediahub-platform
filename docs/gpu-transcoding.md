@@ -34,6 +34,15 @@ guide](https://jellyfin.org/docs/general/post-install/transcoding/hardware-accel
 
 ## Add a GPU to an existing MediaHub LXC
 
+If an earlier setup failed with `GPU permissions denied` on NVIDIA capability
+nodes, use **Repair GPU access after an earlier setup** in the guide (v0.5.34+),
+or pass `--repair-video-access` to the reviewed `setup-existing-gpu.py` tool.
+It reduces matching existing grants to the selected GPU, control and UVM nodes,
+backs up policy/Compose/inventory, recreates only Core/Agent with `--no-deps`
+and reruns verification. It does not stop the LXC or restart Docker, and does
+not change permissions on administrative NVIDIA nodes. Do not rerun the initial
+sharing step on an LXC that already has the GPU mappings.
+
 From **v0.5.31**, open **Settings → General → GPU setup** (Danish:
 **Indstillinger → Generelt → GPU-opsætning**). This resumable guide includes
 the preparation command for your LXC, approved GPU detection and a real

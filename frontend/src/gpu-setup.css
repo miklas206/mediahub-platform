@@ -54,6 +54,15 @@
   margin: 0;
   min-width: 0;
 }
+.gpu-repair-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gpu-repair-choice input {
+  width: auto;
+  flex-shrink: 0;
+}
 .gpu-choices legend {
   margin-bottom: 10px;
   font-weight: 600;

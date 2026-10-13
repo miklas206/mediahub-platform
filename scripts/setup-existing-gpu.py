@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import json
 import os
 import re
 import subprocess
@@ -20,6 +21,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ctid", help="Existing MediaHub LXC ID")
     parser.add_argument("--gpu", help="Exact ID from the discovered list")
+    parser.add_argument(
+        "--repair-video-access",
+        action="store_true",
+        help="Repair existing GPU access without stopping the LXC or restarting Docker",
+    )
     parser.add_argument("--root", default="/opt/mediahub")
     parser.add_argument(
         "--test-only",
@@ -32,6 +38,8 @@ def main():
         help="Explicitly authorize stopping/restarting this guest and its Docker services",
     )
     args = parser.parse_args()
+    if args.repair_video_access and args.test_only:
+        raise ValueError("Choose repair or test-only, not both")
     if os.geteuid() != 0 or not Path("/etc/pve").is_dir():
         raise ValueError("Run on the Proxmox node as root, not inside MediaHub")
     ctid = args.ctid or input("Existing MediaHub LXC ID: ").strip()
@@ -79,7 +87,7 @@ def main():
         )
     token = uuid.uuid4().hex
     helper = "/root/mediahub-gpu-tool-" + token + ".py"
-    if not args.test_only:
+    if not args.test_only and not args.repair_video_access:
         choices = discover()
         if not choices:
             raise ValueError(
@@ -121,7 +129,37 @@ def main():
         run("pct", "push", ctid, inventory, "/etc/mediahub-gpus.json", "--perms", "0600")
     print("[3/5] Copying the reviewed guest helper...", flush=True)
     run("pct", "push", ctid, source, helper, "--perms", "0600")
-    if not args.test_only:
+    if args.repair_video_access:
+        print(
+            "This removes administrative NVIDIA nodes from MediaHub's grants and recreates only Core/Agent. The LXC and Docker stay running."
+        )
+        if not args.yes and input("Type GPU to repair and run hardware tests: ").strip() != "GPU":
+            return
+        guest(
+            ctid,
+            "python3",
+            helper,
+            "--inventory",
+            "/etc/mediahub-gpus.json",
+            "--root",
+            args.root,
+            "--repair-video-access",
+        )
+        # Never restart proxy or installed apps while repairing controller access.
+        compose = json.loads(run("pct", "exec", ctid, "cat", args.root + "/compose.json"))
+        roles = [r for r in ("core", "agent") if r in compose.get("services", {})]
+        guest(
+            ctid,
+            "docker",
+            "compose",
+            "-f",
+            args.root + "/compose.json",
+            "up",
+            "-d",
+            "--no-deps",
+            *roles,
+        )
+    if not args.test_only and not args.repair_video_access:
         print("[4/5] Preparing Docker and updating the existing MediaHub GPU policy...", flush=True)
         guest(
             ctid, "python3", helper, "--inventory", "/etc/mediahub-gpus.json", "--root", args.root
