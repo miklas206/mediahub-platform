@@ -20,7 +20,7 @@ RUN pnpm build
 
 FROM python:3.12-slim-bookworm
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client \
+RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client openssl \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && install -m 0755 -d /etc/apt/keyrings \
@@ -42,6 +42,8 @@ COPY pyproject.toml README.md LICENSE ./
 COPY backend/ ./backend/
 COPY agent/ ./agent/
 COPY apps/ ./apps/
+COPY scripts/ ./scripts/
+COPY bundled/ ./bundled/
 COPY alembic.ini ./
 COPY --from=frontend /build/frontend/dist ./frontend/dist
 USER 10001

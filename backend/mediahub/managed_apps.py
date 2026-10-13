@@ -27,6 +27,7 @@ class Installation(StrictModel):
     runtimeLabels: dict[str, str] = Field(default_factory=dict)
     integrationUrl: str | None = None
     integrationTokenFile: Path | None = None
+    managementTokenFile: Path | None = None
     installFile: Path | None = None
 
     @field_validator("runtimeLabels")
@@ -188,7 +189,8 @@ class ManagedApps:
                 rows = []
             with self.svc.sessions.begin() as db:
                 app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
-                if not app and rows and not (saved and saved["state"] == "succeeded"):
+                running = bool(rows) and all(row.get("State", {}).get("Running") for row in rows)
+                if not app and running and not (saved and saved["state"] == "succeeded"):
                     app = InstalledApp(
                         package_id=package,
                         name=PACKAGES[package],
@@ -200,8 +202,8 @@ class ManagedApps:
                     db.flush()
                 if app:
                     self.svc.apps.adapters[app.id] = ManagedAdapter(self, package)
-                    if not saved and rows:
-                        app.state = "running"
+                    if not saved and rows and app.state != "uninstalled":
+                        app.state = "running" if running else "stopped"
                     if saved and saved["state"] in {"accepted", "running", "failed"}:
                         app.state = "removing"
                     elif saved and saved["state"] == "succeeded":
@@ -213,6 +215,10 @@ class ManagedApps:
         rows = await self.containers(package)
         policy = self.policy[package]
         if package.endswith("mediavpn"):
+            if policy.managementTokenFile and getattr(self.svc, "shared_vpn", None):
+                gateway = await self.svc.shared_vpn.vpn()
+                if gateway.get("enabled") and gateway.get("peers"):
+                    raise DomainError("app_dependency", "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN", 409)
             filters = quote(json.dumps({"label": ["org.mediahub.mediavpn.seedbox=mediaseed"]}))
             clients = await self.docker("GET", "/containers/json?all=1&filters=" + filters)
             if clients:

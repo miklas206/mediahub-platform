@@ -25,6 +25,19 @@ class ConfirmInstall(StrictModel):
     planDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
+@router.get("/prerequisites")
+def prerequisites(request: Request):
+    return result(services(request).app_dependencies.public())
+
+
+@router.post("/prerequisites/retry", status_code=202)
+async def retry_prerequisites(request: Request):
+    service = services(request).app_dependencies
+    if not service.task or service.task.done():
+        service.start()
+    return result(service.public())
+
+
 class ManagedInstaller:
     def __init__(self, svc):
         self.svc = svc
@@ -75,6 +88,9 @@ class ManagedInstaller:
         return read_json(path) if path.exists() else {"state": "idle"}
 
     async def plan(self, package):
+        dependencies = getattr(self.svc, "app_dependencies", None)
+        if dependencies:
+            dependencies.require_ready()
         recipe, digest = self.recipe(package)
         for item in recipe["containers"]:
             await self.manager.docker("GET", "/images/" + item["spec"]["Image"] + "/json")

@@ -45,6 +45,7 @@ class PlexRuntime:
                 save_json(self.install_operation_path, self.operation)
         self.libraries_ready = False
         self.vpn = PlexVPN(self)
+        self.shared_vpn = None
 
     async def uninstall_status(self):
         policy = self.control.policy()
@@ -126,6 +127,9 @@ class PlexRuntime:
             ) from None
 
     async def request(self, method, path, *, body=None, payload=None, binary=False):
+        if (self.shared_vpn and method == "POST" and path.startswith("/containers/create")
+                and body and body.get("Labels", {}).get("org.mediahub.package") == "org.mediahub.plex"):
+            body = await self.shared_vpn.prepare("plex", body)
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(uds=str(self.control.socket)),
@@ -511,6 +515,8 @@ class PlexRuntime:
 
     async def start(self, policy):
         """Restore encrypted preferences before the only container start path."""
+        if self.shared_vpn and not await self.shared_vpn.ready("plex", await self.control.inspect(policy)):
+            raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; Plex start blocked", 409)
         if not await self.control.storage_verified(policy):
             raise DomainError(
                 "storage_unavailable", "Media storage is unavailable; Plex start blocked", 409

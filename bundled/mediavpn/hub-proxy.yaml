@@ -1,0 +1,22 @@
+http:
+  routers:
+    app:
+      entryPoints: [websecure]
+      rule: PathPrefix(`/`)
+      service: app
+      tls: {}
+  services:
+    app:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://app:18802
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /app-tls/cert.pem
+        keyFile: /app-tls/key.pem
+  certificates:
+    - certFile: /app-tls/cert.pem
+      keyFile: /app-tls/key.pem

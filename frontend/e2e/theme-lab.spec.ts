@@ -86,6 +86,35 @@ async function mockHub(page: Page, configured = false, username = "Designer") {
   return { writes };
 }
 
+test('shared VPN profile and per-app selection stay usable on desktop and mobile', async ({page}) => {
+  await mockHub(page, true);
+  let gateway = {enabled:false,ready:false,profileId:'synthetic-profile',publicIp:null as string|null,profiles:[{id:'synthetic-profile',name:'My VPN'}],message:null};
+  const apps = [{id:'jellyfin',name:'Jellyfin',hostId:'paired-host',enabled:false,ready:false,phase:'idle'}];
+  const writes: unknown[] = [];
+  await page.route('**/api/v1/managed-install/org.mediahub.mediavpn', route => route.fulfill({json:{data:{planDigest:'a'.repeat(64),alreadyRunning:true,operation:{state:'idle'}},error:null}}));
+  await page.route('**/api/v1/shared-vpn**', async route => {
+    if(route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON(); writes.push(body);
+      if(route.request().url().endsWith('/gateway')) gateway = {...gateway,enabled:body.enabled,ready:body.enabled,publicIp:body.enabled?'8.8.8.8':null};
+      else apps[0] = {...apps[0],enabled:body.enabled,ready:body.enabled,phase:'ready'};
+    }
+    return route.fulfill({json:{data:{gateway,apps},error:null}});
+  });
+  await page.goto('/store/mediavpn');
+  await expect(page.getByRole('heading',{name:'Shared VPN',exact:true})).toBeVisible();
+  await expect(page.getByRole('checkbox',{name:'Use shared VPN'})).toBeDisabled();
+  await page.getByRole('button',{name:'Enable shared VPN',exact:true}).click();
+  await expect(page.getByRole('checkbox',{name:'Use shared VPN'})).toBeEnabled();
+  await page.getByRole('checkbox',{name:'Use shared VPN'}).check();
+  await expect(page.getByRole('checkbox',{name:'Use shared VPN'})).toBeChecked();
+  expect(writes).toEqual([{enabled:true,profileId:'synthetic-profile'},{enabled:true}]);
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.getByRole('button',{name:'Stop shared VPN',exact:true})).toBeVisible();
+  const panel = page.locator('.panel').filter({has:page.getByRole('heading',{name:'Shared VPN',exact:true})});
+  const width = await panel.evaluate(element => element.getBoundingClientRect().width);
+  expect(width).toBeLessThanOrEqual(390);
+});
+
 for (const width of [1440, 390, 320]) {
   test(`five beta themes preview, save and survive refresh at ${width}px`, async ({
     page,
@@ -590,6 +619,15 @@ for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${w
  const downloaded=page.waitForEvent('download');
  await page.getByRole('button',{name:'Download connector token',exact:true}).click();
  expect((await downloaded).suggestedFilename()).toBe('cloudflared-token.txt');
+ await page.getByRole('button',{name:'Install connector on MediaHub',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'Connector started on the MediaHub host'})).toBeVisible();
+ await page.getByText('Create a DNS record without a tunnel',{exact:true}).click();
+ await page.getByLabel('DNS zone ID',{exact:true}).fill('b'.repeat(32));
+ await page.getByLabel('Hostname',{exact:true}).fill('direct.example.com');
+ await page.getByRole('combobox',{name:'Record type',exact:true}).selectOption('AAAA');
+ await page.getByLabel('Target address',{exact:true}).fill('2001:db8::1');
+ await page.getByRole('button',{name:'Create DNS record',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'DNS record created'})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(errors).toEqual([]);
 });

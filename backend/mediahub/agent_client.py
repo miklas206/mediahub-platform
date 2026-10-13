@@ -100,19 +100,23 @@ class AgentClient:
                 base_url=self._base_url(),
                 transport=transport,
                 timeout=(
-                    180
+                    900
+                    if path.startswith("/v1/shared-vpn/") and method != "GET"
+                    else 180
                     if path.startswith("/v1/backups/")
                     else 20
                     if path.startswith("/v1/plex/artwork/")
                     else 90
-                    if path
+                    if path.startswith("/v1/shared-vpn/")
+                    or path
                     in {
                         "/v1/seedbox/torrents/add",
                         "/v1/seedbox/torrents/action",
                         "/v1/plex/install",
                         "/v1/container-apps/install",
                     }
-                    or path.startswith("/v1/container-apps/") and method != "GET"
+                    or path.startswith("/v1/container-apps/")
+                    and method != "GET"
                     else 8
                 ),
                 trust_env=False,

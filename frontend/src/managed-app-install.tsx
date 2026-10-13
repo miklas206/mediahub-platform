@@ -30,6 +30,15 @@ export function ManagedAppInstallPage({
   const packageId = `org.mediahub.${kind}`;
   const path = `/managed-install/${packageId}`;
   const { data, error, reload } = useData<Plan>(path);
+  const { data: prerequisite, reload: reloadPrerequisite } = useData<{
+    state: string;
+    message: string | null;
+  }>("/managed-install/prerequisites");
+  const preparing = prerequisite?.state === "preparing";
+  useEffect(() => {
+    if (prerequisite?.state === "ready")
+      window.dispatchEvent(new Event("apps-changed"));
+  }, [prerequisite?.state]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [submitted, setSubmitted] = useState<Plan["operation"] | null>(null);
@@ -37,7 +46,16 @@ export function ManagedAppInstallPage({
     submitted && data?.operation.operationId !== submitted.operationId
       ? submitted
       : data?.operation;
-  const running = busy || ["accepted", "running"].includes(job?.state || "");
+  const running =
+    busy || preparing || ["accepted", "running"].includes(job?.state || "");
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = window.setInterval(() => {
+      reloadPrerequisite();
+      reload();
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [preparing, reloadPrerequisite, reload]);
   const succeeded = !busy && job?.state === "succeeded" && data?.alreadyRunning;
   const phases = ["preparing", "containers", "health", "registering"];
   const phase = Math.max(0, phases.indexOf(job?.phase || "preparing"));
@@ -126,7 +144,31 @@ export function ManagedAppInstallPage({
             "Install the app on this MediaHub host. Existing accounts, settings, VPN profiles and downloads are preserved. Hub login and your theme are available in the app.",
           )}
         </p>
-        {error && (
+        {preparing && (
+          <div role="status">
+            <p>{t("Preparing app prerequisites")}</p>
+            <progress
+              aria-label={t("Preparing app prerequisites")}
+              style={{ width: "100%" }}
+            />
+          </div>
+        )}
+        {prerequisite?.state === "failed" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void api("/managed-install/prerequisites/retry", "POST", {})
+                .then(() => reloadPrerequisite())
+                .catch((error) => setFailure((error as Error).message))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {t("Retry preparation")}
+          </button>
+        )}
+        {error && !preparing && (
           <NotificationPopup tone="danger">
             {translateText(error)}
           </NotificationPopup>
@@ -144,7 +186,7 @@ export function ManagedAppInstallPage({
             )}
           </NotificationPopup>
         )}
-        {(running || succeeded || job?.state === "failed") && (
+        {!preparing && (running || succeeded || job?.state === "failed") && (
           <OperationProgress operation={operation} />
         )}
         <div className="button-row">

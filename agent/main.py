@@ -53,6 +53,7 @@ from agent.seedbox_torrents import TorrentService
 from agent.seedbox_workflow import SeedboxWorkflow
 from agent.uploads import UploadSessions
 from agent.vpn_locations import LocationService
+from agent.shared_vpn import SharedVPN
 
 
 class AgentConfig(BaseSettings):
@@ -199,6 +200,24 @@ class AppBackupRequest(StrictModel):
     password: SecretStr = Field(min_length=16, max_length=256)
 
 
+class RelayConnection(StrictModel):
+    address: str = Field(min_length=9, max_length=20)
+    endpointIp: str = Field(min_length=7, max_length=15)
+    endpointPort: int = Field(ge=1024, le=65535)
+    gatewayKey: str = Field(min_length=44, max_length=44)
+
+
+class SharedVPNChoice(StrictModel):
+    enabled: bool
+    peer: RelayConnection | None = None
+
+    @model_validator(mode="after")
+    def require_peer(self):
+        if self.enabled and self.peer is None:
+            raise ValueError("A verified peer configuration is required")
+        return self
+
+
 def create_agent(config: AgentConfig | None = None):
     config = config or AgentConfig()
     if not config.dev_mode:
@@ -241,9 +260,13 @@ def create_agent(config: AgentConfig | None = None):
         config.container_apps_policy_file, config.docker_socket, config.state_dir,
         approved_host_policy_file=config.plex_install_policy_file,
     )
+    shared_vpn = SharedVPN(config, container_apps, plex_runtime)
+    container_apps.shared_vpn = shared_vpn
+    plex_runtime.shared_vpn = shared_vpn
 
     @asynccontextmanager
     async def lifespan(app):
+        shared_monitor = asyncio.create_task(shared_vpn.poll())
         cleanup = asyncio.create_task(uploads.cleanup())
         container_monitor = (
             asyncio.create_task(container_apps.monitor())
@@ -261,6 +284,9 @@ def create_agent(config: AgentConfig | None = None):
         if config.plex_policy_file:
             plex.monitor_task = asyncio.create_task(plex.monitor())
         yield
+        shared_monitor.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await shared_monitor
         if container_monitor:
             container_monitor.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -311,6 +337,16 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/health")
     async def health():
         return {"status": "healthy"}
+
+    @app.get("/v1/shared-vpn/{app_name}")
+    async def shared_vpn_status(app_name: str, request: Request):
+        await secure_workflow(request)
+        return await shared_vpn.status(app_name)
+
+    @app.put("/v1/shared-vpn/{app_name}")
+    async def shared_vpn_choice(app_name: str, body: SharedVPNChoice, request: Request):
+        await secure_workflow(request)
+        return await shared_vpn.configuration(app_name, body.peer.model_dump() if body.peer else {}, body.enabled)
 
     @app.get("/v1/version")
     async def version():

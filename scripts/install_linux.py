@@ -78,7 +78,7 @@ def main():
     parser.add_argument("--storage-identities", type=Path, help="Root-owned Proxmox-generated disk identity file for this LXC")
     parser.add_argument(
         "--release-image-prefix",
-        default="ghcr.io/miklas206/fjordcopy",
+        default="ghcr.io/miklas206/mediahub-platform",
         help="Trusted lowercase GHCR prefix for Core and Agent release images",
     )
     parser.add_argument(
@@ -396,9 +396,10 @@ def main():
         "memswap_limit": "512m",
         "networks": ["control", "lan"],
         "ports": [f"{address}:18765:18765"],
-        "group_add": ["1000"],
+        "group_add": ["1000", str(Path("/var/run/docker.sock").stat().st_gid)],
         "volumes": [
             f"{root}/data:/data",
+            "/var/run/docker.sock:/var/run/docker.sock:ro",
             f"{root}/updates:/updates",
             f"{root}/agent/token:/agent-token:ro",
             f"{root}/tls-core:/tls:ro",
@@ -420,6 +421,10 @@ def main():
             ]),
             "MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST": "true",
             "MEDIAHUB_PLATFORM_UPDATE_SPOOL": "/updates",
+            "MEDIAHUB_MANAGED_APPS_POLICY_FILE": "/data/managed-apps.json",
+            "MEDIAHUB_MANAGED_APPS_DOCKER_SOCKET": "/var/run/docker.sock",
+            "MEDIAHUB_OPERATOR_APP_URLS": json.dumps({"org.mediahub.mediaseed": f"https://{address}:18800", "org.mediahub.mediavpn": f"http://{address}:18802"}),
+            "MEDIAHUB_SSO_APP_URLS": json.dumps({"org.mediahub.mediaseed": f"https://{address}:18800", "org.mediahub.mediavpn": f"https://{address}:18803"}),
         },
         "healthcheck": {
             "test": [
@@ -443,6 +448,8 @@ def main():
         compose, routing = hub_stack(compose, root)
         new_file(root / "hub-proxy.json", json.dumps(routing, indent=2), 0o644)
     new_file(root / "compose.json", json.dumps(compose, indent=2))
+    from prepare_local_apps import provision
+    provision(root, address, SOURCE)
     new_file(root / "installed-version", project_version + "\n", 0o600)
     new_file(
         root / "update-policy.json",

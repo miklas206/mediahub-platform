@@ -75,6 +75,7 @@ class ContainerApps:
         self.tasks = {}
         self.operations = {}
         self.storage_control = PlexControl(None, socket)
+        self.shared_vpn = None
 
     def policy(self):
         try:
@@ -300,6 +301,8 @@ class ContainerApps:
                 if not record or record["planDigest"] != plan["planDigest"]:
                     raise DomainError("container_conflict", "Container name is already in use", 409)
                 self.verify(existing, record)
+                if self.shared_vpn and not await self.shared_vpn.ready(app, existing):
+                    raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409)
                 record["desiredRunning"] = True
                 save_json(self.record_path(app), record)
                 if not existing["State"].get("Running"):
@@ -363,6 +366,8 @@ class ContainerApps:
                             "storage_owner", "Configuration owner must match app UID", 409
                         )
                 plan["desiredRunning"] = False
+                if self.shared_vpn:
+                    plan["container"] = await self.shared_vpn.prepare(app, plan["container"])
                 save_json(self.record_path(app), plan)
                 await self.request(
                     "POST", "/containers/create?name=" + plan["name"], plan["container"]
@@ -396,7 +401,7 @@ class ContainerApps:
             or mounts != actual
             or inspected.get("Config", {}).get("User") != expected["User"]
             or inspected.get("HostConfig", {}).get("Privileged") is not False
-            or inspected.get("HostConfig", {}).get("NetworkMode") != "mediahub-apps"
+            or inspected.get("HostConfig", {}).get("NetworkMode") != expected["HostConfig"].get("NetworkMode", "mediahub-apps")
             or inspected.get("HostConfig", {}).get("CapDrop") != ["ALL"]
             or (inspected.get("HostConfig", {}).get("CapAdd") or [])
             or (inspected.get("HostConfig", {}).get("Tmpfs") or {})
@@ -462,6 +467,8 @@ class ContainerApps:
                 raise DomainError("not_installed", "Container is missing", 409)
             self.verify(inspected, record)
             if action in {"start", "restart"}:
+                if self.shared_vpn and not await self.shared_vpn.ready(app, inspected):
+                    raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409)
                 if not await self.storage_control.storage_verified(self.policy()):
                     raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
             record["desiredRunning"] = action in {"start", "restart"}
@@ -497,6 +504,8 @@ class ContainerApps:
                             continue
                         self.verify(inspected, record)
                         ready = await self.storage_control.storage_verified(self.policy())
+                        if self.shared_vpn:
+                            ready = ready and await self.shared_vpn.ready(app, inspected)
                         running = inspected["State"].get("Running")
                         desired = record.get("desiredRunning") is True
                         if running and (not ready or not desired):

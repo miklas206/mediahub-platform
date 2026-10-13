@@ -1,0 +1,81 @@
+.topbar { position: sticky; top: 0; z-index: 20; flex-wrap: wrap; padding-inline: max(24px,calc((100vw - 1320px)/2)); }
+.brand strong { letter-spacing: -.025em; }
+.topbar > .brand { margin-right: auto; }
+.topbar .theme-switch { margin-left: 0; }
+.topbar #logout { order: 4; }
+#workspace { max-width: 1320px; padding: 36px 28px 80px; }
+#workspace > .heading { margin-bottom: 24px; align-items: center; }
+#workspace h1 { font-size: 36px; letter-spacing: -.035em; margin-bottom: 8px; }
+.workspace-subtitle { color: var(--muted); font-size: 13px; margin: 0; }
+#runtime-state { display: inline-flex; align-items: center; gap: 9px; padding: 12px 16px; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass,var(--surface)); font-size: 12px; }
+#runtime-state::before { content: "◇"; color: var(--accent); font-size: 22px; }
+#profiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(380px,100%),1fr)); gap: 18px; }
+#profiles > .empty { grid-column: 1 / -1; padding: 36px 24px; margin: 0; min-height: 280px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; border: 1px solid var(--line); background: var(--glass,var(--surface)); border-radius: var(--skin-radius); }
+.empty-orbit { display: grid; place-items: center; width: 88px; height: 88px; border-radius: 50%; margin-bottom: 20px; color: var(--accent); font-size: 42px; border: 1px solid var(--accent-line); background: var(--accent-bg); box-shadow: 0 0 0 18px color-mix(in srgb,var(--accent) 5%,transparent), 0 0 0 36px color-mix(in srgb,var(--accent) 3%,transparent); }
+#profiles > .empty h2 { color: var(--text); font-size: 23px; margin: 10px 0; }
+#profiles > .empty p { margin: 0 0 24px; font-size: 13px; }
+.profile { display: flex; align-items: stretch; flex-direction: column; gap: 20px; padding: 24px; margin: 0; border-radius: var(--skin-radius); }
+.profile h2 { margin: 0 0 14px; font-size: 21px; }
+.profile .status { padding: 5px 9px; border: 1px solid var(--line); border-radius: 24px; background: var(--accent-bg); }
+.profile > .actions { margin-top: auto; border-top: 1px solid var(--line); padding-top: 16px; }
+.profile p { font-size: 12px; }
+.app-connections { margin-top: 22px; border: 1px solid var(--line); border-radius: var(--skin-radius); padding: 24px; background: var(--glass,var(--surface)); }
+.app-connections h2 { font-size: 20px; }
+.app-connections dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.app-connections dl > div { padding: 16px; flex-direction: column; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; background: var(--glass-raised,var(--raised)); gap: 12px; }
+.app-connections dt { color: var(--text); font-weight: 600; }
+.app-connections dd { color: var(--muted); font-size: 12px; }
+button.primary { color: var(--accent-contrast); }
+dialog { border-radius: var(--skin-radius); }
+dialog::backdrop { backdrop-filter: blur(7px); }
+.notification-dismiss { position: absolute; right: 12px; top: 14px; width: 28px; min-height: 28px; padding: 0; background: transparent; border: 0; color: var(--muted); }
+@media(max-width: 760px) {
+  .topbar { padding: 12px 16px; }
+  #workspace { padding: 24px 16px 80px; }
+  #workspace h1 { font-size: 29px; }
+  #workspace > .heading { align-items: flex-start; flex-direction: column; gap: 18px; }
+  #workspace > .heading > .actions { width: 100%; }
+  #workspace > .heading > .actions button { flex: 1; }
+  #profiles { grid-template-columns: minmax(0,1fr); }
+  .app-connections dl { grid-template-columns: minmax(0,1fr); }
+  .app-connections, .profile { padding: 18px; }
+}
+
+/* Account preferences inherited only by authenticated MediaHub sessions. */
+.theme-switch .managed-theme-name { font-size: 12px; color: var(--accent); font-weight: 600; }
+:root[data-density="compact"] #workspace { padding-block: 16px 40px; }
+:root[data-density="compact"] :is(.workspace-card, .profile, .app-connections, #tracker-overview, .toolbar) { padding: 14px 16px; }
+:root[data-density="compact"] :is(input:not([type="checkbox"]):not([type="radio"]), select, button) { min-height: 32px; padding-block: 6px; }
+:root[data-density="compact"] :is(.workspace-columns, .profiles-grid) { gap: 12px; }
+:root[data-density="compact"] .torrent-row { padding-block: 8px; }
+
+:root[data-look="soft-orbit"] svg[stroke] { stroke-width: 1.7; stroke-linecap: round; }
+:root[data-look="precision-terminal"] svg[stroke] { stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+:root[data-look="floating-layers"] svg[stroke] { stroke-width: 2.2; }
+:root[data-look="edge-signal"] svg[stroke] { stroke-width: 2.4; stroke-linecap: square; }
+
+/* Quiet app header; appearance and extension tools live in Settings. */
+.topbar .app-settings-button { display: inline-flex; align-items: center; gap: 8px; margin-left: 0; }
+.app-settings-dialog { width: min(520px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); padding: 24px; overflow: auto; color: var(--text); background: var(--surface); border: 1px solid var(--line); }
+.app-settings-dialog::backdrop { background: #02081099; backdrop-filter: blur(5px); }
+.app-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.app-settings-heading h2 { margin: 0; font-size: 24px; }
+.app-settings-close { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; font-size: 22px; }
+.app-settings-panel { padding: 18px; margin-top: 14px; border: 1px solid var(--line); border-radius: var(--skin-radius, 8px); background: var(--glass, var(--raised)); }
+.app-settings-panel h3 { margin: 0 0 8px; font-size: 16px; }
+.app-settings-panel p { margin: 0 0 16px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.app-settings-panel .theme-switch { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0; }
+.app-settings-panel :is(select, .theme-switch select) { width: 100%; max-width: 100%; }
+.app-settings-panel label { display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
+.app-settings-panel .managed-theme-name { font-size: 12px; }
+.app-settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 18px; }
+.app-settings-actions a { font-size: 13px; }
+.settings-extension-download { display: inline-flex; padding: 10px 14px; border: 1px solid var(--accent-line); border-radius: var(--select-radius, 6px); text-decoration: none; }
+.settings-extension-guide { color: var(--muted); text-underline-offset: 3px; }
+.app-settings-message { color: var(--danger); font-size: 13px; margin-bottom: 0; }
+@media (max-width: 420px) {
+ .topbar .app-settings-button { width: 36px; height: 36px; padding: 8px; justify-content: center; }
+ .app-settings-button > span { display: none; }
+ .app-settings-dialog { padding: 18px; }
+ .app-settings-panel { padding: 14px; }
+}

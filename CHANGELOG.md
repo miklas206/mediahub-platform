@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.5.14
+
+- Share one selected MediaVPN provider connection with MediaSeed and owned Plex/Jellyfin apps, including paired Linux Docker Agents. Keep private relay identities host-local, preserve web ports and block direct internet fallback for selected apps.
+- Bundle reviewed first-party sources and automatically prepare app images, local HTTPS identities, integration keys and install recipes on fresh Linux installs and user-installed updates. Preserve existing data, stopped/uninstalled state and current app images when changing VPN selection; retain migration retry and Compose recovery metadata.
+- Add separate Hub VPN management credentials, automatic relay dependencies and userspace WireGuard fallback for existing LXCs with TUN. Keep main fresh installations on the mediahub-platform update channel.
+- Create A, AAAA and CNAME DNS records without overwriting conflicts. Install an optional cloudflared connector directly on MediaHub's Docker host and follow Plex/Jellyfin local web endpoints; VPN public IP and torrent ports do not replace HTTP routes.
+
 ## 0.5.13
 
 - Add optional encrypted Cloudflare API access, real tunnel creation, protected connector-token downloads and app-bound DNS/ingress routes for MediaHub, MediaSeed and MediaVPN.

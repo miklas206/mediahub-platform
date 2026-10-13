@@ -5,6 +5,7 @@ import copy
 import re
 import time
 from ipaddress import ip_address
+from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -27,6 +28,8 @@ APPS = {
     "mediahub": "MediaHub",
     "org.mediahub.mediaseed": "MediaSeed",
     "org.mediahub.mediavpn": "MediaVPN",
+    "org.mediahub.plex": "Plex",
+    "org.mediahub.jellyfin": "Jellyfin",
 }
 
 
@@ -80,6 +83,14 @@ class RouteInput(StrictModel):
 
 class RouteMode(StrictModel):
     autoSync: bool
+
+
+class DNSRecord(StrictModel):
+    zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
+    hostname: str = Field(min_length=3, max_length=253)
+    type: Literal["A", "AAAA", "CNAME"]
+    content: str = Field(min_length=1, max_length=253)
+    proxied: bool = False
 
 
 class ConfiguredHostMiddleware(TrustedHostMiddleware):
@@ -252,11 +263,76 @@ class CloudflareManagement:
             )
             return self.public()
 
+    async def dns_record(self, body):
+        async with self.lock:
+            name = hostname(body.hostname)
+            zone = await self.call("GET", "/zones/" + body.zoneId)
+            if name != zone["name"] and not name.endswith("." + zone["name"]):
+                raise DomainError(
+                    "wrong_zone", "The hostname does not belong to the selected DNS zone", 422
+                )
+            if body.type == "CNAME":
+                content = hostname(body.content)
+                if content == name:
+                    raise DomainError("dns_loop", "A CNAME cannot point to itself", 422)
+            else:
+                try:
+                    address = ip_address(body.content)
+                    if address.version != (4 if body.type == "A" else 6):
+                        raise ValueError()
+                    content = str(address)
+                except ValueError:
+                    raise DomainError(
+                        "dns_address", "Choose an IP address matching the record type", 422
+                    ) from None
+            prefix = "/zones/" + body.zoneId + "/dns_records"
+            existing = await self.call("GET", prefix, params={"name": name, "per_page": 100})
+            values = {"type": body.type, "content": content, "proxied": body.proxied}
+            if existing:
+                if len(existing) == 1 and all(
+                    existing[0].get(key) == value for key, value in values.items()
+                ):
+                    return self.public()
+                raise DomainError(
+                    "dns_conflict",
+                    "This hostname already has DNS records; review them before replacing anything",
+                    409,
+                )
+            remote = await self.call(
+                "POST", prefix, {"name": name, **values, "ttl": 1, "comment": "Created by MediaHub"}
+            )
+            state = self.state()
+            state.setdefault("dnsRecords", []).append(
+                {"id": remote["id"], "zoneId": body.zoneId, "hostname": name, **values}
+            )
+            self.save(state)
+            return self.public()
+
     async def origin(self, package):
         if package not in APPS:
             raise DomainError("unsupported_app", "Choose a supported MediaHub app", 422)
         if package == "mediahub":
             address = self.svc.config.base_url
+        elif package in {"org.mediahub.plex", "org.mediahub.jellyfin"}:
+            app = package.rsplit(".", 1)[-1]
+            key = "plex_installation" if app == "plex" else "container_installation_" + app
+            with self.svc.sessions() as db:
+                binding = db.scalar(select(Setting).where(Setting.key == key))
+                if not binding:
+                    raise DomainError(
+                        "app_unavailable", "Install the app on a paired MediaHub host first", 409
+                    )
+                host = binding.value["hostId"]
+            client = self.svc.hosts.client(host)
+            report = await client.request(
+                "GET",
+                "/v1/plex/status" if app == "plex" else "/v1/container-apps/" + app + "/status",
+            )
+            if report.get("state") != "running":
+                raise DomainError(
+                    "app_unavailable", "The linked app is not running; route was preserved", 409
+                )
+            address = report.get("url")
         else:
             with self.svc.sessions() as db:
                 app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
@@ -508,6 +584,24 @@ async def disconnect(request: Request):
 @router.post("/tunnels")
 async def create(body: NewTunnel, request: Request):
     return result(await services(request).cloudflare_management.create(body.name))
+
+
+@router.post("/dns")
+async def create_dns(body: DNSRecord, request: Request):
+    return result(await services(request).cloudflare_management.dns_record(body))
+
+
+@router.post("/tunnels/{tunnel_id}/install-connector")
+async def install_connector(tunnel_id: UUID, request: Request):
+    from mediahub.cloudflare_connector import install
+
+    manager = services(request).cloudflare_management
+    async with manager.lock:
+        connector = await install(manager, str(tunnel_id))
+        state = manager.state()
+        state.setdefault("connectors", {})[str(tunnel_id)] = connector
+        manager.save(state)
+        return result(manager.public())
 
 
 @router.post("/tunnels/{tunnel_id}/token")

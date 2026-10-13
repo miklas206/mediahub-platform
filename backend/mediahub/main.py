@@ -55,6 +55,8 @@ from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
 from mediahub.sso import router as sso_router
 from mediahub.storage import StorageManager
+from mediahub.shared_vpn import SharedVPN
+from mediahub.shared_vpn import router as shared_vpn_router
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
@@ -117,6 +119,10 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.managed_installer = ManagedInstaller(svc)
         await svc.managed_installer.initialize()
         svc.cloudflare_management = CloudflareManagement(svc)
+        svc.shared_vpn = SharedVPN(svc)
+        from mediahub.app_dependencies import AppDependencies
+        svc.app_dependencies = AppDependencies(svc)
+        svc.app_dependencies.start()
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -160,6 +166,10 @@ def create_app(config: Config | None = None) -> FastAPI:
         try:
             yield
         finally:
+            if svc.app_dependencies.task:
+                svc.app_dependencies.task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await svc.app_dependencies.task
             cloudflare_collector.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await cloudflare_collector
@@ -294,6 +304,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(managed_install_router, prefix="/api/v1")
     app.include_router(sso_router, prefix="/api/v1")
     app.include_router(cloudflare_management_router, prefix="/api/v1")
+    app.include_router(shared_vpn_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")

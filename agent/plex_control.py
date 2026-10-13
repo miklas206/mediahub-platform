@@ -228,8 +228,16 @@ class PlexControl:
                     if policy.vpnEnabled and self.runtime
                     else await self.inspect(policy)
                 )
-                address = inspected["NetworkSettings"]["Networks"][policy.apiNetwork]["IPAddress"]
-                api_url = PlexPolicy.internal_api_only(f"http://{address}:32400")
+                shared = inspected.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.namespace")
+                if shared:
+                    relay = await self.runtime.shared_vpn.owned_relay("plex") if self.runtime and self.runtime.shared_vpn else None
+                    if not relay or relay["Id"] != shared:
+                        raise DomainError("vpn_relay_ownership", "Plex VPN relay no longer matches", 409)
+                    # The original LAN web endpoint stays stable across VPN changes.
+                    api_url = policy.apiUrl
+                else:
+                    address = inspected["NetworkSettings"]["Networks"][policy.apiNetwork]["IPAddress"]
+                    api_url = PlexPolicy.internal_api_only(f"http://{address}:32400")
             if self.runtime:
                 token = ET.fromstring(await self.runtime.preferences(policy)).get("PlexOnlineToken")
             else:
@@ -309,6 +317,8 @@ class PlexControl:
         running = data["State"].get("Running") is True
         report = {
             "installationId": policy.installationId,
+            "url": policy.apiUrl,
+            "state": "running" if running else "stopped",
             "observedAt": time.time(),
             "hostId": policy.hostId,
             "health": "critical",

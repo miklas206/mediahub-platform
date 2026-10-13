@@ -39,6 +39,10 @@ export function CloudflareManagementPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [dnsType, setDnsType] = useState("A");
+  const [dnsHost, setDnsHost] = useState("");
+  const [dnsContent, setDnsContent] = useState("");
+  const [dnsZone, setDnsZone] = useState("");
   const load = useCallback(async () => {
     try {
       const value = await api<Management>(endpoint);
@@ -209,9 +213,89 @@ export function CloudflareManagementPanel() {
                   <Download size={16} />
                   {t("Download connector token")}
                 </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void change(
+                      "/tunnels/" + item.id + "/install-connector",
+                      "POST",
+                      {},
+                      "Connector started on the MediaHub host",
+                    )
+                  }
+                >
+                  <Download size={16} />
+                  {t("Install connector on MediaHub")}
+                </button>
               </article>
             ))}
           </div>
+          <details>
+            <summary>{t("Create a DNS record without a tunnel")}</summary>
+            <p className="muted">
+              {t(
+                "DNS only points to an address. The app must already be reachable there; a VPN public IP does not automatically expose its web ports.",
+              )}
+            </p>
+            <form
+              className="cloudflare-management-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void change(
+                  "/dns",
+                  "POST",
+                  {
+                    zoneId: dnsZone,
+                    hostname: dnsHost,
+                    type: dnsType,
+                    content: dnsContent,
+                    proxied: false,
+                  },
+                  "DNS record created",
+                );
+              }}
+            >
+              <label>
+                {t("DNS zone ID")}
+                <input
+                  required
+                  value={dnsZone}
+                  onChange={(e) => setDnsZone(e.target.value)}
+                  pattern="[a-fA-F0-9]{32}"
+                />
+              </label>
+              <label>
+                {t("Hostname")}
+                <input
+                  required
+                  value={dnsHost}
+                  onChange={(e) => setDnsHost(e.target.value)}
+                />
+              </label>
+              <label>
+                {t("Record type")}
+                <select
+                  value={dnsType}
+                  onChange={(e) => setDnsType(e.target.value)}
+                >
+                  <option>A</option>
+                  <option>AAAA</option>
+                  <option>CNAME</option>
+                </select>
+              </label>
+              <label>
+                {t("Target address")}
+                <input
+                  required
+                  value={dnsContent}
+                  onChange={(e) => setDnsContent(e.target.value)}
+                />
+              </label>
+              <button disabled={busy} type="submit">
+                {t("Create DNS record")}
+              </button>
+            </form>
+          </details>
           {!!data.tunnels.length && (
             <>
               <details>
