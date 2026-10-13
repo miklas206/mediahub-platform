@@ -29,6 +29,11 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
  await page.goto('https://app.example/');
  await expect(page.locator('#workspace')).toBeVisible();
  await expect(page.locator('html')).toHaveAttribute('data-theme-source','mediahub');
+ const brand = page.locator(`.topbar svg[data-brand="${app}"]`);
+ await expect(brand).toBeVisible();
+ expect(await brand.evaluate(el=>getComputedStyle(el).stroke)).toBe(await brand.evaluate(el=>getComputedStyle(el).color));
+ await expect(page.locator('link[data-brand-favicon]')).toHaveAttribute('href',/^data:image\/svg\+xml,/);
+
  await expect(page.locator('.theme-switch select')).toBeVisible();
  await expect(page.locator('.theme-switch select')).toHaveValue('follow-hub');
  expect(await page.locator('.theme-switch select').evaluate(el=>getComputedStyle(el).appearance)).toBe('base-select');
@@ -62,6 +67,9 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
  // An account override wins over future hub changes and persists after reload.
  await page.locator('.theme-switch select').selectOption('edge-signal');
  await expect(page.locator('html')).toHaveAttribute('data-theme-source','override');
+ expect(await brand.evaluate(el=>getComputedStyle(el).stroke)).toBe(await brand.evaluate(el=>getComputedStyle(el).color));
+ await expect.poll(async()=>{const href=await page.locator('link[data-brand-favicon]').getAttribute('href');const color=await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--accent').trim());return decodeURIComponent(href||'').includes('stroke=\"'+color+'\"');}).toBe(true);
+
  await expect(page.locator('html')).toHaveAttribute('data-look','edge-signal');
  appearance={...appearance!,style:'precision-terminal'};
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));

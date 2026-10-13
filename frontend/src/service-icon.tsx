@@ -1,3 +1,4 @@
+import { BrandIcon } from "./brand-icon";
 import {
   Box,
   FolderSymlink,
@@ -35,18 +36,9 @@ export function ServiceIcon({
 }: LucideProps & { packageId: string }) {
   const id = packageId.toLowerCase();
   const appId = id.replace(/^org\.mediahub\./, "");
-  if (appId === "mediaseed" || appId === "seedbox")
-    return (
-      <svg width={size} height={size} viewBox="0 0 48 48" className={className} aria-hidden={props["aria-label"] ? undefined : true} {...props}>
-        <image href="/assets/services/mediaseed.svg" width="48" height="48" />
-      </svg>
-    );
-  if (appId === "mediavpn")
-    return (
-      <svg width={size} height={size} viewBox="0 0 48 48" className={className} aria-hidden={props["aria-label"] ? undefined : true} {...props}>
-        <image href="/assets/services/mediavpn.svg" width="48" height="48" />
-      </svg>
-    );
+  if (appId === "mediaseed" || appId === "seedbox") return <BrandIcon brand="mediaseed" size={size} className={className} {...props} />;
+  if (appId === "mediavpn") return <BrandIcon brand="mediavpn" size={size} className={className} {...props} />;
+  if (/mediahub.*core|^mediahub$|^core$/.test(id)) return <BrandIcon brand="mediahub" size={size} className={className} {...props} />;
   const Fallback = fjordFallbacks[appId as keyof typeof fjordFallbacks];
   if (Fallback)
     return (
@@ -120,7 +112,7 @@ export function ServiceIcon({
       ) : brand === "fjordhub" ? (
         <image href="/assets/services/fjordhub.png" width="32" height="32" />
       ) : brand === "mediahub" ? (
-        <image href="/favicon.svg" width="32" height="32" />
+        <BrandIcon brand="mediahub" size={32} />
       ) : (
         <image
           href={`/assets/services/${brand}.svg`}

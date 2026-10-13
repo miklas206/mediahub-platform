@@ -13,6 +13,7 @@ import "./reference-workspace.css";
 import "./sidebar-themes.css";
 import "./navigation-layouts.css";
 import "./select-controls.css";
+import "./brand-icons.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

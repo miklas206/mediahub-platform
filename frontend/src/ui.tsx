@@ -474,7 +474,7 @@ function Login({
 function Brand() {
   return (
     <div className="brand">
-      <img src="/favicon.svg" alt="" width="34" height="34" />
+      <ServiceIcon packageId="mediahub" size={34} />
       <span>
         Media<span>Hub</span>
       </span>
