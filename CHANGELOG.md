@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.9
+
+- Share each account's current theme, custom colors, color mode, density and motion preferences with MediaSeed and MediaVPN through SSO. Apps follow MediaHub by default and support a persistent, per-account app theme override.
+- Replace first-party artwork with a coordinated monochrome MediaHub, MediaSeed and MediaVPN icon family that follows the active theme, including dynamic browser favicons.
+- Style dropdown fields and their supported native pickers consistently across themes, preserving keyboard controls and native fallback.
+- Move app appearance controls into an accessible Settings dialog. MediaSeed also exposes browser extension downloads and installation guidance there, keeping app headers clean.
+- Preserve existing accounts, app data, credentials and media. App theme preferences use an additive table; no beta runtime data is imported. Update MediaSeed and MediaVPN from their main branches to enable the matching app features.
+
 ## 0.5.8
 
 - Promote the tested beta workspace to release: compact app cards and Overview, five distinct themes with abstract ambient backgrounds, custom accent wheel, and independent light/dark mode.
