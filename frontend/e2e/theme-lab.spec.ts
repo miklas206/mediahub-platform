@@ -248,4 +248,10 @@ test("interface switches have the intended compact switch geometry", async ({pag
  const shape = await input.evaluate(el => {const s=getComputedStyle(el); return {width:s.width,height:s.height,radius:s.borderRadius};});
  expect(shape).toEqual({width:"32px",height:"18px",radius:"99px"});
  await expect(input).toBeVisible();
+ const before = await page.locator(".theme-choice").first().evaluate(el => el.getBoundingClientRect().height);
+ await input.check();
+ const after = await page.locator(".theme-choice").first().evaluate(el => el.getBoundingClientRect().height);
+ expect(after).toBeLessThan(before);
+ await page.getByRole("checkbox",{name:/Reduce motion/}).check();
+ expect(await page.evaluate(() => getComputedStyle(document.body,"::before").animationName)).toBe("none");
 });

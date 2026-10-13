@@ -721,3 +721,12 @@
 :root body .reference-appearance input.appearance-toggle:checked { background: var(--accent-bg); border-color: var(--accent); }
 :root body .reference-appearance input.appearance-toggle:checked::before { transform: translateX(13px); background: var(--accent); }
 :root body .reference-appearance label.appearance-option:has(> input.appearance-toggle) { padding: 15px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--glass,var(--surface)); }
+
+:root[data-density="compact"] .reference-app-grid .hub-app-card { padding: 13px; min-height: 180px; }
+:root[data-density="compact"] .reference-app-grid { gap: 10px; }
+:root[data-density="compact"] .reference-overview { gap: 12px; }
+:root[data-density="compact"] .overview-resource-row article { padding: 11px 13px; }
+:root[data-density="compact"] .overview-connected > a { padding: 8px; }
+:root[data-density="compact"] .overview-status { padding: 11px 14px; }
+:root[data-density="compact"] .reference-appearance .theme-choice { padding: 7px; min-height: 155px; }
+:root[data-density="compact"] .appearance-option { min-height: 64px; }
