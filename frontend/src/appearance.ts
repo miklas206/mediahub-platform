@@ -11,6 +11,15 @@ export const themeStyles = [
 ] as const;
 export type ThemeStyle = (typeof themeStyles)[number];
 
+export const navigationLayouts = [
+  "sidebar",
+  "topbar",
+  "dock-top",
+  "dock-bottom",
+  "launcher",
+] as const;
+export type NavigationLayout = (typeof navigationLayouts)[number];
+
 export type Appearance = {
   accent: string;
   secondary: string;
@@ -20,6 +29,7 @@ export type Appearance = {
   mode?: "inherit" | "dark" | "light" | "system";
   density?: "comfortable" | "compact";
   reducedMotion?: boolean;
+  navigation?: NavigationLayout;
 };
 
 export const defaultAppearance: Appearance = {
@@ -31,6 +41,7 @@ export const defaultAppearance: Appearance = {
   mode: "inherit",
   density: "comfortable",
   reducedMotion: false,
+  navigation: "sidebar",
 };
 export const isHexColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value);
 
@@ -49,6 +60,8 @@ export function readAppearance(value: unknown): Appearance | null {
       !["inherit", "dark", "light", "system"].includes(item.mode)) ||
     (item.density !== undefined &&
       !["comfortable", "compact"].includes(item.density)) ||
+    (item.navigation !== undefined &&
+      !navigationLayouts.includes(item.navigation)) ||
     (item.reducedMotion !== undefined &&
       typeof item.reducedMotion !== "boolean")
   )
@@ -62,6 +75,7 @@ export function readAppearance(value: unknown): Appearance | null {
     mode: item.mode || "inherit",
     density: item.density || "comfortable",
     reducedMotion: item.reducedMotion ?? false,
+    navigation: item.navigation || "sidebar",
   };
 }
 
@@ -244,6 +258,7 @@ export function applyAppearance() {
   for (const key of appliedKeys) root.style.removeProperty(key);
   appliedKeys = [];
   const value = preview === undefined ? saved : preview;
+  root.dataset.navigation = value?.navigation || "sidebar";
   delete root.dataset.look;
   delete root.dataset.appearanceMode;
   delete root.dataset.density;
@@ -251,7 +266,12 @@ export function applyAppearance() {
   if (!value) {
     root.dataset.look = "midnight-glass";
     const mode = root.dataset.theme || "dark";
-    root.dataset.appearanceMode = mode === "light" || (mode === "system" && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+    root.dataset.appearanceMode =
+      mode === "light" ||
+      (mode === "system" &&
+        window.matchMedia("(prefers-color-scheme: light)").matches)
+        ? "light"
+        : "dark";
     return;
   }
   const mode =

@@ -42,6 +42,7 @@ class AppearancePreferences(StrictModel):
     mode: Literal["inherit", "dark", "light", "system"] = "inherit"
     density: Literal["comfortable", "compact"] = "comfortable"
     reducedMotion: bool = Field(default=False, strict=True)
+    navigation: Literal["sidebar", "topbar", "dock-top", "dock-bottom", "launcher"] = "sidebar"
 
     @field_validator("accent", "secondary", "background")
     @classmethod

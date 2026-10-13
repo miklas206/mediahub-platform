@@ -33,6 +33,7 @@ describe("personal appearance", () => {
       { style: "unknown" },
       { mode: "unknown" },
       { density: "unknown" },
+      { navigation: "unknown" },
       { reducedMotion: "true" },
     ])
       expect(readAppearance({ ...legacy, ...value })).toBeNull();

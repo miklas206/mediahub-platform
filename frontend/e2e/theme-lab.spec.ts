@@ -372,3 +372,29 @@ test("continuous frame aligns flush with the viewport in every theme", async ({p
   await page.screenshot({path:`test-results/shell-${id}-1440.png`,animations:"disabled"});
  }
 });
+
+for(const width of [1440,390,320]) test(`navigation layouts preview, persist and retain theme at ${width}px`,async({page})=>{
+ const {writes}=await mockHub(page);await page.setViewportSize({width,height:900});await page.goto("/settings?section=Appearance");
+ const errors:string[]=[];page.on("pageerror",e=>errors.push(e.message));
+ for(const [id,label] of [["topbar","Top navigation"],["dock-top","Top dock"],["dock-bottom","Bottom dock"],["launcher","Compact menu"]]) {
+  await page.getByRole("group",{name:"Navigation layout",exact:true}).getByRole("button",{name:new RegExp(label)}).click();
+  await expect(page.locator("html")).toHaveAttribute("data-navigation",id);
+  await expect(page.locator(".sidebar")).not.toBeVisible();await expect(page.locator(".shell-brand")).toBeVisible();await expect(page.locator(".shell-signout")).toBeVisible();
+  if(id==="launcher") await page.locator(".shell-launcher summary").click();
+  const nav=page.locator(id==="topbar"?".shell-navigation-integrated":id==="launcher"?".shell-navigation-launcher":".shell-navigation-dock");
+  await expect(nav).toBeVisible();expect(await nav.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  const box=await nav.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(width);
+  await page.screenshot({path:`test-results/navigation-${id}-${width}.png`,animations:"disabled"});
+  await nav.getByRole("link",{name:"Overview",exact:true}).click();await expect(page).toHaveURL(/overview/);
+  // Unsaved previews return to the saved layout when leaving Appearance.
+  await page.goto("/settings?section=Appearance");
+  await page.getByRole("group",{name:"Navigation layout",exact:true}).getByRole("button",{name:new RegExp(label)}).click();
+  await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
+  await page.reload();await expect(page.locator("html")).toHaveAttribute("data-navigation",id);
+  await page.locator(".theme-choice").filter({hasText:"Soft Orbit"}).click();await expect(page.locator("html")).toHaveAttribute("data-navigation",id);
+ }
+ expect(writes).toHaveLength(4);expect(errors).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator(".theme-choice").filter({hasText:"Edge Signal"}).click();
+ await page.getByRole("button",{name:"Discard changes",exact:true}).click();await expect(page.locator("html")).toHaveAttribute("data-navigation","launcher");
+ await page.getByRole("group",{name:"Navigation layout",exact:true}).getByRole("button",{name:/Sidebar/}).click();await expect(page.locator("html")).toHaveAttribute("data-navigation","sidebar");
+});

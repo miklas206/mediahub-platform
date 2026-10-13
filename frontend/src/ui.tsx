@@ -1,3 +1,4 @@
+import { ShellNavigation } from "./shell-navigation";
 import { ThemeNavIcon } from "./theme-nav-icon";
 import { ReferenceOverview } from "./reference-overview";
 import { serviceSnapshots } from "./service-snapshots";
@@ -833,6 +834,9 @@ function Shell({
       </aside>
       <div className="workspace">
         <header className="topbar">
+          <Link className="shell-brand" to="/" aria-label="MediaHub"><Brand /></Link>
+          <ShellNavigation placement="integrated" visible={visibleNavigation}/>
+          <ShellNavigation placement="launcher" visible={visibleNavigation}/>
           <div className="breadcrumb">
             <button
               className="mobile-menu icon-button"
@@ -868,6 +872,7 @@ function Shell({
             />
             <Badge value={live ? "live" : "reconnecting"} />
             <div className="topbar-actions">
+              <button className="icon-button shell-signout" aria-label={t("Sign out")} title={t("Sign out")} onClick={() => { onLogout().catch(e => setError(e.message)); }}><LogOut size={18}/></button>
               <Link
                 className="topbar-action"
                 to="/activity"
@@ -892,6 +897,7 @@ function Shell({
             </div>
           </div>
         </header>
+        <ShellNavigation placement="dock" visible={visibleNavigation}/>
         <main className="main-content">
           {(runtimePage || windowsSharePage || storePage || location.pathname.startsWith("/integrations/")) && <Link className="hub-back-link" to="/">← {t("Back to MediaHub")}</Link>}
           {!runtimePage && location.pathname !== "/" && (

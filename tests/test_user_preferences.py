@@ -51,6 +51,7 @@ APPEARANCE = {
     "mode": "inherit",
     "density": "comfortable",
     "reducedMotion": False,
+    "navigation": "sidebar",
 }
 
 
@@ -69,7 +70,7 @@ def test_beta_theme_and_layout_persist(logged_in, style):
     assert logged_in.get("/api/v1/auth/me").json()["data"]["appearance"] == value
 
 
-@pytest.mark.parametrize("field,value", [("style", "bad"), ("mode", "bad"), ("density", "bad"), ("reducedMotion", "true")])
+@pytest.mark.parametrize("field,value", [("style", "bad"), ("mode", "bad"), ("density", "bad"), ("reducedMotion", "true"), ("navigation", "unknown")])
 def test_invalid_theme_preferences_are_rejected(logged_in, field, value):
     response = logged_in.put("/api/v1/auth/preferences", json={"appearance": {**APPEARANCE, field: value}})
     assert response.status_code == 422
@@ -231,3 +232,13 @@ def test_appearance_update_requires_authentication_and_csrf(logged_in):
         ).status_code
         == 403
     )
+
+
+@pytest.mark.parametrize("navigation", ["sidebar", "topbar", "dock-top", "dock-bottom", "launcher"])
+def test_navigation_layout_is_persisted_for_the_account(logged_in, navigation):
+    value = {**APPEARANCE, "navigation": navigation}
+    response = logged_in.put("/api/v1/auth/preferences", json={"appearance": value})
+    assert response.status_code == 200
+    assert logged_in.get("/api/v1/auth/me").json()["data"]["appearance"] == value
+    user_id = logged_in.get("/api/v1/auth/me").json()["data"]["id"]
+    assert SettingsService(logged_in.app.state.services.sessions).user_preferences(user_id).appearance.navigation == navigation

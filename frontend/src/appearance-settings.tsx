@@ -32,6 +32,7 @@ import {
   useAppearance,
   useAppearanceSaving,
   type Appearance,
+  type NavigationLayout,
 } from "./appearance";
 import "./appearance-settings.css";
 
@@ -126,6 +127,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
       mode: current.mode,
       density: current.density,
       reducedMotion: current.reducedMotion,
+      navigation: current.navigation,
     });
   }
   function changeColor(key: (typeof fields)[number][0], value: string) {
@@ -205,6 +207,56 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
   return (
     <section className="appearance-settings reference-appearance">
       <form onSubmit={(event) => void save(event)}>
+        <h2 className="appearance-section-label">{t("Navigation layout")}</h2>
+        <p className="navigation-layout-help">
+          {t("Try a layout. Save to keep it, or discard to return.")}
+        </p>
+        <div
+          className="navigation-layout-choices"
+          role="group"
+          aria-label={t("Navigation layout")}
+        >
+          {(
+            [
+              ["sidebar", "Sidebar", "Navigation along the left edge."],
+              ["topbar", "Top navigation", "Pages beside the logo."],
+              ["dock-top", "Top dock", "A compact dock above your content."],
+              ["dock-bottom", "Bottom dock", "A compact dock at the bottom."],
+              [
+                "launcher",
+                "Compact menu",
+                "Apps first, with a small navigation menu.",
+              ],
+            ] as [NavigationLayout, string, string][]
+          ).map(([id, label, description]) => (
+            <button
+              type="button"
+              key={id}
+              disabled={busy}
+              aria-pressed={(draft?.navigation || "sidebar") === id}
+              onClick={() =>
+                setDraft((current) => ({
+                  ...(current || {
+                    ...defaultAppearance,
+                    style: "midnight-glass",
+                  }),
+                  navigation: id,
+                }))
+              }
+            >
+              <span
+                className={`navigation-layout-mini navigation-layout-${id}`}
+                aria-hidden="true"
+              >
+                <i />
+                <b />
+                <em />
+              </span>
+              <strong>{t(label)}</strong>
+              <small>{t(description)}</small>
+            </button>
+          ))}
+        </div>
         <h2 className="appearance-section-label">{t("Themes")}</h2>
         <div className="theme-gallery" role="group" aria-label={t("Themes")}>
           {quickThemes.map((preset) => (
@@ -217,6 +269,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               onClick={() =>
                 choose({
                   ...preset.value!,
+                  navigation: draft?.navigation || "sidebar",
                   mode: draft?.mode || preset.value!.mode,
                   reducedMotion: draft?.reducedMotion ?? false,
                 })

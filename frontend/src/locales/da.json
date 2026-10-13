@@ -2881,5 +2881,18 @@
   "Hex color": "Hex-farve",
   "Done": "Færdig",
   "Advanced coloring": "Avancerede farver",
-  "Defaults": "Standard"
+  "Defaults": "Standard",
+  "Navigation layout": "Navigationslayout",
+  "Try a layout. Save to keep it, or discard to return.": "Pr?v et layout. Gem for at beholde det, eller annuller for at vende tilbage.",
+  "Sidebar": "Sidebar",
+  "Top navigation": "Topnavigation",
+  "Top dock": "Dock i toppen",
+  "Bottom dock": "Dock i bunden",
+  "Compact menu": "Kompakt menu",
+  "Navigation along the left edge.": "Navigation langs venstre kant.",
+  "Pages beside the logo.": "Siderne ved siden af logoet.",
+  "A compact dock above your content.": "En kompakt dock over indholdet.",
+  "A compact dock at the bottom.": "En kompakt dock nederst.",
+  "Apps first, with a small navigation menu.": "Apps i centrum med en lille navigationsmenu.",
+  "Main navigation": "Hovednavigation"
 }

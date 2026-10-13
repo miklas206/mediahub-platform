@@ -11,6 +11,7 @@ import "./checkboxes.css";
 import "./workspace-redesign.css";
 import "./reference-workspace.css";
 import "./sidebar-themes.css";
+import "./navigation-layouts.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
