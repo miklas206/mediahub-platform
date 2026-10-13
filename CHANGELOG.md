@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.13
+
+- Add optional encrypted Cloudflare API access, real tunnel creation, protected connector-token downloads and app-bound DNS/ingress routes for MediaHub, MediaSeed and MediaVPN.
+- Follow live local app IP/port changes with a persistent background reconciler, per-route opt-out, no-op checks, rate-limit backoff, manual conflict detection and retained unrelated routes. Keep existing monitor-only profiles available.
+- Allow only explicitly published MediaHub hostnames as additional trusted browser origins; retain HTTPS, administrator, CSRF and certificate validation protections. Connector installation remains separate from remote tunnel creation.
+
 ## 0.5.12
 
 - Verify first-party SSO with local HTTPS IP origins and optional app Settings domain overrides; no public domain is required.

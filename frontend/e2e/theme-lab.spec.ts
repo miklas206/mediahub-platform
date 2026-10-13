@@ -551,6 +551,49 @@ for (const width of [1440,320]) test(`uninstall progress and older Agent activit
  await expect(modal.getByRole('button',{name:'Confirm removal',exact:true})).toBeEnabled();
 });
 
+for(const width of [1440,320]) test(`Cloudflare tunnel and app route flow at ${width}px`,async({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width,height:1100});
+ const state={configured:false,accountId:'',tunnels:[] as {id:string;name:string}[],routes:[] as {id:string;hostname:string;packageId:string;tunnelId:string;autoSync:boolean;lastApplied:string;status:string;message:string}[],apps:[{packageId:'mediahub',name:'MediaHub'}]};
+ const tunnelId='11111111-2222-4333-8444-555555555555';
+ await page.route('**/api/v1/cloudflare/manage**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/token'))return route.fulfill({body:'synthetic-connector',contentType:'application/octet-stream',headers:{'Content-Disposition':'attachment; filename="cloudflared-token.txt"'}});
+  if(route.request().method()!=='GET') {
+   const body=route.request().postDataJSON();
+   if(path.endsWith('/credentials')){state.configured=true;state.accountId=body.accountId;}
+   else if(path.endsWith('/tunnels'))state.tunnels.push({id:tunnelId,name:body.name});
+   else if(path.endsWith('/routes')){expect(body.autoSync).toBe(true);state.routes.push({...body,id:'route-1',lastApplied:'https://192.168.1.50:18765',status:'synced',message:'App route is up to date'});}
+   else if(path.endsWith('/sync'))state.routes[0].lastApplied='https://192.168.1.60:19765';
+   else if(path.endsWith('/route-1'))state.routes[0].autoSync=body.autoSync;
+  }
+  return route.fulfill({json:{data:state}});
+ });
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/store/cloudflare');
+ await page.getByLabel('Cloudflare account ID',{exact:true}).fill('a'.repeat(32));
+ await page.getByLabel('Cloudflare API token',{exact:true}).fill('synthetic-test-value-12345');
+ await page.getByRole('button',{name:'Connect account',exact:true}).click();
+ await expect(page.getByLabel('Cloudflare API token',{exact:true})).toHaveValue('');
+ await page.getByLabel('New tunnel name',{exact:true}).fill('Home tunnel');
+ await page.getByRole('button',{name:'Create tunnel',exact:true}).click();
+ await page.getByLabel('Cloudflare zone ID',{exact:true}).fill('b'.repeat(32));
+ await page.getByLabel('Public hostname',{exact:true}).fill('hub.example.com');
+ await page.getByRole('button',{name:'Link app and publish hostname',exact:true}).click();
+ await expect(page.locator('.cloudflare-profile-list').last()).toContainText('hub.example.com');
+ await expect(page.locator('.cloudflare-profile-list').last()).toContainText('https://192.168.1.50:18765');
+ await page.getByRole('button',{name:'Synchronize now',exact:true}).click();
+ await expect(page.locator('.cloudflare-profile-list').last()).toContainText('https://192.168.1.60:19765');
+ await page.getByLabel('Follow app IP and port',{exact:true}).click();
+ await expect(page.getByLabel('Follow app IP and port',{exact:true})).not.toBeChecked();
+ expect(state.routes[0].autoSync).toBe(false);
+ const downloaded=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Download connector token',exact:true}).click();
+ expect((await downloaded).suggestedFilename()).toBe('cloudflared-token.txt');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(errors).toEqual([]);
+});
+
 for (const width of [1440,320]) test(`footer stays at viewport bottom across navigation and themes at ${width}px`,async({page})=>{
  await mockHub(page);
  await page.setViewportSize({width,height:1000});

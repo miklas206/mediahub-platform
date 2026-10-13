@@ -4,7 +4,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -12,7 +11,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from mediahub import __version__
@@ -31,6 +29,8 @@ from mediahub.apps.windows_share import register_windows_share_app
 from mediahub.auth import AuthService
 from mediahub.backups_api import router as backups_router
 from mediahub.catalog import Catalog
+from mediahub.cloudflare_management import CloudflareManagement, ConfiguredHostMiddleware
+from mediahub.cloudflare_management import router as cloudflare_management_router
 from mediahub.cloudflare_tunnel import CloudflareTunnelMonitor
 from mediahub.config import Config
 from mediahub.container_apps_api import router as container_apps_router
@@ -116,6 +116,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
         svc.managed_installer = ManagedInstaller(svc)
         await svc.managed_installer.initialize()
+        svc.cloudflare_management = CloudflareManagement(svc)
         register_windows_share_app(svc)
         if should_register_cloudflared_app(svc):
             register_cloudflared_app(svc)
@@ -154,10 +155,14 @@ def create_app(config: Config | None = None) -> FastAPI:
         update_collector = asyncio.create_task(svc.updates.poll())
         port_collector = asyncio.create_task(svc.seedbox_reachability.poll())
         rss_collector = asyncio.create_task(svc.rss_feeds.poll())
+        cloudflare_collector = asyncio.create_task(svc.cloudflare_management.poll())
         svc.update_queue.resume()
         try:
             yield
         finally:
+            cloudflare_collector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await cloudflare_collector
             await svc.managed_apps.close()
             await svc.update_queue.stop()
             port_collector.cancel()
@@ -204,8 +209,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
-    hosts = sorted({urlsplit(origin).hostname for origin in config.origins})
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+    app.add_middleware(ConfiguredHostMiddleware, config=config)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=sorted(config.origins),
@@ -289,6 +293,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     app.include_router(managed_install_router, prefix="/api/v1")
     app.include_router(sso_router, prefix="/api/v1")
+    app.include_router(cloudflare_management_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")

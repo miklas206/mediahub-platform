@@ -117,3 +117,8 @@
     min-width: min(100%, 12rem);
   }
 }
+
+.cloudflare-management-form { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,230px),1fr)); align-items: end; gap: 16px; margin-block: 20px; }
+.cloudflare-management-form label { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cloudflare-management-form input, .cloudflare-management-form select { width: 100%; min-width: 0; }
+.cloudflare-profile-list article { overflow-wrap: anywhere; flex-wrap: wrap; gap: 12px; }

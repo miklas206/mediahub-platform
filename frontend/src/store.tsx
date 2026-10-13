@@ -13,6 +13,7 @@ import {
   PackagePlus,
   ShieldCheck,
 } from "lucide-react";
+import { CloudflareManagementPanel } from "./cloudflare-management";
 import { CloudflareSetupManager } from "./cloudflare-setup";
 import { IntegrationsPage } from "./integrations";
 import { Panel } from "./phase2";
@@ -29,6 +30,7 @@ export function CloudflareStorePage() {
       <Link className="text-link" to="/">
         {t("Back to MediaHub")}
       </Link>
+      <CloudflareManagementPanel />
       <Panel title={t("What MediaHub can prepare")}>
         <div className="store-discovery-grid">
           <div>
@@ -54,7 +56,7 @@ export function CloudflareStorePage() {
             <strong>{t("Never requested")}</strong>
             <p>
               {t(
-                "MediaHub does not need an account-wide Cloudflare API token and does not disable TLS certificate verification.",
+                "Monitoring works without an API token. Tunnel creation and automatic app routes require an optional scoped Cloudflare API token. TLS certificate verification stays enabled.",
               )}
             </p>
           </div>
