@@ -87,3 +87,18 @@ MediaSeed places its live transfer metrics above navigation and renders compact
 number/name/progress/speed/status/action rows beside RSS. Connection details remain
 under VPN; blocked-download guidance and server-side enforcement are preserved.
 Sparkline paths use real observed samples and stay empty until multiple samples exist.
+
+## Equal Light card and custom accent wheel
+
+All six main looks now use the same card geometry, including Light. The account
+action is Save (Gem in Danish), and feedback refers to the entire appearance.
+A custom-accent trigger beside the preset dots opens an in-app HSV color wheel
+with keyboard-accessible hue/saturation/brightness sliders and validated hex input.
+It previews only the current draft; Cancel/Escape restores the prior accent, Done
+keeps the draft, and Save persists account preferences. No native browser prompt
+or extra network request is needed to choose a color.
+
+Shared environments use stronger low-contrast light fields and abstract curved
+ribbons, with slow movement. No landscape image is used. OS and account reduced
+motion disable both background layers. The environment stylesheet URL is versioned
+to avoid serving an old Cloudflare-cached background.

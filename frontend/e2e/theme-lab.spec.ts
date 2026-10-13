@@ -107,6 +107,7 @@ for (const width of [1440, 390, 320]) {
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true);
+      await expect(panel.locator(".theme-gallery > .theme-choice")).toHaveCount(6);
       await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = true; });
       const interaction = await page.evaluate(() => {
         const button = document.querySelector('.theme-try-actions button')!;
@@ -141,10 +142,10 @@ for (const width of [1440, 390, 320]) {
         page.locator(".notification-popup.info").last(),
       ).toContainText("Theme preview");
       await panel
-        .getByRole("button", { name: "Save colors", exact: true })
+        .getByRole("button", { name: "Save", exact: true })
         .click();
       await expect(
-        panel.getByRole("button", { name: "Save colors", exact: true }),
+        panel.getByRole("button", { name: "Save", exact: true }),
       ).toHaveCount(0);
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-look", id);
@@ -192,9 +193,9 @@ test("discard restores saved theme and palette changes retain its layout and mot
     "true",
   );
   await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
-  await panel.getByRole("button", { name: "Save colors", exact: true }).click();
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
-    panel.getByRole("button", { name: "Save colors", exact: true }),
+    panel.getByRole("button", { name: "Save", exact: true }),
   ).toHaveCount(0);
   await panel
     .locator(".theme-choice")
@@ -241,8 +242,8 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   await expect(page.getByRole("heading", {name:"Appearance",exact:true})).toBeVisible();
   await page.locator(".theme-light-choice").click();
   await expect(page.locator("html")).toHaveAttribute("data-appearance-mode","light");
-  await page.getByRole("button",{name:"Save colors",exact:true}).click();
-  await expect(page.getByRole("button",{name:"Save colors",exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:"Save",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Save",exact:true})).toHaveCount(0);
   await page.reload();
   await expect(page.locator(".theme-light-choice")).toHaveAttribute("aria-pressed","true");
   expect(writes).toHaveLength(1);
@@ -260,4 +261,27 @@ test("interface switches have the intended compact switch geometry", async ({pag
  expect(after).toBeLessThan(before);
  await page.getByRole("checkbox",{name:/Reduce motion/}).check();
  expect(await page.evaluate(() => getComputedStyle(document.body,"::before").animationName)).toBe("none");
+ expect(await page.evaluate(() => getComputedStyle(document.body,"::after").animationName)).toBe("none");
+});
+
+for (const width of [1440, 390, 320]) test(`custom accent wheel previews, cancels and saves at ${width}px`, async ({page}) => {
+ const {writes}=await mockHub(page);await page.setViewportSize({width,height:1000});await page.goto("/settings?section=Appearance");
+ await page.locator(".theme-choice").filter({hasText:"Midnight Glass"}).click();
+ const light=page.locator(".theme-light-choice"), first=page.locator(".theme-choice").first();
+ const sizes=await Promise.all([first.boundingBox(),light.boundingBox()]);expect(Math.abs(sizes[0]!.width-sizes[1]!.width)).toBeLessThan(1);expect(Math.abs(sizes[0]!.height-sizes[1]!.height)).toBeLessThan(1);
+ await page.getByRole("button",{name:"Choose custom color",exact:true}).click();
+ const dialog=page.getByRole("dialog",{name:"Choose custom color",exact:true});await expect(dialog).toBeVisible();
+ await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("#123456");
+ await expect(page.locator('input[aria-label="Accent color"]')).toHaveValue("#123456");
+ await page.keyboard.press("Escape");await expect(dialog).toHaveCount(0);await expect(page.locator('input[aria-label="Accent color"]')).toHaveValue("#25c9ed");
+ await page.getByRole("button",{name:"Choose custom color",exact:true}).click();
+ const wheel=page.getByRole("group",{name:"Color wheel",exact:true});await wheel.click({position:{x:150,y:90}});
+ await expect(page.getByRole("textbox",{name:"Hex color",exact:true})).not.toHaveValue("#25c9ed");
+ await page.getByRole("slider",{name:"Brightness",exact:true}).focus();await page.keyboard.press("Home");await expect(page.getByRole("textbox",{name:"Hex color",exact:true})).toHaveValue("#000000");
+ await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("invalid");await expect(page.getByRole("button",{name:"Done",exact:true})).toBeDisabled();
+ await page.getByRole("textbox",{name:"Hex color",exact:true}).fill("#123456");await page.screenshot({path:`test-results/custom-color-wheel-${width}.png`,animations:"disabled"});
+ await page.getByRole("button",{name:"Done",exact:true}).click();await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toHaveCount(0);
+ expect(writes).toHaveLength(1);expect(writes[0]).toMatchObject({appearance:{accent:"#123456"}});
+ await page.reload();await page.getByRole("button",{name:"Choose custom color",exact:true}).click();await expect(page.getByRole("textbox",{name:"Hex color",exact:true})).toHaveValue("#123456");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

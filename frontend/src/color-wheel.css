@@ -1,0 +1,141 @@
+.accent-dots button.custom-color-trigger {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  background: conic-gradient(
+    #fa6d78,
+    #ffd36b,
+    #4be0ab,
+    #508dff,
+    #aa69ef,
+    #fa6d78
+  );
+  border: 1px solid var(--line);
+  color: #0b1821;
+}
+.color-wheel-dialog {
+  padding: 0;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 20px 70px #0006;
+}
+.color-wheel-dialog::backdrop {
+  background: #020810a0;
+  backdrop-filter: blur(5px);
+}
+.color-wheel-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.color-wheel-dialog h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.color-wheel-dialog > header button {
+  min-height: 30px;
+  padding: 5px;
+  background: none;
+  border: 0;
+}
+.color-wheel-content {
+  padding: 20px;
+}
+.color-wheel-surface {
+  position: relative;
+  width: min(220px, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  touch-action: none;
+  cursor: crosshair;
+  background:
+    radial-gradient(closest-side, white, transparent),
+    conic-gradient(from 90deg, red, #ff0, #0f0, #0ff, #00f, #f0f, red);
+}
+.color-wheel-shade {
+  position: absolute;
+  inset: 0;
+  background: black;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.color-wheel-marker {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 2px solid white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px #0008;
+  pointer-events: none;
+}
+.color-wheel-content > p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 15px 0;
+}
+.color-wheel-slider {
+  display: grid;
+  gap: 8px;
+  margin-block: 13px;
+  font-size: 12px;
+}
+.color-wheel-slider > span {
+  display: flex;
+  justify-content: space-between;
+}
+.color-wheel-slider output {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.color-wheel-slider input {
+  width: 100%;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.color-wheel-hex {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  font-size: 12px;
+  margin-top: 18px;
+}
+.color-wheel-hex > span:first-child {
+  width: 42px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.color-wheel-hex > span:last-child {
+  flex: 1;
+}
+.color-wheel-hex input {
+  margin-top: 6px;
+  padding: 8px 10px;
+  font-family: Consolas, monospace;
+}
+.color-wheel-dialog > footer {
+  position: static;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: none;
+}
+.color-wheel-dialog > footer button {
+  min-height: 36px;
+  font-size: 12px;
+}

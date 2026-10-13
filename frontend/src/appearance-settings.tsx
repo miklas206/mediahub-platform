@@ -1,3 +1,4 @@
+import { ColorWheel } from "./color-wheel";
 import {
   useEffect,
   useRef,
@@ -152,7 +153,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
         applySavedAppearance(preferences.appearance, session) &&
         mounted.current
       )
-        setMessage("Your colors have been saved.");
+        setMessage("Your appearance has been saved.");
     } catch (failure) {
       if (mounted.current) setError((failure as Error).message);
     } finally {
@@ -233,39 +234,38 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               <small>{t(preset.description)}</small>
             </button>
           ))}
-        </div>
-        <button
-          type="button"
-          className="theme-light-choice"
-          disabled={busy}
-          aria-pressed={light}
-          onClick={() =>
-            choose({
-              ...themePresets.find((preset) => preset.id === "midnight-glass")!
-                .value!,
-              mode: "light",
-              reducedMotion: draft?.reducedMotion ?? false,
-            })
-          }
-        >
-          <span className="theme-preview-frame">
-            {preview(
-              themePresets.find((preset) => preset.id === "midnight-glass")!,
-              true,
-            )}
-            {light && (
-              <span className="theme-selected">
-                <Check size={13} />
-              </span>
-            )}
-          </span>
-          <span>
+          <button
+            type="button"
+            className="theme-choice theme-light-choice"
+            disabled={busy}
+            aria-pressed={light}
+            onClick={() =>
+              choose({
+                ...themePresets.find(
+                  (preset) => preset.id === "midnight-glass",
+                )!.value!,
+                mode: "light",
+                reducedMotion: draft?.reducedMotion ?? false,
+              })
+            }
+          >
+            <span className="theme-preview-frame">
+              {preview(
+                themePresets.find((preset) => preset.id === "midnight-glass")!,
+                true,
+              )}
+              {light && (
+                <span className="theme-selected">
+                  <Check size={13} />
+                </span>
+              )}
+            </span>
             <strong>{t("Light")}</strong>
             <small>
               {t("A clean and bright option for well-lit environments.")}
             </small>
-          </span>
-        </button>
+          </button>
+        </div>
         <div className="appearance-interface">
           <h2 className="appearance-section-label">{t("Interface options")}</h2>
           <div className="appearance-option-grid">
@@ -329,6 +329,11 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
                     onClick={() => changeColor("accent", color)}
                   />
                 ))}
+                <ColorWheel
+                  color={(draft || defaultAppearance).accent}
+                  onChange={(color) => changeColor("accent", color)}
+                  disabled={busy}
+                />
               </div>
             </div>
           </div>
@@ -340,7 +345,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
               className="primary"
               disabled={busy || invalid}
             >
-              {t(busy ? "Saving…" : "Save colors")}
+              {t(busy ? "Saving…" : "Save")}
             </button>
             <button type="button" disabled={busy} onClick={() => choose(saved)}>
               {t("Discard changes")}
@@ -523,7 +528,13 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
             </>
           )}
 
-          <div className="theme-try-actions"><button type="button" onClick={() => choose({...defaultAppearance})}>{t("MediaHub Classic")}</button>
+          <div className="theme-try-actions">
+            <button
+              type="button"
+              onClick={() => choose({ ...defaultAppearance })}
+            >
+              {t("MediaHub Classic")}
+            </button>
             <button
               type="button"
               onClick={() =>
