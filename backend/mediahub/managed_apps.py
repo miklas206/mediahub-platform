@@ -6,7 +6,9 @@ binds each installation to Compose labels and optional owned runtime labels.
 
 import asyncio
 import hashlib
+import io
 import json
+import tarfile
 from pathlib import Path
 from urllib.parse import quote
 
@@ -382,6 +384,83 @@ class ManagedApps:
                 409,
             ) from None
 
+    async def controller_settings(self, identifier):
+        """Read the fixed non-secret settings file even when the owned app is stopped."""
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(
+                    uds=str(self.svc.config.managed_apps_docker_socket)
+                ),
+                base_url="http://docker",
+                timeout=10,
+                trust_env=False,
+                follow_redirects=False,
+            ) as client:
+                async with client.stream(
+                    "GET",
+                    "/containers/" + identifier + "/archive",
+                    params={"path": "/data/seedbox.json"},
+                ) as response:
+                    if response.status_code == 404:
+                        return None
+                    response.raise_for_status()
+                    content = bytearray()
+                    async for block in response.aiter_bytes():
+                        content.extend(block)
+                        if len(content) > 32768:
+                            raise ValueError("Settings archive too large")
+            with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as archive:
+                entries = archive.getmembers()
+                if (
+                    len(entries) != 1
+                    or entries[0].name != "seedbox.json"
+                    or not entries[0].isfile()
+                    or entries[0].size > 4096
+                ):
+                    raise ValueError("Invalid settings archive")
+                settings = json.loads(archive.extractfile(entries[0]).read())
+                if not isinstance(settings, dict) or type(settings.get("enabled")) is not bool:
+                    raise ValueError("Invalid settings")
+                return settings
+        except (httpx.HTTPError, ValueError, OSError, tarfile.TarError):
+            raise DomainError(
+                "controller_unverified",
+                "Stopped torrent controller settings could not be verified; no app containers were removed",
+                409,
+            ) from None
+
+    async def controller_inactive(self, rows):
+        policy = self.policy["org.mediahub.mediavpn"]
+        controller = next(
+            (
+                row
+                for row in rows
+                if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+                == "app"
+                and row.get("Config", {}).get("Labels", {}).get("com.docker.compose.project")
+                == policy.project
+            ),
+            None,
+        )
+        if controller is None or controller.get("State", {}).get("Running") is not False:
+            return False
+        settings = await self.controller_settings(controller["Id"])
+        actual = await self.docker("GET", "/containers/" + controller["Id"] + "/json", missing=True)
+        if (
+            not actual
+            or actual.get("State", {}).get("Running") is not False
+            or actual.get("Config", {}).get("Labels") != controller["Config"]["Labels"]
+        ):
+            raise DomainError("installation_changed", "Installation changed during removal", 409)
+        if settings is not None and settings["enabled"]:
+            raise DomainError(
+                "controller_start_required",
+                "Start MediaVPN and disconnect MediaSeed before removal; stopped torrent control is still enabled",
+                409,
+            )
+        # A missing settings file is the controller's documented disabled default.
+        return True
+
     async def run(self, package, job):
         async with self.lock:
             try:
@@ -400,12 +479,14 @@ class ManagedApps:
                 )
                 # An enabled controller may be waiting for VPN health and have
                 # no client yet. Fence it before deleting its source containers.
-                vpn_present = (
-                    package == "org.mediahub.mediaseed"
+                vpn_rows = (
+                    await self.containers("org.mediahub.mediavpn")
+                    if package == "org.mediahub.mediaseed"
                     and "org.mediahub.mediavpn" in self.policy
-                    and bool(await self.containers("org.mediahub.mediavpn"))
+                    else []
                 )
-                if has_client or vpn_present:
+                inactive = bool(vpn_rows) and await self.controller_inactive(vpn_rows)
+                if (has_client or vpn_rows) and not inactive:
                     await self.disconnect_client(self.policy[package])
                 job.update(progress=10, phase="removing")
                 self.save(package, job)

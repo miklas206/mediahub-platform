@@ -3720,6 +3720,8 @@
   "Automatic app preparation failed; existing data was retained": "Automatisk klargøring mislykkedes. Eksisterende data er bevaret.",
   "Preparing app prerequisites": "Klargør nødvendige app-komponenter",
   "Retry preparation": "Prøv klargøringen igen",
+  "Stopped torrent controller settings could not be verified; no app containers were removed": "Den stoppede torrentstyrings indstillinger kunne ikke verificeres. Ingen app-containere blev fjernet.",
+  "Start MediaVPN and disconnect MediaSeed before removal; stopped torrent control is still enabled": "Start MediaVPN, og frakobl MediaSeed før afinstallation. Torrentstyringen er stadig aktiveret i de gemte indstillinger.",
   "Choose your domains, DNS records and apps. MediaHub discovers addresses and follows local IP and port changes automatically.": "Vælg domæner, DNS-records og apps. MediaHub finder adresserne og følger automatisk ændringer i lokale IP-adresser og porte.",
   "Loading Cloudflare account...": "Henter Cloudflare-konto…",
   "Access and automatic setup": "Adgang og automatisk opsætning",

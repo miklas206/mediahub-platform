@@ -339,6 +339,83 @@ def test_seed_removal_fences_present_controller_before_client_is_created(
     disconnect.assert_awaited_once()
 
 
+@pytest.mark.parametrize("settings", [None, {"enabled": False}, {"enabled": True}])
+def test_stopped_controller_checks_saved_settings_before_seed_removal(
+    logged_in, tmp_path, monkeypatch, settings
+):
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+    manager.policy[VPN] = manager.policy[SEED].model_copy(update={"project": "synthetic-vpn"})
+    rows["b" * 64] = {
+        "Id": "b" * 64,
+        "Config": {
+            "Labels": {
+                "com.docker.compose.project": "synthetic-vpn",
+                "com.docker.compose.service": "app",
+            }
+        },
+        "State": {"Running": False},
+        "Mounts": [],
+    }
+    monkeypatch.setattr(manager, "controller_settings", AsyncMock(return_value=settings))
+    disconnect = AsyncMock(
+        side_effect=AssertionError("Stopped disabled controller needs no HTTP call")
+    )
+    monkeypatch.setattr(manager, "disconnect_client", disconnect)
+
+    async def remove():
+        ready = await manager.status(SEED)
+        await manager.remove(SEED, ready["installationId"])
+        await manager.tasks[SEED]
+        if settings and settings["enabled"]:
+            assert manager.saved(SEED)["state"] == "failed"
+            assert "Start MediaVPN" in manager.saved(SEED)["message"]
+            assert not any(method != "GET" for method, _ in calls)
+        else:
+            assert manager.saved(SEED)["state"] == "succeeded"
+            assert "a" * 64 not in rows
+        assert "b" * 64 in rows  # MediaVPN remains untouched.
+
+    asyncio.run(remove())
+    disconnect.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "content,expected",
+    [(b'{"enabled":false}', False), (b'{"enabled":true}', True), (b'{"enabled":"false"}', None)],
+)
+def test_controller_archive_is_bounded_and_validated(
+    logged_in, tmp_path, monkeypatch, content, expected
+):
+    import io
+    import tarfile
+
+    import httpx
+
+    _, manager, _, _ = setup_manager(logged_in, tmp_path, monkeypatch)
+    payload = io.BytesIO()
+    with tarfile.open(fileobj=payload, mode="w") as archive:
+        member = tarfile.TarInfo("seedbox.json")
+        member.size = len(content)
+        archive.addfile(member, io.BytesIO(content))
+
+    def handler(request):
+        assert request.url.params["path"] == "/data/seedbox.json"
+        return httpx.Response(200, content=payload.getvalue())
+
+    original = httpx.AsyncClient
+
+    def client(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return original(**kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    if expected is None:
+        with pytest.raises(DomainError, match="could not be verified"):
+            asyncio.run(manager.controller_settings("a" * 64))
+    else:
+        assert asyncio.run(manager.controller_settings("a" * 64))["enabled"] is expected
+
+
 def test_pending_removal_resumes_after_restart(logged_in, tmp_path, monkeypatch):
     _, manager, rows, _ = setup_manager(logged_in, tmp_path, monkeypatch)
 

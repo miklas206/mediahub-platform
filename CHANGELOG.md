@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.19
+
+- Allow MediaSeed removal when the owned MediaVPN controller is stopped and its torrent settings are verified disabled, including the never-started default with no settings file. Do not contact an inactive controller or start it as a side effect.
+- Read only the fixed settings file through Docker's bounded archive API, recheck stopped state and ownership before removal, and block enabled, malformed or unverifiable settings with actionable guidance. Preserve normal controller disconnects, MediaVPN containers and app data.
+
 ## 0.5.18
 
 - Recover failed managed app removal after container recreation by requiring fresh confirmation of the current owned installation, instead of endlessly retrying a stale container snapshot at 5%.
