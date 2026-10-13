@@ -118,6 +118,16 @@ for (const width of [1440, 390, 320]) {
       expect(interaction.feedback).toBe(({ 'midnight-glass': 'feedback-glass', 'soft-orbit': 'feedback-soft', 'precision-terminal': 'feedback-terminal', 'floating-layers': 'feedback-float', 'edge-signal': 'feedback-edge' })[id]);
       expect(interaction.radius).not.toBe('0px');
       await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = false; });
+      const selectedNav = page.locator('.sidebar > nav a[aria-current="page"]');
+      await expect(selectedNav).toHaveCount(1);
+      await expect(selectedNav).toContainText("Settings");
+      if (width === 1440) {
+        await selectedNav.focus();
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Shift+Tab");
+        expect(await selectedNav.evaluate(el => getComputedStyle(el).outlineStyle)).toBe("solid");
+        await selectedNav.hover();
+      }
       await page.screenshot({ path: `test-results/theme-${id}-appearance-${width}.png`, animations: "disabled" });
       await panel.locator(".appearance-advanced").evaluate((node: HTMLDetailsElement) => { node.open = true; });
       await panel

@@ -105,3 +105,5 @@ to avoid serving an old Cloudflare-cached background.
 
 Appearance refinement: each theme now has its own more visible abstract animated composition (glass arcs, orbit rings, terminal grid, floating planes or signal diagonals). Reduced motion remains supported; stylesheet cache version is ambient-6.
 Color mode and dialog/notification previews are outside Advanced coloring. Compact layout is the single density control. Save, Discard changes and Defaults remain visible together; Defaults is a preview until Save. The redundant Classic button has been removed.
+
+Sidebar selections differ by theme: glass rail, orbit pill/dot, terminal brackets, raised layered tab and signal underline/chevron. Light has a clean flat selection. Current-page semantics, keyboard focus and reduced motion are retained.
