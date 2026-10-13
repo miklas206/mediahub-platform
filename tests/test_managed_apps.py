@@ -105,9 +105,14 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
         await manager.initialize()
 
     asyncio.run(remove())
-    assert stages == [(0, "preparing", "accepted"), (5, "preparing", "running"),
-                      (10, "removing", "running"), (80, "removing", "running"),
-                      (90, "verifying", "running"), (100, "complete", "succeeded")]
+    assert stages == [
+        (0, "preparing", "accepted"),
+        (5, "preparing", "running"),
+        (10, "removing", "running"),
+        (80, "removing", "running"),
+        (90, "verifying", "running"),
+        (100, "complete", "succeeded"),
+    ]
     assert "SECRET" not in manager.journal(SEED).read_text()
     assert logged_in.get("/api/v1/mediaseed/status").json()["data"]["configured"] is False
     assert not any(app["packageId"] == SEED for app in logged_in.get("/api/v1/apps").json()["data"])
@@ -196,6 +201,85 @@ def test_failure_keeps_snapshot_and_can_retry(logged_in, tmp_path, monkeypatch):
     asyncio.run(remove())
 
 
+def test_failed_removal_with_recreated_containers_requires_fresh_confirmation(
+    logged_in, tmp_path, monkeypatch
+):
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+
+    async def remove():
+        previous, confirmation = await manager.preflight(SEED)
+        manager.save(
+            SEED,
+            {
+                "state": "failed",
+                "installationId": manager.policy[SEED].installationId,
+                "confirmation": confirmation,
+                "containers": previous,
+                "volumes": ["previous-data"],
+                "progress": 5,
+                "phase": "preparing",
+                "message": "Installation changed during removal",
+            },
+        )
+        replacement = rows.pop("a" * 64)
+        replacement["Id"] = "b" * 64
+        rows["b" * 64] = replacement
+        ready = await manager.status(SEED)
+        assert ready["state"] == "ready"
+        assert ready["installationId"] != confirmation
+        with pytest.raises(DomainError, match="review removal again"):
+            await manager.remove(SEED, confirmation)
+        assert not any(method != "GET" for method, _ in calls)
+        await manager.remove(SEED, ready["installationId"])
+        await manager.tasks[SEED]
+        assert (await manager.status(SEED))["state"] == "succeeded"
+        assert not rows
+        assert ("GET", "/volumes/previous-data") in calls
+
+    asyncio.run(remove())
+
+
+def test_labels_changed_after_review_blocks_removal_without_writes(
+    logged_in, tmp_path, monkeypatch
+):
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+
+    async def remove():
+        ready = await manager.status(SEED)
+        rows["a" * 64]["Config"]["Labels"]["com.docker.compose.service"] = "replacement"
+        with pytest.raises(DomainError, match="review removal again"):
+            await manager.remove(SEED, ready["installationId"])
+        assert not any(method != "GET" for method, _ in calls)
+
+    asyncio.run(remove())
+
+
+def test_replacement_after_acceptance_stops_at_preflight_then_allows_review(
+    logged_in, tmp_path, monkeypatch
+):
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+
+    async def remove():
+        ready = await manager.status(SEED)
+        await manager.remove(SEED, ready["installationId"])
+        replacement = rows.pop("a" * 64)
+        replacement["Id"] = "b" * 64
+        rows["b" * 64] = replacement
+        await manager.tasks[SEED]
+        failed = manager.saved(SEED)
+        assert failed["state"] == "failed"
+        assert failed["progress"] == 5
+        assert not any(method != "GET" for method, _ in calls)
+        review = await manager.status(SEED)
+        assert review["state"] == "ready"
+        assert review["installationId"] != ready["installationId"]
+        await manager.remove(SEED, review["installationId"])
+        await manager.tasks[SEED]
+        assert (await manager.status(SEED))["state"] == "succeeded"
+
+    asyncio.run(remove())
+
+
 def test_controller_failure_never_deletes_containers(logged_in, tmp_path, monkeypatch):
     _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
     rows["a" * 64]["Config"]["Labels"]["org.mediahub.mediavpn.seedbox"] = "mediaseed"
@@ -231,7 +315,9 @@ def test_unattached_seed_removal_does_not_require_mediavpn(logged_in, tmp_path, 
     assert not rows
 
 
-def test_seed_removal_fences_present_controller_before_client_is_created(logged_in, tmp_path, monkeypatch):
+def test_seed_removal_fences_present_controller_before_client_is_created(
+    logged_in, tmp_path, monkeypatch
+):
     _, manager, _, _ = setup_manager(logged_in, tmp_path, monkeypatch)
     manager.policy[VPN] = manager.policy[SEED].model_copy(update={"project": "synthetic-vpn"})
     containers = manager.containers

@@ -218,7 +218,11 @@ class ManagedApps:
             if policy.managementTokenFile and getattr(self.svc, "shared_vpn", None):
                 gateway = await self.svc.shared_vpn.vpn()
                 if gateway.get("enabled") and gateway.get("peers"):
-                    raise DomainError("app_dependency", "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN", 409)
+                    raise DomainError(
+                        "app_dependency",
+                        "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN",
+                        409,
+                    )
             filters = quote(json.dumps({"label": ["org.mediahub.mediavpn.seedbox=mediaseed"]}))
             clients = await self.docker("GET", "/containers/json?all=1&filters=" + filters)
             if clients:
@@ -243,11 +247,43 @@ class ManagedApps:
                     "Another app uses this runtime. Disconnect it before removal.",
                     409,
                 )
-        identity = hashlib.sha256(json.dumps(sorted(owned)).encode()).hexdigest()
+        identity = hashlib.sha256(
+            json.dumps(
+                sorted(
+                    [
+                        (row["Id"], row.get("Config", {}).get("Labels"), row.get("Mounts", []))
+                        for row in rows
+                    ],
+                    key=lambda row: row[0],
+                ),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
         return rows, policy.installationId + ":" + identity[:16]
+
+    @staticmethod
+    def matches_snapshot(rows, saved):
+        """Already removed containers may be absent; replacements require new consent."""
+        expected = {row["Id"]: row for row in saved["containers"]}
+        return all(
+            row["Id"] in expected
+            and row.get("Config", {}).get("Labels")
+            == expected[row["Id"]].get("Config", {}).get("Labels")
+            and row.get("Mounts", []) == expected[row["Id"]].get("Mounts", [])
+            for row in rows
+        )
 
     async def status(self, package):
         saved = self.saved(package)
+        if saved and saved["state"] == "failed":
+            rows, confirmation = await self.preflight(package)
+            if not self.matches_snapshot(rows, saved):
+                return {
+                    "state": "ready",
+                    "installationId": confirmation,
+                    "mode": "runtime",
+                    "message": "Installation changed; review removal again",
+                }
         if saved:
             return {
                 **{
@@ -282,7 +318,10 @@ class ManagedApps:
             if active and not active.done():
                 raise DomainError("operation_busy", "Another app operation is running", 409)
             rows, confirmation = await self.preflight(package)
-            if saved and saved["state"] == "failed":
+            retry_snapshot = (
+                saved and saved["state"] == "failed" and self.matches_snapshot(rows, saved)
+            )
+            if retry_snapshot:
                 confirmation = saved["confirmation"]
             if confirmed != confirmation or not (rows or saved):
                 raise DomainError(
@@ -294,6 +333,9 @@ class ManagedApps:
                 for mount in row.get("Mounts", [])
                 if mount["Type"] == "volume"
             }
+            if saved and saved["state"] == "failed":
+                # Include volumes from any already removed containers in final preservation checks.
+                volumes.update(saved["volumes"])
             job = {
                 "state": "accepted",
                 "progress": 0,
@@ -304,7 +346,7 @@ class ManagedApps:
                 "volumes": sorted(volumes),
                 "message": "Afinstallation er startet. Data bevares.",
             }
-            if saved:
+            if retry_snapshot:
                 job["containers"] = saved["containers"]
                 job["volumes"] = saved["volumes"]
             self.save(package, job)
@@ -347,8 +389,7 @@ class ManagedApps:
                 self.save(package, job)
                 # Revalidate before any writes, including the controller disconnect.
                 current, _ = await self.preflight(package)
-                expected = {row["Id"] for row in job["containers"]}
-                if any(row["Id"] not in expected for row in current):
+                if not self.matches_snapshot(current, job):
                     raise DomainError(
                         "installation_changed", "Installation changed during removal", 409
                     )
@@ -374,7 +415,9 @@ class ManagedApps:
                         "GET", "/containers/" + identifier + "/json", missing=True
                     )
                     if actual is None:
-                        job["progress"] = 10 + round(70 * (index + 1) / max(1, len(job["containers"])))
+                        job["progress"] = 10 + round(
+                            70 * (index + 1) / max(1, len(job["containers"]))
+                        )
                         self.save(package, job)
                         continue
                     if actual.get("Config", {}).get("Labels") != row.get("Config", {}).get(
@@ -409,7 +452,9 @@ class ManagedApps:
                     "app.uninstalled", package, "Managed runtime removed; persistent data preserved"
                 )
                 job.update(
-                    state="succeeded", progress=100, phase="complete",
+                    state="succeeded",
+                    progress=100,
+                    phase="complete",
                     dataPreserved=True,
                     message="Appen er afinstalleret. Data er bevaret.",
                 )

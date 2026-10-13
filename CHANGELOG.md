@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.18
+
+- Recover failed managed app removal after container recreation by requiring fresh confirmation of the current owned installation, instead of endlessly retrying a stale container snapshot at 5%.
+- Keep partial-removal retries bound to the original containers, verify ownership labels and mounts before writes, and retain preservation checks for previously recorded data volumes.
+
 ## 0.5.17
 
 - Fix Core source updates from already installed versions: place reviewed app bundles and image runtime helper inputs under the existing `docker/` archive root. Older updaters no longer strip required Docker COPY inputs, while runtime bundle paths and media/data preservation remain unchanged.
