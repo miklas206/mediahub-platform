@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 from urllib.parse import quote
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
@@ -101,6 +102,9 @@ class ManagedInstaller:
                 raise DomainError("install_plan_changed", "Review the app installation again", 409)
             job = {
                 "state": "accepted",
+                "operationId": uuid4().hex,
+                "progress": 0,
+                "phase": "preparing",
                 "message": "App installation accepted",
                 "planDigest": digest,
                 "dataPreserved": True,
@@ -117,10 +121,14 @@ class ManagedInstaller:
                     self.manager.tasks[package] = asyncio.create_task(self.run(package))
 
     async def run(self, package):
-        approved = self.status(package).get("planDigest")
+        previous = self.status(package)
+        approved = previous.get("planDigest")
         job = {
             "state": "running",
-            "message": "Starting app containers",
+            "operationId": previous.get("operationId"),
+            "progress": 5,
+            "phase": "preparing",
+            "message": "Preparing installation",
             "dataPreserved": True,
             "planDigest": approved,
         }
@@ -133,7 +141,9 @@ class ManagedInstaller:
                         "install_plan_changed", "Review the app installation again", 409
                     )
                 policy = self.manager.policy[package]
-                for item in recipe["containers"]:
+                job.update(phase="containers", progress=10, message="Starting app containers")
+                save_json(self.journal(package), job)
+                for index, item in enumerate(recipe["containers"]):
                     name = quote(item["name"], safe="")
                     container = await self.manager.docker(
                         "GET", "/containers/" + name + "/json", missing=True
@@ -185,6 +195,10 @@ class ManagedInstaller:
                         )
                     if not container or not container["State"].get("Running"):
                         await self.manager.docker("POST", "/containers/" + name + "/start")
+                    job.update(progress=10 + round(60 * (index + 1) / len(recipe["containers"])))
+                    save_json(self.journal(package), job)
+                job.update(phase="health", progress=75, message="Checking app health")
+                save_json(self.journal(package), job)
                 for _ in range(45):
                     rows = await self.manager.containers(package)
                     if len(rows) >= len(recipe["containers"]) and all(
@@ -206,6 +220,10 @@ class ManagedInstaller:
                         "App did not become healthy; app data was preserved",
                         409,
                     )
+                job.update(
+                    phase="registering", progress=95, message="Registering app and hub login"
+                )
+                save_json(self.journal(package), job)
                 self.manager.journal(package).unlink(missing_ok=True)
                 with self.svc.sessions.begin() as db:
                     app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
@@ -219,7 +237,12 @@ class ManagedInstaller:
                         db.add(app)
                     app.state = "running"
                 await self.manager.initialize()
-                job.update(state="succeeded", message="App installed and running")
+                job.update(
+                    state="succeeded",
+                    phase="complete",
+                    progress=100,
+                    message="App installed and running",
+                )
                 self.svc.events.record(
                     "app.installed", package, "Managed app installed; persistent data preserved"
                 )

@@ -3641,5 +3641,9 @@
   "App health check failed; app data was preserved": "Appens sundhedskontrol fejlede; appdata er bevaret",
   "App did not become healthy; app data was preserved": "Appen blev ikke klar; appdata er bevaret",
   "Review the app installation again": "Kontroller app-installationen igen",
-  "Existing app container ownership or image differs": "Den eksisterende appcontainers ejerskab eller image er anderledes"
+  "Existing app container ownership or image differs": "Den eksisterende appcontainers ejerskab eller image er anderledes",
+  "Preparing installation": "Klargør installation",
+  "Checking app health": "Kontrollerer appens status",
+  "Registering app and hub login": "Registrerer app og hub-login",
+  "Starting app containers": "Starter appens containere"
 }

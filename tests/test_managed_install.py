@@ -71,17 +71,22 @@ def test_install_reuses_approved_data_and_clears_removal_state(
         "State": {"Running": False},
     }
     calls = []
+    progress = []
 
     async def docker(method, path, missing=False, body=None):
         calls.append((method, path, body))
+        if installer.journal(PACKAGE).exists():
+            progress.append(installer.status(PACKAGE).get("progress", 0))
         if path.startswith("/containers/") and path.endswith("/json"):
             return deepcopy(container) if existing else None
         return {}
 
     monkeypatch.setattr(svc.managed_apps, "docker", docker)
-    monkeypatch.setattr(
-        svc.managed_apps, "containers", AsyncMock(return_value=[{"State": {"Running": True}}])
-    )
+    async def healthy_rows(package):
+        if installer.journal(PACKAGE).exists():
+            progress.append(installer.status(PACKAGE).get("progress", 0))
+        return [{"State": {"Running": True}}]
+    monkeypatch.setattr(svc.managed_apps, "containers", healthy_rows)
     svc.managed_apps.journal(PACKAGE).write_text(json.dumps({"state": "succeeded"}))
 
     async def run():
@@ -91,6 +96,10 @@ def test_install_reuses_approved_data_and_clears_removal_state(
 
     asyncio.run(run())
     assert installer.status(PACKAGE)["state"] == "succeeded"
+    assert installer.status(PACKAGE)["progress"] == 100
+    assert installer.status(PACKAGE)["phase"] == "complete"
+    assert 75 in progress
+    assert progress == sorted(progress)
     assert not svc.managed_apps.journal(PACKAGE).exists()
     assert not any(
         method == "DELETE" or path.startswith("/volumes/create") for method, path, _ in calls

@@ -480,3 +480,27 @@ for (const kind of ['mediaseed','mediavpn']) for (const width of [1440,320]) tes
  await expect(page.getByRole('button',{name:'Verify app installation',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+for (const width of [1440,320]) test(`installation progress persists and only completes after health at ${width}px`,async({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width,height:1000});
+ let state='idle',progress=0,phase='preparing',posts=0;
+ await page.route('**/api/v1/managed-install/**',async route=>{
+  if(route.request().method()==='POST') {
+   posts++;state='running';progress=75;phase='health';
+   return route.fulfill({json:{data:{state:'accepted',progress:0,phase:'preparing',operationId:'test-operation'}}});
+  }
+  return route.fulfill({json:{data:{planDigest:'a'.repeat(64),alreadyRunning:state==='succeeded',operation:{state,progress,phase,operationId:'test-operation'}}}});
+ });
+ await page.goto('/store/mediavpn');
+ await page.getByRole('button',{name:'Install MediaVPN',exact:true}).click();
+ const bar=page.getByRole('progressbar',{name:'Install MediaVPN',exact:true});
+ await expect(bar).toHaveAttribute('aria-valuenow','75');
+ await expect(page.locator('.operation-progress')).toContainText('Checking app health');
+ await page.reload();
+ await expect(bar).toHaveAttribute('aria-valuenow','75');
+ expect(posts).toBe(1);
+ state='succeeded';progress=100;phase='complete';
+ await expect(bar).toHaveAttribute('aria-valuenow','100',{timeout:7000});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

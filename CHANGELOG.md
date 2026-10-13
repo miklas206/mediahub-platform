@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show persisted, stage-based MediaSeed/MediaVPN installation progress, including preparation, container starts, health verification and registration. Keep progress on refresh and reach 100% only after verified completion.
+
 - Add host-approved, administrator/HTTPS/CSRF-protected installation and reinstall flows for independent MediaSeed and MediaVPN, including persistent progress, immutable image/ownership checks, retained data and registry/SSO restoration. Route Seedbox setup to the independent app instead of the legacy dedicated-Agent installer. Host preparation remains environment-specific; never promote beta recipes or credentials into main.
 
 ## 0.5.10

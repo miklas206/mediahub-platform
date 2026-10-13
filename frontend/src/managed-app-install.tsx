@@ -7,12 +7,19 @@ import { ServiceIcon } from "./service-icon";
 import { useData } from "./use-data";
 import { t, translateText } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
+import { OperationProgress, type OperationState } from "./operation-progress";
 import "./managed-app-setup.css";
 
 type Plan = {
   planDigest: string;
   alreadyRunning: boolean;
-  operation: { state: string; message?: string };
+  operation: {
+    state: string;
+    message?: string;
+    progress?: number;
+    phase?: string;
+    operationId?: string;
+  };
 };
 export function ManagedAppInstallPage({
   kind,
@@ -25,9 +32,49 @@ export function ManagedAppInstallPage({
   const { data, error, reload } = useData<Plan>(path);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
-  const running =
-    busy || ["accepted", "running"].includes(data?.operation.state || "");
-  const succeeded = data?.operation.state === "succeeded" && data.alreadyRunning;
+  const [submitted, setSubmitted] = useState<Plan["operation"] | null>(null);
+  const job =
+    submitted && data?.operation.operationId !== submitted.operationId
+      ? submitted
+      : data?.operation;
+  const running = busy || ["accepted", "running"].includes(job?.state || "");
+  const succeeded = !busy && job?.state === "succeeded" && data?.alreadyRunning;
+  const phases = ["preparing", "containers", "health", "registering"];
+  const phase = Math.max(0, phases.indexOf(job?.phase || "preparing"));
+  const labels = [
+    "Preparing installation",
+    "Starting app containers",
+    "Checking app health",
+    "Registering app and hub login",
+  ];
+  const operation: OperationState = {
+    title: t("Install {value0}", { value0: name }),
+    status: busy
+      ? "running"
+      : job?.state === "failed"
+        ? "error"
+        : succeeded
+          ? "success"
+          : "running",
+    progress: busy ? 0 : (job?.progress ?? (succeeded ? 100 : 5)),
+    message: busy
+      ? "Preparing installation"
+      : job?.message ||
+        (succeeded ? "App installed and running" : "Starting app containers"),
+    steps: labels.map((label, index) => ({
+      label,
+      state:
+        succeeded || index < phase
+          ? "complete"
+          : index === phase
+            ? job?.state === "failed"
+              ? "error"
+              : "running"
+            : "pending",
+    })),
+    details: [],
+    connectionLost: !!error && running,
+  };
   useEffect(() => {
     if (!running) return;
     const timer = window.setTimeout(reload, 2500);
@@ -40,8 +87,13 @@ export function ManagedAppInstallPage({
     if (!data) return;
     setBusy(true);
     setFailure("");
+    setSubmitted(null);
     try {
-      await api(path, "POST", { planDigest: data.planDigest });
+      setSubmitted(
+        await api<Plan["operation"]>(path, "POST", {
+          planDigest: data.planDigest,
+        }),
+      );
       reload();
     } catch (error) {
       setFailure((error as Error).message);
@@ -92,14 +144,9 @@ export function ManagedAppInstallPage({
             )}
           </NotificationPopup>
         )}
-        {running && (
-          <p role="status">
-            {t(
-              "Starting app containers. You can leave this page and return to follow progress.",
-            )}
-          </p>
+        {(running || succeeded || job?.state === "failed") && (
+          <OperationProgress operation={operation} />
         )}
-        {succeeded && <p role="status">{t("App installed and running")}</p>}
         <div className="button-row">
           <button
             className="primary"
