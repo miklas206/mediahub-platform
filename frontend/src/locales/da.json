@@ -3785,5 +3785,12 @@
   "This record points elsewhere; it was not changed": "Denne record peger et andet sted hen og blev ikke ændret",
   "This app is updated automatically with MediaHub Core.": "Denne app opdateres automatisk sammen med MediaHub Core.",
   "App preparation failed. The installed app may still use older code; its data was preserved.": "Klarg\u00f8ring af apps mislykkedes. Den installerede app kan stadig bruge \u00e6ldre kode; dens data er bevaret.",
-  "Retry app preparation": "Pr\u00f8v app-klarg\u00f8ring igen"
+  "Retry app preparation": "Pr\u00f8v app-klarg\u00f8ring igen",
+  "Downloading app image": "Henter app-image",
+  "Checking storage and preparing container": "Kontrollerer lager og klargør container",
+  "Creating app container": "Opretter app-container",
+  "Starting app container": "Starter app-container",
+  "Container started": "Container startet",
+  "App container did not stay running": "App-containeren stoppede igen efter opstart",
+  "Downloading and starting container": "Henter og starter container"
 }

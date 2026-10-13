@@ -309,19 +309,23 @@ class ContainerApps:
                     await self.request("POST", f"/containers/{plan['name']}/start")
                 self.operations.pop(app, None)
                 return {"state": "installed", "url": plan["url"], "dataPreserved": True}
-            self.operations[app] = {
-                "state": "installing",
-                "message": "Downloading and starting container",
-            }
+            self.install_progress(app, "preparing", 5, "Preparing installation")
             self.tasks[app] = asyncio.create_task(self.provision(app, plan))
             return {"state": "accepted", "url": plan["url"], "dataPreserved": True}
+
+    def install_progress(self, app, phase, progress, message, indeterminate=False):
+        self.operations[app] = {"state": "installing", "phase": phase,
+                                "progress": progress, "message": message,
+                                "indeterminate": indeterminate}
 
     async def provision(self, app, plan):
         try:
             async with self.locks[app]:
                 policy = self.policy()
                 repository = CONTAINER_APPS[app]["repository"]
+                self.install_progress(app, "download", 10, "Downloading app image", True)
                 image = await pull_latest(self.socket, repository)
+                self.install_progress(app, "storage", 65, "Checking storage and preparing container")
                 plan["container"]["Image"] = publisher_reference(image, repository)
                 plan["imageId"] = image["Id"]
                 current = await self.build_plan(
@@ -369,6 +373,7 @@ class ContainerApps:
                 if self.shared_vpn:
                     plan["container"] = await self.shared_vpn.prepare(app, plan["container"])
                 save_json(self.record_path(app), plan)
+                self.install_progress(app, "container", 80, "Creating app container")
                 await self.request(
                     "POST", "/containers/create?name=" + plan["name"], plan["container"]
                 )
@@ -376,13 +381,19 @@ class ContainerApps:
                 self.verify(inspected, plan)
                 plan["desiredRunning"] = True
                 save_json(self.record_path(app), plan)
+                self.install_progress(app, "start", 95, "Starting app container")
                 await self.request("POST", f"/containers/{plan['name']}/start")
-                self.operations[app] = {"state": "installed", "message": "Container started"}
-        except Exception:
-            self.operations[app] = {
-                "state": "failed",
-                "message": "Installation failed; persistent data retained",
-            }
+                inspected = await self.request("GET", f"/containers/{plan['name']}/json")
+                self.verify(inspected, plan)
+                if not inspected.get("State", {}).get("Running"):
+                    raise DomainError("container_not_running", "App container did not stay running", 409)
+                self.operations[app].update(state="installed", phase="complete", progress=100,
+                                            indeterminate=False, message="Container started")
+        except Exception as error:
+            operation = self.operations.setdefault(app, {})
+            operation.update(state="failed", indeterminate=False,
+                             message=error.message if isinstance(error, DomainError)
+                             else "Installation failed; persistent data retained")
 
     def verify(self, inspected, record):
         expected = record["container"]

@@ -101,6 +101,9 @@ class Operation(PublicModel):
     message: str | None = None
     startedAt: float | None = None
     finishedAt: float | None = None
+    phase: str | None = Field(default=None, max_length=40)
+    progress: int | None = Field(default=None, ge=0, le=100)
+    indeterminate: bool | None = None
 
 
 class RuntimeEvent(PublicModel):

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.27
+
+- Show installation progress for Jellyfin and the shared container-app installer immediately after acceptance and through server status after a page reload. Use an indeterminate bar during publisher-image download, followed by explicit storage, creation and startup phases.
+- Forward bounded progress fields through the public Agent status schema. Preserve the phase on failures and report 100 percent only after the created container is inspected as running; retain unknown application health until separately verified.
+
 ## 0.5.26
 
 - Fix automatic app preparation in unprivileged LXCs by inheriting the owned Core container's supplementary groups. Host evidence with an unmapped owner remains protected and readable through its approved group; no host file permissions change.

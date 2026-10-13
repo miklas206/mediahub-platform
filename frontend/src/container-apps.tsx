@@ -14,6 +14,7 @@ import type { InstalledAppInfo } from "./contracts";
 import { t, translateText } from "./i18n";
 import { ErrorBox, useLoad } from "./phase2";
 import { ServiceIcon } from "./service-icon";
+import { OperationProgress, type OperationState } from "./operation-progress";
 
 export const containerAppNames: Record<string, string> = {
   jellyfin: "Jellyfin",
@@ -40,12 +41,32 @@ type Preview = {
   url: string;
   mounts: { target: string; readOnly: boolean }[];
 };
-type Status = {
+export type ContainerAppStatus = {
   state: string;
   url?: string;
-  operation?: { state: string; message?: string };
+  operation?: { state: string; message?: string; phase?: string; progress?: number; indeterminate?: boolean };
   installation: Installation;
 };
+
+export function ContainerInstallProgress({app, status}: {app: string; status?: ContainerAppStatus}) {
+  const job = status?.operation;
+  if (!status || (status.state !== "installing" && !["installing", "installed", "failed"].includes(job?.state || ""))) return null;
+  const phases = ["preparing", "download", "storage", "container", "start"];
+  const labels = ["Preparing installation", "Downloading app image", "Checking storage and preparing container", "Creating app container", "Starting app container"];
+  const failed = job?.state === "failed";
+  const complete = job?.state === "installed";
+  const index = phases.indexOf(job?.phase || "download");
+  const operation: OperationState = {
+    title: t("Install {value0}", {value0: containerAppNames[app] || app}),
+    status: failed ? "error" : complete ? "success" : "running",
+    progress: complete ? 100 : job?.progress || 0,
+    indeterminate: !failed && !complete && (job?.indeterminate ?? job?.progress == null),
+    message: job?.message || "Downloading and starting container",
+    steps: labels.map((label, step) => ({label, state: complete || step < index ? "complete" : step === index ? failed ? "error" : "running" : "pending"})),
+    details: [],
+  };
+  return <OperationProgress operation={operation} />;
+}
 
 export function ContainerAppPage() {
   const { containerApp = "" } = useParams();
@@ -67,7 +88,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
-  const [status, setStatus] = useState<Status>();
+  const [status, setStatus] = useState<ContainerAppStatus>();
   const [refresh, setRefresh] = useState(0);
   const options = useLoad<Options>(
     `/container-apps/${app}/install-options?host=${encodeURIComponent(host)}`,
@@ -79,7 +100,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const report = await api<Status>(
+        const report = await api<ContainerAppStatus>(
           `/container-apps/${app}/status`,
           "GET",
           undefined,
@@ -136,6 +157,8 @@ export function ContainerAppSetup({ app }: { app: string }) {
         confirmedPlanDigest: preview.planDigest,
       });
       setAccepted(true);
+      setStatus({state: "installing", installation: preview.installation,
+        operation: {state: "installing", phase: "preparing", progress: 5, message: "Preparing installation"}});
       installed.reload();
       setRefresh((value) => value + 1);
     } catch (failure) {
@@ -185,6 +208,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
       {needsStatus && (
         <section className="phase-content" aria-label={t("Container status")}>
           <h2>{t("Container status")}</h2>
+          <ContainerInstallProgress app={app} status={status} />
           <p role="status">
             {translateText(
               status?.operation?.state === "failed"

@@ -195,8 +195,42 @@ def test_pull_failure_is_reported_without_creating_container(tmp_path, monkeypat
     monkeypatch.setattr("agent.container_apps.pull_latest", pull)
     asyncio.run(runtime.provision("radarr", plan))
     assert runtime.operations["radarr"]["state"] == "failed"
+    assert runtime.operations["radarr"]["phase"] == "download"
+    assert runtime.operations["radarr"]["progress"] == 10
+    assert runtime.operations["radarr"]["indeterminate"] is False
     runtime.request.assert_not_awaited()
     pull.assert_awaited_once()
+
+
+def test_download_progress_survives_public_status_forwarding(tmp_path, monkeypatch):
+    from mediahub.apps.remote_status import RemoteStatusCache
+
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    plan = asyncio.run(runtime.build_plan(spec))
+    runtime.request = AsyncMock()
+
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        async def pull(*args):
+            started.set()
+            await release.wait()
+            raise DomainError("pull_failed", "Image download failed", 503)
+        monkeypatch.setattr("agent.container_apps.pull_latest", pull)
+        task = asyncio.create_task(runtime.provision("jellyfin", plan))
+        await started.wait()
+        report = await runtime.status("jellyfin")
+        client = SimpleNamespace(request=AsyncMock(return_value=report))
+        forwarded = await RemoteStatusCache().get("test", client, "/v1/container-apps/jellyfin/status")
+        assert forwarded["operation"]["phase"] == "download"
+        assert forwarded["operation"]["progress"] == 10
+        assert forwarded["operation"]["indeterminate"] is True
+        runtime.request.assert_not_awaited()
+        release.set()
+        await task
+        assert runtime.operations["jellyfin"]["state"] == "failed"
+        assert runtime.operations["jellyfin"]["progress"] == 10
+
+    asyncio.run(scenario())
 
 
 def test_uninstall_failed_installation_only_forgets_registration(tmp_path):
@@ -258,7 +292,8 @@ def test_provision_records_ownership_before_creating_and_starting(tmp_path, monk
     asyncio.run(runtime.provision("radarr", plan))
     assert runtime.operations["radarr"]["state"] == "installed"
     assert runtime.record("radarr")["desiredRunning"] is True
-    assert calls[-1] == ("POST", "/containers/mediahub-radarr/start")
+    assert calls[-1] == ("GET", "/containers/mediahub-radarr/json")
+    assert runtime.operations["radarr"]["progress"] == 100
     pull.assert_awaited_once_with(runtime.socket, "linuxserver/radarr")
 
 
