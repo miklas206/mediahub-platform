@@ -1,4 +1,4 @@
-import { translateText, t } from "./i18n";
+import { translateText, t, useLanguage } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
 
 import { createPortal } from "react-dom";
@@ -23,6 +23,7 @@ export function AppUninstall({
   buttonClassName?: string;
   showIcon?: boolean;
 }) {
+  useLanguage();
   const [open, setOpen] = useState(app.state === "removing");
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {

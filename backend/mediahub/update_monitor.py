@@ -80,6 +80,7 @@ class UpdateMonitor:
             "installedVersion": result.get("installedVersion") or app.get("version"),
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
+            "checkStatus": "unsupported" if result.get("supported") is False else result.get("checkStatus") or ("checked" if latest else "unchecked"),
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
             **{
                 key: result[key]
@@ -166,6 +167,7 @@ class UpdateMonitor:
             {
                 "id": "mediahub-core",
                 "name": "MediaHub Core",
+                "checkStatus": "checked" if result.get("latestCommit") or result.get("latestVersion") else "unchecked",
                 "installedVersion": result.get("installedVersion"),
                 "latestVersion": result.get("latestCommit") or result.get("latestVersion"),
                 "updateAvailable": bool(result.get("updateAvailable")),
@@ -210,6 +212,7 @@ class UpdateMonitor:
                     {
                         "id": "mediahub-core",
                         "name": "MediaHub Core",
+                        "checkStatus": "checked" if platform.get("latestCommit") or platform.get("latestVersion") else "unchecked",
                         "installedVersion": platform.get("installedVersion"),
                         "latestVersion": platform.get("latestCommit")
                         or platform.get("latestVersion"),

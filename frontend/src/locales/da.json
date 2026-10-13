@@ -3627,5 +3627,6 @@
   "Internal": "Intern",
   "Proton port forwarding (NAT-PMP)": "Proton port-forwarding (NAT-PMP)",
   "VPN port {port}": "VPN-port {port}",
-  "Update app": "Opdatér app"
+  "Update app": "Opdatér app",
+  "Some components have not been checked or do not support automatic update checks": "Nogle komponenter er ikke kontrolleret eller understøtter ikke automatisk opdateringskontrol"
 }

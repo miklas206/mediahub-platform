@@ -83,7 +83,7 @@ type PlatformRelease = {
 };
 
 type UpdateItem = {
-  checkStatus?: "failed" | "deferred" | "checked";
+  checkStatus?: "failed" | "deferred" | "checked" | "unchecked" | "unsupported";
   stale?: boolean;
   checkedAt?: number | null;
   retryAt?: number | null;
@@ -986,7 +986,9 @@ export function UpdatesPage({
                     ? t(
                         "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected.",
                       )
-                    : t("All checked components are up to date")}
+                    : updateSummary.data.items.some(item => item.checkStatus === "unchecked" || item.checkStatus === "unsupported" || !item.latestVersion)
+                      ? t("Some components have not been checked or do not support automatic update checks")
+                      : t("All checked components are up to date")}
           </strong>
           {!!updateSummary.data?.notifications.length && (
             <button

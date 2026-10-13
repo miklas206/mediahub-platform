@@ -238,7 +238,7 @@ def test_deferred_source_stays_explicit_and_does_not_clear_alerts(logged_in):
     assert len(svc.updates.summary()["notifications"]) == 1
     asyncio.run(svc.updates.record_app(app, {"updateAvailable": False, "message": "Up to date"}))
     assert svc.updates.summary()["notifications"] == []
-    assert "checkStatus" not in svc.updates.summary()["items"][0]
+    assert svc.updates.summary()["items"][0]["checkStatus"] == "unchecked"
 
 
 def test_core_cooldown_keeps_last_verified_commit(logged_in, monkeypatch):
@@ -264,3 +264,12 @@ def test_core_cooldown_keeps_last_verified_commit(logged_in, monkeypatch):
     assert core["stale"] is True
     assert core["retryAt"] == 9999999999
     assert result["lastError"] is None
+
+
+def test_unsupported_and_unchecked_sources_are_not_reported_as_checked(logged_in):
+    svc = logged_in.app.state.services
+    app = {"id": "synthetic-app", "name": "Synthetic", "version": "managed"}
+    assert svc.updates._app_result(app, {"supported": False})["checkStatus"] == "unsupported"
+    assert svc.updates._app_result(app, {})["checkStatus"] == "unchecked"
+    asyncio.run(svc.updates.record_platform({"configured": False, "updateAvailable": False}))
+    assert svc.updates.summary()["items"][0]["checkStatus"] == "unchecked"

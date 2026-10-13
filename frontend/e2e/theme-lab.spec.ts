@@ -437,3 +437,25 @@ for (const width of [1440, 390, 320]) test(`MediaVPN setup card retains padding 
   }
   expect(errors).toEqual([]);
 });
+
+for (const width of [1440, 390, 320]) test(`themed removal content remains inside modal at ${width}px`, async ({page}) => {
+  await mockHub(page,true);
+  await page.setViewportSize({width,height:1000});
+  for (const [name] of themes) {
+    await page.goto('/settings?section=Appearance');
+    await page.locator('.theme-choice').filter({hasText:name}).click();
+    await page.getByRole('button',{name:'Save',exact:true}).click();
+    await page.goto('/');
+    await page.getByRole('button',{name:'Uninstall: Jellyfin',exact:true}).click();
+    const modal=page.getByRole('dialog',{name:'Remove Jellyfin',exact:true});
+    await expect(modal).toContainText('Media files and app data will be kept');
+    const inside=await modal.evaluate(el=>{
+      const r=el.getBoundingClientRect();
+      return el.matches(':modal') && el.scrollWidth<=el.clientWidth && [...el.querySelectorAll('h3,p,button')].every(child=>{
+        const b=child.getBoundingClientRect();return b.left>=r.left+12 && b.right<=r.right-12;
+      });
+    });
+    expect(inside).toBe(true);
+    await page.keyboard.press('Escape');
+  }
+});
