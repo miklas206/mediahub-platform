@@ -31,7 +31,7 @@ def test_stopped_source_and_completed_initializer_do_not_hide_healthy_vpn_client
 
 @pytest.mark.parametrize(
     "version,preparation,status",
-    [("0.1.1", "ready", "checked"), (None, "failed", "failed"), ("0.1.0", "ready", "unchecked")],
+    [("0.1.2", "ready", "checked"), (None, "failed", "failed"), ("0.1.1", "ready", "unchecked"), ("0.1.0", "ready", "unchecked")],
 )
 def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     version, preparation, status
@@ -49,7 +49,7 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     )
     adapter = ManagedAdapter(manager, "org.mediahub.mediaseed")
     checked = asyncio.run(adapter.updateCheck())
-    assert checked["latestVersion"] == "0.1.1"
+    assert checked["latestVersion"] == "0.1.2"
     assert checked["installedVersion"] == version
     assert checked["checkStatus"] == status
     assert not checked[

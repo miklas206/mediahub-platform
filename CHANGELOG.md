@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.30
+
+- Bundle MediaSeed 0.1.2 with RSS storage-location selection and existing-folder browsing, including mount capacity and Unicode folder names. Persist the location on each feed and use the approved destination for RSS categories and torrent imports.
+- Validate feed destinations when saving, enabling and importing; block unavailable/read-only targets without falling back to local disk. Preserve legacy feed paths and existing torrent data. Refresh browser asset URLs so the updated form loads after upgrading.
+
 ## 0.5.29
 
 - Add optional GPU discovery/selection to the Proxmox installation guide. Share only approved render/NVIDIA nodes, stage matching NVIDIA host driver libraries read-only and prepare the guest Docker NVIDIA runtime without changing host kernel drivers.
