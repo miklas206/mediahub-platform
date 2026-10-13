@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.24
+
+- Replace Cloudflare tunnel creation/connector/route controls with read-only tunnel inventory and VPN-bound DNS creation. Reject new tunnel creation through the API; retain existing resources and pause legacy scheduled ingress synchronization.
+- Create DNS-only A/AAAA records from verified MediaVPN profile public IPs, with automatic IP-change reconciliation, per-record opt-out, conflict checks and safe recovery after uncertain creation. Never accept a target IP from the browser or overwrite unrelated records.
+- Show required DNS/tunnel read permissions and explain that DNS does not open inbound app ports or encode VPN forwarding ports. Keep automatic record/domain discovery and allow DNS work without tunnel-read permission.
+
 ## 0.5.23
 
 - Configure MediaVPN with the actual managed MediaSeed Compose project and bundle MediaVPN 0.1.2. Resolve app and torrent services by verified project/service labels instead of hard-coded preview container names.

@@ -1,65 +1,51 @@
 ﻿import { useCallback, useEffect, useState } from "react";
-import { Cloud, Download, Link2, Plus, RefreshCw } from "lucide-react";
+import { Cloud, Plus, RefreshCw } from "lucide-react";
 import "./cloudflare.css";
 import { api } from "./api";
 import { Panel } from "./phase2";
 import { NotificationPopup } from "./notification-popup";
 import { t, translateText, useLanguage } from "./i18n";
-
-type Route = {
-  id: string;
-  hostname: string;
-  packageId: string;
-  tunnelId: string;
-  autoSync: boolean;
-  lastApplied: string | null;
-  status: string;
-  message: string;
-};
-type Tunnel = { id: string; name: string; remote?: boolean };
-type RecordRow = {
-  id: string;
-  zoneId: string;
-  name: string;
-  type: string;
-  content: string;
-  proxied: boolean;
-};
 type Management = {
   configured: boolean;
   accountId: string;
-  tunnels: Tunnel[];
-  routes: Route[];
-  apps: { packageId: string; name: string }[];
+  vpn: {
+    message: string | null;
+    profiles: {
+      id: string;
+      name: string;
+      publicIp: string | null;
+      type: string | null;
+      ready: boolean;
+      forwardedPort: number | null;
+    }[];
+  };
+  vpnRecords: {
+    id: string;
+    hostname: string;
+    profileId: string;
+    content: string | null;
+    type: string | null;
+    autoSync: boolean;
+    status: string;
+    message: string;
+    forwardedPort?: number | null;
+  }[];
   discovery?: {
     zones: { id: string; name: string }[];
-    records: RecordRow[];
-    tunnels: Tunnel[];
-    issues: {
-      resource: string;
-      permission: string;
-      message: string;
-      code: string;
+    records: {
+      id: string;
+      zoneId: string;
+      name: string;
+      type: string;
+      content: string;
     }[];
+    tunnels: { id: string; name: string; remote: boolean }[];
+    issues: { resource: string; permission: string; message: string }[];
     complete: boolean;
     checkedAt: number;
-    apps: {
-      packageId: string;
-      name: string;
-      origin: string | null;
-      message: string;
-    }[];
   };
 };
 const endpoint = "/cloudflare/manage";
-const labels: Record<string, string> = {
-  mediahub: "mediahub",
-  "org.mediahub.mediaseed": "seed",
-  "org.mediahub.mediavpn": "vpn",
-  "org.mediahub.plex": "plex",
-  "org.mediahub.jellyfin": "jellyfin",
-};
-
 export function CloudflareManagementPanel({
   onConfigured,
 }: {
@@ -69,11 +55,9 @@ export function CloudflareManagementPanel({
   const [data, setData] = useState<Management>();
   const [account, setAccount] = useState("");
   const [token, setToken] = useState("");
-  const [tunnel, setTunnel] = useState("");
-  const [existingTunnel, setExistingTunnel] = useState("");
   const [zone, setZone] = useState("");
-  const [record, setRecord] = useState("");
-  const [app, setApp] = useState("mediahub");
+  const [profile, setProfile] = useState("");
+  const [label, setLabel] = useState("vpn");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -106,35 +90,7 @@ export function CloudflareManagementPanel({
     try {
       setData(await api<Management>(endpoint + path, method, body));
       setMessage(success);
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-  const download = async (id: string) => {
-    setBusy(true);
-    setError("");
-    try {
-      const auth = await api<{ csrf: string }>("/auth/me");
-      const response = await fetch(
-        "/api/v1" + endpoint + "/tunnels/" + id + "/token",
-        {
-          method: "POST",
-          headers: { "X-MediaHub-CSRF": auth.csrf },
-          credentials: "same-origin",
-        },
-      );
-      if (!response.ok)
-        throw new Error(t("Could not download connector token"));
-      const url = URL.createObjectURL(await response.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cloudflared-token.txt";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (path === "/credentials") setToken("");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -144,32 +100,19 @@ export function CloudflareManagementPanel({
   const discovery = data?.discovery;
   const selectedZone =
     discovery?.zones.find((row) => row.id === zone) || discovery?.zones[0];
-  const selectedTunnel =
-    data?.tunnels.find((row) => row.id === tunnel) || data?.tunnels[0];
+  const profiles = data?.vpn?.profiles || [];
+  const selectedProfile =
+    profiles.find((row) => row.id === profile) || profiles[0];
+  const dnsIssues =
+    discovery?.issues.filter((row) => row.resource !== "tunnels") || [];
   const records =
     discovery?.records.filter((row) => row.zoneId === selectedZone?.id) || [];
-  const availableTunnels =
-    discovery?.tunnels.filter(
-      (row) =>
-        row.remote && !data?.tunnels.some((saved) => saved.id === row.id),
-    ) || [];
-  const selectedApp = discovery?.apps.find((row) => row.packageId === app);
-  const generatedHostname = selectedZone
-    ? labels[app] + "." + selectedZone.name
-    : "";
-  const compatible = (row: RecordRow) =>
-    row.type === "CNAME" &&
-    row.proxied &&
-    row.content.replace(/\.$/, "") === selectedTunnel?.id + ".cfargotunnel.com";
-  const selectedRecord = records.find((row) => row.id === record);
-  const generatedConflict = records.some(
-    (row) => row.name === generatedHostname && !compatible(row),
-  );
+  const tunnels = discovery?.tunnels || [];
   return (
-    <Panel title={t("Manage Cloudflare tunnels")}>
+    <Panel title={t("Cloudflare DNS and VPN")}>
       <p className="muted">
         {t(
-          "Choose your domains, DNS records and apps. MediaHub discovers addresses and follows local IP and port changes automatically.",
+          "Create DNS records using a verified MediaVPN public IP. Existing Cloudflare tunnels are shown read-only.",
         )}
       </p>
       {error && (
@@ -194,9 +137,7 @@ export function CloudflareManagementPanel({
               "PUT",
               { accountId: account, token },
               "Cloudflare account connected",
-            ).then((ok) => {
-              if (ok) setToken("");
-            });
+            );
           }}
         >
           <label>
@@ -239,30 +180,15 @@ export function CloudflareManagementPanel({
           </li>
           <li>
             {t(
-              "Read DNS records: Zone > DNS > Read or Edit. Publishing and synchronizing requires Edit.",
+              "DNS records require Zone > DNS > Edit. Viewing existing tunnels only requires Account > Cloudflare Tunnel > Read.",
             )}
           </li>
           <li>
             {t(
-              "Read tunnels: Account > Cloudflare Tunnel > Read or Edit. Creating tunnels, publishing routes and installing connectors requires Edit.",
-            )}
-          </li>
-          <li>
-            {t(
-              "Apps on other servers need a connected MediaHub Agent. Install the connector on MediaHub to use its prepared HTTPS certificate automatically.",
-            )}
-          </li>
-          <li>
-            {t(
-              "VPN integration needs no Proton password or VPN private key in Cloudflare. MediaHub follows the local app web address, not the VPN public IP or torrent forwarding port.",
+              "MediaVPN must have a running, verified profile. Its public IP is fetched automatically; no manual IP or VPN private key is needed.",
             )}
           </li>
         </ul>
-        <p className="muted">
-          {t(
-            "Read access is checked when discovering resources. Write access is checked when you perform an action. A successful read does not verify Edit permission.",
-          )}
-        </p>
         <a
           href="https://dash.cloudflare.com/profile/api-tokens"
           target="_blank"
@@ -275,12 +201,6 @@ export function CloudflareManagementPanel({
         <>
           <div className="runtime-toolbar">
             <strong>{t("API connected")}</strong>
-            {discovery?.checkedAt && (
-              <small className="muted">
-                {t("Last checked")}:{" "}
-                {new Date(discovery.checkedAt * 1000).toLocaleTimeString()}
-              </small>
-            )}
             <button
               disabled={busy}
               onClick={() =>
@@ -305,30 +225,38 @@ export function CloudflareManagementPanel({
               </small>
             </div>
           ))}
-          {discovery && !discovery.complete && (
-            <p className="muted">
-              {t(
-                "Discovery is incomplete. Previously fetched records may be shown; publishing is disabled until access is restored.",
-              )}
-            </p>
+          <h3>{t("Create VPN DNS record")}</h3>
+          <p className="muted">
+            {t(
+              "DNS points to the VPN public IP; it does not open an app port. A and AAAA records cannot store a forwarding port. The service must already be reachable through the VPN.",
+            )}
+          </p>
+          {data.vpn?.message && (
+            <p className="muted">{translateText(data.vpn.message)}</p>
           )}
-          {discovery?.complete && !discovery.zones.length && (
-            <p>
-              {t(
-                "No domains are accessible in this account. Check the account and the token's selected zones.",
-              )}
-            </p>
-          )}
-          <div className="cloudflare-management-form">
+          <form
+            className="cloudflare-management-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void change(
+                "/vpn-dns",
+                "POST",
+                {
+                  zoneId: selectedZone?.id,
+                  label,
+                  profileId: selectedProfile?.id,
+                },
+                "VPN DNS request saved. Check its synchronization status below.",
+              );
+            }}
+          >
             <label>
               {t("Domain")}
               <select
+                required
+                disabled={!discovery?.zones.length || busy}
                 value={selectedZone?.id || ""}
-                disabled={busy || !discovery?.zones.length}
-                onChange={(e) => {
-                  setZone(e.target.value);
-                  setRecord("");
-                }}
+                onChange={(e) => setZone(e.target.value)}
               >
                 {!discovery?.zones.length && (
                   <option value="">{t("No accessible domains")}</option>
@@ -340,7 +268,114 @@ export function CloudflareManagementPanel({
                 ))}
               </select>
             </label>
+            <label>
+              {t("Record name")}
+              <input
+                required
+                aria-label={t("Record name")}
+                value={label}
+                pattern="[A-Za-z0-9][A-Za-z0-9.-]*"
+                maxLength={100}
+                onChange={(e) => setLabel(e.target.value)}
+              />
+              <small>
+                {label}.{selectedZone?.name || "..."}
+              </small>
+            </label>
+            <label>
+              {t("VPN profile")}
+              <select
+                required
+                disabled={busy || !profiles.length}
+                value={selectedProfile?.id || ""}
+                onChange={(e) => setProfile(e.target.value)}
+              >
+                {!profiles.length && (
+                  <option value="">{t("No VPN profiles available")}</option>
+                )}
+                {profiles.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                    {row.ready
+                      ? " - " + row.publicIp
+                      : " (" + t("Not verified") + ")"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div>
+              <small>{t("Automatic DNS target")}</small>
+              <p>
+                {selectedProfile?.publicIp
+                  ? selectedProfile.type + " - " + selectedProfile.publicIp
+                  : t(
+                      "Start and verify the selected MediaVPN profile before publishing DNS",
+                    )}
+              </p>
+            </div>
+            <button
+              disabled={
+                busy ||
+                !selectedZone ||
+                !selectedProfile?.ready ||
+                !!dnsIssues.length
+              }
+              type="submit"
+            >
+              <Plus size={16} />
+              {t("Create DNS record")}
+            </button>
+          </form>
+          <h3>{t("VPN DNS records")}</h3>
+          <div className="cloudflare-profile-list">
+            {(data.vpnRecords || []).map((row) => (
+              <article key={row.id}>
+                <div>
+                  <strong>{row.hostname}</strong>
+                  <small>
+                    {row.type || "DNS"} - {row.content || t("Pending")}
+                  </small>
+                  <p>{translateText(row.message)}</p>
+                  {row.forwardedPort && (
+                    <small>
+                      {t("VPN forwarding port")}: {row.forwardedPort} (
+                      {t("not stored in DNS")})
+                    </small>
+                  )}
+                </div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={row.autoSync}
+                    disabled={busy}
+                    onChange={(e) =>
+                      void change(
+                        "/vpn-dns/" + row.id,
+                        "PUT",
+                        { autoSync: e.target.checked },
+                        "Automatic synchronization updated",
+                      )
+                    }
+                  />
+                  {t("Follow VPN IP")}
+                </label>
+              </article>
+            ))}
           </div>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void change(
+                "/sync",
+                "POST",
+                {},
+                "VPN DNS synchronization checked",
+              )
+            }
+          >
+            <RefreshCw size={16} />
+            {t("Synchronize now")}
+          </button>
           <details open>
             <summary>
               {t("Existing DNS records")} ({records.length})
@@ -362,255 +397,39 @@ export function CloudflareManagementPanel({
               <p className="muted">{t("No records found for this domain.")}</p>
             )}
           </details>
-          <div className="cloudflare-management-form">
-            {!!availableTunnels.length && (
-              <>
-                <label>
-                  {t("Existing tunnel")}
-                  <select
-                    value={existingTunnel || availableTunnels[0].id}
-                    onChange={(e) => setExistingTunnel(e.target.value)}
-                  >
-                    {availableTunnels.map((row) => (
-                      <option key={row.id} value={row.id}>
-                        {row.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  disabled={busy || !discovery?.complete}
-                  onClick={() =>
-                    void change(
-                      "/tunnels/" +
-                        (existingTunnel || availableTunnels[0].id) +
-                        "/adopt",
-                      "POST",
-                      {},
-                      "Existing tunnel selected. Unrelated routes were preserved.",
-                    )
-                  }
-                >
-                  {t("Use selected tunnel")}
-                </button>
-              </>
-            )}
-            <button
-              disabled={busy}
-              onClick={() =>
-                void change(
-                  "/tunnels",
-                  "POST",
-                  { name: "MediaHub" },
-                  "Tunnel created. Connect a cloudflared connector to bring it online.",
-                )
-              }
-            >
-              <Plus size={16} />
-              {t("Create tunnel")}
-            </button>
-          </div>
-          <div className="cloudflare-profile-list">
-            {data.tunnels.map((item) => (
-              <article key={item.id}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <small>{item.id}</small>
-                </div>
-                <button disabled={busy} onClick={() => void download(item.id)}>
-                  <Download size={16} />
-                  {t("Download connector token")}
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void change(
-                      "/tunnels/" + item.id + "/install-connector",
-                      "POST",
-                      {},
-                      "Connector started on the MediaHub host",
-                    )
-                  }
-                >
-                  <Download size={16} />
-                  {t("Install connector on MediaHub")}
-                </button>
-              </article>
-            ))}
-          </div>
-          {!!data.tunnels.length && (
-            <form
-              className="cloudflare-management-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void change(
-                  "/routes/discovered",
-                  "POST",
-                  {
-                    tunnelId: selectedTunnel?.id,
-                    zoneId: selectedZone?.id,
-                    packageId: app,
-                    recordId: record || null,
-                  },
-                  "App route saved. Check its synchronization status below.",
-                );
-              }}
-            >
-              <label>
-                {t("Tunnel")}
-                <select
-                  value={selectedTunnel?.id || ""}
-                  onChange={(e) => {
-                    setTunnel(e.target.value);
-                    setRecord("");
-                  }}
-                >
-                  {data.tunnels.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("App")}
-                <select
-                  value={app}
-                  onChange={(e) => {
-                    setApp(e.target.value);
-                    setRecord("");
-                  }}
-                >
-                  {data.apps.map((row) => (
-                    <option key={row.packageId} value={row.packageId}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("Public hostname")}
-                <select
-                  value={record}
-                  onChange={(e) => setRecord(e.target.value)}
-                >
-                  <option value="" disabled={generatedConflict}>
-                    {generatedHostname} ({t("Automatic")})
-                  </option>
-                  {records
-                    .filter(
-                      (row) =>
-                        row.type === "CNAME" ||
-                        row.type === "A" ||
-                        row.type === "AAAA",
-                    )
-                    .map((row) => (
-                      <option
-                        key={row.id}
-                        value={row.id}
-                        disabled={!compatible(row)}
-                      >
-                        {row.name} - {row.type}
-                        {!compatible(row)
-                          ? " (" + t("Points elsewhere") + ")"
-                          : ""}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                disabled={
-                  busy ||
-                  !discovery?.complete ||
-                  !selectedApp?.origin ||
-                  !selectedZone ||
-                  (!record && generatedConflict) ||
-                  (!!record && (!selectedRecord || !compatible(selectedRecord)))
-                }
-              >
-                <Link2 size={16} />
-                {t("Link app and publish hostname")}
-              </button>
+          <details open>
+            <summary>
+              {t("Existing tunnels (read-only)")} ({tunnels.length})
+            </summary>
+            <div className="cloudflare-profile-list">
+              {tunnels.map((row) => (
+                <article key={row.id}>
+                  <div>
+                    <strong>{row.name}</strong>
+                    <small>{row.id}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {!tunnels.length && (
               <p className="muted">
-                {selectedApp?.origin ||
-                  translateText(
-                    selectedApp?.message ||
-                      "Install or connect this app in MediaHub first.",
-                  )}
+                {t("No tunnels found or tunnel read access is missing.")}
               </p>
-              {generatedConflict && (
-                <p className="muted">
-                  {t(
-                    "The automatic hostname already points elsewhere. Choose a matching tunnel record; existing records are preserved.",
-                  )}
-                </p>
-              )}
-            </form>
-          )}
-          <div className="cloudflare-profile-list">
-            {data.routes.map((route) => (
-              <article key={route.id}>
-                <div>
-                  <strong>{route.hostname}</strong>
-                  <small>
-                    {
-                      data.apps.find(
-                        (item) => item.packageId === route.packageId,
-                      )?.name
-                    }{" "}
-                    {"\u2192"} {route.lastApplied || t("Pending")}
-                  </small>
-                  <span>{translateText(route.message)}</span>
-                </div>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={route.autoSync}
-                    disabled={busy}
-                    onChange={(e) =>
-                      void change(
-                        "/routes/" + route.id,
-                        "PUT",
-                        { autoSync: e.target.checked },
-                        "Automatic synchronization updated",
-                      )
-                    }
-                  />
-                  {t("Follow app IP and port")}
-                </label>
-              </article>
-            ))}
-          </div>
-          <div className="runtime-toolbar">
-            <button
-              disabled={busy}
-              onClick={() =>
-                void change(
-                  "/sync",
-                  "POST",
-                  {},
-                  "Route synchronization checked",
-                )
-              }
-            >
-              <RefreshCw size={16} />
-              {t("Synchronize now")}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() =>
-                void change(
-                  "/credentials",
-                  "DELETE",
-                  undefined,
-                  "Cloudflare disconnected. Remote tunnels and DNS records were kept.",
-                )
-              }
-            >
-              {t("Disconnect account")}
-            </button>
-          </div>
+            )}
+          </details>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void change(
+                "/credentials",
+                "DELETE",
+                undefined,
+                "Cloudflare disconnected. Remote tunnels and DNS records were kept.",
+              )
+            }
+          >
+            {t("Disconnect account")}
+          </button>
         </>
       )}
     </Panel>

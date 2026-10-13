@@ -16,6 +16,7 @@ from pydantic import Field, SecretStr
 from sqlalchemy import select
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from mediahub import cloudflare_vpn_dns
 from mediahub.api import administrator, result, services
 from mediahub.contracts import StrictModel
 from mediahub.db import InstalledApp, Setting
@@ -245,6 +246,7 @@ class CloudflareManagement:
             self.save(state)
             self.discovery_at = 0.0
             await self.discover_locked()
+            await cloudflare_vpn_dns.refresh_profiles(self, force=True)
             return self.public()
 
     async def pages(self, path, params=None, per_page=50):
@@ -265,6 +267,8 @@ class CloudflareManagement:
 
     async def discover(self, force=False):
         async with self.lock:
+            if self.configured():
+                await cloudflare_vpn_dns.refresh_profiles(self, force=force)
             now = time.monotonic()
             # Explicit refresh can bypass the five-minute cache, at most once per 30 seconds.
             if self.configured() and (
@@ -344,7 +348,7 @@ class CloudflareManagement:
             "tunnels",
             "/accounts/" + state["accountId"] + "/cfd_tunnel",
             {"is_deleted": "false"},
-            "Account > Cloudflare Tunnel > Read / Edit",
+            "Account > Cloudflare Tunnel > Read",
         )
         discovery["tunnels"] = (
             previous.get("tunnels", [])
@@ -428,6 +432,8 @@ class CloudflareManagement:
         return {
             **self.state(),
             "configured": self.configured(),
+            "vpn": getattr(self, "vpn_snapshot", {"profiles": [], "message": None}),
+            "vpnRecords": self.state().get("vpnRecords", []),
             "apps": [{"packageId": key, "name": value} for key, value in APPS.items()],
         }
 
@@ -756,10 +762,24 @@ class CloudflareManagement:
             self.monitor_routes(state)
             return self.public()
 
+    async def sync_vpn_dns(self, force=False):
+        async with self.lock:
+            if not self.configured():
+                return self.public()
+            state = self.state()
+            rows = state.get("vpnRecords", [])
+            if rows:
+                await cloudflare_vpn_dns.refresh_profiles(self, force=force)
+                for row in rows:
+                    if force or row["autoSync"]:
+                        await cloudflare_vpn_dns.reconcile(self, row, force=force)
+                        self.save(state)
+            return self.public()
+
     async def poll(self):
         while True:
             try:
-                await self.sync()
+                await self.sync_vpn_dns()
             except (DomainError, OSError, ValueError):
                 pass
             await asyncio.sleep(60)
@@ -800,7 +820,27 @@ async def disconnect(request: Request):
 
 @router.post("/tunnels")
 async def create(body: NewTunnel, request: Request):
-    return result(await services(request).cloudflare_management.create(body.name))
+    raise DomainError(
+        "tunnel_read_only", "Tunnels are read-only in MediaHub; create VPN DNS records instead", 405
+    )
+
+
+@router.post("/vpn-dns")
+async def create_vpn_dns(body: cloudflare_vpn_dns.VPNRecord, request: Request):
+    return result(await cloudflare_vpn_dns.create(services(request).cloudflare_management, body))
+
+
+@router.put("/vpn-dns/{record_id}")
+async def vpn_dns_mode(record_id: str, body: RouteMode, request: Request):
+    manager = services(request).cloudflare_management
+    async with manager.lock:
+        state = manager.state()
+        row = next((row for row in state.get("vpnRecords", []) if row["id"] == record_id), None)
+        if not row:
+            raise DomainError("dns_not_found", "VPN DNS record not found", 404)
+        row["autoSync"] = body.autoSync
+        manager.save(state)
+        return result(manager.public())
 
 
 @router.post("/dns")
@@ -857,4 +897,4 @@ async def mode(route_id: str, body: RouteMode, request: Request):
 
 @router.post("/sync")
 async def sync(request: Request):
-    return result(await services(request).cloudflare_management.sync(force=True))
+    return result(await services(request).cloudflare_management.sync_vpn_dns(force=True))
