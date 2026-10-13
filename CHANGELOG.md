@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.11
+
+- Center the installation boxes and their headings consistently across MediaVPN, MediaSeed, Plex, container apps, Cloudflare, FjordHub and the legacy Seedbox guide.
+- Show unchecked and unsupported update sources explicitly, preserve account-language updates in removal dialogs, and retain environment-specific update channels during source promotion.
+
 - Show persisted, stage-based MediaSeed/MediaVPN installation progress, including preparation, container starts, health verification and registration. Keep progress on refresh and reach 100% only after verified completion.
 
 - Add host-approved, administrator/HTTPS/CSRF-protected installation and reinstall flows for independent MediaSeed and MediaVPN, including persistent progress, immutable image/ownership checks, retained data and registry/SSO restoration. Route Seedbox setup to the independent app instead of the legacy dedicated-Agent installer. Host preparation remains environment-specific; never promote beta recipes or credentials into main.

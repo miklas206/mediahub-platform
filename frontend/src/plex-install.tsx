@@ -74,7 +74,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
     }
   };
   return (
-    <div className="stack">
+    <div className="stack app-install-page">
       {!embedded && <Link to="/apps">{t("← Apps")}</Link>}
       <header>
         <p className="eyebrow">{t("YOUR MEDIA, YOUR SERVER")}</p>

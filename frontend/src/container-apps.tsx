@@ -166,7 +166,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
     options.data.slots.every((slot) => !slot.required || storage[slot.id]);
   const running = status?.state === "running";
   return (
-    <div className="stack">
+    <div className="stack app-install-page">
       <Link to="/">{t("Back to MediaHub")}</Link>
       <header>
         <h1>

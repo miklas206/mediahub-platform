@@ -504,3 +504,22 @@ for (const width of [1440,320]) test(`installation progress persists and only co
  await expect(bar).toHaveAttribute('aria-valuenow','100',{timeout:7000});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+for (const width of [1440,320]) test(`all app setup boxes are centered at ${width}px`, async({page})=>{
+ await mockHub(page);
+ await page.setViewportSize({width,height:1000});
+ await page.route('**/api/v1/**/install-options*',async route=>route.fulfill({json:{data:{hostId:'local',port:8096,slots:[],storage:[]}}}));
+ await page.route('**/api/v1/seedbox/wizard/targets',async route=>route.fulfill({json:{data:{bound:false,hosts:[]}}}));
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ for (const path of ['/store/mediavpn','/store/mediaseed','/apps/install/plex','/apps/install/jellyfin','/apps/install/prowlarr','/apps/install/radarr','/apps/install/sonarr','/apps/install/autobrr','/store/cloudflare','/store/fjordhub','/apps/install/seedbox']) {
+  await page.goto(path);
+  const setup=page.locator('.managed-app-setup,.app-install-page,.store-install-page,.seedbox-wizard').first();
+  await expect(setup, path).toBeVisible();
+  const box=(await setup.boundingBox())!;
+  const main=(await page.locator('.main-content').boundingBox())!;
+  expect(Math.abs(box.x+box.width/2-main.x-main.width/2),path).toBeLessThanOrEqual(2);
+  expect(box.width,path).toBeLessThanOrEqual(960);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),path).toBe(true);
+ }
+ expect(errors).toEqual([]);
+});

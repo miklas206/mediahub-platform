@@ -1,4 +1,10 @@
-.managed-app-setup { max-width: 960px; }
+/* Keep every app setup flow centered within the shared workspace. */
+:is(.managed-app-setup, .app-install-page, .store-install-page, .seedbox-wizard) {
+  width: 100%; max-width: 960px; min-width: 0; margin-inline: auto;
+}
+.main-content:has(.managed-app-setup, .app-install-page, .store-install-page, .seedbox-wizard) > :is(.page-heading, .hub-back-link) {
+  width: min(100%, 960px); margin-inline: auto;
+}
 .managed-app-title { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 26px; }
 .managed-app-title > svg { flex: none; }
 .managed-app-setup .phase-content { display: grid; gap: 16px; overflow-wrap: anywhere; }
