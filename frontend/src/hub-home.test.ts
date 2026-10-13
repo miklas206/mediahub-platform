@@ -62,6 +62,13 @@ const input = {
   deployment: null,
 };
 
+it("recognizes managed MediaSeed as the installed Seedbox without an external address", () => {
+  const managed = { ...seedbox, id: "managed-seed", packageId: "org.mediahub.mediaseed", name: "MediaSeed", removable: true };
+  const entry = buildHubEntries({ ...input, apps: [managed] }).find(row => row.id === "org.mediahub.seedbox");
+  expect(entry).toMatchObject({configured:true,path:managed.detailPath,settingsPath:"/app-settings/org.mediahub.mediaseed",removableApp:managed});
+  expect(entry?.statusLabel).not.toBe("Not set up");
+});
+
 describe("primary MediaHub app hub", () => {
   it("opens a saved external address and keeps app settings accessible", () => {
     const entries = buildHubEntries({ ...input, apps: [{ ...seedbox, externalUrl: "https://seed.example.com" }] });

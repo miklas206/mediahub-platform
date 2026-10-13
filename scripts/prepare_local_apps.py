@@ -39,8 +39,14 @@ def private(path, content, uid=0, gid=0):
         os.chown(path, uid, gid)
 
 
+def bundle_root(source):
+    # Checkout layout remains compatible with old source archive allowlists;
+    # the image places the same reviewed files at /app/bundled.
+    return source / "docker/bundled" if (source / "docker/bundled").is_dir() else source / "bundled"
+
+
 def fingerprint(source=SOURCE):
-    files = sorted(p for p in (source / "bundled").rglob("*") if p.is_file())
+    files = sorted(p for p in bundle_root(source).rglob("*") if p.is_file())
     return hashlib.sha256(
         b"".join(
             p.relative_to(source).as_posix().encode()
@@ -152,7 +158,7 @@ def provision(root, lan, source=SOURCE):
         folder = projects / kind
         folder.mkdir(mode=0o700, exist_ok=True)
         context = folder / ("source-" + digest[:16])
-        shutil.copytree(source / "bundled" / kind, context, dirs_exist_ok=True)
+        shutil.copytree(bundle_root(source) / kind, context, dirs_exist_ok=True)
         package = "org.mediahub." + kind
         entry = policy.get(package)
         project = entry["project"] if entry else "mediahub-" + kind

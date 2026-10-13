@@ -179,7 +179,10 @@ export function buildHubEntries({
         }
       }
       const installed = apps?.find(
-        (app) => app.packageId === entry.id && !app.isMock,
+        (app) =>
+          (app.packageId === entry.id ||
+            (entry.id === "org.mediahub.seedbox" && app.packageId === "org.mediahub.mediaseed")) &&
+          !app.isMock,
       );
       const fjordHub = entry.id === "org.mediahub.fjordhub";
       const integration = fjordHub
@@ -218,7 +221,7 @@ export function buildHubEntries({
         category: definition.category,
         configured,
         removableApp: installed?.removable ? installed : undefined,
-        settingsPath: installed ? `/app-settings/${entry.id}` : undefined,
+        settingsPath: installed ? `/app-settings/${installed.packageId}` : undefined,
         external: installed?.externalUrl ? true : undefined,
         path:
           installed?.externalUrl ||

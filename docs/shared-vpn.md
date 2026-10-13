@@ -13,9 +13,18 @@ management key can register relays. The MediaSeed integration key cannot.
 
 ## Installation and updates
 
-Reviewed first-party build sources are included under `bundled/` with a source
+Reviewed first-party build sources are included under `docker/bundled/` with a source
 manifest. No private repository token is needed on the server. Refresh this
 snapshot with `scripts/sync_bundled_apps.py` when publishing first-party changes.
+
+Keep the checkout bundle at `docker/bundled/`: older installed Core updaters retain
+the `docker/` source root but discard new top-level directories. The Core image
+copies this reviewed bundle to `/app/bundled` and the two host preparation helpers
+from `docker/runtime-scripts/` to `/app/scripts/`. These helper copies must match
+their reviewed `scripts/` originals; regression tests enforce parity and verify
+every Core Docker COPY input survives the legacy archive normalizer. Do not fix
+this by disabling archive path filtering or by downloading mutable app source
+during an update.
 Runtime databases, keys, profiles and downloads must never be copied there.
 
 The Linux installer prepares local HTTPS app origins, certificates issued by the

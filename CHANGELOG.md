@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.17
+
+- Fix Core source updates from already installed versions: place reviewed app bundles and image runtime helper inputs under the existing `docker/` archive root. Older updaters no longer strip required Docker COPY inputs, while runtime bundle paths and media/data preservation remain unchanged.
+- Verify every Core Docker COPY input survives legacy archive normalization and enforce runtime helper/source bundle parity.
+- Recognize installed managed MediaSeed entries on the Seedbox home card even before an external app URL is configured; preserve actual unknown/unhealthy status and use the correct app settings ID.
+
 ## 0.5.16
 
 - Discover Cloudflare domains, existing DNS records and remotely managed tunnels automatically after API connection, with complete bounded pagination, five-minute caching and permission-specific recovery guidance.

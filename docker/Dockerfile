@@ -42,8 +42,9 @@ COPY pyproject.toml README.md LICENSE ./
 COPY backend/ ./backend/
 COPY agent/ ./agent/
 COPY apps/ ./apps/
-COPY scripts/ ./scripts/
-COPY bundled/ ./bundled/
+# Keep all build inputs under roots retained by already-installed source updaters.
+COPY docker/runtime-scripts/ ./scripts/
+COPY docker/bundled/ ./bundled/
 COPY alembic.ini ./
 COPY --from=frontend /build/frontend/dist ./frontend/dist
 USER 10001
