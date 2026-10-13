@@ -285,7 +285,12 @@ def smoke_command(grant, image, token):
         "256",
         "--memory",
         "1g",
+        "--read-only",
     ]
+    # Override the image's declared VOLUME directories so Docker never creates
+    # anonymous disk volumes for this disposable encoding test.
+    for path in ("/tmp", "/config", "/cache"):
+        command += ["--tmpfs", path + ":rw,nosuid,nodev,noexec,size=64m,uid=10001,gid=1000"]
     for device in grant["devices"]:
         command += ["--device", device + ":" + device + ":rw"]
     for gid in sorted({str(Path(p).stat().st_gid) for p in grant["devices"]}):

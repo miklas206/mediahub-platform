@@ -7,7 +7,7 @@ import pytest
 from mediahub.errors import DomainError
 from test_gpu_installation import INTEL, NVIDIA, gpu_runtime
 
-from agent.gpu_setup import GPUSetup, encode_arguments
+from agent.gpu_setup import GPUSetup, encode_arguments, isolated_filesystem
 
 
 @pytest.mark.parametrize("grant", [INTEL, NVIDIA])
@@ -31,13 +31,16 @@ def test_real_encoder_scoped_devices_and_cleanup(tmp_path, monkeypatch, grant, e
                 "Config": {"Labels": body["Labels"]},
                 "Image": image,
                 "HostConfig": copy.deepcopy(body["HostConfig"]),
-                "Mounts": [],
+                "Mounts": [
+                    {"Type": "tmpfs", "Destination": path} for path in body["HostConfig"]["Tmpfs"]
+                ],
             }
             assert body["Cmd"] == encode_arguments(gpu.grant(grant["id"]))
             assert body["Entrypoint"] == ["/usr/lib/jellyfin-ffmpeg/ffmpeg"]
             assert body["HostConfig"]["NetworkMode"] == "none"
             assert body["HostConfig"]["ReadonlyRootfs"]
             assert body["HostConfig"]["Mounts"] == []
+            assert set(body["HostConfig"]["Tmpfs"]) == {"/tmp", "/config", "/cache"}
             assert body["HostConfig"]["GroupAdd"] == ["104"]
             assert {d["PathOnHost"] for d in body["HostConfig"]["Devices"]} == set(grant["devices"])
             return {"Id": name}
@@ -65,6 +68,24 @@ def test_real_encoder_scoped_devices_and_cleanup(tmp_path, monkeypatch, grant, e
     if exit_code:
         assert "GPU encoding failed" in gpu.report["message"]
     assert events[-1][0] == "DELETE"
+
+
+@pytest.mark.parametrize("change", ["volume", "bind", "unknown-tmpfs", "changed-options"])
+def test_test_filesystem_rejects_disk_mounts_and_changed_tmpfs(change):
+    spec = {
+        "HostConfig": {"Tmpfs": {"/config": "size=64m", "/cache": "size=64m", "/tmp": "size=64m"}}
+    }
+    row = {"HostConfig": copy.deepcopy(spec["HostConfig"]), "Mounts": []}
+    assert isolated_filesystem(row, spec)
+    if change == "volume":
+        row["Mounts"] = [{"Type": "volume", "Destination": "/config"}]
+    elif change == "bind":
+        row["HostConfig"]["Binds"] = ["/media:/config"]
+    elif change == "unknown-tmpfs":
+        row["Mounts"] = [{"Type": "tmpfs", "Destination": "/other"}]
+    else:
+        row["HostConfig"]["Tmpfs"]["/config"] = "size=8g"
+    assert not isolated_filesystem(row, spec)
 
 
 def test_unapproved_gpu_and_busy_test_rejected(tmp_path, monkeypatch):

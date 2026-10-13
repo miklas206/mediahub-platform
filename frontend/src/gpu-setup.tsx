@@ -57,11 +57,11 @@ export function gpuPreparationCommand(ctid: string, repair = false) {
   if (!/^[1-9][0-9]{2,8}$/.test(ctid)) return "";
   return `(
   set -e
-  install -d -m 700 /root/mediahub-gpu-tools-v0.5.34
+  install -d -m 700 /root/mediahub-gpu-tools-v0.5.35
   for script in setup-existing-gpu.py proxmox_gpu.py gpu_setup.py; do
-    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.34/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.34/$script"
+    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.35/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.35/$script"
   done
-  python3 /root/mediahub-gpu-tools-v0.5.34/setup-existing-gpu.py --ctid ${ctid}${repair ? " --repair-video-access" : ""}
+  python3 /root/mediahub-gpu-tools-v0.5.35/setup-existing-gpu.py --ctid ${ctid}${repair ? " --repair-video-access" : ""}
 )`;
 }
 

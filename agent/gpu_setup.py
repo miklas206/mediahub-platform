@@ -40,6 +40,19 @@ def encode_arguments(grant):
     return args + ["-c:v", encoder, "-frames:v", "10", "-an", "-f", "null", "-"]
 
 
+def isolated_filesystem(row, spec):
+    host = row.get("HostConfig", {})
+    temporary = spec["HostConfig"]["Tmpfs"]
+    return (
+        host.get("Tmpfs") == temporary
+        and not host.get("Binds")
+        and all(
+            mount.get("Type") == "tmpfs" and mount.get("Destination") in temporary
+            for mount in row.get("Mounts") or []
+        )
+    )
+
+
 class GPUSetup:
     def __init__(self, apps):
         self.apps = apps
@@ -183,7 +196,8 @@ class GPUSetup:
                     "MemorySwap": 1024**3,
                     "PidsLimit": 256,
                     "Tmpfs": {
-                        "/tmp": f"rw,nosuid,nodev,noexec,size=64m,uid={policy.uid},gid={policy.gid}"
+                        path: f"rw,nosuid,nodev,noexec,size=64m,uid={policy.uid},gid={policy.gid}"
+                        for path in ("/tmp", "/config", "/cache")
                     },
                     "LogConfig": {
                         "Type": "json-file",
@@ -206,8 +220,7 @@ class GPUSetup:
                 or not verify_gpu(row, spec)
                 or row.get("HostConfig", {}).get("Privileged") is not False
                 or row.get("HostConfig", {}).get("NetworkMode") != "none"
-                or row.get("Mounts")
-                or row.get("HostConfig", {}).get("Binds")
+                or not isolated_filesystem(row, spec)
             ):
                 raise DomainError(
                     "gpu_test_ownership",

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.35
+
+- Fix the in-app GPU test rejecting the official Jellyfin image's automatically created `/config` and `/cache` volumes. Override those paths with bounded tmpfs in both UI and CLI tests, retaining the ban on disk volumes, bind mounts and unapproved mounts.
+- Verify tmpfs configuration explicitly and cover Docker's inspected tmpfs mounts in regression tests. No app media or credentials are mounted, and no permanent test volumes are created.
+
 ## 0.5.34
 
 - Limit NVIDIA video grants to the selected GPU, control and UVM devices. Administrative capability and display nodes are not required for ordinary NVENC/CUDA and can be root-only after NVIDIA runtime initialization.

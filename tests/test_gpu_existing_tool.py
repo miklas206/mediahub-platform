@@ -114,6 +114,13 @@ def test_smoke_test_uses_selected_gpu_without_media_network_or_cpu_fallback(
     assert command[command.index("--user") + 1] == "10001:1000"
     assert command[command.index("-c:v") + 1] == encoder
     assert "--privileged" not in command
+    assert "--read-only" in command
+    temporary = [
+        command[index + 1].split(":")[0]
+        for index, value in enumerate(command)
+        if value == "--tmpfs"
+    ]
+    assert temporary == ["/tmp", "/config", "/cache"]
     assert "--volume" not in command and "-v" not in command and "--mount" not in command
     assert command[command.index("-i") + 1].startswith("testsrc2=")
     assert command[-2:] == ["null", "-"]
