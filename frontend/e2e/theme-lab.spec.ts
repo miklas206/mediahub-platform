@@ -232,7 +232,13 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   await expect(page.locator(".overview-activity")).toContainText("Synthetic activity");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path:`test-results/reference-overview-${width}.png`, animations:"disabled" });
-  await page.goto("/settings?section=Appearance");
+  await page.goto("/settings?section=General");
+  await expect(page.getByRole("combobox", {name:"Language",exact:true})).toBeVisible();
+  await expect(page.locator(".appearance-entry")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:`test-results/general-clean-${width}.png`,animations:"disabled"});
+  await page.getByRole("tab", {name:"Appearance",exact:true}).click();
+  await expect(page.getByRole("heading", {name:"Appearance",exact:true})).toBeVisible();
   await page.locator(".theme-light-choice").click();
   await expect(page.locator("html")).toHaveAttribute("data-appearance-mode","light");
   await page.getByRole("button",{name:"Save colors",exact:true}).click();

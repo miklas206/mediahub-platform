@@ -1,5 +1,4 @@
 import { ReferenceOverview } from "./reference-overview";
-import { ArrowRight } from "lucide-react";
 import { serviceSnapshots } from "./service-snapshots";
 import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
@@ -1046,7 +1045,6 @@ function Shell({
                                 <LanguageSettings compact />
                               </div>
                             </LayoutGroup>
-                            <Link className="primary appearance-entry" to="/settings?section=Appearance">{t("Appearance")}<ArrowRight size={16}/></Link>
                           </LayoutGroup>
                         }
                         appearance={<AppearanceSettings compact />}
