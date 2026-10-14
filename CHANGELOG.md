@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.12
+
+- Add the missing administrator-scoped MediaVPN SSO endpoint for Plex remote access. Preserve actionable prerequisite errors through the actual app-to-hub request path.
+- Keep requested DNS records and Origin Rule hostnames when an app is temporarily unavailable during updates or restarts. Restore forwarding automatically when the app returns; explicit route removal, disabling and confirmed uninstall still clean up owned resources.
+- Report unfinished Plex account setup explicitly before applying remote-access settings.
+
 ## 0.6.11
 
 - Bundle MediaVPN 0.2.4. Replace the generic Settings tab with separate Cloudflare and Appearance tabs, and remove the duplicate settings button from the header.

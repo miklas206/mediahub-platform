@@ -46,6 +46,12 @@ async def configure(runtime, shared, body):
                     409,
                 )
         identity = await control.plex_get(policy, "/identity")
+        if body.enabled and identity.get("claimed") == "0":
+            raise DomainError(
+                "plex_remote_settings_unavailable",
+                "Plex remote-access settings are unavailable; finish Plex account setup first",
+                409,
+            )
         machine = identity.get("machineIdentifier")
         if not machine:
             raise DomainError(

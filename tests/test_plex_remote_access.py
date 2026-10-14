@@ -88,6 +88,23 @@ def test_browser_cannot_supply_lan_or_extra_target():
 
 
 @run_async
+async def test_unclaimed_plex_returns_account_setup_requirement(runtime):
+    app, _, _ = runtime
+    app.control.plex_get = AsyncMock(
+        return_value=ET.Element("MediaContainer", machineIdentifier="owned-plex", claimed="0")
+    )
+    shared = SimpleNamespace(status=AsyncMock(return_value={"enabled": True, "ready": True}))
+    with pytest.raises(DomainError) as error:
+        await configure(
+            app, shared, RemoteAccessChoice(enabled=True, publicPort=50001, publicIp="8.8.8.8")
+        )
+    assert error.value.code == "plex_remote_settings_unavailable"
+    assert "account setup" in error.value.message
+    assert app.control.plex_get.await_count == 1
+    app.checkpoint.assert_not_called()
+
+
+@run_async
 async def test_hub_requires_distinct_port_and_public_identity():
     client = SimpleNamespace(
         request=AsyncMock(

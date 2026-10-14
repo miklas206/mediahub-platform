@@ -16,7 +16,7 @@ from mediahub.db import Session, Setting, User
 from mediahub.errors import DomainError
 from mediahub.shared_vpn import AppChoice, GatewayChoice
 from mediahub.vpn_gateway import Credentials as GatewayCredentials
-from mediahub.vpn_gateway import GatewayConfig
+from mediahub.vpn_gateway import GatewayConfig, PlexPortChoice
 
 router = APIRouter()
 
@@ -169,3 +169,9 @@ async def web_gateway_reconcile(request: Request):
     vpn_administrator(request)
     services(request).vpn_gateway.schedule()
     return result(services(request).vpn_gateway.snapshot())
+
+
+@router.put("/sso/vpn-gateway/plex-port", status_code=202)
+async def web_gateway_plex_port(body: PlexPortChoice, request: Request):
+    vpn_administrator(request)
+    return result(await services(request).vpn_gateway.configure_plex_port(body.enabled))

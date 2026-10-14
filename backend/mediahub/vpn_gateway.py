@@ -28,7 +28,7 @@ from mediahub.api import administrator, result, services
 from mediahub.app_settings import saved_address
 from mediahub.cloudflare_management import API, hostname
 from mediahub.contracts import StrictModel
-from mediahub.db import Setting
+from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
 from mediahub.plex_forwarding import PlexForwarding
 
@@ -946,6 +946,11 @@ class VPNGateway:
                 return self.snapshot()
             state.update(issues=[], checks=[], checkedAt=int(time.time()))
             try:
+                with self.svc.sessions() as db:
+                    removed_packages = set(db.scalars(select(InstalledApp.package_id).where(
+                        InstalledApp.state == "uninstalled", InstalledApp.is_mock.is_(False)
+                    )))
+                removed_ids = {row["id"] for row in state["routes"] if row["packageId"] in removed_packages}
                 active, machine_routes = [], []
                 for row in state["routes"]:
                     if not state["enabled"]:
@@ -958,6 +963,15 @@ class VPNGateway:
                         active.append(row)
                     except DomainError as error:
                         row.update(status="blocked", message=error.message, httpsVerified=False)
+                # An app restart is not a request to remove its hostname. If
+                # every selected app is unavailable, preserve the last machine
+                # configuration and all owned DNS until inspection can recover.
+                if (state["enabled"] and not active
+                        and not removed_ids and not state.get("retired")
+                        and any(row["id"] not in removed_ids for row in state["routes"])):
+                    self.gateway = self.sanitized_gateway(await self.vpn())
+                    self.save(state)
+                    return self.snapshot()
                 payload = {
                     "enabled": bool(state["enabled"] and active),
                     "profileId": state["profileId"],
@@ -1003,7 +1017,7 @@ class VPNGateway:
                 active_ids = {row["id"] for row in active}
                 cleanup = [
                     *state.get("retired", []),
-                    *(row for row in state["routes"] if row["id"] not in active_ids),
+                    *(row for row in state["routes"] if not state["enabled"] or row["id"] in removed_ids),
                 ]
                 for row in cleanup:
                     try:
@@ -1016,7 +1030,8 @@ class VPNGateway:
                 state["retired"] = [
                     row for row in state.get("retired", []) if row["id"] in state["records"]
                 ]
-                zones = {row["zoneId"] for row in active}
+                selected_routes = [row for row in state["routes"] if row["id"] not in removed_ids] if state["enabled"] else []
+                zones = {row["zoneId"] for row in selected_routes}
                 for zone_id in set(state["rules"]) - zones:
                     try:
                         await self.sync_rule(state, zone_id, [], None)
@@ -1045,7 +1060,7 @@ class VPNGateway:
                     for row in self.gateway.get("routes", [])
                 }
                 for zone_id in zones:
-                    rows = [row for row in active if row["zoneId"] == zone_id]
+                    rows = [row for row in selected_routes if row["zoneId"] == zone_id]
                     try:
                         await self.zone(zone_id)
                         mode = await self.cf("GET", "/zones/" + zone_id + "/settings/ssl")
@@ -1062,6 +1077,8 @@ class VPNGateway:
                         )
                         for row in rows:
                             await self.sync_record(state, row, address)
+                            if row["id"] not in active_ids:
+                                continue  # Keep DNS while the app is temporarily unavailable.
                             self.app_address(row)
                             certificate = certificates.get(row["id"], False)
                             probe = (

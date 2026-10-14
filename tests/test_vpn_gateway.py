@@ -175,6 +175,40 @@ def mutations(remote):
     return [call for call in remote["calls"] if call[0] != "GET"]
 
 
+@pytest.mark.parametrize("all_offline", [False, True])
+def test_app_restart_keeps_dns_selections_and_recovers_without_readding(logged_in, gateway, monkeypatch, all_offline):
+    service, remote = gateway
+    origin = AsyncMock(return_value={"upstream": "http://192.168.1.50:18765"})
+    monkeypatch.setattr(service, "upstream", origin)
+    body = {**BODY, "routes": [*BODY["routes"], {"packageId": "org.mediahub.mediavpn", "zoneId": ZONE, "label": "vpn"}]}
+    configured = configure(logged_in, service, body)
+    ids = [row["id"] for row in configured["routes"]]
+    records = copy.deepcopy(remote["records"])
+    rules = copy.deepcopy(remote["ruleset"])
+    before_calls = len(remote["calls"])
+    before_machine = len(remote["machineCalls"])
+
+    async def offline(package):
+        if all_offline or package == "org.mediahub.mediavpn":
+            raise DomainError("app_unavailable", "Synthetic app restarting", 409)
+        return {"upstream": "http://192.168.1.50:18765"}
+
+    origin.side_effect = offline
+    status = logged_in.portal.call(service.reconcile, True)
+    assert [row["id"] for row in status["routes"]] == ids
+    assert status["routes"][1]["status"] == "blocked"
+    assert remote["records"] == records
+    assert remote["ruleset"] == rules
+    assert not any(method == "DELETE" for method, _, _ in remote["calls"][before_calls:])
+    if all_offline:
+        assert not any(method == "PUT" for method, _ in remote["machineCalls"][before_machine:])
+    origin.side_effect = None
+    recovered = logged_in.portal.call(service.reconcile, True)
+    assert [row["id"] for row in recovered["routes"]] == ids
+    assert all(row["status"] == "healthy" for row in recovered["routes"])
+    assert remote["records"] == records
+
+
 def test_gateway_provisions_owned_a_and_individual_origin_rule_and_verifies_https(
     logged_in, gateway
 ):
