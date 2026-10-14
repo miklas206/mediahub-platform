@@ -151,10 +151,13 @@ test("profiles render while the gateway request is still pending", async ({
   await expect(page.locator("#profiles h2")).toHaveText("Mediahub", {
     timeout: 2000,
   });
+  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(0);
   await page.locator("#tab-apps").click();
   await expect(page.locator(".gateway-loading")).toBeVisible();
   release();
   await expect(page.locator(".compact-route")).toBeVisible();
+  await page.locator("#tab-connection").click();
+  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(0);
 });
 test("Plex port choice sends only an enable flag and stays pending until verified", async ({
   page,

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.10
+
+- Bundle MediaVPN 0.2.3. Remove the legacy fixed app-connection summary that flashed before gateway loading completed. Keep app connection controls in the Apps and domains tab, including the compatibility fallback.
+- Refresh localization asset versions so new tab and detail labels use the selected account language.
+
 ## 0.6.9
 
 - Redirect the removed standalone Apps page to the hub home and send app return links directly home.
