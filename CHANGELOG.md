@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.5
+
+- Let old completed Plex/Seedbox removal receipts be confirmed again to reset settings preserved by previous versions.
+
 ## 0.6.4
 
 - Reset app settings, accounts, VPN profiles and owned configuration when uninstalling MediaVPN, MediaSeed, Plex and managed container apps. Keep media and downloaded files.

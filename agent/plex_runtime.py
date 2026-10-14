@@ -79,6 +79,8 @@ class PlexRuntime:
                     "configurationReset": True,
                 }
         operation = self.operation if self.operation.get("action") == "remove-runtime" else {}
+        if operation.get("state") == "succeeded" and not record.get("configurationReset"):
+            operation = {}  # Older receipts preserved settings; offer the new reset.
         return {
             "state": operation.get("state", "ready"),
             "installationId": installation_id,
