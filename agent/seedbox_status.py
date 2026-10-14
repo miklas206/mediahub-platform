@@ -167,6 +167,7 @@ class SeedboxStatus:
                             )
                 torrent = await inspect("torrent")
                 report["qBittorrent"]["running"] = torrent["State"]["Running"]
+                report["startedAt"] = torrent["State"].get("StartedAt") if torrent["State"]["Running"] else None
                 report["qBittorrent"]["oomKilled"] = bool(torrent["State"].get("OOMKilled"))
                 report["qBittorrent"]["memoryLimitMiB"] = (
                     torrent["HostConfig"].get("Memory", 0) // 1024**2

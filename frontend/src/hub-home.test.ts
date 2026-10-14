@@ -245,3 +245,37 @@ it("opens the installed Plex server and uses its own installation settings path"
     settingsPath: "/apps/plex-installation-unique",
   });
 });
+
+it("includes other installed catalog apps with status settings and both addresses", () => {
+  const app = {
+    ...seedbox,
+    id: "radarr-runtime",
+    packageId: "org.mediahub.radarr",
+    localUrl: "http://192.168.1.20:7878",
+    externalUrl: "https://radarr.example.com",
+    startedAt: "2026-10-15T00:00:00Z",
+    running: true,
+  };
+  const entries = buildHubEntries({
+    ...input,
+    catalog: [
+      ...catalog,
+      {
+        id: app.packageId,
+        name: "Radarr",
+        description: "Movies",
+        category: "Media",
+        availability: "available",
+      } as CatalogApp,
+    ],
+    apps: [app],
+  });
+  expect(entries.find((entry) => entry.id === app.packageId)).toMatchObject({
+    name: "Radarr",
+    settingsPath: "/app-settings/org.mediahub.radarr",
+    localUrl: app.localUrl,
+    externalUrl: app.externalUrl,
+    startedAt: app.startedAt,
+    running: true,
+  });
+});

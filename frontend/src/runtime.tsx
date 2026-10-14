@@ -1,3 +1,4 @@
+import {AppSettingsPage} from "./app-settings";
 import { useConfirm } from "./confirmation-dialog";
 import { translateText, getLocale, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
@@ -1065,6 +1066,7 @@ export function AppRuntimePage() {
   };
   const extraCards = (
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
+      {data?.view === "plex" && <AppSettingsPage packageId="org.mediahub.plex" embedded/>}
       {data?.view === "plex" && <PlexAccountSetup />}
       {data?.view === "plex" && appId && <AppVPNDomainPanel appId={appId} />}
       {data?.view === "cloudflare" && (

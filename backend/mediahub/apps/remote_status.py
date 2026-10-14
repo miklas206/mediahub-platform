@@ -124,6 +124,7 @@ class ControlStatus(PublicModel):
 
 
 class RuntimeStatus(PublicModel):
+    startedAt: str | None = None
     observedAt: float
     installationId: str
     hostId: str

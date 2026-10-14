@@ -4105,5 +4105,10 @@
   "Plex did not confirm account linking. Get a fresh claim token and retry.": "Plex bekræftede ikke kontotilknytningen. Hent et frisk tilknytningstoken, og prøv igen.",
   "Plex account linking failed; media and configuration were preserved": "Plex-kontotilknytningen mislykkedes; medier og opsætning blev bevaret",
   "Start Plex before linking your account": "Start Plex, før du tilknytter din konto",
-  "Plex account status could not be verified": "Plex-kontoens status kunne ikke bekræftes"
+  "Plex account status could not be verified": "Plex-kontoens status kunne ikke bekræftes",
+  "App status": "Appstatus",
+  "App addresses": "App-adresser",
+  "Domain address": "Domæneadresse",
+  "App uptime": "Driftstid",
+  "{days}d": "{days}d"
 }

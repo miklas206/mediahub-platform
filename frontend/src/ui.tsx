@@ -604,7 +604,7 @@ function Shell({
         ? activeApp?.name || "App runtime"
         : storePage
           ? "App Store"
-          : "Home");
+          : location.pathname.startsWith("/app-settings/") ? "App status" : "Home");
   return (
     <div className="app-shell">
       {open && (
@@ -898,7 +898,7 @@ function Shell({
         <ShellNavigation placement="dock" visible={visibleNavigation}/>
         <main className="main-content">
           {(runtimePage || windowsSharePage || storePage || location.pathname.startsWith("/integrations/")) && <Link className="hub-back-link" to="/">← {t("Back to MediaHub")}</Link>}
-          {!runtimePage && location.pathname !== "/" && (
+          {!runtimePage && !location.pathname.startsWith("/app-settings/") && location.pathname !== "/" && (
             <div className="page-heading">
               <div>
                 <span className="eyebrow">

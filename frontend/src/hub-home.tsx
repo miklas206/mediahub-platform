@@ -14,6 +14,7 @@ import { appStatusLabel } from "./seedbox-status";
 import { t } from "./i18n";
 import { useData } from "./use-data";
 import "./hub-home.css";
+import { AppAddressLinks, AppUptime } from "./app-uptime";
 import { useAppearance, type ThemeStyle, type Appearance } from "./appearance";
 
 export function themedAppUrl(
@@ -89,6 +90,11 @@ export type HubEntry = {
   external?: boolean;
   settingsPath?: string;
   removableApp?: InstalledAppInfo;
+  localUrl?: string | null;
+  externalUrl?: string | null;
+  startedAt?: string | null;
+  running?: boolean | null;
+  observedAt?: number;
 };
 
 export type MediaSeedStatus = {
@@ -129,11 +135,20 @@ export function buildHubEntries({
     .filter(
       (entry) =>
         entry.availability === "available" &&
-        entry.id !== "org.mediahub.windows-share" &&
-        Object.hasOwn(hubApps, entry.id),
+        ![
+          "org.mediahub.windows-share",
+          "org.mediahub.cloudflared",
+          "org.mediahub.mediavpn",
+          "org.mediahub.mediaseed",
+        ].includes(entry.id),
     )
     .map((entry) => {
-      const definition = hubApps[entry.id as keyof typeof hubApps];
+      const definition = hubApps[entry.id as keyof typeof hubApps] || {
+        name: entry.name,
+        description: entry.description,
+        category: entry.category || "Apps",
+        setup: "/apps/install/" + entry.id.replace("org.mediahub.", ""),
+      };
       if (
         entry.id === "org.mediahub.seedbox" &&
         mediaseed?.configured &&
@@ -299,9 +314,40 @@ export function buildHubEntries({
       action: "Set up",
     });
   }
-  return entries.sort(
-    (left, right) => Number(right.configured) - Number(left.configured),
-  );
+  return entries
+    .map((entry) => {
+      const app = apps?.find(
+        (row) =>
+          !row.isMock &&
+          (row.packageId === entry.id ||
+            (entry.id === "org.mediahub.seedbox" &&
+              row.packageId === "org.mediahub.mediaseed")),
+      );
+      const separate =
+        entry.id === "org.mediahub.seedbox"
+          ? mediaseed
+          : entry.id === "org.mediahub.mediavpn"
+            ? mediavpn
+            : undefined;
+      const integration =
+        entry.id === "org.mediahub.fjordhub"
+          ? integrations.find((row) => row.enabled)
+          : undefined;
+      return {
+        ...entry,
+        settingsPath:
+          entry.settingsPath ||
+          (entry.configured
+            ? `/app-settings/${app?.packageId || entry.id}`
+            : undefined),
+        localUrl: app?.localUrl || separate?.url || integration?.baseUrl,
+        externalUrl: app?.externalUrl,
+        running: app?.running,
+        startedAt: app?.startedAt,
+        observedAt: app?.observedAt,
+      };
+    })
+    .sort((left, right) => Number(right.configured) - Number(left.configured));
 }
 
 export function HubHome({
@@ -504,6 +550,20 @@ export function HubHome({
                   </div>
                 </div>
                 <p className="hub-card-description">{t(entry.description)}</p>
+                {entry.configured && entry.id !== "healthcheck" && (
+                  <div className="hub-card-runtime">
+                    <AppAddressLinks
+                      localUrl={entry.localUrl}
+                      externalUrl={entry.externalUrl}
+                      packageId={entry.id}
+                    />
+                    <AppUptime
+                      startedAt={entry.startedAt}
+                      running={entry.running}
+                      observedAt={entry.observedAt}
+                    />
+                  </div>
+                )}
                 <div className="hub-card-footer">
                   {entry.external ? (
                     <a

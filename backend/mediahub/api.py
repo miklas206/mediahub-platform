@@ -175,7 +175,9 @@ async def _apps_with_health(svc):
 
     async def with_health(app):
         async with slots:
-            return {**app, "health": (await svc.apps.health(app["id"])).model_dump()}
+            from mediahub.app_settings import runtime_summary
+            summary = await runtime_summary(svc, app)
+            return {**app, **summary, "health": (await svc.apps.health(app["id"])).model_dump()}
 
     return await asyncio.gather(*(with_health(app) for app in svc.apps.list() if app.get("packageId") != "org.mediahub.cloudflared"))
 
@@ -190,7 +192,7 @@ async def apps(
     listing = [app for app in svc.apps.list() if app["packageId"] != "org.mediahub.cloudflared"]
     from mediahub.app_settings import saved_address
 
-    listing = [{**app, "externalUrl": saved_address(svc, app["packageId"])} for app in listing]
+    listing = [{**app, "externalUrl": saved_address(svc, app["packageId"]), "localUrl": svc.config.operator_app_urls.get(app["packageId"])} for app in listing]
     registered = {app["packageId"] for app in listing}
     listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
     for package_id, origin in svc.config.sso_app_urls.items():
@@ -201,6 +203,7 @@ async def apps(
         origin = saved_address(svc, package_id) or origin
         if package_id not in registered:
             connected = {"id": package_id, "packageId": package_id, "name": {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}[package_id], "version": "connected", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"}
+            connected.update(localUrl=svc.config.operator_app_urls.get(package_id), externalUrl=saved_address(svc, package_id))
             if include_health:
                 from mediahub.mediaseed_api import available
 
@@ -208,6 +211,17 @@ async def apps(
                 healthy = bool(private_origin) and await available(private_origin, svc.config.agent_ca_file)
                 connected["health"] = {"status": "healthy" if healthy else "unknown", "summary": "App available" if healthy else "Check connection", "checks": []}
             listing.append(connected)
+    if "org.mediahub.fjordhub" not in registered:
+        from sqlalchemy import select
+
+        from mediahub.db import ExternalIntegration
+        with svc.sessions() as db:
+            integration = db.scalar(select(ExternalIntegration).where(ExternalIntegration.provider == "fjordhub", ExternalIntegration.enabled.is_(True)))
+            if integration:
+                snapshot = integration.snapshot or {}
+                listing.append({"id": "org.mediahub.fjordhub", "packageId": "org.mediahub.fjordhub", "name": "FjordHub", "version": "connected", "state": "connected", "isMock": False,
+                    "localUrl": integration.base_url, "externalUrl": saved_address(svc, "org.mediahub.fjordhub"), "detailPath": f"/integrations/{integration.id}",
+                    **({"health": {"status": "healthy" if snapshot.get("status") == "online" and not snapshot.get("stale") else "unknown", "summary": "Connected" if snapshot.get("status") == "online" and not snapshot.get("stale") else "Status unavailable", "checks": []}} if include_health else {})})
     if user["role"] != "administrator":
         visible = []
         for app in listing:

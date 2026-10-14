@@ -478,6 +478,7 @@ class ContainerApps:
         record = self.record(app)
         operation = self.operations.get(app, {})
         state = operation.get("state", "not-installed")
+        started_at = None
         health, url = "unknown", record.get("url") if record else None
         checks, version, verified = [], None, False
         if record and state not in {"installing", "failed"}:
@@ -488,6 +489,7 @@ class ContainerApps:
                 self.verify(inspected, record)
                 runtime = inspected.get("State", {})
                 state = "running" if runtime.get("Running") else "stopped"
+                started_at = runtime.get("StartedAt") if state == "running" and not runtime.get("Restarting") else None
                 observed = runtime.get("Health", {}).get("Status")
                 health = "critical" if runtime.get("Dead") or observed == "unhealthy" else (
                     "degraded" if runtime.get("Restarting") or observed == "starting" or state == "stopped" else
@@ -502,6 +504,7 @@ class ContainerApps:
         return {
             "health": health,
             "state": state,
+            "startedAt": started_at,
             "installationId": "mediahub-" + app,
             "observedAt": time.time(),
             "hostId": self.policy().hostId,

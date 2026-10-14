@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.22
+
+- Expand app settings into live status pages with health, installed version, owned containers, local/domain links and address editing. Preserve Plex-specific setup and managed domain controls, adding its addresses and uptime.
+- Show separate local and configured domain links on installed app home cards, including available catalog apps. Count uptime from confirmed runtime start, reset on restart, stop on shutdown and show unknown when observations expire or are unavailable.
+- Extend the existing Agent status schema and managed app inspection with start timestamps. Preserve existing installations and settings; no database migration or additional dependency is required.
+
 ## 0.6.21
 
 - Restore standard heading and content spacing in Plex account and VPN domain panels. Align actions, wrap long domains and translated card text, and pad ordinary users app cards. Translate the MediaVPN opening link into Danish.

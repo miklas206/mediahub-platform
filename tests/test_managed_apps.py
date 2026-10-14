@@ -13,6 +13,29 @@ SEED = "org.mediahub.mediaseed"
 VPN = "org.mediahub.mediavpn"
 
 
+def test_uptime_uses_primary_app_not_initialization_container(logged_in, tmp_path, monkeypatch):
+    from mediahub.managed_apps import ManagedAdapter
+
+    svc, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
+    app = next(iter(rows.values()))
+    app["Config"]["Labels"]["com.docker.compose.service"] = "app"
+    app["State"].update(StartedAt="2026-10-14T20:00:00Z", Health={"Status": "healthy"})
+    helper = deepcopy(app)
+    helper["Id"] = "b" * 64
+    helper["Config"]["Labels"]["com.docker.compose.service"] = "client-init"
+    helper["State"].update(Running=False, StartedAt="2026-10-14T10:00:00Z")
+    rows[helper["Id"]] = helper
+    adapter = ManagedAdapter(manager, SEED)
+    result = asyncio.run(adapter.runtime_summary())
+    assert result["state"] == "running" and result["startedAt"] == "2026-10-14T20:00:00Z"
+    assert len(result["containers"]) == 2
+    assert "Env" not in json.dumps(result)
+    adapter._observations = None
+    app["State"].update(Running=False)
+    stopped = asyncio.run(adapter.runtime_summary())
+    assert stopped["state"] == "stopped" and stopped["startedAt"] is None
+
+
 def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False):
     svc = logged_in.app.state.services
     policy = {package: {"installationId": "synthetic-installation", "project": "synthetic-app"}}

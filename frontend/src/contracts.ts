@@ -7,6 +7,11 @@ export type Health = {
   checks: { name: string; status: string; message: string }[];
 };
 export type AppInfo = {
+  localUrl?: string | null;
+  startedAt?: string | null;
+  running?: boolean | null;
+  observedAt?: number;
+
   removable?: boolean;
   id: string;
   name: string;

@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import tarfile
+import time
 import tomllib
 from pathlib import Path
 from urllib.parse import quote
@@ -59,10 +60,35 @@ class ManagedAdapter:
 
     def __init__(self, manager, package):
         self.manager, self.package = manager, package
+        self._observations = None
+        self._observation_lock = asyncio.Lock()
+
+    async def observed_containers(self):
+        async with self._observation_lock:
+            if self._observations and time.monotonic() - self._observations[0] < 2:
+                return self._observations[1]
+            rows = await self.manager.containers(self.package)
+            self._observations = (time.monotonic(), rows)
+            return rows
+
+    async def runtime_summary(self):
+        rows = await self.observed_containers()
+        apps = [row for row in rows if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"]
+        primary = apps[0] if len(apps) == 1 else None
+        state = primary.get("State", {}) if primary else {}
+        running = bool(state.get("Running")) and not state.get("Restarting") and not state.get("Dead")
+        return {
+            "state": "running" if running else "restarting" if state.get("Restarting") else "stopped" if primary else "unknown",
+            "startedAt": state.get("StartedAt") if running else None,
+            "containers": [{"name": (row.get("Name") or "").lstrip("/"),
+                "state": "running" if row.get("State", {}).get("Running") else "stopped",
+                "health": row.get("State", {}).get("Health", {}).get("Status"),
+                "startedAt": row.get("State", {}).get("StartedAt") if row.get("State", {}).get("Running") else None} for row in rows],
+        }
 
     async def health(self):
         try:
-            rows = await self.manager.containers(self.package)
+            rows = await self.observed_containers()
             # One-shot initialization is expected to exit. With MediaVPN the
             # original isolated client is deliberately stopped; the owned
             # VPN-bound replacement is the active torrent service instead.

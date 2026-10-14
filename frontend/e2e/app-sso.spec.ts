@@ -22,7 +22,7 @@ for (const width of [1440, 390]) {
       await route.fulfill({ json: { data, error: null, metadata: {} } });
     });
     await page.goto("/app-settings/org.mediahub.mediavpn");
-    await expect(page.getByRole("heading", { name: "MediaVPN: indstillinger" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MediaVPN · Appstatus" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Afinstaller", exact: true })).toHaveCount(0);
     await page.getByLabel("Ekstern app-adresse").fill("https://vpn.example.com");
     await page.getByRole("button", { name: "Gem adresse" }).click();
