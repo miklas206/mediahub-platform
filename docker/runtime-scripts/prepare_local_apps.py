@@ -50,6 +50,25 @@ def bundle_root(source):
     return source / "docker/bundled" if (source / "docker/bundled").is_dir() else source / "bundled"
 
 
+def configure_vpn_tun(cfg):
+    """Backfill the same narrow device mapping used by fresh runtime Compose."""
+    app = cfg["services"]["app"]
+    devices = []
+    for item in app.get("devices", []):
+        if isinstance(item, str):
+            parts = item.split(":")
+            source, target = parts[0], parts[1] if len(parts) > 1 else parts[0]
+        else:
+            source, target = item.get("source"), item.get("target")
+        if target == "/dev/net/tun":
+            if source != "/dev/net/tun":
+                raise ValueError("Existing MediaVPN TUN mapping has an unexpected source")
+            continue
+        devices.append(item)
+    devices.append({"source": "/dev/net/tun", "target": "/dev/net/tun", "permissions": "rwm"})
+    app["devices"] = devices
+
+
 def fingerprint(source=SOURCE):
     files = sorted(p for p in bundle_root(source).rglob("*") if p.is_file())
     # Preparation-only fixes must run even when the bundled app source is unchanged.
@@ -515,6 +534,8 @@ def provision(root, lan, source=SOURCE):
         if metadata.is_file():
             version = tomllib.loads(metadata.read_text())["project"]["version"]
             cfg["services"]["app"].setdefault("labels", {})["org.mediahub.app.version"] = version
+        if kind == "mediavpn":
+            configure_vpn_tun(cfg)
         repair_tls_permissions(folder, cfg)
         if kind == "mediaseed":
             configure_media_storage(cfg, locations)

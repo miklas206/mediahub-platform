@@ -295,3 +295,37 @@ def test_preparation_labels_the_actual_bundled_app_version(tmp_path, monkeypatch
     for kind, version in (("mediaseed", "0.1.1"), ("mediavpn", "0.1.3")):
         cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
         assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == version
+
+
+@pytest.mark.parametrize('existing', [[], ['/dev/net/tun:/dev/net/tun:rw'], [{'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rw'}]])
+def test_vpn_tun_mapping_repairs_existing_compose_without_changing_other_settings(existing):
+    cfg = {'services': {'app': {'devices': [*existing, '/dev/dri:/dev/dri:rwm'], 'environment': {'EXISTING': 'keep'}, 'volumes': ['private:/data']}}}
+    module.configure_vpn_tun(cfg)
+    module.configure_vpn_tun(cfg)
+    app = cfg['services']['app']
+    assert app['devices'] == ['/dev/dri:/dev/dri:rwm', {'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rwm'}]
+    assert app['environment'] == {'EXISTING': 'keep'}
+    assert app['volumes'] == ['private:/data']
+    assert not app.get('privileged') and not app.get('cap_add')
+
+
+def test_vpn_tun_mapping_rejects_foreign_source():
+    cfg = {'services': {'app': {'devices': ['/unowned/device:/dev/net/tun:rwm']}}}
+    with pytest.raises(ValueError, match='unexpected source'):
+        module.configure_vpn_tun(cfg)
+
+
+def test_update_backfills_tun_in_saved_compose_and_keeps_stopped_apps_stopped(tmp_path, monkeypatch):
+    root, source, calls, _ = fixture(tmp_path, monkeypatch)
+    module.provision(root, '192.168.1.50', source)
+    cfg = json.loads((root / 'local-apps/mediavpn/compose.json').read_text())
+    assert cfg['services']['app']['devices'] == [{'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rwm'}]
+    assert not any('up' in args and '-d' in args for args in calls)
+
+
+def test_fresh_runtime_declares_tun_device_without_extra_capabilities():
+    import yaml
+    cfg = yaml.safe_load((SCRIPTS.parent / 'docker/bundled/mediavpn/compose.runtime.yaml').read_text())
+    app = cfg['services']['app']
+    assert app['devices'] == ['/dev/net/tun:/dev/net/tun:rwm']
+    assert not app.get('privileged') and not app.get('cap_add')

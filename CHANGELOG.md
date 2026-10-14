@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.6
+
+- Map TUN into the MediaVPN management container on fresh installs and when updating existing Compose configurations. Preserve saved profiles, credentials and app domains.
+- Bundle MediaVPN 0.2.1. Gateway activation continues to require a character device that can actually be opened; missing host/LXC TUN access remains an explicit prerequisite.
+
 ## 0.6.5
 
 - Let old completed Plex/Seedbox removal receipts be confirmed again to reset settings preserved by previous versions.
