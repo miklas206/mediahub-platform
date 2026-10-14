@@ -45,9 +45,16 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
         if path.startswith("/containers/json?"):
             return []
         if path == "/volumes":
+            assert runtime.operation["phase"] == "storage"
+            assert runtime.operation["progress"] == 50
             return {"Volumes": [{**plan["runtimeVolume"], "Options": plan["runtimeVolume"]["DriverOpts"]}] if reinstall else []}
         if path.startswith("/containers/create"):
+            assert runtime.operation["phase"] == "container"
+            assert runtime.operation["progress"] == 80
             assert body["Image"] == publisher
+        if path == "/containers/mediahub-plex-main/start":
+            assert runtime.operation["phase"] == "start"
+            assert runtime.operation["progress"] == 90
         if path.endswith("/json"):
             return {"Mounts": []}
         return {}
@@ -69,6 +76,9 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
         pull.assert_not_awaited()
         await runtime.install_task
         assert runtime.operation["state"] == "succeeded"
+        assert runtime.operation["progress"] == 100
+        assert runtime.operation["phase"] == "complete"
+        assert runtime.operation["indeterminate"] is False
         return result
 
     result = asyncio.run(run())
@@ -95,7 +105,15 @@ def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkey
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.policy = lambda: SimpleNamespace(hostId="local")
     monkeypatch.setattr("agent.plex_runtime.installation_plan", lambda *args: {"planDigest": "reviewed"})
-    runtime.install = AsyncMock(side_effect=DomainError("download_failed", "Image download failed", 503))
+    async def fail_install(_):
+        runtime.install_progress("download", 10, "Downloading app image", indeterminate=True)
+        from agent.install_files import read_json
+        persisted = read_json(runtime.install_operation_path)
+        assert persisted["phase"] == "download"
+        assert persisted["indeterminate"] is True
+        raise DomainError("download_failed", "Image download failed", 503)
+
+    runtime.install = AsyncMock(side_effect=fail_install)
     body = SimpleNamespace(installation=SimpleNamespace(installationId="plex-test"), reviewedPlanDigest="reviewed")
 
     async def run():
@@ -107,6 +125,9 @@ def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkey
     asyncio.run(run())
     restarted = PlexRuntime(control, None, tmp_path)
     assert restarted.operation["state"] == "failed"
+    assert restarted.operation["phase"] == "download"
+    assert restarted.operation["progress"] == 10
+    assert restarted.operation["indeterminate"] is False
     report = asyncio.run(PlexControl.status(SimpleNamespace(runtime=restarted, policy_file=control.policy_file)))
     assert report["health"] == "unknown"
     assert report["operation"]["message"] == "Image download failed"

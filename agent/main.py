@@ -52,9 +52,9 @@ from agent.seedbox_install import PrepareSeedbox, SeedboxInstaller
 from agent.seedbox_status import SeedboxStatus
 from agent.seedbox_torrents import TorrentService
 from agent.seedbox_workflow import SeedboxWorkflow
+from agent.shared_vpn import SharedVPN
 from agent.uploads import UploadSessions
 from agent.vpn_locations import LocationService
-from agent.shared_vpn import SharedVPN
 
 
 class AgentConfig(BaseSettings):
@@ -494,6 +494,10 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/plex/status")
     async def plex_status():
         return await plex.status()
+
+    @app.get("/v1/plex/install-status")
+    async def plex_install_status():
+        return {"operation": plex_runtime.operation}
 
     @app.get("/v1/plex/recent-media")
     async def plex_recent_media():

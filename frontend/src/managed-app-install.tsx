@@ -95,9 +95,9 @@ export function ManagedAppInstallPage({
   };
   useEffect(() => {
     if (!running) return;
-    const timer = window.setTimeout(reload, 2500);
-    return () => window.clearTimeout(timer);
-  }, [running, reload, data]);
+    const timer = window.setInterval(reload, 3500);
+    return () => window.clearInterval(timer);
+  }, [running, reload]);
   useEffect(() => {
     if (succeeded) window.dispatchEvent(new Event("apps-changed"));
   }, [succeeded]);

@@ -2,7 +2,7 @@ import { translateText, t } from "./i18n";
 
 import { FjordHubDeployment } from "./fjordhub-deployment";
 import { FjordHubTokenGuide } from "./fjordhub-token-guide";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Check,
@@ -37,6 +37,10 @@ export function FjordHubStorePage() {
     stepStart.current?.scrollIntoView({ block: "start", behavior: "instant" });
   }, [step]);
   const [deploying, setDeploying] = useState(false);
+  const deploymentBusy = useCallback((busy: boolean) => {
+    setDeploying(busy);
+    if (busy) setStep(2);
+  }, []);
   const [mode, setMode] = useState<FjordHubMode>("new");
   const [config, setConfig] = useState<FjordHubConfig>({
     ...defaultFjordHubConfig,
@@ -333,7 +337,7 @@ export function FjordHubStorePage() {
         <FjordHubDeployment
           config={config}
           visible={step === 2}
-          onBusy={setDeploying}
+          onBusy={deploymentBusy}
         />
 
         {step === 3 && (

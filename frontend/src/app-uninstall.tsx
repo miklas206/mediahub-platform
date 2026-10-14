@@ -57,6 +57,7 @@ export function AppUninstall({
         const result = await api<Removal>(endpoint);
         if (cancelled) return;
         setStatus(result);
+        setError("");
         if (result.state === "succeeded") {
           setOpen(false);
           onRemoved();
@@ -65,13 +66,15 @@ export function AppUninstall({
         if (["accepted", "running"].includes(result.state))
           timer = setTimeout(() => void poll(), 2000);
       } catch (e) {
-        if (!cancelled)
+        if (!cancelled) {
           setError(
             (e as Error).message +
               (managed ? "" : windowsShare
                 ? " Check the connection to MediaHub and try again."
                 : " Check the Agent connection and update the Agent if removal is not supported."),
           );
+          timer = setTimeout(() => void poll(), 2500);
+        }
       }
     };
     void poll();
@@ -111,6 +114,7 @@ export function AppUninstall({
       label, state: index < phase ? "complete" : index > phase ? "pending" : status?.state === "failed" ? "error" : "running",
     })) : [],
     details: [],
+    connectionLost: !!error && working,
   };
   return (
     <>

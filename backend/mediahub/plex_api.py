@@ -35,6 +35,18 @@ async def plan(body: PlexInstallation, request: Request):
     )
 
 
+@router.get("/install-status")
+async def install_status(request: Request):
+    svc = services(request)
+    with svc.sessions() as db:
+        binding = db.scalar(select(Setting).where(Setting.key == "plex_installation"))
+        app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == "org.mediahub.plex"))
+        if binding is None or (app is not None and app.state == "uninstalled"):
+            return result({"operation": {"state": "idle"}})
+        host = binding.value["hostId"]
+    return result(await target(request, host).request("GET", "/v1/plex/install-status"))
+
+
 @router.post("/install", status_code=202)
 async def install(body: PlexInstallRequest, request: Request):
     svc = services(request)

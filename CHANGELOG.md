@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.6.1
+
+- Show durable Plex installation phases and progress on its installer and runtime page, including indeterminate image downloads, reconnecting, failure and confirmed completion.
+- Add progress bars to FjordHub and the legacy Seedbox wizard; restore the active FjordHub deployment step after reloading. Show immediate activity for all five container-app installers and keep MediaSeed/MediaVPN polling through connection failures.
+- Allow confirmed removal of failed or interrupted Plex installations before a managed runtime policy exists. Verify the saved identity and container ownership, preserve media, app data, volumes and credentials, and verify containers are gone before removing the hub registration. Retry removal status after temporary connection failures.
+
 ## 0.5.36
 
 - Add guided Proxmox host GPU driver/firmware preparation to fresh installation and existing-instance GPU setup. Offer matching kernel headers, DKMS, NVIDIA NVENC/NVDEC libraries and Intel/AMD firmware, with explicit host-package/repository confirmation and APT removal protection.

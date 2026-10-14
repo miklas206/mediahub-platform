@@ -86,3 +86,4 @@ def test_embedded_install_plan_passes_real_agent_https_guard(tmp_path):
     }))
     assert result["mediaReadOnly"] is True
     assert len(result["planDigest"]) == 64
+    assert asyncio.run(client.request("GET", "/v1/plex/install-status"))["operation"]["state"] == "idle"

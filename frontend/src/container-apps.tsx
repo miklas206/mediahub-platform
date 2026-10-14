@@ -62,7 +62,7 @@ export type ContainerAppStatus = {
   installation: Installation;
 };
 
-export function ContainerInstallProgress({app, status}: {app: string; status?: ContainerAppStatus}) {
+export function ContainerInstallProgress({app, status, connectionLost = false}: {app: string; status?: ContainerAppStatus; connectionLost?: boolean}) {
   const job = status?.operation;
   if (!status || (status.state !== "installing" && !["installing", "installed", "failed"].includes(job?.state || ""))) return null;
   const phases = ["preparing", "download", "storage", "container", "start"];
@@ -78,6 +78,7 @@ export function ContainerInstallProgress({app, status}: {app: string; status?: C
     message: job?.message || "Downloading and starting container",
     steps: labels.map((label, step) => ({label, state: complete || step < index ? "complete" : step === index ? failed ? "error" : "running" : "pending"})),
     details: [],
+    connectionLost,
   };
   return <OperationProgress operation={operation} />;
 }
@@ -102,6 +103,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const [gpuId, setGpuId] = useState(app === "jellyfin" ? suggested?.gpuId || "" : "");
   const [preview, setPreview] = useState<Preview>();
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [status, setStatus] = useState<ContainerAppStatus>();
@@ -167,6 +169,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
   const install = async () => {
     if (!preview) return;
     setBusy(true);
+    setStarting(true);
     setError("");
     try {
       await api("/container-apps/install", "POST", {
@@ -190,6 +193,7 @@ export function ContainerAppSetup({ app }: { app: string }) {
       setError((failure as Error).message);
     } finally {
       setBusy(false);
+      setStarting(false);
     }
   };
   const action = async (command: string) => {
@@ -232,10 +236,13 @@ export function ContainerAppSetup({ app }: { app: string }) {
           (showSetup ? options.error : "")
         }
       />
-      {needsStatus && (
+      {starting && (
+        <ContainerInstallProgress app={app} status={{state: "installing", installation: preview!.installation, operation: {state: "installing", phase: "preparing", indeterminate: true, message: "Preparing installation"}}} />
+      )}
+      {needsStatus && !starting && (
         <section className="phase-content" aria-label={t("Container status")}>
           <h2>{t("Container status")}</h2>
-          <ContainerInstallProgress app={app} status={status} />
+          <ContainerInstallProgress app={app} status={status} connectionLost={!!error && status?.state === "installing"} />
           {status?.installation.gpuId && (
             <p>
               {t(

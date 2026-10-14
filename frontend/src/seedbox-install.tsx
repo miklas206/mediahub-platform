@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { SeedboxMediaHubLogin } from "./seedbox-mediahub-login";
+import { SeedboxInstallProgress } from "./legacy-install-progress";
 
 type Settings = {
   incompleteDownloads: boolean;
@@ -536,15 +537,7 @@ export function SeedboxInstallPage() {
                 )}
               </p>
             )}
-            {data.transaction.steps.length > 0 && (
-              <ol>
-                {data.transaction.steps.map((row) => (
-                  <li key={row.id}>
-                    {row.id.replaceAll("_", " ")} — {translateText(row.state)}
-                  </li>
-                ))}
-              </ol>
-            )}
+            <SeedboxInstallProgress transaction={data.transaction} connectionLost={disconnected} />
             {locked && (
               <>
                 <p role="alert">

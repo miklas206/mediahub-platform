@@ -1,10 +1,14 @@
 import { translateText, t } from "./i18n";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Film, ShieldCheck } from "lucide-react";
 import { api } from "./api";
 import { ErrorBox, Panel, useLoad } from "./phase2";
+import {
+  PlexInstallProgress,
+  type PlexInstallOperation,
+} from "./plex-install-progress";
 
 type Choice = {
   id: string;
@@ -23,6 +27,32 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   const [failure, setFailure] = useState("");
   const [digest, setDigest] = useState("");
   const [done, setDone] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const status = useLoad<{ operation: PlexInstallOperation }>(
+    "/plex/install-status",
+  );
+  const job: PlexInstallOperation | undefined =
+    starting || (done && status.data?.operation.state === "idle")
+      ? {
+          action: "install",
+          state: "running",
+          phase: "preparing",
+          indeterminate: true,
+        }
+      : status.data?.operation;
+  const installing =
+    starting || (job?.action === "install" && job.state === "running");
+  const completed = job?.action === "install" && job.state === "succeeded";
+  const statusLoaded = !!status.data;
+  useEffect(() => {
+    if (!done && !installing && statusLoaded) return;
+    if (job?.state === "failed" || completed) return;
+    const timer = window.setInterval(status.reload, 2500);
+    return () => window.clearInterval(timer);
+  }, [done, installing, job?.state, completed, statusLoaded, status.reload]);
+  useEffect(() => {
+    if (completed) window.dispatchEvent(new Event("apps-changed"));
+  }, [completed]);
   const selection = (kind: string) =>
     (data?.storage || [])
       .filter((s) => s.kind === kind && selected.includes(s.id))
@@ -58,6 +88,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   };
   const install = async () => {
     setBusy(true);
+    setStarting(true);
     setFailure("");
     try {
       await api("/plex/install", "POST", {
@@ -67,10 +98,13 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
       });
       setDone(true);
       setClaim("");
+      window.dispatchEvent(new Event("apps-changed"));
     } catch (e) {
       setFailure((e as Error).message);
     } finally {
       setBusy(false);
+      setStarting(false);
+      status.reload();
     }
   };
   return (
@@ -88,15 +122,39 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
           )}
         </p>
       </header>
-      <ErrorBox error={error || failure} />
-      {done ? (
-        <Panel title={t("Plex is starting")}>
+      <ErrorBox error={error || failure || status.error} />
+      <PlexInstallProgress
+        job={job}
+        connectionLost={!!status.error && installing}
+      />
+      {done || installing || completed ? (
+        <Panel
+          title={t(
+            completed
+              ? "Installation"
+              : job?.state === "failed"
+                ? "Installation needs attention"
+                : "Plex is starting",
+          )}
+        >
           <p>
-            {t(
-              "Installation accepted. The latest Plex image is downloading in the background. Open the app to follow installation status.",
-            )}
+            {completed || job?.state === "failed"
+              ? translateText(job.message)
+              : t(
+                  "Installation continues on the Agent even if this page is closed. Do not start another installation.",
+                )}
           </p>
           <Link to="/apps">{t("View installed apps")}</Link>
+          {job?.state === "failed" && (
+            <button
+              onClick={() => {
+                setDone(false);
+                setDigest("");
+              }}
+            >
+              {t("Review installation")}
+            </button>
+          )}
         </Panel>
       ) : (
         <>

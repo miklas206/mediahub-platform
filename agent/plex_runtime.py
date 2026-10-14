@@ -41,55 +41,123 @@ class PlexRuntime:
         if self.install_operation_path.exists():
             self.operation = read_json(self.install_operation_path)
             if self.operation.get("state") == "running":
-                self.operation.update(state="failed", message="Plex installation was interrupted; review the app runtime before retrying")
+                self.operation.update(state="failed", indeterminate=False, message="Plex installation was interrupted; review the app runtime before retrying")
                 save_json(self.install_operation_path, self.operation)
         self.libraries_ready = False
         self.vpn = PlexVPN(self)
         self.shared_vpn = None
 
-    async def uninstall_status(self):
-        policy = self.control.policy()
+    async def uninstall_status(self, *, check_installing=True):
+        installation_id, policy = self.removal_identity()
+        if check_installing and self.operation.get("action") == "install" and self.operation.get("state") == "running":
+            return {"state": "running", "installationId": installation_id,
+                    "message": self.operation.get("message")}
         path = self.state_dir / "plex-removal.json"
         record = read_json(path) if path.exists() else {}
-        if record.get("installationId") == policy.installationId:
+        if record.get("installationId") == installation_id:
             from urllib.parse import quote
 
             filters = quote(
                 json.dumps(
                     {
                         "label": [
-                            "org.mediahub.installation=" + policy.installationId,
+                            "org.mediahub.installation=" + installation_id,
                             "org.mediahub.package=org.mediahub.plex",
                         ]
                     }
                 )
             )
             containers = await self.request("GET", "/containers/json?all=true&filters=" + filters)
-            vpn = await self.vpn._container(required=False) if policy.vpnEnabled else None
+            vpn = await self.vpn._container(required=False) if policy and policy.vpnEnabled else None
             if not containers and vpn is None:
                 return {
                     "state": "succeeded",
-                    "installationId": policy.installationId,
+                    "installationId": installation_id,
                     "dataPreserved": True,
                 }
         operation = self.operation if self.operation.get("action") == "remove-runtime" else {}
         return {
             "state": operation.get("state", "ready"),
-            "installationId": policy.installationId,
+            "installationId": installation_id,
             "message": operation.get("message"),
         }
 
-    async def uninstall(self, installation_id):
+    def removal_identity(self):
+        # A failed first install may not have written the managed runtime policy.
+        # Its durable, server-created operation still proves which install ran.
+        policy_file = getattr(self.control, "policy_file", None)
+        if policy_file is not None and not Path(policy_file).exists():
+            operation = self.operation
+            identity = operation.get("installationId", "")
+            if (operation.get("action") in {"install", "remove-runtime"}
+                    and re.fullmatch(r"[a-z][a-z0-9-]{2,40}", identity)
+                    and operation.get("hostId") == self.policy().hostId):
+                return identity, None
         policy = self.control.policy()
-        if installation_id != policy.installationId:
+        return policy.installationId, policy
+
+    async def uninstall(self, installation_id):
+        identity, policy = self.removal_identity()
+        if installation_id != identity:
             raise DomainError(
                 "confirmation_required", "Exact installation confirmation required", 409
             )
-        if self.operation.get("state") == "running" or self.control.lock.locked():
+        if (self.operation.get("state") == "running" or self.control.lock.locked()
+                or (self.install_task and not self.install_task.done())):
             raise DomainError("operation_busy", "Another Plex operation is running", 409)
-        self.operation = {"state": "running", "action": "remove-runtime"}
-        self.update_task = asyncio.create_task(self.remove_runtime(policy))
+        failed_install = policy is None or self.operation.get("failedInstallation") or (
+            self.operation.get("action") == "install" and self.operation.get("state") == "failed")
+        self.operation = {"state": "running", "action": "remove-runtime",
+                          "installationId": identity,
+                          "hostId": self.operation.get("hostId"),
+                          "failedInstallation": bool(failed_install)}
+        if failed_install:
+            save_json(self.install_operation_path, self.operation)
+            self.update_task = asyncio.create_task(self.remove_failed_install(identity, policy))
+        else:
+            self.update_task = asyncio.create_task(self.remove_runtime(policy))
         return {"state": "accepted", "dataPreserved": True}
+
+    async def remove_failed_install(self, installation_id, policy):
+        try:
+            async with self.control.lock:
+                from urllib.parse import quote
+
+                labels = {"org.mediahub.installation": installation_id,
+                          "org.mediahub.package": "org.mediahub.plex"}
+                filters = quote(json.dumps({"label": [key + "=" + value for key, value in labels.items()]}))
+                listing = await self.request("GET", "/containers/json?all=true&filters=" + filters)
+                owned = []
+                name = "mediahub-" + installation_id
+                for row in listing:
+                    item = await self.request("GET", f"/containers/{row['Id']}/json")
+                    actual = item.get("Config", {}).get("Labels", {}) or {}
+                    if (any(actual.get(key) != value for key, value in labels.items())
+                            or item.get("Name") not in {"/" + name, "/" + name + "-prepare"}):
+                        raise DomainError("plex_ownership_mismatch", "Plex runtime does not match host policy", 409)
+                    if policy and item["Name"] == "/" + name:
+                        verified = await self.control.inspect(policy)
+                        if verified["Id"] != item["Id"]:
+                            raise DomainError("plex_ownership_mismatch", "Plex runtime does not match host policy", 409)
+                    owned.append(item)
+                if policy and any(item["Name"] == "/" + name and item["State"].get("Running") for item in owned):
+                    await self.checkpoint(policy)
+                if policy:
+                    self.control.save_intent(policy, False)
+                for item in owned:
+                    if item["State"].get("Running"):
+                        await self.request("POST", f"/containers/{item['Id']}/stop?t=30")
+                    await self.request("DELETE", f"/containers/{item['Id']}?force=false&v=false")
+                if await self.request("GET", "/containers/json?all=true&filters=" + filters):
+                    raise DomainError("removal_unverified", "Runtime removal has not passed its final checks", 409)
+                save_json(self.state_dir / "plex-removal.json", {"installationId": installation_id})
+                self.operation.update(state="succeeded", message="Plex runtime removed; media, settings and credentials preserved")
+        except DomainError as error:
+            self.operation.update(state="failed", message=error.message)
+        except Exception:
+            self.operation.update(state="failed", message="Runtime removal stopped; persistent data was not deleted")
+        finally:
+            save_json(self.install_operation_path, self.operation)
 
     async def remove_runtime(self, policy):
         try:
@@ -375,7 +443,7 @@ class PlexRuntime:
         policy = self.control.policy()
         if policy.installationId != installation_id:
             return False
-        status = await self.uninstall_status()
+        status = await self.uninstall_status(check_installing=False)
         return status.get("state") == "succeeded" and status.get("dataPreserved") is True
 
     async def queue_install(self, body: PlexInstallRequest):
@@ -392,7 +460,8 @@ class PlexRuntime:
         self.operation = {
             "state": "running", "action": "install", "hostId": policy.hostId,
             "installationId": body.installation.installationId,
-            "message": "Downloading the latest Plex image and preparing installation",
+            "phase": "preparing", "progress": 0, "indeterminate": True,
+            "message": "Preparing installation",
         }
         save_json(self.install_operation_path, self.operation)
         self.install_task = asyncio.create_task(self._run_install(body))
@@ -402,13 +471,19 @@ class PlexRuntime:
     async def _run_install(self, body):
         try:
             await self.install(body)
-            self.operation.update(state="succeeded", message="Plex started; account and libraries are being checked")
+            self.operation.update(state="succeeded", phase="complete", progress=100, message="Plex started; account and libraries are being checked")
         except DomainError as error:
             self.operation.update(state="failed", message=error.message)
         except Exception:
             self.operation.update(state="failed", message="Plex installation failed; media and persistent data were retained")
         finally:
+            self.operation["indeterminate"] = False
             save_json(self.install_operation_path, self.operation)
+
+    def install_progress(self, phase, progress, message, indeterminate=False):
+        self.operation.update(phase=phase, progress=progress, message=message,
+                              indeterminate=indeterminate)
+        save_json(self.install_operation_path, self.operation)
 
     async def close(self):
         if self.install_task and not self.install_task.done():
@@ -447,8 +522,10 @@ class PlexRuntime:
                     "Media storage is not verified; installation blocked",
                     409,
                 )
+            self.install_progress("download", 10, "Downloading app image", indeterminate=True)
             image = await pull_latest(self.control.socket, "lscr.io/linuxserver/plex")
             plan["container"]["Image"] = publisher_reference(image, "lscr.io/linuxserver/plex")
+            self.install_progress("storage", 50, "Checking storage and preparing container")
             existing = await self.request("GET", "/volumes")
             volume = next((v for v in existing.get("Volumes") or []
                            if v["Name"] == plan["runtimeVolume"]["Name"]), None)
@@ -485,6 +562,7 @@ class PlexRuntime:
                     else b"",
                 }
                 await self.archive_write(helper, files, policy.uid, policy.gid)
+                self.install_progress("container", 80, "Creating app container")
                 await self.request(
                     "POST", "/containers/create?name=" + plan["name"], body=plan["container"]
                 )
@@ -503,6 +581,7 @@ class PlexRuntime:
                 save_json(Path(self.control.policy_file), guard.model_dump())
                 (self.state_dir / "plex-removal.json").unlink(missing_ok=True)
                 self.control.save_intent(guard, True)
+                self.install_progress("start", 90, "Starting app container")
                 await self.request("POST", f"/containers/{plan['name']}/start")
                 self.control.record("installed")
                 return {

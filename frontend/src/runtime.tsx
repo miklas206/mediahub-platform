@@ -25,9 +25,10 @@ import { SeedboxWebUI } from "./seedbox-webui";
 import { CloudflareManagementPanel } from "./cloudflare-management";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
+import { PlexInstallProgress, type PlexInstallOperation } from "./plex-install-progress";
 
 export type Runtime = {
-  operation?: { state: string; message?: string };
+  operation?: PlexInstallOperation;
   plex?: {
     running: boolean;
     version: string | null;
@@ -608,6 +609,7 @@ function PlexPanel({
         </div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
+      <PlexInstallProgress job={r.operation} connectionLost={r.agentOnline === false} />
       {appId && (
         <Panel title={t("Recently added media")}>
           <div className="plex-library-preview">

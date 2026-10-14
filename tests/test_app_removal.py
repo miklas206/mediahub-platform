@@ -126,3 +126,85 @@ def test_plex_ownership_failure_never_deletes(tmp_path):
         runtime.request.assert_not_called()
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("managed", [False, True])
+@pytest.mark.parametrize("partial", ["none", "helper", "container", "foreign", "foreign-name"])
+def test_failed_plex_install_can_be_removed_without_managed_policy(tmp_path, partial, managed):
+    from agent.install_files import save_json
+
+    async def run():
+        control = SimpleNamespace(policy_file=tmp_path / "missing-policy.json", lock=asyncio.Lock())
+        if managed:
+            control.policy_file.write_text("retained policy")
+            control.policy = lambda: SimpleNamespace(installationId="plex-test", vpnEnabled=False)
+            control.save_intent = MagicMock()
+        operation = {"action": "install", "state": "failed", "hostId": "local", "installationId": "plex-test"}
+        save_json(tmp_path / "plex-install-operation.json", operation)
+        runtime = PlexRuntime(control, None, tmp_path)
+        runtime.policy = lambda: SimpleNamespace(hostId="local")
+        persistent = tmp_path / "media-and-appdata"
+        persistent.write_bytes(b"keep existing data")
+        container = {"Id": "a" * 64, "Name": "/mediahub-plex-test" + ("-prepare" if partial == "helper" else ""),
+                     "Config": {"Labels": {"org.mediahub.installation": "other" if partial == "foreign" else "plex-test", "org.mediahub.package": "org.mediahub.plex"}},
+                     "State": {"Running": True}}
+        if partial == "foreign-name":
+            container["Name"] = "/unrelated-app"
+        if managed:
+            control.inspect = AsyncMock(return_value=container)
+            runtime.checkpoint = AsyncMock()
+        remaining = [] if partial == "none" else [container]
+        mutations = []
+
+        async def request(method, path, **kwargs):
+            if method == "GET" and path.startswith("/containers/json?"):
+                return [{"Id": item["Id"]} for item in remaining]
+            if method == "GET" and path.endswith("/json"):
+                return container
+            mutations.append((method, path))
+            if method == "DELETE":
+                remaining.clear()
+            return {}
+
+        runtime.request = request
+        assert (await runtime.uninstall_status())["installationId"] == "plex-test"
+        with pytest.raises(DomainError, match="Exact installation confirmation"):
+            await runtime.uninstall("wrong")
+        assert mutations == []
+        await runtime.uninstall("plex-test")
+        await runtime.update_task
+        if partial in {"foreign", "foreign-name"}:
+            assert runtime.operation["state"] == "failed"
+            assert mutations == []
+        else:
+            assert runtime.operation["state"] == "succeeded"
+            report = await runtime.uninstall_status()
+            assert report == {"state": "succeeded", "installationId": "plex-test", "dataPreserved": True}
+            assert all("/containers/" in path and "v=false" in path for method, path in mutations if method == "DELETE")
+            restarted = PlexRuntime(control, None, tmp_path)
+            restarted.policy = runtime.policy
+            restarted.request = request
+            assert (await restarted.uninstall_status())["state"] == "succeeded"
+            if managed and partial == "container":
+                control.inspect.assert_awaited_once()
+                runtime.checkpoint.assert_awaited_once()
+        assert persistent.read_bytes() == b"keep existing data"
+
+    asyncio.run(run())
+
+
+def test_failed_plex_removal_does_not_guess_identity_or_interrupt_installer(tmp_path):
+    async def run():
+        control = SimpleNamespace(policy_file=tmp_path / "missing.json", lock=asyncio.Lock(),
+                                  policy=lambda: (_ for _ in ()).throw(DomainError("plex_disabled", "Unavailable", 503)))
+        runtime = PlexRuntime(control, None, tmp_path)
+        runtime.policy = lambda: SimpleNamespace(hostId="local")
+        runtime.request = AsyncMock()
+        with pytest.raises(DomainError):
+            await runtime.uninstall_status()
+        runtime.operation = {"state": "running", "action": "install", "hostId": "local", "installationId": "plex-test"}
+        with pytest.raises(DomainError, match="Another Plex operation"):
+            await runtime.uninstall("plex-test")
+        runtime.request.assert_not_awaited()
+
+    asyncio.run(run())

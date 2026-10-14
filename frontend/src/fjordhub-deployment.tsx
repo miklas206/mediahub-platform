@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { Link } from "react-router-dom";
 import type { FjordHubConfig } from "./fjordhub-commands";
+import { FjordHubInstallProgress } from "./legacy-install-progress";
 
 type Deployment = {
   verification?: { state: string; message: string; checkedAt: number };
@@ -394,8 +395,14 @@ export function FjordHubDeployment({
           )}
         </section>
       )}
+      {pending && requestId.current && visible && (
+        <FjordHubInstallProgress state="running" message="Preparing installation" />
+      )}
       {job && visible && (
         <section className="stack" aria-label={t("FjordHub deployment status")}>
+          {!(pending && requestId.current) && (
+            <FjordHubInstallProgress state={job.state} message={job.message} connectionLost={!loaded && job.state === "running"} />
+          )}
           <strong>
             {job.state === "running"
               ? t("Installing FjordHub")
