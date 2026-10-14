@@ -105,6 +105,24 @@ for (const name of ["MediaSeed", "MediaVPN"])
       });
       await page.goto("/");
       const card = page.locator(`[data-app-id="${cardId}"]`);
+      const footer = card.locator(".hub-card-footer");
+      const stop = footer.getByRole("button", {
+        name: `Stop ${name}`,
+        exact: true,
+      });
+      await expect(stop).toBeVisible();
+      const openBox = await footer.locator(".hub-card-action").boundingBox();
+      const stopBox = await stop.boundingBox();
+      const settingsBox = await footer
+        .locator(".hub-card-settings")
+        .boundingBox();
+      expect(Math.abs(openBox!.y - stopBox!.y)).toBeLessThan(2);
+      expect(Math.abs(settingsBox!.y - stopBox!.y)).toBeLessThan(2);
+      expect(stopBox!.width).toBeLessThan(130);
+      await page.screenshot({
+        path: test.info().outputPath("compact-stop-home.png"),
+        fullPage: true,
+      });
       await card
         .getByRole("button", { name: `Stop ${name}`, exact: true })
         .click();

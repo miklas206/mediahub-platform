@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.24
+
+- Move the home-card stop control into the action row, with a compact stop icon, quieter styling, keyboard focus and explicit stopping feedback. Preserve confirmation and runtime behavior.
+
 ## 0.6.23
 
 - Keep local MediaSeed/MediaVPN login on the approved LAN origin even when a public domain is saved. Carry the selected allowlisted origin through hub authorization and login resume. Bundle MediaVPN 0.2.9 and MediaSeed 0.1.4.

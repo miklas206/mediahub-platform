@@ -594,6 +594,19 @@ export function HubHome({
                       {t(entry.action)}
                     </Link>
                   )}
+                  {entry.canStop && entry.runtimeAppId && (
+                    <StopAppButton
+                      appId={entry.runtimeAppId}
+                      name={entry.name}
+                      packageId={
+                        entry.id === "org.mediahub.seedbox"
+                          ? "org.mediahub.mediaseed"
+                          : entry.id
+                      }
+                      running={entry.running}
+                      onChanged={onAppRemoved}
+                    />
+                  )}
                   {entry.settingsPath && (
                     <Link
                       className="hub-card-settings"
@@ -605,19 +618,6 @@ export function HubHome({
                     </Link>
                   )}
                 </div>
-                {entry.canStop && entry.runtimeAppId && (
-                  <StopAppButton
-                    appId={entry.runtimeAppId}
-                    name={entry.name}
-                    packageId={
-                      entry.id === "org.mediahub.seedbox"
-                        ? "org.mediahub.mediaseed"
-                        : entry.id
-                    }
-                    running={entry.running}
-                    onChanged={onAppRemoved}
-                  />
-                )}
                 {entry.removableApp && (
                   <AppUninstall
                     app={entry.removableApp}

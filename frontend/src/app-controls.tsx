@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LoaderCircle, Square } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
 import { useConfirm } from "./confirmation-dialog";
@@ -57,12 +58,19 @@ export function StopAppButton({
     <>
       {error && <NotificationPopup tone="danger">{error}</NotificationPopup>}
       <button
-        className="hub-card-stop danger"
+        className="hub-card-stop"
+        type="button"
         disabled={busy || running !== true}
+        aria-busy={busy}
         aria-label={t("Stop {app}", { app: name })}
         onClick={() => void stop()}
       >
-        {t(busy ? "Working..." : "Stop app")}
+        {busy ? (
+          <LoaderCircle size={14} className="spin" aria-hidden="true" />
+        ) : (
+          <Square size={12} fill="currentColor" aria-hidden="true" />
+        )}
+        <span>{t(busy ? "Stopping..." : "Stop app")}</span>
       </button>
     </>
   );
