@@ -1,9 +1,8 @@
-﻿# Cloudflare DNS bound to MediaVPN
+# Cloudflare app domains and VPN DNS
 
 The Cloudflare app discovers accessible domains, DNS records and existing tunnels
-through the encrypted scoped API credential. Tunnels are displayed read-only in
-the UI; tunnel creation is rejected by the API. Connector installation, token
-downloads, tunnel adoption and tunnel route creation are not offered in the app.
+through the encrypted scoped API credential. The app supports tunnel creation,
+explicit adoption, local connector installation and installed-app route creation.
 Existing Cloudflare resources are never deleted when changing this configuration.
 
 ## Permissions and setup
@@ -44,9 +43,8 @@ External edits pause changes rather than being overwritten. Cloudflare does not
 provide a transaction spanning the read and PATCH; concurrent external writes
 remain a provider limitation. No private VPN key is sent to Cloudflare.
 
-Old tunnel-route journals are preserved for compatibility, but the scheduled
-reconciler and current Synchronize action only maintain VPN DNS records. They do
-not update tunnel ingress. Existing tunnel routes continue running in Cloudflare.
+Tunnel-route journals are retained. Scheduled and manual synchronization maintain
+both app routes and VPN DNS, respecting each automatic synchronization switch.
 
 ## Endpoints
 
@@ -55,12 +53,29 @@ not update tunnel ingress. Existing tunnel routes continue running in Cloudflare
 - POST /api/v1/cloudflare/manage/discover: refresh domain, record and tunnel inventory.
 - POST /api/v1/cloudflare/manage/vpn-dns: create a binding using zoneId, label and profileId.
 - PUT /api/v1/cloudflare/manage/vpn-dns/<id>: change automatic synchronization.
-- POST /api/v1/cloudflare/manage/sync: explicitly reconcile VPN DNS.
-- POST /api/v1/cloudflare/manage/tunnels: rejected (405).
+- POST /api/v1/cloudflare/manage/sync: explicitly reconcile app routes and VPN DNS.
+- POST /api/v1/cloudflare/manage/tunnels: create a remotely managed tunnel.
 
-Legacy direct DNS and route-management endpoints remain for existing integrations;
-new app workflows use VPN DNS. No legacy mutation action is exposed in the UI.
+Direct DNS endpoints remain for integrations. App domains use managed tunnel
+routes; VPN DNS is a separate optional workflow.
 
 Tests simulate Cloudflare and MediaVPN, including IP changes, IPv6, conflicts,
 unhealthy profiles and uncertain POST results. They do not change a real account,
 DNS record, VPN profile or running server.
+
+## Installed app domains
+
+Choose an installed app, zone, record name and managed tunnel. MediaHub resolves
+the private endpoint, creates a proxied CNAME, configures ingress and saves the
+public HTTPS address for opening the app and SSO. Conflicts are reported per
+route. This requires Zone DNS Edit and Account Cloudflare Tunnel Edit. Install
+the local connector or use an existing connector that trusts the local app CA.
+
+Connector container state is observed on refresh. Public HTTPS is probed by
+Cloudflare Healthcheck; a successful API write is not proof of public reachability.
+Stopped apps retain their routes and report unavailable until they run again.
+
+Inbound domains use Cloudflare Tunnel. Applications may independently use the
+shared Proton gateway for outbound traffic. Inbound HTTPS through Proton with
+Origin Rules and arbitrary TCP port forwarding are not implemented in this release.
+See [the audit](app-network-audit.md) for the GitHub reference and validation limits.

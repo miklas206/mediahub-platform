@@ -333,6 +333,9 @@ def test_app_checks_share_release_cache_for_fifteen_minutes(monkeypatch):
     ],
 )
 def test_rate_limit_pauses_even_forced_checks_until_retry_then_recovers(monkeypatch, headers):
+    # Construct epoch deadlines at execution time, not during collection of the full suite.
+    if "x-ratelimit-reset" in headers:
+        headers = {**headers, "x-ratelimit-reset": str(int(time.time()) + 3600)}
     requests = []
 
     async def handler(request):

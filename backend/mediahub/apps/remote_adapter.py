@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from mediahub.contracts import Health, HealthCheck
 from mediahub.errors import DomainError
+from mediahub.github_metadata import GitHubMetadata
 
 
 @dataclass(frozen=True)
@@ -17,10 +18,11 @@ class RemoteAppDefinition:
 
 
 class RemoteAppAdapter:
-    def __init__(self, definition, host_id, client_factory, status_cache, events, app_id):
+    def __init__(self, definition, host_id, client_factory, status_cache, events, app_id, metadata_cache=None):
         self.definition, self.host_id = definition, host_id
         self.client_factory, self.status_cache = client_factory, status_cache
         self.events, self.app_id = events, app_id
+        self.metadata_cache = metadata_cache or GitHubMetadata()
 
     async def status(self):
         return await self.status_cache.get(
@@ -35,6 +37,7 @@ class RemoteAppAdapter:
             "healthy": "healthy",
             "degraded": "degraded",
             "critical": "unhealthy",
+            "unhealthy": "unhealthy",
             "offline": "unknown",
             "unknown": "unknown",
         }
@@ -43,7 +46,7 @@ class RemoteAppAdapter:
             summary="Remote app: " + report["health"],
             checks=[
                 HealthCheck(
-                    name=c["name"], status=states.get(c["status"], "unknown"), message=c["status"]
+                    name=c["name"], status=states.get(c["status"], "unknown"), message=c.get("message") or c["status"]
                 )
                 for c in report.get("checks", [])
             ],
@@ -93,6 +96,11 @@ class RemoteAppAdapter:
             return await self.client_factory(self.host_id).request(
                 "POST", self.definition.agent_prefix + "/update-check"
             )
+        from mediahub.app_releases import REPOSITORIES, latest_release
+
+        if self.definition.package_id in REPOSITORIES:
+            status = await self.status()
+            return await latest_release(self.definition.package_id, status.get("version"), self.metadata_cache)
         return {
             "supported": False,
             "reason": "Digest-pinned runtime; no automatic update provider configured",

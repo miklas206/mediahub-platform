@@ -210,7 +210,7 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
             "PidsLimit": 512,
             "RestartPolicy": {"Name": "no"},
             "Ulimits": [{"Name": "core", "Soft": 0, "Hard": 0}],
-            "LogConfig": {"Type": "none", "Config": {}},
+            "LogConfig": {"Type": "local", "Config": {"max-size": "5m", "max-file": "2"}},
         },
     }
     if policy.vpn is None:

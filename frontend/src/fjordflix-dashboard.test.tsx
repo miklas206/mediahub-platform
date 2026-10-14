@@ -144,6 +144,6 @@ it("preserves explicit app URL variants/nondefault ports and makes absent or unt
     ).toBe(true);
   expect(
     fjordHubAppLink(row.baseUrl, { id: "fjordflix", port: 9234 })?.management,
-  ).toBe(true);
+  ).toBe(false);
   expect(fjordHubAppLink(row.baseUrl, { id: "../unsafe" })).toBeNull();
 });

@@ -34,9 +34,12 @@ def test_stopped_source_and_completed_initializer_do_not_hide_healthy_vpn_client
     [("0.1.2", "ready", "checked"), (None, "failed", "failed"), ("0.1.1", "ready", "unchecked"), ("0.1.0", "ready", "unchecked")],
 )
 def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
-    version, preparation, status
+    version, preparation, status, monkeypatch
 ):
+    upstream = AsyncMock(return_value={"latestVersion": "0.1.2"})
+    monkeypatch.setattr("mediahub.platform_source.GitHubSourceProvider.check", upstream)
     svc = SimpleNamespace(
+        release_credentials=SimpleNamespace(token=lambda: None),
         app_dependencies=SimpleNamespace(
             public=lambda: {
                 "state": preparation,
@@ -49,6 +52,7 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     )
     adapter = ManagedAdapter(manager, "org.mediahub.mediaseed")
     checked = asyncio.run(adapter.updateCheck())
+    upstream.assert_awaited_once_with("miklas206/mediaseed", None)
     assert checked["latestVersion"] == "0.1.2"
     assert checked["installedVersion"] == version
     assert checked["checkStatus"] == status

@@ -6,11 +6,15 @@ const publicFile = (name: string) =>
 
 it("declares branded standalone home-screen icons for Android and iOS", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  expect(html).toContain('rel="manifest" href="/manifest.webmanifest"');
-  expect(html).toContain(
-    'rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"',
+  expect(html).toMatch(
+    /rel="manifest" href="\/manifest\.webmanifest(?:\?[^" ]*)?"/,
   );
-  expect(html).toContain('name="apple-mobile-web-app-title" content="MediaHub"');
+  expect(html).toMatch(
+    /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png(?:\?[^" ]*)?"/,
+  );
+  expect(html).toContain(
+    'name="apple-mobile-web-app-title" content="MediaHub"',
+  );
   expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
   const manifest = JSON.parse(publicFile("manifest.webmanifest").toString());
   expect(manifest).toMatchObject({
@@ -23,7 +27,12 @@ it("declares branded standalone home-screen icons for Android and iOS", () => {
     background_color: "#101719",
     theme_color: "#101719",
   });
-  expect(manifest.icons).toEqual(
+  expect(
+    manifest.icons.map((icon: { src: string }) => ({
+      ...icon,
+      src: icon.src.split("?")[0],
+    })),
+  ).toEqual(
     [192, 512].map((size) => ({
       src: `/icon-${size}.png`,
       sizes: `${size}x${size}`,

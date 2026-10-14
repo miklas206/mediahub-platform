@@ -435,7 +435,7 @@ def test_concurrent_actions_poll_refresh_and_config_fencing(logged_in):
     asyncio.run(exercise())
 
 
-def test_viewer_reads_status_but_cannot_act(logged_in):
+def test_viewer_cannot_access_administrator_integration_settings(logged_in):
     from mediahub.db import User
     from sqlalchemy import select
 
@@ -447,7 +447,7 @@ def test_viewer_reads_status_but_cannot_act(logged_in):
     service, _, path = setup(logged_in, handler)
     with service.sessions.begin() as db:
         db.scalar(select(User)).role = "viewer"
-    assert logged_in.get(path + "/updates").status_code == 200
+    assert logged_in.get(path + "/updates").status_code == 403
     for action in ("check", "start"):
         assert logged_in.post(path + "/updates/fjordflix/" + action, json={}).status_code == 403
 

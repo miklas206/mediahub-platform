@@ -39,10 +39,10 @@ def authenticated(request: Request):
         own_paths = {"/auth/me", "/auth/logout", "/auth/preferences", "/apps", "/app-overview"}
         if path.startswith("/apps/"):
             parts = path.split("/")
-            app = svc.apps.get(parts[2])
-            svc.auth.app_role(user["id"], app["packageId"])
             if request.method != "GET" or (len(parts) > 3 and parts[3] not in {"health", "open"}):
                 raise DomainError("administrator_required", "Administrator access is required", 403)
+            app = svc.apps.get(parts[2])
+            svc.auth.app_role(user["id"], app["packageId"])
         elif path not in own_paths and not path.startswith("/security") and not path.startswith("/sso/"):
             raise DomainError("administrator_required", "Administrator access is required", 403)
     if user.get("totpRequired") and not user.get("totpEnabled"):

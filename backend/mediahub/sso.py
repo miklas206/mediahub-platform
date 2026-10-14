@@ -14,6 +14,7 @@ from mediahub.auth import COOKIE, digest
 from mediahub.contracts import StrictModel
 from mediahub.db import Session, Setting, User
 from mediahub.errors import DomainError
+from mediahub.shared_vpn import AppChoice, GatewayChoice
 
 router = APIRouter()
 
@@ -110,3 +111,34 @@ def session_identity(request: Request, packageId: str):
         if row.value.get("scope"):
             public["scope"] = row.value["scope"]
         return result(public)
+
+
+def vpn_administrator(request):
+    svc = services(request)
+    if request.url.scheme != "https" and not svc.config.dev_mode:
+        raise DomainError("https_required", "Use HTTPS to manage shared VPN", 403)
+    public = session_identity(request, "org.mediahub.mediavpn")["data"]
+    with svc.sessions() as db:
+        user = db.get(User, public["id"])
+        if not user or user.role != "administrator" or public.get("scope"):
+            raise DomainError("forbidden", "MediaHub administrator access required", 403)
+    return svc.shared_vpn
+
+
+@router.get("/sso/vpn/apps")
+async def vpn_apps(request: Request):
+    return result(await vpn_administrator(request).public())
+
+
+@router.put("/sso/vpn/apps/{app_id}")
+async def vpn_app_choice(app_id: str, body: AppChoice, request: Request):
+    return result(await vpn_administrator(request).assign(app_id, body.enabled))
+
+
+@router.put("/sso/vpn/gateway")
+async def vpn_gateway_choice(body: GatewayChoice, request: Request):
+    # Reuse the same orchestration lock and dedicated-Plex conflict checks.
+    from mediahub.shared_vpn import gateway
+
+    vpn_administrator(request)
+    return await gateway(body, request)

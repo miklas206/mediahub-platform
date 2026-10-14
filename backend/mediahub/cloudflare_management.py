@@ -267,6 +267,9 @@ class CloudflareManagement:
 
     async def discover(self, force=False):
         async with self.lock:
+            from mediahub.cloudflare_connector import observe
+
+            await observe(self)
             if self.configured():
                 await cloudflare_vpn_dns.refresh_profiles(self, force=force)
             now = time.monotonic()
@@ -429,12 +432,18 @@ class CloudflareManagement:
         )
 
     def public(self):
+        with self.svc.sessions() as db:
+            installed = set(db.scalars(select(InstalledApp.package_id).where(
+                InstalledApp.is_mock.is_(False),
+                InstalledApp.state.not_in({"uninstalled", "removing", "installing", "failed"}),
+            )))
         return {
             **self.state(),
             "configured": self.configured(),
             "vpn": getattr(self, "vpn_snapshot", {"profiles": [], "message": None}),
             "vpnRecords": self.state().get("vpnRecords", []),
-            "apps": [{"packageId": key, "name": value} for key, value in APPS.items()],
+            "apps": [{"packageId": key, "name": value} for key, value in APPS.items()
+                     if key == "mediahub" or key in installed],
         }
 
     def prefix(self, state, tunnel):
@@ -519,6 +528,8 @@ class CloudflareManagement:
     async def origin(self, package):
         if package not in APPS:
             raise DomainError("unsupported_app", "Choose a supported MediaHub app", 422)
+        if package not in {row["packageId"] for row in self.public()["apps"]}:
+            raise DomainError("app_unavailable", "The linked app is not installed", 409)
         if package == "mediahub":
             address = self.svc.config.base_url
         elif package in {"org.mediahub.plex", "org.mediahub.jellyfin"}:
@@ -623,6 +634,8 @@ class CloudflareManagement:
                     "wrong_zone", "The hostname does not belong to the selected DNS zone", 422
                 )
             origin = await self.origin(body.packageId)
+            from mediahub.app_settings import saved_address
+
             route = {
                 "id": uuid4().hex,
                 "tunnelId": tunnel,
@@ -634,6 +647,7 @@ class CloudflareManagement:
                 "lastApplied": None,
                 "status": "pending",
                 "message": "Publishing app route",
+                "previousExternalUrl": saved_address(self.svc, body.packageId),
             }
             # Persist before remote writes so partial DNS/config success can be retried.
             state["routes"].append(route)
@@ -734,7 +748,9 @@ class CloudflareManagement:
                         db.add(
                             Setting(key=key, value={"externalUrl": "https://" + route["hostname"]})
                         )
-                    elif not row.value.get("externalUrl"):
+                    elif row.value.get("externalUrl", "") in {
+                        "", route.get("previousExternalUrl", ""), "https://" + route["hostname"]
+                    }:
                         row.value = {"externalUrl": "https://" + route["hostname"]}
         except DomainError as error:
             route.update(status="error", message=error.message, checkedAt=int(time.time()))
@@ -779,9 +795,11 @@ class CloudflareManagement:
     async def poll(self):
         while True:
             try:
+                await self.sync()
                 await self.sync_vpn_dns()
             except (DomainError, OSError, ValueError):
-                pass
+                self.svc.events.record("cloudflare.sync_failed", "cloudflare",
+                                       "Cloudflare background synchronization failed; check app configuration", "warning")
             await asyncio.sleep(60)
 
 
@@ -820,9 +838,7 @@ async def disconnect(request: Request):
 
 @router.post("/tunnels")
 async def create(body: NewTunnel, request: Request):
-    raise DomainError(
-        "tunnel_read_only", "Tunnels are read-only in MediaHub; create VPN DNS records instead", 405
-    )
+    return result(await services(request).cloudflare_management.create(body.name))
 
 
 @router.post("/vpn-dns")
@@ -897,4 +913,6 @@ async def mode(route_id: str, body: RouteMode, request: Request):
 
 @router.post("/sync")
 async def sync(request: Request):
-    return result(await services(request).cloudflare_management.sync_vpn_dns(force=True))
+    manager = services(request).cloudflare_management
+    await manager.sync(force=True)
+    return result(await manager.sync_vpn_dns(force=True))

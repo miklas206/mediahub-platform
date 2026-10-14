@@ -93,6 +93,7 @@ class HostMetrics(PublicModel):
 class Check(PublicModel):
     name: str
     status: str
+    message: str | None = None
 
 
 class Operation(PublicModel):
@@ -127,6 +128,10 @@ class RuntimeStatus(PublicModel):
     installationId: str
     hostId: str
     health: str
+    state: str | None = None
+    version: str | None = None
+    url: str | None = None
+    healthVerified: bool = False
     operation: Operation | None = None
     agentOnline: bool = False
     dockerHealthy: bool = False

@@ -31,7 +31,12 @@ def test_local_agent_rejects_untrusted_transport(url):
         Config(_env_file=None, agent_url=url)
 
 
-@pytest.mark.asyncio
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
 async def test_embedded_runtime_uses_internal_transport_without_tls_files(tmp_path):
     runtime = FastAPI()
     token = "test-token-" + "a" * 48
@@ -46,7 +51,7 @@ async def test_embedded_runtime_uses_internal_transport_without_tls_files(tmp_pa
     assert (await client.status())["connected"] is True
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_embedded_runtime_preserves_policy_errors():
     runtime = FastAPI()
 

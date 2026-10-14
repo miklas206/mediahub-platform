@@ -119,7 +119,7 @@ def test_manual_changes_pause_sync_and_browser_cannot_submit_target_ip(logged_in
         ).status_code
         == 422
     )
-    assert logged_in.post(BASE + "/tunnels", json={"name": "New"}).status_code == 405
+    assert logged_in.post(BASE + "/tunnels", json={"name": "New"}).status_code == 200
 
 
 def test_ipv6_uses_aaaa_and_lost_create_response_is_recovered(logged_in, vpn_dns, monkeypatch):

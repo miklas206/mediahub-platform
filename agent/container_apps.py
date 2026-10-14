@@ -260,7 +260,7 @@ class ContainerApps:
                 "Memory": 2 * 1024**3 if spec.app == "jellyfin" else 1024**3,
                 "MemorySwap": 2 * 1024**3 if spec.app == "jellyfin" else 1024**3,
                 "PidsLimit": 512,
-                "LogConfig": {"Type": "none", "Config": {}},
+                "LogConfig": {"Type": "local", "Config": {"max-size": "5m", "max-file": "2"}},
                 "Ulimits": [{"Name": "core", "Soft": 0, "Hard": 0}],
             },
         }
@@ -451,14 +451,24 @@ class ContainerApps:
         operation = self.operations.get(app, {})
         state = operation.get("state", "not-installed")
         health, url = "unknown", record.get("url") if record else None
+        checks, version, verified = [], None, False
         if record and state not in {"installing", "failed"}:
             inspected = await self.request(
                 "GET", f"/containers/{record['name']}/json", missing=True
             )
             if inspected:
                 self.verify(inspected, record)
-                state = "running" if inspected.get("State", {}).get("Running") else "stopped"
-                health = "unknown" if state == "running" else "degraded"
+                runtime = inspected.get("State", {})
+                state = "running" if runtime.get("Running") else "stopped"
+                observed = runtime.get("Health", {}).get("Status")
+                health = "critical" if runtime.get("Dead") or observed == "unhealthy" else (
+                    "degraded" if runtime.get("Restarting") or observed == "starting" or state == "stopped" else
+                    "healthy" if observed == "healthy" else "unknown")
+                verified = state == "running" and observed == "healthy" and not runtime.get("Restarting")
+                checks = [{"name": "container", "status": health,
+                           "message": "Docker healthcheck: " + (observed or state)}]
+                labels = inspected.get("Config", {}).get("Labels", {}) or {}
+                version = labels.get("org.opencontainers.image.version") or labels.get("build_version")
             else:
                 state = "removed"
         return {
@@ -470,10 +480,11 @@ class ContainerApps:
             "agentOnline": True,
             "dockerHealthy": state in {"running", "stopped"},
             "url": url,
-            "checks": [],
+            "checks": checks,
+            "version": str(version)[:128] if version else None,
             "operation": operation,
             "dataPreserved": True,
-            "healthVerified": False,
+            "healthVerified": verified,
         }
 
     async def action(self, app, action, confirmation=None):

@@ -90,7 +90,7 @@ def test_create_encrypts_credentials_and_download_requires_owned_tunnel(logged_i
         if method == "POST" and path.endswith("/cfd_tunnel")
     ]
     assert creates == [{"name": "Home", "config_src": "cloudflare"}]
-    assert logged_in.post(BASE + "/tunnels", json={"name": "Home"}).status_code == 405
+    assert logged_in.post(BASE + "/tunnels", json={"name": "Home"}).status_code == 409
     response = logged_in.post(BASE + "/tunnels/" + TUNNEL + "/token")
     assert response.content == b"connector-private-token"
     assert response.headers["cache-control"] == "no-store"

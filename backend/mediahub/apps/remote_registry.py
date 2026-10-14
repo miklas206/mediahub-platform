@@ -46,4 +46,5 @@ def register_remote_apps(svc):
                     svc.runtime_status_cache,
                     svc.events,
                     app.id,
+                    metadata_cache=getattr(getattr(svc, "updates", None), "github_metadata", None),
                 )

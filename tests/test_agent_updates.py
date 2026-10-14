@@ -399,7 +399,8 @@ def test_generated_command_selects_administrator_access_without_running_payload(
     import subprocess
     from pathlib import Path
 
-    shell = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
+    git_bash = Path("C:/Program Files/Git/bin/bash.exe")
+    shell = str(git_bash) if git_bash.is_file() else shutil.which("bash") or "bash"
     if not Path(shell).is_file():
         pytest.skip("Shell parser unavailable")
     updater = logged_in.app.state.services.agent_updates

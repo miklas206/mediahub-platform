@@ -46,6 +46,12 @@ def describe(svc, package_id):
         removable = None
         if installed and svc.apps.supports_removal(installed):
             removable = svc.apps.get(installed.id)
+    manager = getattr(svc, "cloudflare_management", None)
+    routing_managed = bool(manager and any(
+        route["packageId"] == package_id and route.get("status") == "synced"
+        and "https://" + route["hostname"] == saved_address(svc, package_id)
+        for route in manager.state()["routes"]
+    ))
     return {
         "packageId": package_id,
         "name": name,
@@ -53,7 +59,7 @@ def describe(svc, package_id):
         "localUrl": svc.config.operator_app_urls.get(package_id),
         "ssoOrigin": (saved_address(svc, package_id) or svc.config.sso_app_urls[package_id]) if package_id in svc.config.sso_app_urls else None,
         "ssoManaged": package_id in svc.config.sso_app_urls,
-        "routingManaged": False,
+        "routingManaged": routing_managed,
         "removableApp": removable,
         "configurationPath": {"org.mediahub.cloudflared": "/store/cloudflare", "org.mediahub.plex": "/apps/install/plex", "org.mediahub.jellyfin": "/apps/install/jellyfin", "org.mediahub.seedbox": "/apps/install/seedbox"}.get(package_id),
     }
@@ -71,7 +77,7 @@ def settings(package_id: str, request: Request):
 @router.put("/{package_id}")
 def save(package_id: str, body: AddressSettings, request: Request):
     svc = services(request)
-    current = describe(svc, package_id)
+    describe(svc, package_id)
     address = normalize_address(body.externalUrl)
     key = "app_address:" + package_id
     with svc.sessions.begin() as db:

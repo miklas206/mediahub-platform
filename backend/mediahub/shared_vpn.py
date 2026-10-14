@@ -84,7 +84,12 @@ class SharedVPN:
                 ("jellyfin", "container_installation_jellyfin"),
             ):
                 row = db.scalar(select(Setting).where(Setting.key == key))
-                if row:
+                installed = db.scalar(select(InstalledApp).where(
+                    InstalledApp.package_id == "org.mediahub." + app,
+                    InstalledApp.is_mock.is_(False),
+                    InstalledApp.state.not_in({"uninstalled", "removing", "installing", "failed"}),
+                ))
+                if row and installed:
                     choices.append(
                         {
                             "id": app,
@@ -110,8 +115,11 @@ class SharedVPN:
     async def public(self):
         gateway = await self.vpn()
         apps = []
-        seed = await self.vpn(path="/status", shared=False)
         if self.seed_installed():
+            try:
+                seed = await self.vpn(path="/status", shared=False)
+            except DomainError:
+                seed = {"enabled": None, "ready": False, "phase": "unavailable"}
             apps.append(
                 {
                     "id": "mediaseed",
@@ -119,7 +127,7 @@ class SharedVPN:
                     "hostId": "local",
                     "enabled": seed.get("enabled", False),
                     "ready": seed.get("ready", False),
-                    "phase": "ready" if seed.get("ready") else "idle",
+                    "phase": seed.get("phase") or ("ready" if seed.get("ready") else "idle"),
                 }
             )
         for item in self.bindings():
@@ -143,7 +151,7 @@ class SharedVPN:
             app = db.scalar(
                 select(InstalledApp).where(InstalledApp.package_id == "org.mediahub.mediaseed")
             )
-            return bool(app and not app.is_mock and app.state not in {"uninstalled", "removing"})
+            return bool(app and not app.is_mock and app.state not in {"uninstalled", "removing", "installing", "failed"})
 
     async def assign(self, app, enabled):
         async with self.lock:

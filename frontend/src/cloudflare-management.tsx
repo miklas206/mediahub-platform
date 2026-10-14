@@ -5,7 +5,8 @@ import { api } from "./api";
 import { Panel } from "./phase2";
 import { NotificationPopup } from "./notification-popup";
 import { t, translateText, useLanguage } from "./i18n";
-type Management = {
+import { CloudflareAppRoutes, type AppRouting } from "./cloudflare-app-routes";
+type Management = AppRouting & {
   configured: boolean;
   accountId: string;
   vpn: {
@@ -109,10 +110,10 @@ export function CloudflareManagementPanel({
     discovery?.records.filter((row) => row.zoneId === selectedZone?.id) || [];
   const tunnels = discovery?.tunnels || [];
   return (
-    <Panel title={t("Cloudflare DNS and VPN")}>
+    <Panel title={t("Cloudflare app domains and VPN DNS")}>
       <p className="muted">
         {t(
-          "Create DNS records using a verified MediaVPN public IP. Existing Cloudflare tunnels are shown read-only.",
+          "Connect installed apps to their own domains, or synchronize DNS with a verified MediaVPN public IP.",
         )}
       </p>
       {error && (
@@ -225,6 +226,13 @@ export function CloudflareManagementPanel({
               </small>
             </div>
           ))}
+          <CloudflareAppRoutes
+            data={data}
+            zones={discovery?.zones || []}
+            discovered={tunnels}
+            busy={busy}
+            change={change}
+          />
           <h3>{t("Create VPN DNS record")}</h3>
           <p className="muted">
             {t(
@@ -369,7 +377,7 @@ export function CloudflareManagementPanel({
                 "/sync",
                 "POST",
                 {},
-                "VPN DNS synchronization checked",
+                "App routes and VPN DNS synchronization checked",
               )
             }
           >
@@ -399,7 +407,7 @@ export function CloudflareManagementPanel({
           </details>
           <details open>
             <summary>
-              {t("Existing tunnels (read-only)")} ({tunnels.length})
+              {t("Existing tunnels")} ({tunnels.length})
             </summary>
             <div className="cloudflare-profile-list">
               {tunnels.map((row) => (

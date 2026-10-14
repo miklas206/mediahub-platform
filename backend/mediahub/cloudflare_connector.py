@@ -41,6 +41,7 @@ async def install(manager, tunnel):
             raise DomainError("connector_ownership", "Connector container ownership changed", 409)
         if not existing["State"].get("Running"):
             await runtime.docker("POST", "/containers/" + existing["Id"] + "/start")
+            return {"state": "starting", "tunnelId": tunnel, "location": "MediaHub host"}
         return {"state": "running", "tunnelId": tunnel, "location": "MediaHub host"}
     token = await manager.call("GET", prefix + "/token")
     directory = manager.svc.config.data_dir / "cloudflare-connectors"
@@ -74,9 +75,29 @@ async def install(manager, tunnel):
                 "CapDrop": ["ALL"],
                 "SecurityOpt": ["no-new-privileges:true"],
                 "RestartPolicy": {"Name": "unless-stopped"},
-                "LogConfig": {"Type": "none", "Config": {}},
+                "LogConfig": {"Type": "local", "Config": {"max-size": "5m", "max-file": "2"}},
             },
         },
     )
     await runtime.docker("POST", "/containers/" + name + "/start")
     return {"state": "starting", "tunnelId": tunnel, "location": "MediaHub host"}
+
+
+async def observe(manager):
+    state = manager.state()
+    for tunnel, connector in state.get("connectors", {}).items():
+        try:
+            row = await manager.svc.managed_apps.docker(
+                "GET", "/containers/mediahub-cloudflared-" + tunnel + "/json", missing=True)
+            if not row:
+                phase = "missing"
+            elif row.get("Config", {}).get("Labels", {}).get("org.mediahub.cloudflare.tunnel") != tunnel:
+                phase = "ownership-conflict"
+            else:
+                runtime = row.get("State", {})
+                phase = "restarting" if runtime.get("Restarting") else "running" if runtime.get("Running") else "stopped"
+            connector["state"] = phase
+        except DomainError:
+            connector["state"] = "unavailable"
+    if state.get("connectors"):
+        manager.save(state)

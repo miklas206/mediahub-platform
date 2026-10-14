@@ -117,8 +117,8 @@ def test_viewer_cannot_save_probe_or_download_helpers(logged_in, monkeypatch):
     auth = logged_in.app.state.services.auth
     real = auth.authenticate
     monkeypatch.setattr(auth, "authenticate", lambda token: {**real(token), "role": "viewer"})
-    assert logged_in.get("/api/v1/windows-share/configuration").status_code == 200
-    assert logged_in.get("/api/v1/windows-share/status").status_code == 200
+    assert logged_in.get("/api/v1/windows-share/configuration").status_code == 403
+    assert logged_in.get("/api/v1/windows-share/status").status_code == 403
     assert logged_in.put("/api/v1/windows-share/configuration", json=CONFIG).status_code == 403
     assert logged_in.post("/api/v1/windows-share/check").status_code == 403
     assert logged_in.get("/api/v1/windows-share/connect.ps1").status_code == 403

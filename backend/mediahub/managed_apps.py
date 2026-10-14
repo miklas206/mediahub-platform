@@ -17,7 +17,7 @@ import httpx
 from pydantic import Field, field_validator
 from sqlalchemy import select
 
-from mediahub.contracts import Health, StrictModel
+from mediahub.contracts import Health, HealthCheck, StrictModel
 from mediahub.db import InstalledApp
 from mediahub.errors import DomainError
 
@@ -74,20 +74,32 @@ class ManagedAdapter:
             rows = [row for row in rows if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
                     not in ({"client-init", "qbittorrent"} if active_clone else {"client-init"})]
             has_app = any(row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app" for row in rows)
-            running = has_app and all(
-                row.get("State", {}).get("Running")
-                and row.get("State", {}).get("Health", {}).get("Status", "healthy") == "healthy"
-                for row in rows
-            )
+            checks = []
+            for row in rows:
+                state = row.get("State", {})
+                service = row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") or "runtime"
+                health = state.get("Health", {}).get("Status")
+                status = "unhealthy" if health == "unhealthy" or state.get("Dead") else (
+                    "degraded" if state.get("Restarting") or health == "starting" else
+                    "healthy" if state.get("Running") else "unknown"
+                )
+                checks.append(HealthCheck(name=service, status=status,
+                    message="Container unhealthy" if status == "unhealthy" else
+                    "Container starting or restarting" if status == "degraded" else
+                    "Container running" if state.get("Running") else "Container stopped"))
+            running = has_app and bool(checks) and all(check.status == "healthy" for check in checks)
+            overall = "healthy" if running else "unhealthy" if any(check.status == "unhealthy" for check in checks) else "degraded" if any(check.status == "degraded" for check in checks) else "unknown"
             return Health(
-                status="healthy" if running else "unknown",
+                status=overall,
                 summary="App containers running" if running else "Check app runtime",
-                checks=[],
+                checks=checks,
             )
         except DomainError:
             return Health(status="unknown", summary="App runtime unavailable", checks=[])
 
     async def updateCheck(self):
+        from mediahub.platform_source import GitHubSourceProvider
+
         kind = self.package.rsplit(".", 1)[-1]
         root = Path(__file__).resolve().parents[2]
         bundled = root / "bundled" / kind / "pyproject.toml"
@@ -102,11 +114,21 @@ class ManagedAdapter:
             installed = versions[0] if len(versions) == 1 else None
             dependencies = getattr(self.manager.svc, "app_dependencies", None)
             state = dependencies.public() if dependencies else {}
+            monitor = getattr(self.manager.svc, "updates", None)
+            upstream = await GitHubSourceProvider(
+                installed or latest,
+                metadata_cache=getattr(monitor, "github_metadata", None),
+            ).check("miklas206/" + kind, self.manager.svc.release_credentials.token())
             return {"supported": False, "updateAvailable": False,
-                    "installedVersion": installed, "latestVersion": latest,
+                    "installedVersion": installed, "latestVersion": upstream["latestVersion"],
+                    "bundledVersion": latest, "repository": "miklas206/" + kind,
                     "checkStatus": "failed" if state.get("state") == "failed" else "checked" if installed == latest else "unchecked",
-                    "message": state.get("message") or "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
-        except (OSError, ValueError, KeyError, DomainError):
+                    "message": state.get("message") if state.get("state") == "failed" else
+                    "A newer app version exists on GitHub; it must be included in a MediaHub Core update before installation." if upstream["latestVersion"] != latest else
+                    "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
+        except DomainError:
+            raise
+        except (OSError, ValueError, KeyError):
             return {"supported": False, "checkStatus": "failed", "message": "Bundled app version could not be verified"}
 
 
