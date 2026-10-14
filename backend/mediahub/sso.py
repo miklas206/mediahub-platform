@@ -15,6 +15,8 @@ from mediahub.contracts import StrictModel
 from mediahub.db import Session, Setting, User
 from mediahub.errors import DomainError
 from mediahub.shared_vpn import AppChoice, GatewayChoice
+from mediahub.vpn_gateway import Credentials as GatewayCredentials
+from mediahub.vpn_gateway import GatewayConfig
 
 router = APIRouter()
 
@@ -142,3 +144,28 @@ async def vpn_gateway_choice(body: GatewayChoice, request: Request):
 
     vpn_administrator(request)
     return await gateway(body, request)
+
+
+@router.get("/sso/vpn-gateway")
+async def web_gateway_status(request: Request):
+    vpn_administrator(request)
+    return result(await services(request).vpn_gateway.public())
+
+
+@router.put("/sso/vpn-gateway/credentials")
+async def web_gateway_credentials(body: GatewayCredentials, request: Request):
+    vpn_administrator(request)
+    return result(await services(request).vpn_gateway.credentials(body))
+
+
+@router.put("/sso/vpn-gateway/config", status_code=202)
+async def web_gateway_config(body: GatewayConfig, request: Request):
+    vpn_administrator(request)
+    return result(await services(request).vpn_gateway.configure(body))
+
+
+@router.post("/sso/vpn-gateway/reconcile", status_code=202)
+async def web_gateway_reconcile(request: Request):
+    vpn_administrator(request)
+    services(request).vpn_gateway.schedule()
+    return result(services(request).vpn_gateway.snapshot())

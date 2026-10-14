@@ -246,7 +246,7 @@ def test_release_check_rejects_unverifiable_metadata(monkeypatch):
     assert failure.value.code == "update_check_unavailable"
 
 
-def test_configured_monitor_is_registered_as_read_only_app(logged_in, monkeypatch):
+def test_legacy_monitor_is_preserved_but_removed_from_public_apps(logged_in, monkeypatch):
     async def handler(request):
         if request.url.host == "192.168.50.10":
             return httpx.Response(
@@ -267,9 +267,10 @@ def test_configured_monitor_is_registered_as_read_only_app(logged_in, monkeypatc
     register_cloudflared_app(svc)
 
     apps = logged_in.get("/api/apps").json()["data"]
-    app = next(item for item in apps if item["packageId"] == "org.mediahub.cloudflared")
+    assert not any(item["packageId"] == "org.mediahub.cloudflared" for item in apps)
+    app = next(item for item in svc.apps.list() if item["packageId"] == "org.mediahub.cloudflared")
     assert app["detailPath"] == f"/apps/{app['id']}"
-    assert app["health"]["status"] == "healthy"
+    assert logged_in.get("/api/v1/cloudflare/status").json()["data"]["status"] == "healthy"
 
     runtime = logged_in.get(f"/api/apps/{app['id']}/runtime").json()["data"]
     assert runtime["view"] == "cloudflare"

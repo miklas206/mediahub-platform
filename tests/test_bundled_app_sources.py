@@ -40,7 +40,7 @@ def test_reviewed_bundle_matches_manifest_and_relay_protocol():
 
 def test_compatibility_runtime_scripts_match_reviewed_host_helpers():
     root = Path(__file__).resolve().parents[1]
-    for name in ("prepare_local_apps.py", "prepare_managed_install.py"):
+    for name in ("prepare_local_apps.py", "prepare_managed_install.py", "platform_update_host.py"):
         assert (root / "scripts" / name).read_bytes().replace(b"\r\n", b"\n") == (
             root / "docker/runtime-scripts" / name
         ).read_bytes().replace(b"\r\n", b"\n")

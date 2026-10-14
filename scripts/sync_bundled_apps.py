@@ -32,6 +32,7 @@ def sync(source_root, destination):
                 p.suffix == ".py"
                 or "static" in p.relative_to(root).parts
                 or "relay_image" in p.relative_to(root).parts
+                or "gateway_image" in p.relative_to(root).parts
             )
         ]
         for path in sorted(files):

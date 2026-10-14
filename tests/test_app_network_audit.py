@@ -67,8 +67,16 @@ def test_vpn_app_delegation_requires_hub_admin_and_live_parent_session(logged_in
     grant = logged_in.post("/api/v1/sso/exchange", json={"code": code, "verifier": verifier, "packageId": package}).json()["data"]
     headers = {"Authorization": "Bearer " + grant["token"]}
     monkeypatch.setattr(svc.shared_vpn, "public", AsyncMock(return_value={"apps": []}))
+    monkeypatch.setattr(svc.vpn_gateway, "public", AsyncMock(return_value={"routes": []}))
+    configure = AsyncMock(return_value={"routes": [], "enabled": False})
+    monkeypatch.setattr(svc.vpn_gateway, "configure", configure)
     assert logged_in.get("/api/v1/sso/vpn/apps").status_code == 401
     assert logged_in.get("/api/v1/sso/vpn/apps", headers=headers).status_code == 200
+    assert logged_in.get("/api/v1/sso/vpn-gateway").status_code == 401
+    assert logged_in.get("/api/v1/sso/vpn-gateway", headers=headers).status_code == 200
+    assert logged_in.put("/api/v1/sso/vpn-gateway/config", headers=headers, json={"enabled": False, "routes": []}).status_code == 202
+    configure.assert_awaited_once()
     with svc.sessions.begin() as db:
         db.scalar(select(User).where(User.username == "tester")).role = "user"
     assert logged_in.get("/api/v1/sso/vpn/apps", headers=headers).status_code == 403
+    assert logged_in.get("/api/v1/sso/vpn-gateway", headers=headers).status_code == 403

@@ -61,12 +61,6 @@ const hubApps = {
     setup: "/apps/install/jellyfin",
     category: "Media",
   },
-  "org.mediahub.cloudflared": {
-    name: "Cloudflare",
-    description: "Tunnel connections, public routes and monitoring.",
-    setup: "/store/cloudflare",
-    category: "Network",
-  },
   "org.mediahub.fjordhub": {
     name: "FjordHub",
     description: "Connect FjordHub and manage its own apps from here.",

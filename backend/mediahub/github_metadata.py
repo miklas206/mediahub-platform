@@ -52,6 +52,9 @@ class GitHubMetadata:
         key = (identity, path)
         async with self.lock:
             now = self.clock()
+            cached = self.cache.get(key)
+            if cached and now < cached[0]:
+                return cached[1]
             retry_at = self.cooldowns.get(identity, 0)
             if now < retry_at:
                 error = DomainError(
@@ -61,9 +64,6 @@ class GitHubMetadata:
                 )
                 error.retry_at = retry_at
                 raise error
-            cached = self.cache.get(key)
-            if cached and now < cached[0]:
-                return cached[1]
             response = await client.get("https://api.github.com" + path)
             from mediahub.platform_source import check_github_access
 

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from mediahub.errors import DomainError
 from mediahub.managed_apps import ManagedAdapter
 from mediahub.update_monitor import UpdateMonitor
 
@@ -69,3 +70,41 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     )
     assert result["installedVersion"] == version and result["checkStatus"] == status
     assert "managed" != result["installedVersion"]
+
+
+def test_rate_limit_does_not_erase_observed_installed_app_version(monkeypatch):
+    error = DomainError("github_rate_limited", "GitHub request limit reached", 429)
+    error.retry_at = 123456
+    monitor = SimpleNamespace(check_platform=AsyncMock(side_effect=error))
+    svc = SimpleNamespace(updates=monitor, settings=SimpleNamespace(get=lambda: SimpleNamespace(release_repository="owner/hub")))
+    adapter = ManagedAdapter(SimpleNamespace(svc=svc, containers=AsyncMock(return_value=[row("app", False, "0.1.7")])), "org.mediahub.mediaseed")
+    checked = asyncio.run(adapter.updateCheck())
+    assert checked["installedVersion"] == "0.1.7"
+    assert checked["checkStatus"] == "deferred" and checked["retryAt"] == 123456
+    assert checked["bundledVersion"] == BUNDLED_VERSION
+
+
+def test_matching_verified_core_commit_reuses_immutable_bundled_metadata():
+    monitor = SimpleNamespace(
+        check_platform=AsyncMock(return_value={"installedCommit": "a" * 40, "latestCommit": "a" * 40}),
+        source_metadata=AsyncMock(side_effect=AssertionError("Unnecessary GitHub request")),
+    )
+    svc = SimpleNamespace(updates=monitor, settings=SimpleNamespace(get=lambda: SimpleNamespace(release_repository="owner/hub")))
+    adapter = ManagedAdapter(SimpleNamespace(svc=svc, containers=AsyncMock(return_value=[row("app", True, BUNDLED_VERSION)])), "org.mediahub.mediaseed")
+    checked = asyncio.run(adapter.updateCheck())
+    assert checked["checkStatus"] == "checked"
+    assert checked["latestVersion"] == BUNDLED_VERSION
+    monitor.source_metadata.assert_not_awaited()
+
+
+def test_preparation_finishing_during_check_publishes_replacement_version():
+    monitor = SimpleNamespace(check_platform=AsyncMock(return_value={"installedCommit": "a" * 40, "latestCommit": "a" * 40}))
+    svc = SimpleNamespace(updates=monitor, settings=SimpleNamespace(get=lambda: SimpleNamespace(release_repository="owner/hub")))
+    adapter = ManagedAdapter(SimpleNamespace(svc=svc), "org.mediahub.mediaseed")
+    adapter.installed_version = AsyncMock(side_effect=[
+        {"installedVersion": "0.1.0", "bundledVersion": BUNDLED_VERSION, "preparationState": "preparing", "preparationMessage": None},
+        {"installedVersion": BUNDLED_VERSION, "bundledVersion": BUNDLED_VERSION, "preparationState": "ready", "preparationMessage": None},
+    ])
+    checked = asyncio.run(adapter.updateCheck())
+    assert checked["installedVersion"] == BUNDLED_VERSION
+    assert checked["checkStatus"] == "checked"

@@ -20,6 +20,11 @@ class AppDependencies:
     async def run(self):
         async with self.svc.managed_apps.lock:
             await self._run()
+        monitor = getattr(self.svc, "updates", None)
+        if monitor:
+            # Refresh local version labels even when GitHub has imposed a
+            # cooldown. Preparation can outlive the initial release check.
+            await monitor.refresh_managed_versions("failed" if self.message else "ready")
 
     async def _run(self):
         config, manager = self.svc.config, self.svc.managed_apps

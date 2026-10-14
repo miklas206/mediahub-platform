@@ -53,7 +53,7 @@ def test_maintenance_limits_docker_cleanup_and_reports_failure(tmp_path, monkeyp
     monkeypatch.setattr(updater, "_cleanup_staging", lambda: 3)
     monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
     updater._maintenance(request)
-    assert commands == [["docker", "builder", "prune", "--force", "--all", "--filter", "until=24h"]]
+    assert commands == []
     status = json.loads((updater.updates / "maintenance-status.json").read_text())
     assert status["state"] == "succeeded"
     assert not (updater.updates / "request.json").exists()
@@ -67,20 +67,11 @@ def test_maintenance_limits_docker_cleanup_and_reports_failure(tmp_path, monkeyp
     assert "private" not in status["message"]
 
 
-def test_cleanup_uses_temporary_docker_client_config(monkeypatch):
-    environments = []
+def test_cleanup_has_no_blanket_docker_prune_commands():
+    import inspect
 
-    def run(args, **kwargs):
-        environment = kwargs["env"]
-        assert os.path.isdir(environment["DOCKER_CONFIG"])
-        assert environment["HOME"] == environment["DOCKER_CONFIG"]
-        assert environment["DOCKER_HOST"] == "unix:///var/run/docker.sock"
-        environments.append(environment)
-        return SimpleNamespace(stdout="cleaned")
-
-    monkeypatch.setattr(host_module.subprocess, "run", run)
-    assert HostUpdater._run(["docker", "builder", "prune", "--force"]) == "cleaned"
-    assert not os.path.exists(environments[0]["DOCKER_CONFIG"])
+    for method in (HostUpdater._maintenance, HostUpdater._cleanup_after_success):
+        assert '"prune"' not in inspect.getsource(method)
 
 
 def test_maintenance_skips_mounted_stage(tmp_path, monkeypatch):
@@ -944,7 +935,7 @@ def test_cleanup_preserves_current_rollback_container_and_foreign_images(tmp_pat
 
     def command(*args):
         if args[:3] == ("docker", "image", "inspect"):
-            return args[-1]
+            return ids["old"] if args[-1] == "mediahub-core:source-0.4.29-333333333333" else args[-1]
         if args[:3] == ("docker", "ps", "-aq"):
             return "container-id"
         if args[:2] == ("docker", "inspect"):
@@ -958,7 +949,7 @@ def test_cleanup_preserves_current_rollback_container_and_foreign_images(tmp_pat
 
     updater.command = command
     updater._cleanup_update_images()
-    assert deleted == ["mediahub-core:source-0.4.29-333333333333"]
+    assert deleted == [ids["old"]]
 
 
 def test_cleanup_failure_cannot_change_verified_update_to_failed(tmp_path, monkeypatch):

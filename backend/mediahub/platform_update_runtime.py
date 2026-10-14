@@ -24,9 +24,8 @@ from mediahub.source_git import source_access
 IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 RUNNING = {"downloading", "staged", "building", "installing", "verifying", "rolling_back"}
 MAINTENANCE_UNAVAILABLE = (
-    "An administrator must refresh the root-owned host updater from a reviewed checkout "
-    "using scripts/enable_source_updates.py --refresh-helper on the host. "
-    "Updating MediaHub alone does not enable system cleanup."
+    "Safe system cleanup is being prepared automatically. Wait for app preparation to finish; "
+    "if it fails, retry app preparation in Updates."
 )
 
 SOURCE_ASSETS = {"mediahub-source-release.json", "mediahub-source.tar.gz"}
@@ -432,7 +431,7 @@ class PlatformUpdateRuntime:
             raise
 
     def maintenance_status(self):
-        if not self._host_capability("maintenance"):
+        if not self._host_capability("maintenance") or not self._host_capability("ownedHelperCleanup"):
             return {
                 "state": "unavailable",
                 "message": MAINTENANCE_UNAVAILABLE,
@@ -441,21 +440,35 @@ class PlatformUpdateRuntime:
         if not path.exists():
             return {"state": "idle", "message": "Ready for maintenance."}
         try:
-            if path.is_symlink() or path.stat().st_size > 4096:
+            if path.is_symlink() or path.stat().st_size > 65536:
                 raise ValueError()
             value = json.loads(path.read_text())
-            return {
+            report = {
                 "state": str(value["state"])[:32],
                 "message": str(value["message"])[:400],
                 "operationId": str(value.get("operationId", ""))[:32],
                 "freeBytes": max(0, int(value.get("freeBytes", 0))),
                 "reclaimedBytes": max(0, int(value.get("reclaimedBytes", 0))),
             }
+            cleanup = value.get("helperCleanup")
+            if isinstance(cleanup, dict):
+                planned = cleanup.get("planned", [])
+                removed = cleanup.get("removedImageIds", [])
+                report["helperCleanup"] = {
+                    "planned": [{"id": row["id"], "tags": [str(tag)[:128] for tag in row.get("tags", [])[:1]],
+                                 "component": row.get("component")}
+                                for row in planned[:100] if isinstance(row, dict)
+                                and re.fullmatch(r"sha256:[a-f0-9]{64}", str(row.get("id", "")))
+                                and row.get("component") in {"vpn-gateway", "vpn-relay"}],
+                    "removedImageIds": [item for item in removed[:100] if isinstance(item, str)
+                                        and re.fullmatch(r"sha256:[a-f0-9]{64}", item)],
+                }
+            return report
         except (OSError, ValueError, KeyError, TypeError):
             return {"state": "invalid", "message": "Maintenance status could not be read."}
 
     def start_maintenance(self):
-        if not self._host_capability("maintenance"):
+        if not self._host_capability("maintenance") or not self._host_capability("ownedHelperCleanup"):
             raise DomainError("maintenance_unavailable", MAINTENANCE_UNAVAILABLE, 409)
         if (
             self.status()["state"] in RUNNING

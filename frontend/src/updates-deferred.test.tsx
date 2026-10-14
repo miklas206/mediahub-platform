@@ -38,7 +38,7 @@ function render() {
     </MemoryRouter>,
   );
 }
-describe("deferred Cloudflare update checks", () => {
+describe("deferred app update checks", () => {
   it("shows a stale Core commit without an invented check time or tunnel message", () => {
     setLanguage("da");
     state.items = [{id:"mediahub-core", name:"MediaHub Core", checkStatus:"deferred", retryAt:123456,
@@ -77,7 +77,8 @@ describe("deferred Cloudflare update checks", () => {
     state.lastError = "Could not check: Plex";
     const html = render();
     expect(html).toContain("GitHubs forespørgselsgrænse");
-    expect(html).toContain("Tunnelen fungerer uændret");
+    expect(html).toContain("Installerede apps kører videre");
+    expect(html).not.toContain("Tunnelen fungerer uændret");
     expect(html).toContain("Senest verificerede udgivelse: 2026.9.1");
     expect(html).toContain("forældet");
     expect(html).toContain("Plex update source timed out");

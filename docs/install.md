@@ -88,8 +88,12 @@ containers keeps their data. This script is not an update or repair command.
 ### Proxmox
 
 This path creates **one new MediaHub LXC**, not one LXC per app. It never
-replaces LXC 102 or any other existing guest. The script currently supports
-amd64 Proxmox, a Debian 13 template and a DHCP-enabled local network.
+replaces any existing guest. The script supports native amd64/arm64 hosts with
+a matching Debian 13 template, cgroup v2 and a DHCP-enabled local network.
+It discovers active container/template storage and bridges, proposes CPU/RAM
+based on available capacity and validates TUN access. Block volumes use their
+filesystem UUID; mounted ZFS datasets use their GUID. Missing prerequisites
+stop the guide with a specific message. See [the gateway guide](vpn-gateway-guide.md).
 It installs Docker inside the new guest, not on the Proxmox hypervisor.
 The installer also loads the host TUN driver, enables it at host boot and
 passes `/dev/net/tun` to the new unprivileged LXC as a root-only device.

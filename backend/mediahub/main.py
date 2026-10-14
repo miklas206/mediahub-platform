@@ -61,6 +61,8 @@ from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
+from mediahub.vpn_gateway import VPNGateway
+from mediahub.vpn_gateway import router as vpn_gateway_router
 from mediahub.windows_share import WindowsShareService
 from mediahub.windows_share_api import router as windows_share_router
 
@@ -121,6 +123,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         await svc.managed_installer.initialize()
         svc.cloudflare_management = CloudflareManagement(svc)
         svc.shared_vpn = SharedVPN(svc)
+        svc.vpn_gateway = VPNGateway(svc)
         from mediahub.app_dependencies import AppDependencies
         svc.app_dependencies = AppDependencies(svc)
         svc.app_dependencies.start()
@@ -163,6 +166,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         port_collector = asyncio.create_task(svc.seedbox_reachability.poll())
         rss_collector = asyncio.create_task(svc.rss_feeds.poll())
         cloudflare_collector = asyncio.create_task(svc.cloudflare_management.poll())
+        vpn_gateway_collector = asyncio.create_task(svc.vpn_gateway.poll())
         svc.update_queue.resume()
         try:
             yield
@@ -172,6 +176,10 @@ def create_app(config: Config | None = None) -> FastAPI:
                 with contextlib.suppress(asyncio.CancelledError):
                     await svc.app_dependencies.task
             cloudflare_collector.cancel()
+            vpn_gateway_collector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await vpn_gateway_collector
+            await svc.vpn_gateway.close()
             with contextlib.suppress(asyncio.CancelledError):
                 await cloudflare_collector
             await svc.cloudflare_management.close()
@@ -307,6 +315,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(sso_router, prefix="/api/v1")
     app.include_router(cloudflare_management_router, prefix="/api/v1")
     app.include_router(shared_vpn_router, prefix="/api/v1")
+    app.include_router(vpn_gateway_router, prefix="/api/v1")
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(gpu_setup_router, prefix="/api/v1")

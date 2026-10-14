@@ -177,7 +177,7 @@ async def _apps_with_health(svc):
         async with slots:
             return {**app, "health": (await svc.apps.health(app["id"])).model_dump()}
 
-    return await asyncio.gather(*(with_health(app) for app in svc.apps.list()))
+    return await asyncio.gather(*(with_health(app) for app in svc.apps.list() if app.get("packageId") != "org.mediahub.cloudflared"))
 
 
 @router.get("/apps")
@@ -187,7 +187,7 @@ async def apps(
     user=Depends(authenticated),
 ):
     svc = services(request)
-    listing = svc.apps.list()
+    listing = [app for app in svc.apps.list() if app["packageId"] != "org.mediahub.cloudflared"]
     from mediahub.app_settings import saved_address
 
     listing = [{**app, "externalUrl": saved_address(svc, app["packageId"])} for app in listing]

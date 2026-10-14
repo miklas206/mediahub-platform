@@ -237,8 +237,9 @@ checks passed; `rolled_back` means restoration succeeded; `failed` requires
 review of the protected status file. Build output is bounded and redacted.
 The two newest successful configuration snapshots are retained. Failed-state
 directories remain for administrator recovery. Do not delete recovery state until
-the deployment is confirmed healthy. Successful updates prune unused build cache
-older than 24 hours while keeping a 4 GB cache budget.
+the deployment is confirmed healthy. Successful updates remove only unreferenced
+MediaHub source images and explicitly owned obsolete VPN helper images. Docker
+build cache is preserved; no system, builder, container or volume prune is run.
 
 ## Faster shutdown during updates
 
@@ -256,17 +257,31 @@ host-side cleanup. It runs independently of the browser and reports recovered
 system disk space. Updates and maintenance cannot run concurrently.
 
 Cleanup removes only known update archive/manifest files in old staging folders,
-unused MediaHub source images that are not referenced by any container or rollback
-snapshot, and unused Docker build cache older than 24 hours. Manual maintenance
-does not retain the automatic update's 4 GB cache budget. Subsequent builds may
-need to rebuild cached layers, including those shared with other applications.
-It never prunes volumes or containers, scans media folders, or deletes app data,
-configuration, rollback backups or unknown files. Failed recovery directories
-remain available for investigation.
+unused MediaHub source images, and obsolete owned VPN helper images. Every running
+or stopped container, current app Compose recipe, helper-image registry and retained
+rollback snapshot protects its referenced image identities. Helper candidates need
+both an exact MediaHub helper tag and its matching source fingerprint label. Foreign
+tags, unknown ownership and installations without a current helper-image registry
+are preserved. The planner rechecks ownership and all references immediately before
+deleting an immutable image ID without `--force`.
 
-Existing installations require an explicit administrator refresh of the host helper
-from a reviewed checkout containing the maintenance implementation, as root on the
-MediaHub host. Adjust `--root` if the installation is not at `/opt/mediahub`:
+It never prunes build cache, volumes or containers, scans media folders, or deletes
+app data, configuration, rollback backups or unknown files. Failed recovery
+directories remain available for investigation. The maintenance result includes
+`helperCleanup.planned` and `helperCleanup.removedImageIds` for review.
+
+To preview exact helper candidates without deleting anything, run the installed
+host helper (adjust the installation root if necessary):
+
+```sh
+sudo python3 /opt/mediahub/platform_update_host.py --root /opt/mediahub --cleanup-preview
+```
+
+The automatic app-preparation helper refreshes this host script from the immutable
+installed Core image. Healthcheck cleanup remains unavailable until the host reports
+the `ownedHelperCleanup` capability, so an older helper cannot run its former broad
+build-cache pruning. If preparation fails, retry it from Updates. For explicit
+administrator recovery, the equivalent reviewed-checkout command is:
 
 ```sh
 sudo python3 scripts/enable_source_updates.py --root /opt/mediahub --refresh-helper

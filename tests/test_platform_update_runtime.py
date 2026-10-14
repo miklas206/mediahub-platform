@@ -72,6 +72,23 @@ def test_maintenance_requires_capability_and_refuses_active_update(tmp_path, mon
         updater.start_maintenance()
 
 
+def test_maintenance_exposes_only_bounded_owned_helper_identities(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    monkeypatch.setattr(updater, "_host_capability", lambda name: True)
+    identifier = "sha256:" + "a" * 64
+    (spool / "maintenance-status.json").write_text(json.dumps({
+        "state": "succeeded", "message": "Finished", "helperCleanup": {
+            "planned": [{"id": identifier, "tags": ["mediahub-web-gateway:" + "b" * 16], "component": "vpn-gateway", "private": "do-not-return"},
+                        {"id": "invalid", "tags": ["foreign:latest"], "component": "foreign"}],
+            "removedImageIds": [identifier, "invalid"],
+        },
+    }))
+    result = updater.maintenance_status()
+    assert result["helperCleanup"]["removedImageIds"] == [identifier]
+    assert len(result["helperCleanup"]["planned"]) == 1
+    assert "do-not-return" not in str(result)
+
+
 def test_source_capabilities_do_not_imply_maintenance_support(tmp_path, monkeypatch):
     updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
     path = spool / "host-capabilities.json"
@@ -92,7 +109,7 @@ def test_source_capabilities_do_not_imply_maintenance_support(tmp_path, monkeypa
     monkeypatch.setattr(Path, "lstat", metadata)
     assert updater.source_available is True
     assert updater.maintenance_status()["state"] == "unavailable"
-    assert "--refresh-helper" in updater.maintenance_status()["message"]
+    assert "prepared automatically" in updater.maintenance_status()["message"]
     with pytest.raises(DomainError) as failure:
         updater.start_maintenance()
     assert failure.value.status == 409
@@ -104,6 +121,16 @@ def test_source_capabilities_do_not_imply_maintenance_support(tmp_path, monkeypa
 def test_maintenance_routes_require_admin(client):
     assert client.get("/api/v1/maintenance").status_code == 401
     assert client.post("/api/v1/maintenance").status_code in (401, 403)
+
+
+def test_legacy_maintenance_capability_cannot_run_broad_cleanup(tmp_path, monkeypatch):
+    updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
+    monkeypatch.setattr(updater, "_host_capability", lambda name: name != "ownedHelperCleanup")
+    assert updater.maintenance_status()["state"] == "unavailable"
+    assert "prepared automatically" in updater.maintenance_status()["message"]
+    with pytest.raises(DomainError, match="prepared automatically"):
+        updater.start_maintenance()
+    assert not (spool / "request.json").exists()
 
 
 def test_status_exposes_bounded_optional_build_console(tmp_path, monkeypatch):

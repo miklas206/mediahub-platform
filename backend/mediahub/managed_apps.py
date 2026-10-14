@@ -97,45 +97,67 @@ class ManagedAdapter:
         except DomainError:
             return Health(status="unknown", summary="App runtime unavailable", checks=[])
 
-    async def updateCheck(self):
-        from packaging.version import Version
-
-        from mediahub.platform_source import GitHubSourceProvider
-
+    async def installed_version(self):
         kind = self.package.rsplit(".", 1)[-1]
         root = Path(__file__).resolve().parents[2]
         bundled = root / "bundled" / kind / "pyproject.toml"
         if not bundled.is_file():
             bundled = root / "docker/bundled" / kind / "pyproject.toml"
+        latest = tomllib.loads(bundled.read_text(encoding="utf-8"))["project"]["version"]
+        rows = await self.manager.containers(self.package)
+        versions = [row.get("Config", {}).get("Labels", {}).get("org.mediahub.app.version") for row in rows
+                    if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"]
+        installed = versions[0] if len(versions) == 1 else None
+        dependencies = getattr(self.manager.svc, "app_dependencies", None)
+        state = dependencies.public() if dependencies else {}
+        return {"installedVersion": installed, "bundledVersion": latest,
+                "preparationState": state.get("state", "ready"),
+                "preparationMessage": state.get("message")}
+
+    async def updateCheck(self):
+        from packaging.version import Version
+
+        from mediahub.platform_source import GitHubSourceProvider
+
+        local = {"installedVersion": None}
         try:
-            latest = tomllib.loads(bundled.read_text())["project"]["version"]
-            rows = await self.manager.containers(self.package)
-            versions = [row.get("Config", {}).get("Labels", {}).get("org.mediahub.app.version") for row in rows
-                        if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"
-                        and row.get("State", {}).get("Running")]
-            installed = versions[0] if len(versions) == 1 else None
-            dependencies = getattr(self.manager.svc, "app_dependencies", None)
-            state = dependencies.public() if dependencies else {}
+            local = await self.installed_version()
+            installed, latest = local["installedVersion"], local["bundledVersion"]
             monitor = getattr(self.manager.svc, "updates", None)
             repository = self.manager.svc.settings.get().release_repository
-            upstream = await GitHubSourceProvider(
-                installed or latest,
-                source_access=getattr(monitor, "source_access", None),
-                metadata_cache=getattr(monitor, "github_metadata", None),
-                project_path="docker/bundled/" + kind + "/pyproject.toml",
-            ).check(repository, self.manager.svc.release_credentials.token())
+            path = "docker/bundled/" + self.package.rsplit(".", 1)[-1] + "/pyproject.toml"
+            if monitor:
+                platform = await monitor.check_platform()
+                if platform.get("installedCommit") and platform.get("installedCommit") == platform.get("latestCommit"):
+                    # The immutable running Core already contains these exact
+                    # bundled sources; another GitHub request cannot add evidence.
+                    upstream = {"latestVersion": latest}
+                else:
+                    upstream = await monitor.source_metadata(path, installed or latest)
+            else:
+                upstream = await GitHubSourceProvider(
+                    installed or latest, project_path=path,
+                ).check(repository, self.manager.svc.release_credentials.token())
+            if local["preparationState"] == "preparing":
+                # A network check can span the helper replacing the app. Do
+                # not publish the label observed before that replacement.
+                local = await self.installed_version()
+                installed = local["installedVersion"]
             remote_version = upstream.get("latestVersion")
             newer = bool(remote_version and Version(remote_version) > Version(latest))
-            return {"supported": False, "updateAvailable": False,
+            return {**local, "supported": False, "updateAvailable": False,
                     "installedVersion": installed, "latestVersion": upstream["latestVersion"],
                     "bundledVersion": latest, "repository": repository,
-                    "checkStatus": "failed" if state.get("state") == "failed" else "checked" if remote_version and installed == latest else "unchecked",
-                    "message": state.get("message") if state.get("state") == "failed" else
+                    "checkStatus": "failed" if local["preparationState"] == "failed" else "checked" if remote_version and installed == latest else "unchecked",
+                    "message": local["preparationMessage"] if local["preparationState"] == "failed" else
                     "Choose the MediaHub update repository before checking app versions." if not remote_version else
                     "A newer bundled app is available through the MediaHub Core update." if newer else
                     "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
-        except DomainError:
-            raise
+        except DomainError as error:
+            return {**local, "supported": False, "updateAvailable": False,
+                    "checkStatus": "deferred" if getattr(error, "retry_at", None) else "failed",
+                    "errorCode": error.code, "message": error.message,
+                    **({"retryAt": error.retry_at} if getattr(error, "retry_at", None) else {})}
         except (OSError, ValueError, KeyError):
             return {"supported": False, "checkStatus": "failed", "message": "Bundled app version could not be verified"}
 

@@ -19,6 +19,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from mediahub import cloudflare_vpn_dns
 from mediahub.api import administrator, result, services
+from mediahub.apps.containers import CONTAINER_APPS
 from mediahub.contracts import StrictModel
 from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
@@ -32,6 +33,7 @@ APPS = {
     "org.mediahub.mediavpn": "MediaVPN",
     "org.mediahub.plex": "Plex",
     "org.mediahub.jellyfin": "Jellyfin",
+    **{"org.mediahub." + app: config["name"] for app, config in CONTAINER_APPS.items()},
 }
 
 
@@ -806,7 +808,9 @@ class CloudflareManagement:
             raise DomainError("app_unavailable", "The linked app is not installed", 409)
         if package == "mediahub":
             address = self.svc.config.base_url
-        elif package in {"org.mediahub.plex", "org.mediahub.jellyfin"}:
+        elif package == "org.mediahub.plex" or package in {
+            "org.mediahub." + app for app in CONTAINER_APPS
+        }:
             app = package.rsplit(".", 1)[-1]
             key = "plex_installation" if app == "plex" else "container_installation_" + app
             with self.svc.sessions() as db:

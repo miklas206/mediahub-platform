@@ -107,16 +107,6 @@ class HostUpdater:
 
     @staticmethod
     def _run(args, capture=True, on_output=None):
-        if args[:3] == ["docker", "builder", "prune"]:
-            with tempfile.TemporaryDirectory(prefix="mediahub-cleanup-") as temporary:
-                environment = {
-                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                    "HOME": temporary,
-                    "DOCKER_CONFIG": temporary,
-                    "BUILDX_CONFIG": str(Path(temporary) / "buildx"),
-                    "DOCKER_HOST": "unix:///var/run/docker.sock",
-                }
-                return HostUpdater._run_command(args, capture, environment)
         source_build = args[:2] == ["docker", "build"]
         environment = None
         if source_build:
@@ -881,6 +871,10 @@ class HostUpdater:
         try:
             shutil.copy2(self.compose, temporary / "compose.json")
             shutil.copy2(self.installed_version, temporary / "installed-version")
+            helpers = self.root / "local-apps/vpn-helper-images.json"
+            if helpers.exists():
+                self._helper_references(helpers)
+                shutil.copy2(helpers, temporary / "vpn-helper-images.json")
             marker = self.updates / "installed-source.json"
             if marker.exists():
                 self.installed_source()  # Validate before copying root-owned metadata.
@@ -939,28 +933,105 @@ class HostUpdater:
         self._compose_command("up", "-d", "--no-deps", "core", capture=False)
         self._wait("core", health=True)
 
-    def _cleanup_update_images(self):
-        """Only remove owned source tags, preserving containers and rollback images."""
+    @staticmethod
+    def _helper_references(path):
+        value = HostUpdater._read_json(path, 65536)
+        images, previous = value.get("images"), value.get("previousImages", [])
+        if not isinstance(images, dict) or not isinstance(previous, list):
+            raise ValueError("Invalid helper image registry")
+        references = [*images.values(), *previous]
+        if any(not isinstance(item, str) or not LOADED_IMAGE.fullmatch(item) for item in references):
+            raise ValueError("Invalid helper image identity")
+        return set(references)
+
+    def _protected_image_ids(self):
+        """Protect all containers, current recipes and retained rollback identities."""
         protected = set()
-        compose_files = [self.compose] + [
-            path / "compose.json" for path in self.backups.iterdir() if path.is_dir()
-        ]
+        backups = [path for path in self.backups.iterdir() if path.is_dir()] if self.backups.exists() else []
+        if any(path.is_symlink() or path.resolve().parent != self.backups.resolve() for path in backups):
+            raise ValueError("Unsafe rollback directory")
+        compose_files = [self.compose] + [path / "compose.json" for path in backups]
+        for app in ("mediavpn", "mediaseed"):
+            path = self.root / "local-apps" / app / "compose.json"
+            if path.exists():
+                compose_files.append(path)
         for path in compose_files:
             value = self._read_json(path, 2 * 1024 * 1024)
-            for role in ("core", "agent"):
-                if role not in value["services"]:
+            for service in value["services"].values():
+                reference = service.get("image")
+                if not reference:
                     continue
-                reference = value["services"][role]["image"]
                 image = self.command("docker", "image", "inspect", "--format", "{{.Id}}", reference)
                 if not LOADED_IMAGE.fullmatch(image):
                     raise ValueError("Rollback image could not be verified")
                 protected.add(image)
+        for path in [self.root / "local-apps/vpn-helper-images.json", *(backup / "vpn-helper-images.json" for backup in backups)]:
+            if path.exists():
+                protected.update(self._helper_references(path))
         containers = self.command("docker", "ps", "-aq").splitlines()
         for container in containers:
             image = self.command("docker", "inspect", "--format", "{{.Image}}", container)
             if not LOADED_IMAGE.fullmatch(image):
                 raise ValueError("Container image could not be verified")
             protected.add(image)
+        return protected
+
+    @staticmethod
+    def _owned_helper(image):
+        """Only explicit MediaHub provenance qualifies, never a proxy product name."""
+        labels = image.get("Config", {}).get("Labels") or {}
+        tags = image.get("RepoTags") or []
+        if len(tags) != 1:
+            return None
+        tag = tags[0]
+        gateway = re.fullmatch(r"mediahub-web-gateway:([a-f0-9]{16})", tag)
+        relay = re.fullmatch(r"mediahub-vpn-relay:(1|[a-f0-9]{16})", tag)
+        component = "vpn-gateway" if gateway else "vpn-relay" if relay else None
+        source = labels.get("org.mediahub.gateway.source" if gateway else "org.mediahub.vpn.relay-source")
+        if (not component or not isinstance(source, str) or not re.fullmatch(r"[a-f0-9]{64}", source)
+                or labels.get("org.mediahub.managed-component", component) != component
+                or (gateway and gateway[1] != source[:16])
+                or (relay and relay[1] != "1" and relay[1] != source[:16])):
+            return None
+        return {"id": image["Id"], "tags": tags, "component": component, "sourceFingerprint": source}
+
+    def cleanup_preview(self):
+        registry = self.root / "local-apps/vpn-helper-images.json"
+        if not registry.exists():
+            return []  # An old installation has no authoritative current recipe ledger.
+        protected = self._protected_image_ids()
+        candidates = []
+        identifiers = set()
+        for prefix in ("mediahub-web-gateway:*", "mediahub-vpn-relay:*"):
+            identifiers.update(self.command("docker", "image", "ls", "-q", "--no-trunc", "--filter", "reference=" + prefix).splitlines())
+        for identifier in sorted(identifiers):
+            if not LOADED_IMAGE.fullmatch(identifier) or identifier in protected:
+                continue
+            rows = json.loads(self.command("docker", "image", "inspect", identifier))
+            if not isinstance(rows, list) or len(rows) != 1 or rows[0].get("Id") != identifier:
+                raise ValueError("Helper image identity changed")
+            owned = self._owned_helper(rows[0])
+            if owned:
+                candidates.append(owned)
+        return candidates[:100]
+
+    def _cleanup_helper_images(self, progress=None):
+        planned = self.cleanup_preview()
+        result = progress if progress is not None else {}
+        result.update(planned=planned, removedImageIds=[])
+        for candidate in planned:
+            # Re-read recipes, rollback ledgers, every stopped/running container
+            # and image ownership immediately before deleting an immutable ID.
+            current = {row["id"]: row for row in self.cleanup_preview()}
+            if current.get(candidate["id"]) != candidate:
+                continue
+            self.command("docker", "image", "rm", candidate["id"])
+            result["removedImageIds"].append(candidate["id"])
+        return result
+
+    def _cleanup_update_images(self):
+        """Only remove owned source images, preserving containers and rollback images."""
+        protected = self._protected_image_ids()
         candidates = {}
         listing = self.command("docker", "image", "ls", "--no-trunc", "--format", "{{json .}}")
         for line in listing.splitlines():
@@ -972,15 +1043,19 @@ class HostUpdater:
         for image, tags in candidates.items():
             if image in protected or not LOADED_IMAGE.fullmatch(image):
                 continue
-            if not all(
+            if len(tags) != 1 or not all(
                 re.fullmatch(
                     r"mediahub-(core|agent):source-[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]{12}", tag
                 )
                 for tag in tags
             ):
                 continue
+            if image in self._protected_image_ids():
+                continue
+            if self.command("docker", "image", "inspect", "--format", "{{.Id}}", tags[0]) != image:
+                continue
             # No --force: Docker provides a final guard against container use.
-            self.command("docker", "image", "rm", *tags)
+            self.command("docker", "image", "rm", image)
             removed += len(tags)
         self._append_log(
             f"Cleanup removed {removed} unused MediaHub source tags; rollback images retained"
@@ -1000,16 +1075,7 @@ class HostUpdater:
                     raise ValueError("Unsafe backup path")
                 shutil.rmtree(old)
             self._cleanup_update_images()
-            self.command(
-                "docker",
-                "builder",
-                "prune",
-                "--force",
-                "--filter",
-                "until=24h",
-                "--keep-storage",
-                "4GB",
-            )
+            self._cleanup_helper_images()
         except Exception:
             self._append_log("Update succeeded; some optional cleanup could not be completed")
         self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
@@ -1066,6 +1132,7 @@ class HostUpdater:
         running = self.updates / ("maintenance-running-" + operation + ".json")
         os.replace(self.updates / "request.json", running)
         before = shutil.disk_usage(self.root).free
+        helper_cleanup = {"planned": [], "removedImageIds": []}
 
         def report(state, message):
             self._atomic_json(
@@ -1077,6 +1144,7 @@ class HostUpdater:
                     "freeBytes": shutil.disk_usage(self.root).free,
                     "reclaimedBytes": max(0, shutil.disk_usage(self.root).free - before),
                     "updatedAt": time.time(),
+                    "helperCleanup": helper_cleanup,
                 },
                 uid=10001,
                 gid=10001,
@@ -1086,11 +1154,10 @@ class HostUpdater:
             report("running", "Cleaning unused system files; media and app data are protected.")
             removed = self._cleanup_staging()
             self._cleanup_update_images()
-            # Build cache only: never prune volumes, containers or arbitrary images.
-            self.command("docker", "builder", "prune", "--force", "--all", "--filter", "until=24h")
+            self._cleanup_helper_images(helper_cleanup)
             report(
                 "succeeded",
-                f"Maintenance completed. Removed {removed} old update files and unused build cache. Media, app data and rollback backups were preserved.",
+                f"Maintenance completed. Removed {removed} old update files and {len(helper_cleanup['removedImageIds'])} unused MediaHub helper images. Media, app data, containers, build cache and rollback backups were preserved.",
             )
         except Exception:
             report(
@@ -1266,11 +1333,16 @@ class HostUpdater:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default="/opt/mediahub")
+    parser.add_argument("--cleanup-preview", action="store_true", help="List exact unused owned helper images without deleting anything")
     args = parser.parse_args()
     root = Path(args.root)
     if not root.is_absolute() or root == Path("/") or ".." in root.parts:
         raise ValueError("Use a bounded absolute MediaHub root")
-    HostUpdater(root).process()
+    updater = HostUpdater(root)
+    if args.cleanup_preview:
+        print(json.dumps({"helperImages": updater.cleanup_preview(), "dryRun": True}, indent=2))
+    else:
+        updater.process()
 
 
 if __name__ == "__main__":

@@ -10,9 +10,11 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
+import tempfile
 import time
 import tomllib
 from pathlib import Path
@@ -56,6 +58,7 @@ def fingerprint(source=SOURCE):
         for p in (
             source / "scripts/prepare_local_apps.py",
             source / "scripts/prepare_managed_install.py",
+            source / "scripts/platform_update_host.py",
         )
         if p.is_file()
     ]
@@ -67,6 +70,102 @@ def fingerprint(source=SOURCE):
             for p in files
         )
     ).hexdigest()
+
+
+def refresh_host_updater(root, source):
+    """Upgrade the owned one-shot helper while holding the host updater lock."""
+    target = root / "platform_update_host.py"
+    reviewed = source / "scripts/platform_update_host.py"
+    if not target.exists():
+        return  # The fresh installer writes its reviewed helper after app preparation.
+    if not reviewed.is_file() or reviewed.is_symlink() or target.is_symlink():
+        raise ValueError("Reviewed host updater source is unavailable")
+    info = target.stat()
+    if os.name == "posix" and (info.st_mode & 0o022 or info.st_uid != 0):
+        raise ValueError("Host updater ownership changed")
+    content = reviewed.read_bytes()
+    if len(content) > 2 * 1024 * 1024:
+        raise ValueError("Host updater source exceeds its limit")
+    compile(content, str(reviewed), "exec")
+    if target.read_bytes() != content:
+        backup = root / "updates/platform_update_host.previous.py"
+        if backup.is_symlink():
+            raise ValueError("Unsafe host updater backup")
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(target, backup)
+        backup.chmod(0o600)
+        descriptor, temporary = tempfile.mkstemp(prefix=".host-updater-", dir=root)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(temporary, 0o700)
+            os.replace(temporary, target)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+    capabilities = root / "updates/host-capabilities.json"
+    if capabilities.is_symlink():
+        raise ValueError("Unsafe host capability metadata")
+    value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
+    value.update(ownedHelperCleanup=True, maintenance=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".capabilities-", dir=capabilities.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream)
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, capabilities)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def prepare_vpn_helpers(context, root):
+    """Prepare native gateway dependencies without starting any provider or app."""
+    definitions = (
+        ("relay", "relay_image", ("Dockerfile", "runtime.py"), "org.mediahub.vpn.relay-source"),
+        ("gateway", "gateway_image", ("Dockerfile", "config.py", "observer.py", "natpmp.py"), "org.mediahub.gateway.source"),
+    )
+    images = {}
+    for kind, folder, names, label in definitions:
+        source = context / "mediavpn" / folder
+        if not source.is_dir():
+            # Older reviewed bundles only included the relay; never invent sources.
+            continue
+        digest = hashlib.sha256(b"".join((source / name).read_bytes().replace(b"\r\n", b"\n") for name in names)).hexdigest()
+        tag = "mediahub-vpn-relay:1" if kind == "relay" else "mediahub-web-gateway:" + digest[:16]
+        inspected = None
+        try:
+            inspected = json.loads(run("docker", "image", "inspect", tag))[0]
+        except subprocess.CalledProcessError:
+            pass
+        if inspected and not inspected.get("Config", {}).get("Labels", {}).get(label):
+            raise ValueError("VPN helper image ownership could not be verified")
+        if not inspected or inspected["Config"]["Labels"][label] != digest:
+            run("docker", "build", "--pull", "--label", label + "=" + digest,
+                "--label", "org.mediahub.managed-component=vpn-" + kind,
+                "--tag", tag, str(source))
+            inspected = json.loads(run("docker", "image", "inspect", tag))[0]
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}", inspected.get("Id", "")) or inspected.get("Config", {}).get("Labels", {}).get(label) != digest:
+            raise ValueError("VPN helper image could not be verified after preparation")
+        images[kind] = inspected["Id"]
+    if images:
+        provider = "qmcgaw/gluetun:v3.40.0"
+        run("docker", "pull", provider)
+        inspected = json.loads(run("docker", "image", "inspect", provider))[0]
+        if not re.fullmatch(r"sha256:[a-f0-9]{64}", inspected.get("Id", "")) or not any(
+            re.fullmatch(r"(?:docker.io/)?qmcgaw/gluetun@sha256:[a-f0-9]{64}", ref)
+            for ref in inspected.get("RepoDigests", [])
+        ):
+            raise ValueError("The VPN provider image publisher could not be verified")
+        images["provider"] = inspected["Id"]
+        path = root / "local-apps/vpn-helper-images.json"
+        previous = json.loads(path.read_text()) if path.exists() else {}
+        private(path, "{}")
+        previous_ids = list(dict.fromkeys(previous.get("images", {}).values()))
+        path.write_text(json.dumps({"images": images, "previousImages": previous_ids}))
+    return images
 
 
 def tls_permissions(tls, uid, gid):
@@ -299,6 +398,7 @@ def provision(root, lan, source=SOURCE):
     hub_compose = json.loads((root / "compose.json").read_text())
     if hub_compose.get("name") != "mediahub-platform":
         raise ValueError("MediaHub installation ownership changed")
+    refresh_host_updater(root, source)
     browser_origin = hub_browser_origin(hub_compose, lan)
     locations = approved_media_storage(root)
     # Domain changes must invalidate the marker too, without changing internal API URLs.
@@ -445,6 +545,8 @@ def provision(root, lan, source=SOURCE):
                 raise ValueError("Approved media storage changed during preparation")
             compose_path.write_text(json.dumps(cfg))
             run(*command, "build", "app")
+            if kind == "mediavpn":
+                prepare_vpn_helpers(context, root)
             if kind == "mediaseed":
                 run(*command, "build", "client-init")
                 # Initialization is idempotent and refuses mismatched existing secrets.

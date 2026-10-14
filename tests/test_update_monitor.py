@@ -1,4 +1,6 @@
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from mediahub.apps.cloudflared import register_cloudflared_app
 
@@ -88,8 +90,7 @@ def test_update_schedule_is_configurable_and_does_not_install(logged_in):
 
 def test_recording_an_app_result_updates_the_shared_badge(logged_in):
     svc = logged_in.app.state.services
-    register_cloudflared_app(svc)
-    app = next(item for item in svc.apps.list() if not item["isMock"])
+    app = {"id": "jellyfin-test", "name": "Jellyfin", "packageId": "org.mediahub.jellyfin"}
     asyncio.run(
         svc.updates.record_app(
             app,
@@ -274,3 +275,72 @@ def test_unsupported_and_unchecked_sources_are_not_reported_as_checked(logged_in
     assert svc.updates._app_result(app, {})["checkStatus"] == "unchecked"
     asyncio.run(svc.updates.record_platform({"configured": False, "updateAvailable": False}))
     assert svc.updates.summary()["items"][0]["checkStatus"] == "unchecked"
+
+
+def test_preparation_refreshes_stale_local_versions_without_github(logged_in, monkeypatch):
+    svc = logged_in.app.state.services
+    app = {"id": "seed", "name": "MediaSeed", "packageId": "org.mediahub.mediaseed"}
+    monkeypatch.setattr(svc.apps, "list", lambda: [app])
+    monkeypatch.setattr(svc.apps, "adapter", lambda _: SimpleNamespace(installed_version=AsyncMock(return_value={
+        "installedVersion": "0.1.3", "bundledVersion": "0.1.3", "preparationState": "preparing"})))
+    repository = svc.settings.get().release_repository
+    monkeypatch.setattr(svc.platform_update, "installed_source", lambda: {"repository": repository, "commit": "a" * 40})
+    monkeypatch.setattr(svc.updates, "check_platform", AsyncMock(side_effect=AssertionError("Must not call GitHub")))
+    svc.updates._store_results([
+        {"id": "mediahub-core", "name": "MediaHub Core", "latestVersion": "a" * 40, "checkStatus": "checked"},
+        {"id": "seed", "name": "MediaSeed", "installedVersion": "managed", "checkStatus": "deferred", "errorCode": "github_rate_limited", "retryAt": 9999999999},
+    ])
+    asyncio.run(svc.updates.refresh_managed_versions())
+    seed = next(item for item in svc.updates.summary()["items"] if item["id"] == "seed")
+    assert seed["installedVersion"] == seed["latestVersion"] == "0.1.3"
+    assert seed["checkStatus"] == "checked" and seed["preparationState"] == "ready"
+    assert "retryAt" not in seed and "errorCode" not in seed
+    svc.updates.check_platform.assert_not_awaited()
+
+
+def test_source_checks_are_shared_but_scoped_to_repo_token_and_project(logged_in, monkeypatch):
+    svc = logged_in.app.state.services
+    source = AsyncMock(return_value={"latestCommit": "a" * 40, "latestVersion": "0.5.38"})
+    monkeypatch.setattr("mediahub.update_monitor.GitHubSourceProvider.check", source)
+    token = [None]
+    monkeypatch.setattr(svc.release_credentials, "token", lambda: token[0])
+
+    async def run():
+        first, second = await asyncio.gather(svc.updates.check_platform(), svc.updates.check_platform())
+        assert source.await_count == 1
+        first["latestVersion"] = "caller-mutated"
+        assert second["latestVersion"] == "0.5.38"
+        await svc.updates.source_metadata("docker/bundled/mediaseed/pyproject.toml", "0.1.3")
+        assert source.await_count == 2
+        token[0] = "synthetic-new-credential"
+        await svc.updates.check_platform()
+        assert source.await_count == 3
+        assert token[0] not in repr(svc.updates.source_checks)
+
+    asyncio.run(run())
+
+
+def test_retired_cloudflare_rows_and_placeholder_versions_are_hidden(logged_in):
+    svc = logged_in.app.state.services
+    register_cloudflared_app(svc)
+    app = next(item for item in svc.apps.list() if item["packageId"] == "org.mediahub.cloudflared")
+    svc.updates._store_results([
+        {"id": app["id"], "name": "Cloudflare Tunnel", "checkStatus": "failed", "updateAvailable": True},
+        {"id": "seed", "name": "MediaSeed", "installedVersion": "managed", "checkStatus": "unchecked"},
+    ])
+    summary = svc.updates.summary()
+    assert summary["count"] == 0 and summary["lastError"] is None
+    assert [item["id"] for item in summary["items"]] == ["seed"]
+    assert summary["items"][0]["installedVersion"] is None
+
+
+def test_version_refresh_skips_sso_only_app_without_lifecycle_adapter(logged_in, monkeypatch):
+    from mediahub.errors import DomainError
+
+    svc = logged_in.app.state.services
+    monkeypatch.setattr(svc.apps, "list", lambda: [{"id": "external", "name": "MediaSeed", "packageId": "org.mediahub.mediaseed"}])
+    def missing(_):
+        raise DomainError("adapter_unavailable", "No lifecycle control", 503)
+    monkeypatch.setattr(svc.apps, "adapter", missing)
+    asyncio.run(svc.updates.refresh_managed_versions())
+    assert not any(item["id"] == "external" for item in svc.updates.summary()["items"])

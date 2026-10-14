@@ -59,15 +59,13 @@ Agent/installer adapter before they can be attached through this flow.
 
 ## Cloudflare and DNS
 
-Cloudflare routes resolve the stable local web endpoint of MediaHub, MediaSeed,
-MediaVPN, Plex or Jellyfin. Public VPN addresses and torrent NAT-PMP ports never
-replace HTTP origin ports. Local connector installation runs cloudflared on the
-existing Docker host with an immutable image ID, a protected token file and
-the host's public CA certificate; a separate Cloudflare LXC is optional.
-
-The Cloudflare panel can also create A, AAAA and CNAME records without a tunnel.
-Existing conflicting records are refused. DNS creation does not open a firewall,
-configure HTTPS or make a VPN endpoint accept inbound web traffic.
+The [MediaVPN guide](vpn-gateway-guide.md) combines Proton, Cloudflare and selected
+installed app domains. A Traefik instance in the provider namespace handles
+inbound HTTPS, DNS-01 certificates and trusted private origins. Owned proxied
+A-records and Origin Rules follow the verified Proton IP/port. Torrents use a
+separate renewable NAT-PMP mapping. The Hub's existing Traefik remains independent.
+No Caddy dependency or new cloudflared connector is needed. Existing legacy
+tunnels and unrelated records are preserved until explicitly migrated.
 
 ## Verification and recovery
 

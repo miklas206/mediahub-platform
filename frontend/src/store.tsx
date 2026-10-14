@@ -13,7 +13,6 @@ import {
   PackagePlus,
   ShieldCheck,
 } from "lucide-react";
-import { CloudflareManagementPanel } from "./cloudflare-management";
 import { IntegrationsPage } from "./integrations";
 import { Panel } from "./phase2";
 import {
@@ -21,17 +20,6 @@ import {
   fjordHubErrors,
   type FjordHubConfig,
 } from "./fjordhub-commands";
-
-export function CloudflareStorePage() {
-  return (
-    <div className="stack store-install-page">
-      <Link className="text-link" to="/">
-        {t("Back to MediaHub")}
-      </Link>
-      <CloudflareManagementPanel />
-    </div>
-  );
-}
 
 type FjordHubMode = "new" | "existing";
 

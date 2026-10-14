@@ -9,6 +9,7 @@ import httpx
 import pytest
 from mediahub.managed_apps import ManagedAdapter
 from mediahub.platform_source import GitHubSourceProvider
+from mediahub.update_monitor import UpdateMonitor
 
 
 @pytest.fixture(params=["mediaseed", "mediavpn"])
@@ -22,10 +23,12 @@ def bundled_app(request):
 
 def managed_adapter(kind, installed, repository, access):
     svc = SimpleNamespace(
-        updates=SimpleNamespace(source_access=access, github_metadata=None),
         release_credentials=SimpleNamespace(token=lambda: None),
         settings=SimpleNamespace(get=lambda: SimpleNamespace(release_repository=repository)),
     )
+    svc.updates = UpdateMonitor(svc)
+    svc.updates.source_access = access
+    svc.updates.check_platform = AsyncMock(return_value={})
     manager = SimpleNamespace(svc=svc, containers=AsyncMock(return_value=[{
         "State": {"Running": True}, "Config": {"Labels": {
             "com.docker.compose.service": "app", "org.mediahub.app.version": installed,

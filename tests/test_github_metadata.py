@@ -76,6 +76,25 @@ def test_core_agent_and_watcher_share_requests_then_refresh_after_ttl():
     asyncio.run(run())
 
 
+def test_valid_cached_metadata_remains_available_during_provider_cooldown():
+    async def run():
+        calls = []
+
+        def handle(request):
+            calls.append(request.url.path)
+            return httpx.Response(200, json={"sha": "a" * 40}) if len(calls) == 1 else httpx.Response(429)
+
+        cache = GitHubMetadata(lambda: 1000)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            cached = await cache.get(client, "/repos/owner/hub/commits/main")
+            with pytest.raises(DomainError):
+                await cache.get(client, "/repos/owner/other/commits/main")
+            assert await cache.get(client, "/repos/owner/hub/commits/main") is cached
+            assert len(calls) == 2
+
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize(
     "headers,deadline",
     [

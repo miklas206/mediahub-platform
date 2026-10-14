@@ -1,5 +1,10 @@
 # Cloudflare app domains and VPN DNS
 
+> Legacy compatibility reference. From MediaHub 0.6.0 the separate Cloudflare app
+> is retired. New app domains use the [guided MediaVPN/Traefik gateway](vpn-gateway-guide.md).
+> Existing tunnel state is retained during explicit migration; the endpoints below
+> are not the new-install user workflow.
+
 The Cloudflare app discovers accessible domains, DNS records and existing tunnels
 through the encrypted scoped API credential. The app supports tunnel creation,
 explicit adoption, local connector installation and installed-app route creation.

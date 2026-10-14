@@ -92,9 +92,16 @@ type UpdateItem = {
   name: string;
   installedVersion: string | null;
   latestVersion: string | null;
+  bundledVersion?: string | null;
+  preparationState?: string;
   updateAvailable: boolean;
   message: string;
 };
+
+export function platformUpdateReady(release?: PlatformRelease) {
+  return !!release?.installReady && release.updateAvailable === true &&
+    (!release.latestCommit || release.latestCommit !== release.installedCommit);
+}
 
 type UpdateNotification = {
   id: string;
@@ -840,7 +847,7 @@ export function UpdatesPage({
         result.lastError
           ? `Update check incomplete: ${result.lastError}`
           : deferred
-            ? "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected."
+            ? "Some update checks are deferred by GitHub's rate limit. Installed apps keep running."
             : result.count
               ? `${result.count} update${result.count === 1 ? " is" : "s are"} available.`
               : "Everything checked is up to date.",
@@ -881,6 +888,7 @@ export function UpdatesPage({
 
   async function installPlatform() {
     if (
+      !platformUpdateReady(release) ||
       !release?.latestVersion ||
       !(await confirm(
         `Install MediaHub ${release.latestVersion}${release.latestCommit ? ` / ${release.latestCommit.slice(0, 7)} from main` : ""}? ${release.updateMethod === "source" ? "Source code will be downloaded from GitHub and built on this server while the current version keeps running. " : ""}${release.fastUpdateAvailable ? "Fast update is selected automatically when possible: Core restarts, while an unchanged Agent keeps running. Otherwise both services are rebuilt and restarted. " : "Core and the local Agent may restart. "}Configuration is backed up first, media files are excluded, and rollback is attempted if health verification fails. Remote Agents are not updated by this operation.`,
@@ -1020,7 +1028,7 @@ export function UpdatesPage({
                         (item) => item.checkStatus === "deferred",
                       )
                     ? t(
-                        "Some update checks are deferred by GitHub's rate limit; tunnel operation is unaffected.",
+                        "Some update checks are deferred by GitHub's rate limit. Installed apps keep running.",
                       )
                     : updateSummary.data.items.some(item => item.checkStatus === "unchecked" || item.checkStatus === "unsupported" || !item.latestVersion)
                       ? t("Some components have not been checked or do not support automatic update checks")
@@ -1059,7 +1067,7 @@ export function UpdatesPage({
               {t(
                 item.id === "mediahub-core"
                   ? "GitHub rate limit: update check deferred until {time}. MediaHub keeps running."
-                  : "GitHub rate limit: update check deferred until {time}. Tunnel operation is unaffected.",
+                  : "GitHub rate limit: update check deferred until {time}. Installed apps keep running.",
                 { time: checkedAt(item.retryAt) },
               )}
               {item.latestVersion && (
@@ -1120,15 +1128,11 @@ export function UpdatesPage({
                 size={16}
               />
             </button>
-            <button
-              className="primary"
-              disabled={!!busy || !release?.installReady}
-              onClick={() => void installPlatform()}
-            >
-              {busy === "platform-install"
-                ? t("Installing…")
-                : t("Install update")}
-            </button>
+            {platformUpdateReady(release) && (
+              <button className="primary" disabled={!!busy} onClick={() => void installPlatform()}>
+                {busy === "platform-install" ? t("Installing…") : t("Install update")}
+              </button>
+            )}
           </div>
           <details className="update-card-advanced">
             <summary>{t("Details and update settings")}</summary>
@@ -1242,19 +1246,22 @@ export function UpdatesPage({
           </UpdateCard>
         )}
         {apps
-          ?.filter((app) => !app.isMock)
+          ?.filter((app) => !app.isMock && app.packageId !== "org.mediahub.cloudflared")
           .map((app) => {
             const version = versions[app.id];
             const isPlex = app.packageId === "org.mediahub.plex";
             const isCloudflare = app.packageId === "org.mediahub.cloudflared";
             const isBundled = ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId);
             const bundled = updateSummary.data?.items.find((item) => item.id === app.id);
+            const preparationNeeded = isBundled && !!bundled?.installedVersion &&
+              bundled.installedVersion !== "managed" && !!bundled.bundledVersion &&
+              bundled.installedVersion !== bundled.bundledVersion;
             return (
               <UpdateCard key={app.id} name={app.name} packageId={app.packageId}>
                 <div className="runtime-row">
                   <span>{t("Installed")}</span>
                   <strong>
-                    {(isBundled ? bundled?.installedVersion : null) || version?.plex?.version ||
+                    {(isBundled && bundled?.installedVersion !== "managed" ? bundled?.installedVersion : null) || version?.plex?.version ||
                       version?.qBittorrent?.version ||
                       version?.cloudflare?.version ||
                       (isCloudflare
@@ -1277,7 +1284,7 @@ export function UpdatesPage({
                       <button disabled={!!busy || prerequisites.data?.state === "preparing"} onClick={() => void check(app)}>
                         <RefreshCw size={16} />{t("Check release")}
                       </button>
-                      {prerequisites.data?.state === "failed" && <button disabled={!!busy} onClick={() => void retryAppPreparation()}>{t("Retry app preparation")}</button>}
+                      {(prerequisites.data?.state === "failed" || preparationNeeded) && <button disabled={!!busy || prerequisites.data?.state === "preparing"} onClick={() => void retryAppPreparation()}>{t("Retry app preparation")}</button>}
                     </div>
                   </>
                 )}

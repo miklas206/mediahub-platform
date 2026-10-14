@@ -137,9 +137,6 @@ const ContainerAppPage = lazy(() =>
 const SecuritySettings = lazy(() =>
   import("./security").then((module) => ({ default: module.SecuritySettings })),
 );
-const CloudflareStorePage = lazy(() =>
-  import("./store").then((module) => ({ default: module.CloudflareStorePage })),
-);
 const FjordHubStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.FjordHubStorePage })),
 );
@@ -190,7 +187,6 @@ const detailedDashboard: DashboardSection[] = [
   "core",
   "runtime",
   "integrations",
-  "cloudflare",
   "torrents",
   "uploads",
 ];
@@ -970,7 +966,7 @@ function Shell({
                   />
                   <Route
                     path="/store/cloudflare"
-                    element={<CloudflareStorePage />}
+                    element={<Navigate to="/store/mediavpn" replace />}
                   />
                   <Route
                     path="/store/fjordhub"
@@ -2054,7 +2050,7 @@ function MaintenancePage() {
             <h3>{t("Keep MediaHub healthy")}</h3>
             <p>
               {t(
-                "Check the platform, apps and storage, then remove old update files, unused MediaHub images and build cache. Services keep running.",
+                "Check the platform, apps and storage, then remove old update files and verified unused MediaHub helper images. Services keep running.",
               )}
             </p>
           </div>
@@ -2134,7 +2130,7 @@ function MaintenancePage() {
             <strong>{t("Media stays protected")}</strong>
             <p>
               {t(
-                "Movies, TV series, downloads, app data, Docker volumes and rollback backups are preserved. Run maintenance only cleans known disposable update files and unused system build cache. Media folders are never scanned.",
+                "Movies, TV series, downloads, app data, Docker volumes, build cache and rollback backups are preserved. Maintenance only removes known disposable update files and owned helper images that no container or recovery configuration uses.",
               )}
             </p>
           </div>
@@ -2176,9 +2172,4 @@ const dashboardChoices: [DashboardSection, string, string][] = [
   ["core", "Core health", "Connection and runtime diagnostics"],
   ["runtime", "App runtime", "Technical Agent and Docker status"],
   ["integrations", "Integrations", "Status for optional connections"],
-  [
-    "cloudflare",
-    "Cloudflare Tunnel",
-    "Tunnel connection and public route health",
-  ],
 ];

@@ -1,6 +1,8 @@
 """Scheduled, read-only release checks with persistent non-secret summaries."""
 
 import asyncio
+import copy
+import hashlib
 import time
 
 from sqlalchemy import select
@@ -30,6 +32,8 @@ class UpdateMonitor:
             source_access=self.source_access, metadata_cache=self.github_metadata
         )
         self.check_finished_at = 0
+        self.metadata_lock = asyncio.Lock()
+        self.source_checks = {}
 
     def _load(self):
         with self.services.sessions() as db:
@@ -61,6 +65,16 @@ class UpdateMonitor:
 
     def summary(self):
         value = self._load()
+        retired = {app["id"] for app in self.services.apps.list()
+                   if app.get("packageId") == "org.mediahub.cloudflared"}
+        value["items"] = [item for item in value["items"] if item["id"] not in retired]
+        value["count"] = sum(bool(item.get("updateAvailable")) for item in value["items"])
+        if retired and value.get("lastError") and value["lastError"].startswith("Could not check:"):
+            failed = [item["name"] for item in value["items"] if item.get("checkStatus") == "failed"]
+            value["lastError"] = "Could not check: " + ", ".join(failed) if failed else None
+        for item in value["items"]:
+            if item.get("installedVersion") == "managed":
+                item["installedVersion"] = None
         value["intervalHours"] = self.services.settings.get().update_check_interval_hours
         value["mainCheckIntervalSeconds"] = (
             MAIN_CHECK_INTERVAL_SECONDS
@@ -89,7 +103,7 @@ class UpdateMonitor:
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
             **{
                 key: result[key]
-                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode")
+                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode", "bundledVersion", "preparationState")
                 if key in result
             },
         }
@@ -99,7 +113,7 @@ class UpdateMonitor:
         return {
             "id": app["id"],
             "name": app["name"],
-            "installedVersion": app.get("version"),
+            "installedVersion": app.get("version") if app.get("version") != "managed" else None,
             "latestVersion": None,
             "updateAvailable": False,
             "checkStatus": "deferred" if getattr(error, "retry_at", None) else "failed",
@@ -157,12 +171,64 @@ class UpdateMonitor:
         repository = self.services.settings.get().release_repository
         installed = self.services.platform_update.installed_source()
         commit = installed.get("commit") if installed.get("repository") == repository else None
-        return await GitHubSourceProvider(
-            __version__,
-            commit,
-            source_access=self.source_access,
-            metadata_cache=self.github_metadata,
-        ).check(repository, self.services.release_credentials.token())
+        return await self.source_metadata("pyproject.toml", __version__, commit)
+
+    async def source_metadata(self, project_path, current_version, installed_commit=None):
+        """Share short-lived source checks across Core and bundled app cards."""
+        repository = self.services.settings.get().release_repository
+        token = self.services.release_credentials.token()
+        identity = hashlib.sha256((token or "").encode()).digest()
+        key = (repository, identity, project_path, current_version, installed_commit)
+        async with self.metadata_lock:
+            cached = self.source_checks.get(key)
+            if cached and time.monotonic() < cached[0]:
+                return copy.deepcopy(cached[1])
+            result = await GitHubSourceProvider(
+                current_version, installed_commit,
+                source_access=self.source_access, metadata_cache=self.github_metadata,
+                project_path=project_path,
+            ).check(repository, token)
+            self.source_checks[key] = (time.monotonic() + 60, copy.deepcopy(result))
+            while len(self.source_checks) > 16:
+                self.source_checks.pop(next(iter(self.source_checks)))
+            return result
+
+    async def refresh_managed_versions(self, preparation_state="ready"):
+        """Refresh observed versions after preparation, without contacting GitHub."""
+        async with self.lock:
+            previous = self._load()
+            by_id = {item["id"]: item for item in previous["items"]}
+            installed = self.services.platform_update.installed_source()
+            repository = self.services.settings.get().release_repository
+            core = by_id.get("mediahub-core", {})
+            same_source = bool(installed.get("repository") == repository and installed.get("commit")
+                               and core.get("latestVersion") == installed["commit"]
+                               and core.get("checkStatus") == "checked")
+            for app in self.services.apps.list():
+                if app.get("packageId") not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"}:
+                    continue
+                try:
+                    adapter = self.services.apps.adapter(app["id"])
+                    if not hasattr(adapter, "installed_version"):
+                        continue  # SSO-only connected apps do not grant Docker lifecycle access.
+                    local = await adapter.installed_version()
+                except (DomainError, OSError, ValueError, KeyError):
+                    continue
+                item = {**by_id.get(app["id"], {"id": app["id"], "name": app["name"], "checkStatus": "unchecked"}),
+                        "installedVersion": local["installedVersion"],
+                        "bundledVersion": local["bundledVersion"], "preparationState": preparation_state,
+                        "updateAvailable": False}
+                if same_source:
+                    item.update(latestVersion=local["bundledVersion"],
+                                checkStatus="checked" if local["installedVersion"] == local["bundledVersion"] else "unchecked",
+                                message="This app is updated automatically with MediaHub Core.", stale=False)
+                    item.pop("errorCode", None)
+                    item.pop("retryAt", None)
+                if preparation_state == "failed":
+                    item.update(checkStatus="failed", message="Automatic app preparation failed; existing data was retained")
+                by_id[app["id"]] = item
+            self.check_finished_at = 0
+            self._store_results(list(by_id.values()))
 
     async def record_platform(self, result):
         previous = self._load()
@@ -267,7 +333,7 @@ class UpdateMonitor:
                         self._failure({"id": "seedbox-agent", "name": "Seedbox Agent"}, error)
                     )
             for app in self.services.apps.list():
-                if app.get("isMock"):
+                if app.get("isMock") or app.get("packageId") == "org.mediahub.cloudflared":
                     continue
                 try:
                     result = await asyncio.wait_for(
@@ -275,7 +341,7 @@ class UpdateMonitor:
                     )
                     items.append(self._app_result(app, result))
                 except (DomainError, asyncio.TimeoutError) as error:
-                    failures += 1
+                    failures += not bool(getattr(error, "retry_at", None))
                     items.append(self._failure(app, error))
             self._store_results(
                 items,
@@ -298,6 +364,7 @@ class UpdateMonitor:
             (item for item in self._load()["items"] if item.get("id") == "mediahub-core"), None
         )
         if core is None or core.get("latestVersion") != commit:
+            self.source_checks.clear()
             self.check_finished_at = 0
             await self.check_all()
 

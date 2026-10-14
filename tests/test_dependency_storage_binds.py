@@ -1,6 +1,7 @@
 import asyncio
 import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import mediahub.app_dependencies as dependencies
 import pytest
@@ -77,3 +78,14 @@ def test_helper_inherits_only_existing_approved_core_storage(
         assert "/mnt/media:/mnt/media:ro" in binds
         assert "/host-evidence:/host-evidence:ro" in binds
         assert not any("unapproved" in bind for bind in binds)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_preparation_refreshes_observed_versions_after_finishing(failed):
+    monitor = SimpleNamespace(refresh_managed_versions=AsyncMock())
+    manager = SimpleNamespace(lock=asyncio.Lock())
+    controller = dependencies.AppDependencies(SimpleNamespace(updates=monitor, managed_apps=manager))
+    controller._run = AsyncMock()
+    controller.message = "Preparation failed" if failed else None
+    asyncio.run(controller.run())
+    monitor.refresh_managed_versions.assert_awaited_once_with("failed" if failed else "ready")

@@ -267,7 +267,6 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
     assert apps == []
     catalog = setup_client.get("/api/v1/catalog").json()["data"]
     assert {a["name"] for a in catalog} == {
-        "Cloudflare Tunnel",
         "FjordHub",
         "Plex",
         "Seedbox",

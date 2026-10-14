@@ -93,7 +93,7 @@ describe("primary MediaHub app hub", () => {
   });
   it("exposes the supported MediaHub apps with real setup paths before installation", () => {
     const entries = buildHubEntries(input);
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(entries.find(entry => entry.name === "MediaVPN")).toMatchObject({ configured: false, path: "/store/mediavpn", action: "Set up" });
     expect(
       entries.every(
@@ -106,9 +106,7 @@ describe("primary MediaHub app hub", () => {
     expect(entries.find((entry) => entry.name === "Jellyfin")?.path).toBe(
       "/apps/install/jellyfin",
     );
-    expect(entries.find((entry) => entry.name === "Cloudflare")?.path).toBe(
-      "/store/cloudflare",
-    );
+    expect(entries.find((entry) => entry.name === "Cloudflare")).toBeUndefined();
   });
   it("uses live registry paths and health and does not treat mock apps as installed", () => {
     const entries = buildHubEntries({
@@ -135,7 +133,7 @@ describe("primary MediaHub app hub", () => {
   });
   it("keeps FjordHub as one peer app and its child apps inside FjordHub", () => {
     const entries = buildHubEntries({ ...input, integrations: [integration] });
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(entries.find((entry) => entry.name === "FjordHub")).toMatchObject({
       configured: true,
       path: "/integrations/fjordhub-one",
@@ -188,7 +186,7 @@ describe("primary MediaHub app hub", () => {
       ],
       deployment: { state: "succeeded", uninstall: { state: "removed" } },
     });
-    expect(entries).toHaveLength(6);
+    expect(entries).toHaveLength(5);
     expect(entries.find((entry) => entry.name === "FjordHub")?.configured).toBe(
       false,
     );
