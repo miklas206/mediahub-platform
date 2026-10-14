@@ -4064,5 +4064,9 @@
   "verify api": "Kontrollér API-forbindelse",
   "verify egress": "Kontrollér udgående trafik",
   "verify listen port": "Kontrollér lytteport",
-  "mark installed": "Registrér installation"
+  "mark installed": "Registrér installation",
+  "Manage app VPN connections": "Administrér apps' VPN-forbindelser",
+  "App VPN connections": "Apps' VPN-forbindelser",
+  "Disconnect apps from the shared VPN here before uninstalling MediaVPN. MediaSeed can also be disconnected from its own VPN settings.": "Frakobl apps fra den fælles VPN her, før du afinstallerer MediaVPN. MediaSeed kan også frakobles i sine egne VPN-indstillinger.",
+  "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN": "Frakobl Plex og Jellyfin fra den fælles VPN, før du afinstallerer MediaVPN"
 }

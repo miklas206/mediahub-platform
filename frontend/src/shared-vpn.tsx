@@ -26,7 +26,7 @@ type Shared = {
   }[];
 };
 
-export function SharedVPNPanel() {
+export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
   const { data, error, reload } = useData<Shared>("/shared-vpn");
   const [profile, setProfile] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,10 +65,12 @@ export function SharedVPNPanel() {
     }
   }
   return (
-    <Panel title={t("Shared VPN")}>
+    <Panel title={t(appsOnly ? "App VPN connections" : "Shared VPN")}>
       <p className="muted">
         {t(
-          "Use one VPN profile for your apps. Local web addresses stay the same. Apps selected here have no direct internet fallback.",
+          appsOnly
+            ? "Disconnect apps from the shared VPN here before uninstalling MediaVPN. MediaSeed can also be disconnected from its own VPN settings."
+            : "Use one VPN profile for your apps. Local web addresses stay the same. Apps selected here have no direct internet fallback.",
         )}
       </p>
       {(error || failure) && (
@@ -79,51 +81,53 @@ export function SharedVPNPanel() {
       {message && (
         <NotificationPopup tone="success">{message}</NotificationPopup>
       )}
-      <div className="button-row">
-        <label>
-          {t("VPN profile")}
-          <select
-            value={profile || data?.gateway.profileId || ""}
-            disabled={busy || !data}
-            onChange={(e) => setProfile(e.target.value)}
+      {!appsOnly && (
+        <div className="button-row">
+          <label>
+            {t("VPN profile")}
+            <select
+              value={profile || data?.gateway.profileId || ""}
+              disabled={busy || !data}
+              onChange={(e) => setProfile(e.target.value)}
+            >
+              <option value="">{t("Choose a profile")}</option>
+              {data?.gateway.profiles.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="primary"
+            disabled={busy || !(profile || data?.gateway.profileId)}
+            onClick={() =>
+              void change("gateway", {
+                enabled: true,
+                profileId: profile || data?.gateway.profileId,
+              })
+            }
           >
-            <option value="">{t("Choose a profile")}</option>
-            {data?.gateway.profiles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="primary"
-          disabled={busy || !(profile || data?.gateway.profileId)}
-          onClick={() =>
-            void change("gateway", {
-              enabled: true,
-              profileId: profile || data?.gateway.profileId,
-            })
-          }
-        >
-          <Shield size={16} />
-          {t("Enable shared VPN")}
-        </button>
-        <button
-          disabled={busy || !data?.gateway.enabled}
-          onClick={() =>
-            void change("gateway", {
-              enabled: false,
-              profileId: data?.gateway.profileId,
-            })
-          }
-        >
-          {t("Stop shared VPN")}
-        </button>
-        <button disabled={busy} onClick={reload}>
-          <RefreshCw size={16} />
-          {t("Refresh")}
-        </button>
-      </div>
+            <Shield size={16} />
+            {t("Enable shared VPN")}
+          </button>
+          <button
+            disabled={busy || !data?.gateway.enabled}
+            onClick={() =>
+              void change("gateway", {
+                enabled: false,
+                profileId: data?.gateway.profileId,
+              })
+            }
+          >
+            {t("Stop shared VPN")}
+          </button>
+          <button disabled={busy} onClick={reload}>
+            <RefreshCw size={16} />
+            {t("Refresh")}
+          </button>
+        </div>
+      )}
       {data && (
         <p role="status">
           {t(

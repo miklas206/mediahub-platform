@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { OperationProgress, type OperationState } from "./operation-progress";
 import { api } from "./api";
+import { Link } from "react-router-dom";
 import type { InstalledAppInfo } from "./contracts";
 type Removal = {
   state: string;
@@ -14,6 +15,7 @@ type Removal = {
   installationId?: string;
   mode?: string;
   message?: string;
+  configurationPath?: string;
 };
 export function AppUninstall({
   app,
@@ -145,6 +147,11 @@ export function AppUninstall({
             {translateText(status?.message) ||
               t("Checking installation identity and removal support...")}
           </p>
+          {status?.state === "blocked" && status.configurationPath && (
+            <Link className="button-link" to={status.configurationPath} onClick={() => setOpen(false)}>
+              {t("Manage app VPN connections")}
+            </Link>
+          )}
           <p>
             {windowsShare
               ? t(

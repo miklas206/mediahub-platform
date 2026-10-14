@@ -16,7 +16,17 @@ async def removal_status(svc, app_id):
         return {"state": "succeeded", "dataPreserved": True}
     adapter = svc.apps.adapter(app_id)
     if getattr(adapter, "managed", False):
-        return await svc.managed_apps.status(app["packageId"])
+        try:
+            return await svc.managed_apps.status(app["packageId"])
+        except DomainError as error:
+            if error.code != "app_dependency":
+                raise
+            return {
+                "state": "blocked",
+                "mode": "runtime",
+                "message": error.message,
+                "configurationPath": "/store/mediavpn",
+            }
     if app["packageId"] == WINDOWS_SHARE:
         return {
             "state": "ready",

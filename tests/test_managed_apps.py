@@ -203,6 +203,26 @@ def test_uninstall_requires_admin_and_csrf(logged_in, tmp_path, monkeypatch):
     assert not any(method != "GET" for method, _ in calls)
 
 
+def test_vpn_removal_dependency_has_persistent_guidance_but_post_stays_blocked(logged_in, tmp_path, monkeypatch):
+    _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch, VPN, True)
+    rows["b" * 64] = {
+        "Id": "b" * 64,
+        "Config": {"Labels": {"org.mediahub.mediavpn.seedbox": "mediaseed"}},
+        "HostConfig": {"NetworkMode": "bridge"},
+    }
+    app = next(app for app in manager.svc.apps.list() if app["packageId"] == VPN)
+    endpoint = "/api/v1/apps/" + app["id"] + "/uninstall"
+    response = logged_in.get(endpoint)
+    assert response.status_code == 200
+    report = response.json()["data"]
+    assert report["state"] == "blocked"
+    assert report["configurationPath"] == "/store/mediavpn"
+    assert "MediaSeed" in report["message"]
+    assert "installationId" not in report
+    assert logged_in.post(endpoint, json={"confirmedInstallationId": "wrong"}).status_code == 409
+    assert not any(method != "GET" for method, _ in calls)
+
+
 def test_failure_keeps_snapshot_and_can_retry(logged_in, tmp_path, monkeypatch):
     svc, manager, rows, _ = setup_manager(logged_in, tmp_path, monkeypatch)
     original = manager.docker

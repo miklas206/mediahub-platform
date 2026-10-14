@@ -343,3 +343,46 @@ test("Failed Plex can be removed after a transient status failure", async ({page
   await expect(page.getByRole("button", {name: "Uninstall: Plex", exact: true})).toHaveCount(0);
   expect(posts).toBe(1);
 });
+
+for (const language of ["en", "da"]) for (const width of [1440, 320]) test(`MediaVPN removal explains dependencies and exposes disconnect controls (${language}, ${width}px)`, async ({page}) => {
+  await page.setViewportSize({width, height: 950});
+  let connected = true;
+  const writes: string[] = [];
+  await mockHub(page, (path, route) => {
+    if (route.request().method() !== "GET") writes.push(path);
+    if (path === "/catalog") return [{id: "org.mediahub.mediavpn", availability: "available"}];
+    if (path === "/apps") return [{id: "vpn", name: "MediaVPN", packageId: "org.mediahub.mediavpn", state: "running", isMock: false, removable: true}];
+    if (path === "/mediavpn/status") return {configured: true, available: true, url: "https://vpn.example.test"};
+    if (path === "/managed-install/prerequisites") return {state: "ready"};
+    if (path === "/managed-install/org.mediahub.mediavpn") return {planDigest: "a".repeat(64), alreadyRunning: true, operation: {state: "idle"}};
+    if (path === "/apps/vpn/uninstall") return connected
+      ? {state: "blocked", message: "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN", configurationPath: "/store/mediavpn"}
+      : {state: "ready", installationId: "verified-identity"};
+    if (path === "/shared-vpn/apps/jellyfin") {
+      expect(route.request().method()).toBe("PUT");
+      expect(route.request().postDataJSON()).toEqual({enabled: false});
+      connected = false;
+      return {};
+    }
+    if (path === "/shared-vpn") return {
+      gateway: {enabled: true, ready: true, profileId: "test-profile", profiles: [], publicIp: null, message: null},
+      apps: [{id: "jellyfin", name: "Jellyfin", hostId: "local", enabled: connected, ready: connected, phase: "ready"}],
+    };
+  }, language);
+  await page.goto("/");
+  const removalName = language === "da" ? "Afinstaller: MediaVPN" : "Uninstall: MediaVPN";
+  const confirmationName = language === "da" ? "Bekræft fjernelse" : "Confirm removal";
+  await page.getByRole("button", {name: removalName, exact: true}).click();
+  await expect(page.getByRole("button", {name: confirmationName, exact: true})).toBeDisabled();
+  await expect(page.getByText(language === "da" ? "Frakobl Plex og Jellyfin fra den fælles VPN, før du afinstallerer MediaVPN" : "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN", {exact: true})).toBeVisible();
+  expect(writes).toEqual([]);
+  await page.getByRole("link", {name: language === "da" ? "Administrér apps' VPN-forbindelser" : "Manage app VPN connections"}).click();
+  await expect(page.getByRole("heading", {name: language === "da" ? "Apps' VPN-forbindelser" : "App VPN connections"})).toBeVisible();
+  await page.getByRole("checkbox", {name: language === "da" ? "Brug fælles VPN" : "Use shared VPN"}).uncheck();
+  await expect.poll(() => connected).toBe(false);
+  await page.goto("/");
+  await page.getByRole("button", {name: removalName, exact: true}).click();
+  await expect(page.getByRole("button", {name: confirmationName, exact: true})).toBeEnabled();
+  expect(writes).toEqual(["/shared-vpn/apps/jellyfin"]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});

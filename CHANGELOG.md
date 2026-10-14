@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.6.2
+
+- Restore app VPN connection controls on the MediaVPN setup page so apps can be disconnected before uninstalling the VPN runtime. Keep provider/domain configuration in MediaVPN.
+- Explain blocked removal persistently in the confirmation dialog and link directly to connection controls. Continue enforcing dependency checks on removal requests; do not disconnect or delete anything automatically.
+
 ## 0.6.1
 
 - Show durable Plex installation phases and progress on its installer and runtime page, including indeterminate image downloads, reconnecting, failure and confirmed completion.
