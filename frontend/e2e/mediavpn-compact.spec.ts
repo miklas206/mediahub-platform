@@ -124,8 +124,35 @@ for (const width of [1440, 390, 320])
           path: test.info().outputPath("apps-tabs.png"),
           fullPage: true,
         });
-      await page.locator("#tab-settings").click();
-      await expect(page.locator("#panel-settings #web-gateway")).toBeVisible();
+      await page.locator("#tab-cloudflare").click();
+      await expect(
+        page.locator("#panel-cloudflare #web-gateway"),
+      ).toBeVisible();
+      await expect(page.locator(".topbar .app-settings-button")).toHaveCount(0);
+      await page.locator("#tab-appearance").click();
+      await expect(
+        page.locator("#panel-appearance .theme-switch select"),
+      ).toBeVisible();
+      await page
+        .locator("#panel-appearance .theme-switch select")
+        .selectOption("classic");
+      await expect
+        .poll(() =>
+          page.evaluate(() => localStorage.getItem("mediahub-app-theme-v2")),
+        )
+        .toBe("classic");
+      if (language === "da" && width !== 320)
+        await page.screenshot({
+          path: test.info().outputPath("appearance-tab.png"),
+          fullPage: true,
+        });
+      await expect(page.locator("#panel-appearance #web-gateway")).toHaveCount(
+        0,
+      );
+      await expect(page.locator("#app-settings")).not.toHaveJSProperty(
+        "tagName",
+        "DIALOG",
+      );
       await page.locator("#tab-connection").focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.locator("#tab-apps")).toHaveAttribute(
@@ -137,6 +164,16 @@ for (const width of [1440, 390, 320])
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true);
+      await page.keyboard.press("End");
+      await expect(page.locator("#tab-appearance")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await page.keyboard.press("ArrowRight");
+      await expect(page.locator("#tab-connection")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
       expect(errors).toEqual([]);
     });
 test("profiles render while the gateway request is still pending", async ({
@@ -151,13 +188,17 @@ test("profiles render while the gateway request is still pending", async ({
   await expect(page.locator("#profiles h2")).toHaveText("Mediahub", {
     timeout: 2000,
   });
-  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(0);
+  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(
+    0,
+  );
   await page.locator("#tab-apps").click();
-  await expect(page.locator(".gateway-loading")).toBeVisible();
+  await expect(page.locator("#panel-apps .gateway-loading")).toBeVisible();
   release();
   await expect(page.locator(".compact-route")).toBeVisible();
   await page.locator("#tab-connection").click();
-  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(0);
+  await expect(page.locator("#panel-connection .app-connections")).toHaveCount(
+    0,
+  );
 });
 test("Plex port choice sends only an enable flag and stays pending until verified", async ({
   page,

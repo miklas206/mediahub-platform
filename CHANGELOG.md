@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.11
+
+- Bundle MediaVPN 0.2.4. Replace the generic Settings tab with separate Cloudflare and Appearance tabs, and remove the duplicate settings button from the header.
+- Render existing appearance controls directly in the Appearance panel, preserving automatic theme saving and account overrides. Support four-tab keyboard navigation and a two-column layout on small screens.
+
 ## 0.6.10
 
 - Bundle MediaVPN 0.2.3. Remove the legacy fixed app-connection summary that flashed before gateway loading completed. Keep app connection controls in the Apps and domains tab, including the compatibility fallback.
