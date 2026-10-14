@@ -13,7 +13,7 @@ from mediahub.errors import DomainError
 PUBLISHERS = frozenset({
     "lscr.io/linuxserver/plex", "jellyfin/jellyfin", "linuxserver/prowlarr",
     "linuxserver/radarr", "linuxserver/sonarr", "ghcr.io/autobrr/autobrr",
-    "qmcgaw/gluetun", "lscr.io/linuxserver/qbittorrent",
+    "qmcgaw/gluetun", "lscr.io/linuxserver/qbittorrent", "cloudflare/cloudflared",
 })
 
 

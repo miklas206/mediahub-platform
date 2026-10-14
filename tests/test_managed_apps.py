@@ -127,6 +127,37 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
     )
 
 
+def test_live_seed_health_ignores_saved_stopped_state_and_replaced_client(logged_in, tmp_path, monkeypatch):
+    from mediahub.db import InstalledApp
+    from sqlalchemy import select
+
+    svc, manager, _, _ = setup_manager(logged_in, tmp_path, monkeypatch)
+    with svc.sessions.begin() as db:
+        stored = db.scalar(select(InstalledApp).where(InstalledApp.package_id == SEED))
+        stored.state = "stopped"
+        app_id = stored.id
+    rows = [
+        {"Config": {"Labels": {"com.docker.compose.service": "app"}},
+         "State": {"Running": True, "Health": {"Status": "healthy"}}},
+        {"Config": {"Labels": {"com.docker.compose.service": "qbittorrent"}},
+         "State": {"Running": False}},
+        {"Config": {"Labels": {"org.mediahub.mediavpn.seedbox": "mediaseed"}},
+         "State": {"Running": True}},
+    ]
+    monkeypatch.setattr(manager, "containers", AsyncMock(return_value=rows))
+    response = logged_in.get("/api/v1/apps")
+    assert response.status_code == 200
+    actual = next(row for row in response.json()["data"] if row["id"] == app_id)
+    assert actual["health"]["status"] == "healthy"
+    assert all(check["status"] == "healthy" for check in actual["health"]["checks"])
+    with svc.sessions() as db:
+        assert db.get(InstalledApp, app_id).state == "stopped"
+    rows[-1]["State"]["Running"] = False
+    response = logged_in.get("/api/v1/apps")
+    actual = next(row for row in response.json()["data"] if row["id"] == app_id)
+    assert actual["health"]["status"] != "healthy"
+
+
 def test_container_replacement_invalidates_confirmation(logged_in, tmp_path, monkeypatch):
     _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch)
     ready = asyncio.run(manager.status(SEED))

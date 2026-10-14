@@ -66,6 +66,7 @@ export function CloudflareManagementPanel({
     try {
       const value = await api<Management>(endpoint);
       setData(value);
+      setError("");
       setAccount((current) => current || value.accountId);
     } catch (e) {
       setError((e as Error).message);
@@ -73,9 +74,9 @@ export function CloudflareManagementPanel({
   }, []);
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 15000);
+    const timer = setInterval(() => void load(), data?.setup?.state === "running" ? 2000 : 15000);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [load, data?.setup?.state]);
   useEffect(() => {
     if (data) onConfigured?.(data.configured);
   }, [data, onConfigured]);
@@ -110,10 +111,10 @@ export function CloudflareManagementPanel({
     discovery?.records.filter((row) => row.zoneId === selectedZone?.id) || [];
   const tunnels = discovery?.tunnels || [];
   return (
-    <Panel title={t("Cloudflare app domains and VPN DNS")}>
+    <Panel title={t("Domains and access")}>
       <p className="muted">
         {t(
-          "Connect installed apps to their own domains, or synchronize DNS with a verified MediaVPN public IP.",
+          "Connect Cloudflare once, then choose an app and the domain you want to use.",
         )}
       </p>
       {error && (
@@ -186,7 +187,7 @@ export function CloudflareManagementPanel({
           </li>
           <li>
             {t(
-              "MediaVPN must have a running, verified profile. Its public IP is fetched automatically; no manual IP or VPN private key is needed.",
+              "Automatic app domains require Zone DNS Edit and Account Cloudflare Tunnel Edit. VPN DNS is optional and available under advanced settings.",
             )}
           </li>
         </ul>
@@ -233,211 +234,216 @@ export function CloudflareManagementPanel({
             busy={busy}
             change={change}
           />
-          <h3>{t("Create VPN DNS record")}</h3>
-          <p className="muted">
-            {t(
-              "DNS points to the VPN public IP; it does not open an app port. A and AAAA records cannot store a forwarding port. The service must already be reachable through the VPN.",
+          <details>
+            <summary>{t("Advanced DNS and connection settings")}</summary>
+            <h3>{t("Create VPN DNS record")}</h3>
+            <p className="muted">
+              {t(
+                "DNS points to the VPN public IP; it does not open an app port. A and AAAA records cannot store a forwarding port. The service must already be reachable through the VPN.",
+              )}
+            </p>
+            {data.vpn?.message && (
+              <p className="muted">{translateText(data.vpn.message)}</p>
             )}
-          </p>
-          {data.vpn?.message && (
-            <p className="muted">{translateText(data.vpn.message)}</p>
-          )}
-          <form
-            className="cloudflare-management-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void change(
-                "/vpn-dns",
-                "POST",
-                {
-                  zoneId: selectedZone?.id,
-                  label,
-                  profileId: selectedProfile?.id,
-                },
-                "VPN DNS request saved. Check its synchronization status below.",
-              );
-            }}
-          >
-            <label>
-              {t("Domain")}
-              <select
-                required
-                disabled={!discovery?.zones.length || busy}
-                value={selectedZone?.id || ""}
-                onChange={(e) => setZone(e.target.value)}
+            <form
+              className="cloudflare-management-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void change(
+                  "/vpn-dns",
+                  "POST",
+                  {
+                    zoneId: selectedZone?.id,
+                    label,
+                    profileId: selectedProfile?.id,
+                  },
+                  "VPN DNS request saved. Check its synchronization status below.",
+                );
+              }}
+            >
+              <label>
+                {t("Domain")}
+                <select
+                  required
+                  disabled={!discovery?.zones.length || busy}
+                  value={selectedZone?.id || ""}
+                  onChange={(e) => setZone(e.target.value)}
+                >
+                  {!discovery?.zones.length && (
+                    <option value="">{t("No accessible domains")}</option>
+                  )}
+                  {discovery?.zones.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("Record name")}
+                <input
+                  required
+                  aria-label={t("Record name")}
+                  value={label}
+                  pattern="[A-Za-z0-9][A-Za-z0-9.-]*"
+                  maxLength={100}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
+                <small>
+                  {label}.{selectedZone?.name || "..."}
+                </small>
+              </label>
+              <label>
+                {t("VPN profile")}
+                <select
+                  required
+                  disabled={busy || !profiles.length}
+                  value={selectedProfile?.id || ""}
+                  onChange={(e) => setProfile(e.target.value)}
+                >
+                  {!profiles.length && (
+                    <option value="">{t("No VPN profiles available")}</option>
+                  )}
+                  {profiles.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.name}
+                      {row.ready
+                        ? " - " + row.publicIp
+                        : " (" + t("Not verified") + ")"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div>
+                <small>{t("Automatic DNS target")}</small>
+                <p>
+                  {selectedProfile?.publicIp
+                    ? selectedProfile.type + " - " + selectedProfile.publicIp
+                    : t(
+                        "Start and verify the selected MediaVPN profile before publishing DNS",
+                      )}
+                </p>
+              </div>
+              <button
+                disabled={
+                  busy ||
+                  !selectedZone ||
+                  !selectedProfile?.ready ||
+                  !!dnsIssues.length
+                }
+                type="submit"
               >
-                {!discovery?.zones.length && (
-                  <option value="">{t("No accessible domains")}</option>
-                )}
-                {discovery?.zones.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("Record name")}
-              <input
-                required
-                aria-label={t("Record name")}
-                value={label}
-                pattern="[A-Za-z0-9][A-Za-z0-9.-]*"
-                maxLength={100}
-                onChange={(e) => setLabel(e.target.value)}
-              />
-              <small>
-                {label}.{selectedZone?.name || "..."}
-              </small>
-            </label>
-            <label>
-              {t("VPN profile")}
-              <select
-                required
-                disabled={busy || !profiles.length}
-                value={selectedProfile?.id || ""}
-                onChange={(e) => setProfile(e.target.value)}
-              >
-                {!profiles.length && (
-                  <option value="">{t("No VPN profiles available")}</option>
-                )}
-                {profiles.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                    {row.ready
-                      ? " - " + row.publicIp
-                      : " (" + t("Not verified") + ")"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div>
-              <small>{t("Automatic DNS target")}</small>
-              <p>
-                {selectedProfile?.publicIp
-                  ? selectedProfile.type + " - " + selectedProfile.publicIp
-                  : t(
-                      "Start and verify the selected MediaVPN profile before publishing DNS",
+                <Plus size={16} />
+                {t("Create DNS record")}
+              </button>
+            </form>
+            <h3>{t("VPN DNS records")}</h3>
+            <div className="cloudflare-profile-list">
+              {(data.vpnRecords || []).map((row) => (
+                <article key={row.id}>
+                  <div>
+                    <strong>{row.hostname}</strong>
+                    <small>
+                      {row.type || "DNS"} - {row.content || t("Pending")}
+                    </small>
+                    <p>{translateText(row.message)}</p>
+                    {row.forwardedPort && (
+                      <small>
+                        {t("VPN forwarding port")}: {row.forwardedPort} (
+                        {t("not stored in DNS")})
+                      </small>
                     )}
-              </p>
+                  </div>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={row.autoSync}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void change(
+                          "/vpn-dns/" + row.id,
+                          "PUT",
+                          { autoSync: e.target.checked },
+                          "Automatic synchronization updated",
+                        )
+                      }
+                    />
+                    {t("Follow VPN IP")}
+                  </label>
+                </article>
+              ))}
             </div>
             <button
-              disabled={
-                busy ||
-                !selectedZone ||
-                !selectedProfile?.ready ||
-                !!dnsIssues.length
+              disabled={busy}
+              onClick={() =>
+                void change(
+                  "/sync",
+                  "POST",
+                  {},
+                  "App routes and VPN DNS synchronization checked",
+                )
               }
-              type="submit"
             >
-              <Plus size={16} />
-              {t("Create DNS record")}
+              <RefreshCw size={16} />
+              {t("Synchronize now")}
             </button>
-          </form>
-          <h3>{t("VPN DNS records")}</h3>
-          <div className="cloudflare-profile-list">
-            {(data.vpnRecords || []).map((row) => (
-              <article key={row.id}>
-                <div>
-                  <strong>{row.hostname}</strong>
-                  <small>
-                    {row.type || "DNS"} - {row.content || t("Pending")}
-                  </small>
-                  <p>{translateText(row.message)}</p>
-                  {row.forwardedPort && (
-                    <small>
-                      {t("VPN forwarding port")}: {row.forwardedPort} (
-                      {t("not stored in DNS")})
-                    </small>
-                  )}
-                </div>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={row.autoSync}
-                    disabled={busy}
-                    onChange={(e) =>
-                      void change(
-                        "/vpn-dns/" + row.id,
-                        "PUT",
-                        { autoSync: e.target.checked },
-                        "Automatic synchronization updated",
-                      )
-                    }
-                  />
-                  {t("Follow VPN IP")}
-                </label>
-              </article>
-            ))}
-          </div>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void change(
-                "/sync",
-                "POST",
-                {},
-                "App routes and VPN DNS synchronization checked",
-              )
-            }
-          >
-            <RefreshCw size={16} />
-            {t("Synchronize now")}
-          </button>
-          <details open>
-            <summary>
-              {t("Existing DNS records")} ({records.length})
-            </summary>
-            <div className="cloudflare-profile-list">
-              {records.map((row) => (
-                <article key={row.id}>
-                  <div>
-                    <strong>{row.name}</strong>
-                    <small>
-                      {row.type}
-                      {row.content ? " - " + row.content : ""}
-                    </small>
-                  </div>
-                </article>
-              ))}
-            </div>
-            {!records.length && (
-              <p className="muted">{t("No records found for this domain.")}</p>
-            )}
+            <details>
+              <summary>
+                {t("Existing DNS records")} ({records.length})
+              </summary>
+              <div className="cloudflare-profile-list">
+                {records.map((row) => (
+                  <article key={row.id}>
+                    <div>
+                      <strong>{row.name}</strong>
+                      <small>
+                        {row.type}
+                        {row.content ? " - " + row.content : ""}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {!records.length && (
+                <p className="muted">
+                  {t("No records found for this domain.")}
+                </p>
+              )}
+            </details>
+            <details>
+              <summary>
+                {t("Existing tunnels")} ({tunnels.length})
+              </summary>
+              <div className="cloudflare-profile-list">
+                {tunnels.map((row) => (
+                  <article key={row.id}>
+                    <div>
+                      <strong>{row.name}</strong>
+                      <small>{row.id}</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {!tunnels.length && (
+                <p className="muted">
+                  {t("No tunnels found or tunnel read access is missing.")}
+                </p>
+              )}
+            </details>
+            <button
+              disabled={busy}
+              onClick={() =>
+                void change(
+                  "/credentials",
+                  "DELETE",
+                  undefined,
+                  "Cloudflare disconnected. Remote tunnels and DNS records were kept.",
+                )
+              }
+            >
+              {t("Disconnect account")}
+            </button>
           </details>
-          <details open>
-            <summary>
-              {t("Existing tunnels")} ({tunnels.length})
-            </summary>
-            <div className="cloudflare-profile-list">
-              {tunnels.map((row) => (
-                <article key={row.id}>
-                  <div>
-                    <strong>{row.name}</strong>
-                    <small>{row.id}</small>
-                  </div>
-                </article>
-              ))}
-            </div>
-            {!tunnels.length && (
-              <p className="muted">
-                {t("No tunnels found or tunnel read access is missing.")}
-              </p>
-            )}
-          </details>
-          <button
-            disabled={busy}
-            onClick={() =>
-              void change(
-                "/credentials",
-                "DELETE",
-                undefined,
-                "Cloudflare disconnected. Remote tunnels and DNS records were kept.",
-              )
-            }
-          >
-            {t("Disconnect account")}
-          </button>
         </>
       )}
     </Panel>

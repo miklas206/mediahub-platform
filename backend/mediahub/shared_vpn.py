@@ -138,8 +138,10 @@ class SharedVPN:
                     {
                         **item,
                         "enabled": state["enabled"],
-                        "ready": bool(gateway["ready"] and state["handshakeVerified"]),
+                        "ready": bool(gateway["ready"] and state.get("ready", state["handshakeVerified"] and state["phase"] == "ready")),
                         "phase": state["phase"],
+                        "errorCode": state.get("errorCode"),
+                        "message": state.get("message"),
                     }
                 )
             except DomainError:

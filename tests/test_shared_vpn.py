@@ -41,6 +41,7 @@ def controller(tmp_path):
         record_path=lambda app: path,
         record=lambda app: read_json(path),
         verify=lambda row, record: None,
+        prepare_storage=AsyncMock(),
     )
     control = SharedVPN(SimpleNamespace(state_dir=tmp_path, docker_socket=None), apps, None)
     private = X25519PrivateKey.generate()
@@ -116,6 +117,30 @@ def test_namespace_restart_invalidates_app_readiness(tmp_path):
     assert asyncio.run(control.ready("jellyfin", current)) is False
     current["Config"]["Labels"]["org.mediahub.vpn.generation"] = "new"
     assert asyncio.run(control.ready("jellyfin", current)) is True
+
+
+def test_healthy_relay_does_not_report_missing_app_ready(tmp_path):
+    control, _, _, _ = controller(tmp_path)
+    save_json(control.path("jellyfin"), {"enabled": True, "phase": "blocked"})
+    control.owned_relay = AsyncMock(return_value={
+        "Id": "relay", "State": {"Running": True, "Health": {"Status": "healthy"}},
+    })
+    control.request = AsyncMock(return_value=None)
+    status = asyncio.run(control.status("jellyfin"))
+    assert status["handshakeVerified"] is True
+    assert status["ready"] is False
+    assert status["message"]
+
+
+def test_storage_is_prepared_before_stopping_app_and_error_is_reported(tmp_path):
+    control, peer, events, _ = controller(tmp_path)
+    control.apps.prepare_storage.side_effect = DomainError(
+        "storage_unverified", "Storage is not verified mounted", 409
+    )
+    with pytest.raises(DomainError, match="Storage is not verified"):
+        asyncio.run(control.configuration("jellyfin", peer, True))
+    assert not any(method != "GET" for method, _, _ in events)
+    assert control.state("jellyfin")["errorCode"] == "storage_unverified"
 
 
 def test_shared_vpn_management_requires_login(client):

@@ -339,6 +339,43 @@ class ContainerApps:
                                 "progress": progress, "message": message,
                                 "indeterminate": indeterminate}
 
+    async def prepare_storage(self, app, container, *, create_config=True):
+        """Prepare only owned app directories on currently verified storage."""
+        policy = self.policy()
+        if not await self.storage_control.storage_verified(policy):
+            raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
+        mounts = container["HostConfig"]["Mounts"]
+        config_mounts = [m for m in mounts if m["Target"] == "/config"]
+        allowed = {
+            Path(choice.path) / ("mediahub-" + app)
+            for choice in policy.storage.values() if choice.kind == "appdata"
+        }
+        if len(config_mounts) != 1 or Path(config_mounts[0]["Source"]) not in allowed:
+            raise DomainError("unsafe_storage", "App configuration path is not approved", 409)
+        config = Path(config_mounts[0]["Source"])
+        roots = [Path(root) for root in (*policy.requiredMounts, *policy.requiredFilesystemUuids)]
+        for mount in mounts:
+            path = Path(mount["Source"])
+            if path.resolve() != path or not any(path == root or root in path.parents for root in roots):
+                raise DomainError("unsafe_storage", "App storage path changed", 409)
+            if mount["Target"] == "/cache":
+                if app != "jellyfin" or path != config / "cache":
+                    raise DomainError("unsafe_storage", "App cache path is not approved", 409)
+            elif mount["Target"] != "/config" and not path.is_dir():
+                raise DomainError("storage_unavailable", "An app media directory is unavailable", 409)
+        if not config.is_dir() and not create_config:
+            raise DomainError("storage_unavailable", "App configuration directory is unavailable", 409)
+        for target in ("/config", "/cache"):
+            for mount in mounts:
+                if mount["Target"] != target:
+                    continue
+                path = Path(mount["Source"])
+                path.mkdir(mode=0o700, exist_ok=True)
+                if os.name == "posix" and os.geteuid() == 0:
+                    os.chown(path, policy.uid, policy.gid)
+                elif os.name == "posix" and path.stat().st_uid != policy.uid:
+                    raise DomainError("storage_owner", "Configuration owner must match app UID", 409)
+
     async def provision(self, app, plan):
         try:
             async with self.locks[app]:
@@ -377,19 +414,7 @@ class ContainerApps:
                         or network.get("Internal") is not False
                     ):
                         raise DomainError("network_conflict", "Container network is not owned", 409)
-                for mount in plan["container"]["HostConfig"]["Mounts"]:
-                    if mount["Target"] not in {"/config", "/cache"}:
-                        continue
-                    path = Path(mount["Source"])
-                    if path.resolve() != path:
-                        raise DomainError("unsafe_storage", "Configuration path changed", 409)
-                    path.mkdir(mode=0o700, exist_ok=True)
-                    if os.name == "posix" and os.geteuid() == 0:
-                        os.chown(path, policy.uid, policy.gid)
-                    elif os.name == "posix" and path.stat().st_uid != policy.uid:
-                        raise DomainError(
-                            "storage_owner", "Configuration owner must match app UID", 409
-                        )
+                await self.prepare_storage(app, plan["container"])
                 plan["desiredRunning"] = False
                 if self.shared_vpn:
                     plan["container"] = await self.shared_vpn.prepare(app, plan["container"])
@@ -507,6 +532,9 @@ class ContainerApps:
             )
             if inspected is None:
                 if action == "uninstall":
+                    record["desiredRunning"] = False
+                    save_json(self.record_path(app), record)
+                    self.operations.pop(app, None)
                     return {"state": "succeeded", "dataPreserved": True}
                 raise DomainError("not_installed", "Container is missing", 409)
             self.verify(inspected, record)

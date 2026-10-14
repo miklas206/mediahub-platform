@@ -330,6 +330,16 @@ class SharedVPN:
                 # Preserve the latest installed image across VPN off/on, rather
                 # than resurrecting an old version stored before an update.
                 original["Image"] = record["container"]["Image"]
+                if app != "plex":
+                    # A missing disposable cache must not leave a selected app
+                    # permanently absent after recreation. Verify storage and
+                    # prepare only its approved cache before stopping anything.
+                    try:
+                        await self.apps.prepare_storage(app, original, create_config=False)
+                    except DomainError as error:
+                        state.update(errorCode=error.code, message=error.message)
+                        save_json(self.path(app), state)
+                        raise
                 if enabled:
                     validate(
                         {
@@ -371,9 +381,13 @@ class SharedVPN:
                         else:
                             await self.request("POST", "/containers/" + record["name"] + "/start")
                     state["phase"] = "ready"
+                    state.pop("errorCode", None)
+                    state.pop("message", None)
                     save_json(self.path(app), state)
-                except Exception:
+                except Exception as error:
                     state["phase"] = "blocked"
+                    state["errorCode"] = error.code if isinstance(error, DomainError) else "vpn_app_recreation_failed"
+                    state["message"] = error.message if isinstance(error, DomainError) else "App recreation failed; persistent data retained"
                     save_json(self.path(app), state)
                     raise
                 return await self.status(app)
@@ -381,6 +395,10 @@ class SharedVPN:
     async def status(self, app):
         value = self.state(app)
         row = await self.owned_relay(app) if value["enabled"] else None
+        current = await self.request("GET", "/containers/mediahub-" + app + "/json", missing=True) if value["enabled"] else None
+        ready = bool(value["enabled"] and value.get("phase") == "ready"
+                     and current and current.get("State", {}).get("Running")
+                     and await self.ready(app, current))
         return {
             "enabled": value["enabled"],
             "phase": value.get("phase", "idle"),
@@ -390,6 +408,11 @@ class SharedVPN:
                 and row["State"].get("Health", {}).get("Status") == "healthy"
             ),
             "publicKey": self.identity(app)["publicKey"],
+            "ready": ready,
+            "errorCode": value.get("errorCode"),
+            "message": value.get("message") or (
+                "App is stopped or missing; the VPN relay alone is not an active app" if value["enabled"] and not ready else None
+            ),
         }
 
     async def poll(self):

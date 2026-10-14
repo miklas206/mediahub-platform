@@ -54,10 +54,10 @@ from mediahub.seedbox_reachability import SeedboxReachability
 from mediahub.seedbox_rss_feeds import RSSFeeds
 from mediahub.settings import SettingsService
 from mediahub.setup import SetupService
-from mediahub.sso import router as sso_router
-from mediahub.storage import StorageManager
 from mediahub.shared_vpn import SharedVPN
 from mediahub.shared_vpn import router as shared_vpn_router
+from mediahub.sso import router as sso_router
+from mediahub.storage import StorageManager
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
@@ -174,6 +174,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             cloudflare_collector.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await cloudflare_collector
+            await svc.cloudflare_management.close()
             await svc.managed_apps.close()
             await svc.update_queue.stop()
             port_collector.cancel()

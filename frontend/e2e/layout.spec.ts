@@ -1629,7 +1629,7 @@ test("Danish maintenance cards translate dynamic health messages", async ({
     cards.getByText("mediahub er tilsluttet.", { exact: true }),
   ).toBeVisible();
   await expect(
-    cards.getByText("1 af 1 placeringer er tilg?ngelige.", { exact: true }),
+    cards.getByText("1 af 1 placeringer er tilgængelige.", { exact: true }),
   ).toBeVisible();
   await expect(
     cards.getByText("1 app er sund.", { exact: true }),

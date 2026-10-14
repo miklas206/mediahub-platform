@@ -22,6 +22,7 @@ type Shared = {
     enabled: boolean | null;
     ready: boolean;
     phase: string;
+    message?: string | null;
   }[];
 };
 
@@ -133,11 +134,17 @@ export function SharedVPNPanel() {
           {data.gateway.publicIp ? " · " + data.gateway.publicIp : ""}
         </p>
       )}
+      {data?.gateway.message && (
+        <p role="status" className="muted">
+          {translateText(data.gateway.message)}
+        </p>
+      )}
       {data?.apps.map((app) => (
         <div key={app.id} className="runtime-toolbar">
           <strong>{app.name}</strong>
           <span className="muted">
             {app.hostId} · {t(app.ready ? "Connected" : "Not connected")}
+            {app.message && <small>{translateText(app.message)}</small>}
           </span>
           <label>
             <input

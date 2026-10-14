@@ -1,10 +1,14 @@
 import asyncio
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from mediahub.managed_apps import ManagedAdapter
 from mediahub.update_monitor import UpdateMonitor
+
+BUNDLED_VERSION = tomllib.loads((Path(__file__).resolve().parents[1] / "docker/bundled/mediaseed/pyproject.toml").read_text())["project"]["version"]
 
 
 def row(service, running, version=None, clone=False):
@@ -31,14 +35,15 @@ def test_stopped_source_and_completed_initializer_do_not_hide_healthy_vpn_client
 
 @pytest.mark.parametrize(
     "version,preparation,status",
-    [("0.1.2", "ready", "checked"), (None, "failed", "failed"), ("0.1.1", "ready", "unchecked"), ("0.1.0", "ready", "unchecked")],
+    [(BUNDLED_VERSION, "ready", "checked"), (None, "failed", "failed"), ("0.1.1", "ready", "unchecked"), ("0.1.0", "ready", "unchecked")],
 )
 def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     version, preparation, status, monkeypatch
 ):
-    upstream = AsyncMock(return_value={"latestVersion": "0.1.2"})
+    upstream = AsyncMock(return_value={"latestVersion": BUNDLED_VERSION})
     monkeypatch.setattr("mediahub.platform_source.GitHubSourceProvider.check", upstream)
     svc = SimpleNamespace(
+        settings=SimpleNamespace(get=lambda: SimpleNamespace(release_repository="owner/mediahub-main")),
         release_credentials=SimpleNamespace(token=lambda: None),
         app_dependencies=SimpleNamespace(
             public=lambda: {
@@ -52,8 +57,8 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     )
     adapter = ManagedAdapter(manager, "org.mediahub.mediaseed")
     checked = asyncio.run(adapter.updateCheck())
-    upstream.assert_awaited_once_with("miklas206/mediaseed", None)
-    assert checked["latestVersion"] == "0.1.2"
+    upstream.assert_awaited_once_with("owner/mediahub-main", None)
+    assert checked["latestVersion"] == BUNDLED_VERSION
     assert checked["installedVersion"] == version
     assert checked["checkStatus"] == status
     assert not checked[

@@ -91,12 +91,16 @@ class GitHubSourceProvider:
         *,
         source_access=None,
         metadata_cache=None,
+        project_path="pyproject.toml",
     ):
         self.version = current_version
         self.commit = installed_commit if SHA.fullmatch(installed_commit or "") else None
         self.transport = transport
         self.source_access = source_access
         self.metadata_cache = metadata_cache
+        if project_path not in {"pyproject.toml", "docker/bundled/mediaseed/pyproject.toml", "docker/bundled/mediavpn/pyproject.toml"}:
+            raise ValueError("Unsupported project metadata path")
+        self.project_path = project_path
 
     async def check(self, repository, token=None):
         result = {
@@ -129,7 +133,7 @@ class GitHubSourceProvider:
             raise DomainError("invalid_repository", "Invalid GitHub repository", 422)
         try:
             if self.source_access:
-                commit, project = await self.source_access.metadata(repository)
+                commit, project = await self.source_access.metadata(repository) if self.project_path == "pyproject.toml" else await self.source_access.metadata(repository, project_path=self.project_path)
                 version = tomllib.loads(project.decode())["project"]["version"]
                 return self._checked(result, repository, commit, version)
             async with httpx.AsyncClient(
@@ -147,7 +151,7 @@ class GitHubSourceProvider:
                     raise ValueError("Invalid commit")
                 project = await metadata(
                     client,
-                    f"/repos/{repository}/contents/pyproject.toml?ref={commit}",
+                    f"/repos/{repository}/contents/{self.project_path}?ref={commit}",
                     self.metadata_cache,
                 )
                 if project.get("encoding") != "base64" or len(project["content"]) > 100000:

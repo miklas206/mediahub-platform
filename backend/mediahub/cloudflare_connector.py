@@ -7,9 +7,8 @@ from agent.install_images import pull_latest
 from mediahub.errors import DomainError
 
 
-async def install(manager, tunnel):
-    state = manager.state()
-    prefix = manager.prefix(state, tunnel)
+async def preflight(manager):
+    """Verify local ownership before automatic setup creates anything remotely."""
     runtime = manager.svc.managed_apps
     if not manager.svc.config.managed_apps_docker_socket:
         raise DomainError("connector_runtime", "The MediaHub Docker host is not configured", 409)
@@ -31,6 +30,18 @@ async def install(manager, tunnel):
         raise DomainError(
             "connector_runtime", "MediaHub data and local CA mounts are required", 409
         )
+    for mount in (data, trust):
+        source = PurePosixPath(mount["Source"])
+        if not source.is_absolute() or ".." in source.parts:
+            raise DomainError("connector_runtime", "MediaHub host mounts are invalid", 409)
+    return data, trust
+
+
+async def install(manager, tunnel):
+    state = manager.state()
+    prefix = manager.prefix(state, tunnel)
+    runtime = manager.svc.managed_apps
+    data, trust = await preflight(manager)
     name = "mediahub-cloudflared-" + tunnel
     existing = await runtime.docker("GET", "/containers/" + name + "/json", missing=True)
     if existing:
@@ -39,19 +50,27 @@ async def install(manager, tunnel):
             != tunnel
         ):
             raise DomainError("connector_ownership", "Connector container ownership changed", 409)
-        if not existing["State"].get("Running"):
-            await runtime.docker("POST", "/containers/" + existing["Id"] + "/start")
-            return {"state": "starting", "tunnelId": tunnel, "location": "MediaHub host"}
-        return {"state": "running", "tunnelId": tunnel, "location": "MediaHub host"}
     token = await manager.call("GET", prefix + "/token")
     directory = manager.svc.config.data_dir / "cloudflare-connectors"
     directory.mkdir(mode=0o700, exist_ok=True)
+    if directory.is_symlink():
+        raise DomainError("connector_runtime", "Connector secrets need a private directory", 409)
     path = directory / (tunnel + ".token")
     descriptor = os.open(
         path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600
     )
     with os.fdopen(descriptor, "w") as stream:
         stream.write(str(token))
+    # The unprivileged connector must be able to read its root-created bind mount.
+    # Keep the token private; making it world-readable would expose credentials.
+    if hasattr(os, "chown"):
+        os.chown(path, 10001, 10001, follow_symlinks=False)
+    path.chmod(0o600)
+    if existing:
+        if not existing["State"].get("Running"):
+            await runtime.docker("POST", "/containers/" + existing["Id"] + "/start")
+            return {"state": "starting", "tunnelId": tunnel, "location": "MediaHub host"}
+        return {"state": "running", "tunnelId": tunnel, "location": "MediaHub host"}
     image = await pull_latest(
         manager.svc.config.managed_apps_docker_socket, "cloudflare/cloudflared"
     )
@@ -88,14 +107,24 @@ async def observe(manager):
     for tunnel, connector in state.get("connectors", {}).items():
         try:
             row = await manager.svc.managed_apps.docker(
-                "GET", "/containers/mediahub-cloudflared-" + tunnel + "/json", missing=True)
+                "GET", "/containers/mediahub-cloudflared-" + tunnel + "/json", missing=True
+            )
             if not row:
                 phase = "missing"
-            elif row.get("Config", {}).get("Labels", {}).get("org.mediahub.cloudflare.tunnel") != tunnel:
+            elif (
+                row.get("Config", {}).get("Labels", {}).get("org.mediahub.cloudflare.tunnel")
+                != tunnel
+            ):
                 phase = "ownership-conflict"
             else:
                 runtime = row.get("State", {})
-                phase = "restarting" if runtime.get("Restarting") else "running" if runtime.get("Running") else "stopped"
+                phase = (
+                    "restarting"
+                    if runtime.get("Restarting")
+                    else "running"
+                    if runtime.get("Running")
+                    else "stopped"
+                )
             connector["state"] = phase
         except DomainError:
             connector["state"] = "unavailable"

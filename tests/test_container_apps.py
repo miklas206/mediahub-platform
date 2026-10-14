@@ -108,6 +108,45 @@ def inspected_container(plan):
     }
 
 
+def test_vpn_recreation_restores_only_missing_owned_jellyfin_cache(tmp_path):
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    plan = asyncio.run(runtime.build_plan(spec))
+    config = tmp_path / "appdata" / "mediahub-jellyfin"
+    config.mkdir()
+    marker = config / "settings.xml"
+    marker.write_text("existing settings")
+    asyncio.run(runtime.prepare_storage("jellyfin", plan["container"], create_config=False))
+    assert (config / "cache").is_dir()
+    assert marker.read_text() == "existing settings"
+    for mount in plan["container"]["HostConfig"]["Mounts"]:
+        if mount["Target"] == "/cache":
+            mount["Source"] = str(tmp_path / "movies" / "unowned-cache")
+    with pytest.raises(DomainError, match="cache path is not approved"):
+        asyncio.run(runtime.prepare_storage("jellyfin", plan["container"], create_config=False))
+    assert not (tmp_path / "movies" / "unowned-cache").exists()
+
+
+def test_vpn_recreation_refuses_missing_storage_and_configuration(tmp_path):
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    plan = asyncio.run(runtime.build_plan(spec))
+    with pytest.raises(DomainError, match="configuration directory is unavailable"):
+        asyncio.run(runtime.prepare_storage("jellyfin", plan["container"], create_config=False))
+    runtime.storage_control.storage_verified.return_value = False
+    with pytest.raises(DomainError, match="Storage is not verified"):
+        asyncio.run(runtime.prepare_storage("jellyfin", plan["container"], create_config=False))
+    assert not (tmp_path / "appdata" / "mediahub-jellyfin").exists()
+
+
+def test_uninstall_missing_container_clears_saved_running_intent(tmp_path):
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    plan = asyncio.run(runtime.build_plan(spec))
+    plan["desiredRunning"] = True
+    save_json(runtime.record_path("jellyfin"), plan)
+    runtime.request = AsyncMock(return_value=None)
+    asyncio.run(runtime.action("jellyfin", "uninstall", "mediahub-jellyfin"))
+    assert runtime.record("jellyfin")["desiredRunning"] is False
+
+
 @pytest.mark.parametrize("app", CONTAINER_APPS)
 def test_plans_request_latest_approved_publisher_and_scope_mounts(tmp_path, app):
     runtime, spec = runtime_and_spec(tmp_path, app)

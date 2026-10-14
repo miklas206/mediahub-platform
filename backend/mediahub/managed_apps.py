@@ -98,6 +98,8 @@ class ManagedAdapter:
             return Health(status="unknown", summary="App runtime unavailable", checks=[])
 
     async def updateCheck(self):
+        from packaging.version import Version
+
         from mediahub.platform_source import GitHubSourceProvider
 
         kind = self.package.rsplit(".", 1)[-1]
@@ -115,16 +117,22 @@ class ManagedAdapter:
             dependencies = getattr(self.manager.svc, "app_dependencies", None)
             state = dependencies.public() if dependencies else {}
             monitor = getattr(self.manager.svc, "updates", None)
+            repository = self.manager.svc.settings.get().release_repository
             upstream = await GitHubSourceProvider(
                 installed or latest,
+                source_access=getattr(monitor, "source_access", None),
                 metadata_cache=getattr(monitor, "github_metadata", None),
-            ).check("miklas206/" + kind, self.manager.svc.release_credentials.token())
+                project_path="docker/bundled/" + kind + "/pyproject.toml",
+            ).check(repository, self.manager.svc.release_credentials.token())
+            remote_version = upstream.get("latestVersion")
+            newer = bool(remote_version and Version(remote_version) > Version(latest))
             return {"supported": False, "updateAvailable": False,
                     "installedVersion": installed, "latestVersion": upstream["latestVersion"],
-                    "bundledVersion": latest, "repository": "miklas206/" + kind,
-                    "checkStatus": "failed" if state.get("state") == "failed" else "checked" if installed == latest else "unchecked",
+                    "bundledVersion": latest, "repository": repository,
+                    "checkStatus": "failed" if state.get("state") == "failed" else "checked" if remote_version and installed == latest else "unchecked",
                     "message": state.get("message") if state.get("state") == "failed" else
-                    "A newer app version exists on GitHub; it must be included in a MediaHub Core update before installation." if upstream["latestVersion"] != latest else
+                    "Choose the MediaHub update repository before checking app versions." if not remote_version else
+                    "A newer bundled app is available through the MediaHub Core update." if newer else
                     "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
         except DomainError:
             raise

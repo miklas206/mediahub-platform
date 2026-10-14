@@ -1,6 +1,7 @@
 """Opt-in Cloudflare API management and app-bound origin reconciliation."""
 
 import asyncio
+import contextlib
 import copy
 import re
 import time
@@ -71,6 +72,12 @@ class NewTunnel(StrictModel):
     name: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9 _.-]*$")
 
 
+class PublishApp(StrictModel):
+    zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
+    label: str = Field(min_length=1, max_length=100)
+    packageId: str = Field(max_length=120)
+
+
 class RouteInput(StrictModel):
     tunnelId: UUID
     zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
@@ -119,9 +126,19 @@ class CloudflareManagement:
     def __init__(self, svc):
         self.svc = svc
         self.lock = asyncio.Lock()
+        self.setup_lock = asyncio.Lock()
+        self.setup_task = None
         self.store = SecretStore((svc.config.data_dir / "cloudflare-secrets").resolve())
         self.retry_at = 0.0
         self.discovery_at = 0.0
+        state = self.state()
+        if state.get("setup", {}).get("state") == "running":
+            state["setup"].update(
+                state="failed",
+                code="setup_interrupted",
+                message="Setup was interrupted. Retry to continue the saved configuration.",
+            )
+            self.save(state)
         self.monitor_routes(self.state())
         for route in self.state()["routes"]:
             if route["packageId"] == "mediahub" and route.get("lastApplied"):
@@ -223,9 +240,17 @@ class CloudflareManagement:
             ) from None
 
     async def credentials(self, body):
+        if self.setup_task and not self.setup_task.done():
+            raise DomainError("setup_running", "Wait for domain setup to finish", 409)
         async with self.lock:
+            if self.setup_task and not self.setup_task.done():
+                raise DomainError("setup_running", "Wait for domain setup to finish", 409)
             state = self.state()
-            if state["accountId"] and state["accountId"] != body.accountId and state["tunnels"]:
+            if (
+                state["accountId"]
+                and state["accountId"] != body.accountId
+                and (state["tunnels"] or state.get("automaticTunnel"))
+            ):
                 raise DomainError(
                     "cloudflare_account", "Use the account that owns the saved tunnels", 409
                 )
@@ -266,6 +291,10 @@ class CloudflareManagement:
         )
 
     async def discover(self, force=False):
+        # Image pulls and upstream requests run in the setup task. Progress polling
+        # must remain responsive while that task holds the mutation lock.
+        if self.setup_task and not self.setup_task.done():
+            return self.public()
         async with self.lock:
             from mediahub.cloudflare_connector import observe
 
@@ -433,17 +462,26 @@ class CloudflareManagement:
 
     def public(self):
         with self.svc.sessions() as db:
-            installed = set(db.scalars(select(InstalledApp.package_id).where(
-                InstalledApp.is_mock.is_(False),
-                InstalledApp.state.not_in({"uninstalled", "removing", "installing", "failed"}),
-            )))
+            installed = set(
+                db.scalars(
+                    select(InstalledApp.package_id).where(
+                        InstalledApp.is_mock.is_(False),
+                        InstalledApp.state.not_in(
+                            {"uninstalled", "removing", "installing", "failed"}
+                        ),
+                    )
+                )
+            )
         return {
             **self.state(),
             "configured": self.configured(),
             "vpn": getattr(self, "vpn_snapshot", {"profiles": [], "message": None}),
             "vpnRecords": self.state().get("vpnRecords", []),
-            "apps": [{"packageId": key, "name": value} for key, value in APPS.items()
-                     if key == "mediahub" or key in installed],
+            "apps": [
+                {"packageId": key, "name": value}
+                for key, value in APPS.items()
+                if key == "mediahub" or key in installed
+            ],
         }
 
     def prefix(self, state, tunnel):
@@ -452,6 +490,242 @@ class CloudflareManagement:
                 "tunnel_not_owned", "Choose a tunnel created through this MediaHub", 409
             )
         return "/accounts/" + state["accountId"] + "/cfd_tunnel/" + tunnel
+
+    def setup_progress(self, **values):
+        state = self.state()
+        state.setdefault("setup", {}).update(**values, checkedAt=int(time.time()))
+        self.save(state)
+
+    async def publish(self, body):
+        """Start a serialized, resumable app-domain operation without an HTTP timeout."""
+        async with self.setup_lock:
+            current = self.state().get("setup", {})
+            requested = body.model_dump()
+            if self.setup_task and not self.setup_task.done():
+                if all(current.get(key) == value for key, value in requested.items()):
+                    return self.public()
+                raise DomainError("setup_running", "Wait for domain setup to finish", 409)
+            async with self.lock:
+                if not self.configured() or not self.state()["accountId"]:
+                    raise DomainError(
+                        "cloudflare_credentials", "Connect your Cloudflare account first", 409
+                    )
+                # Reject malformed labels and unavailable apps before accepting the job.
+                hostname(body.label + ".example.com")
+                await self.origin(body.packageId)
+                self.setup_progress(
+                    **requested,
+                    state="running",
+                    phase="checking",
+                    code=None,
+                    hostname="",
+                    message="Checking the app, domain and local connector requirements",
+                )
+                self.setup_task = asyncio.create_task(self.run_publish(body))
+            return self.public()
+
+    @staticmethod
+    def validate_connector_origin(origin):
+        parsed = urlsplit(origin)
+        try:
+            address = ip_address(parsed.hostname or "")
+        except ValueError:
+            address = None
+        if not address or address.is_loopback:
+            raise DomainError(
+                "connector_origin",
+                "Configure the app's private LAN address before publishing it",
+                409,
+            )
+
+    async def run_publish(self, body):
+        from mediahub.cloudflare_connector import install, preflight
+
+        try:
+            async with asyncio.timeout(300), self.lock:
+                origin = await self.origin(body.packageId)
+                state = self.state()
+                zone = await self.call("GET", "/zones/" + body.zoneId)
+                if zone.get("account", {}).get("id") != state["accountId"]:
+                    raise DomainError(
+                        "cloudflare_account",
+                        "Choose a domain in the connected Cloudflare account",
+                        409,
+                    )
+                name = hostname(body.label + "." + zone["name"])
+                route = next((row for row in state["routes"] if row["hostname"] == name), None)
+                if route and (
+                    route["packageId"] != body.packageId or route["zoneId"] != body.zoneId
+                ):
+                    raise DomainError(
+                        "route_exists", "This hostname is already linked to another app", 409
+                    )
+                if not route and len(state["routes"]) >= 32:
+                    raise DomainError("route_exists", "The app domain limit was reached", 409)
+                dedicated = state.get("automaticTunnel", {})
+                manual_route = route and route["tunnelId"] != dedicated.get("id")
+                if not manual_route:
+                    self.validate_connector_origin(origin)
+                    await preflight(self)
+                records = await self.call(
+                    "GET",
+                    "/zones/" + body.zoneId + "/dns_records",
+                    params={"name": name, "per_page": 100},
+                )
+                # Existing manual routes may be retried but their tunnel and connector
+                # are never replaced or silently adopted by automatic setup.
+                expected_tunnel = route["tunnelId"] if route else dedicated.get("id")
+                if records and (
+                    len(records) != 1
+                    or not expected_tunnel
+                    or records[0].get("type") != "CNAME"
+                    or records[0].get("content", "").rstrip(".")
+                    != expected_tunnel + ".cfargotunnel.com"
+                    or not records[0].get("proxied")
+                ):
+                    raise DomainError(
+                        "dns_conflict",
+                        "An existing DNS record uses this hostname; it was not overwritten",
+                        409,
+                    )
+                if not route and not dedicated.get("id") and len(state["tunnels"]) >= 8:
+                    raise DomainError(
+                        "tunnel_limit", "At most eight managed tunnels are supported", 409
+                    )
+                self.setup_progress(
+                    hostname=name,
+                    phase="tunnel",
+                    message="Preparing MediaHub's connection to Cloudflare",
+                )
+                if manual_route:
+                    tunnel = route["tunnelId"]
+                    self.prefix(state, tunnel)
+                else:
+                    tunnel = await self.automatic_tunnel()
+                if not manual_route:
+                    self.setup_progress(
+                        phase="connector",
+                        message="Installing and starting the local Cloudflare connector",
+                    )
+                    connector = await install(self, tunnel)
+                    state = self.state()
+                    state.setdefault("connectors", {})[tunnel] = connector
+                    self.save(state)
+                self.setup_progress(
+                    phase="publishing",
+                    message="Connecting the domain to the app and saving its HTTPS address",
+                )
+                origin = await self.origin(body.packageId)
+                if not manual_route:
+                    self.validate_connector_origin(origin)
+                state = self.state()
+                route = next((row for row in state["routes"] if row["hostname"] == name), None)
+                if not route:
+                    from mediahub.app_settings import saved_address
+
+                    route = {
+                        "id": uuid4().hex,
+                        "tunnelId": tunnel,
+                        "zoneId": body.zoneId,
+                        "hostname": name,
+                        "packageId": body.packageId,
+                        "autoSync": True,
+                        "caPool": "/etc/cloudflared/mediahub-ca.pem",
+                        "lastApplied": None,
+                        "status": "pending",
+                        "message": "Publishing app route",
+                        "previousExternalUrl": saved_address(self.svc, body.packageId),
+                    }
+                    state["routes"].append(route)
+                    self.save(state)
+                await self.reconcile_route(state, route, origin)
+                self.save(state)
+                self.monitor_routes(state)
+                if route["status"] != "synced":
+                    raise DomainError("route_publish_failed", route["message"], 409)
+                self.discovery_at = 0
+                self.setup_progress(
+                    state="succeeded",
+                    phase="configured",
+                    code=None,
+                    connectorMode="existing" if manual_route else "local",
+                    message=(
+                        "Domain configured using its existing connector. Check that connection separately."
+                        if manual_route
+                        else "Domain configured. The connector may need a moment to connect."
+                    ),
+                )
+        except asyncio.CancelledError:
+            self.setup_progress(
+                state="failed",
+                code="setup_interrupted",
+                message="Setup was interrupted. Retry to continue the saved configuration.",
+            )
+            raise
+        except DomainError as error:
+            self.setup_progress(state="failed", code=error.code, message=error.message)
+        except Exception:
+            # Docker and API exception bodies can contain credential-bearing requests.
+            self.setup_progress(
+                state="failed",
+                code="setup_failed",
+                message="Domain setup could not finish. Saved progress was preserved; retry to continue.",
+            )
+
+    async def automatic_tunnel(self):
+        """Recover only our durably recorded random name after a lost POST response."""
+        state = self.state()
+        dedicated = state.get("automaticTunnel")
+        if not dedicated:
+            dedicated = {"name": "mediahub-" + uuid4().hex, "accountId": state["accountId"]}
+            state["automaticTunnel"] = dedicated
+            self.save(state)
+        if dedicated["accountId"] != state["accountId"]:
+            raise DomainError(
+                "cloudflare_account", "The automatic tunnel belongs to another account", 409
+            )
+        prefix = "/accounts/" + state["accountId"] + "/cfd_tunnel"
+        if dedicated.get("id"):
+            remote = await self.call("GET", prefix + "/" + dedicated["id"])
+        else:
+            rows = await self.pages(prefix, {"name": dedicated["name"], "is_deleted": "false"})
+            matches = [row for row in rows if row.get("name") == dedicated["name"]]
+            if len(matches) > 1:
+                raise DomainError(
+                    "tunnel_conflict", "Multiple tunnels match the saved setup identity", 409
+                )
+            remote = (
+                matches[0]
+                if matches
+                else await self.call(
+                    "POST",
+                    prefix,
+                    {"name": dedicated["name"], "config_src": "cloudflare"},
+                )
+            )
+        if (
+            remote.get("deleted_at")
+            or remote.get("config_src") != "cloudflare"
+            or remote.get("name") != dedicated["name"]
+        ):
+            raise DomainError("tunnel_conflict", "The saved automatic tunnel identity changed", 409)
+        tunnel = str(UUID(remote["id"]))
+        if dedicated.get("id") and dedicated["id"] != tunnel:
+            raise DomainError("tunnel_conflict", "The saved automatic tunnel identity changed", 409)
+        dedicated["id"] = tunnel
+        if not any(row["id"] == tunnel for row in state["tunnels"]):
+            state["tunnels"].append({"id": tunnel, "name": dedicated["name"]})
+        self.save(state)
+        from mediahub.apps.cloudflared import register_cloudflared_app
+
+        register_cloudflared_app(self.svc)
+        return tunnel
+
+    async def close(self):
+        if self.setup_task and not self.setup_task.done():
+            self.setup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.setup_task
 
     async def create(self, name):
         async with self.lock:
@@ -749,7 +1023,9 @@ class CloudflareManagement:
                             Setting(key=key, value={"externalUrl": "https://" + route["hostname"]})
                         )
                     elif row.value.get("externalUrl", "") in {
-                        "", route.get("previousExternalUrl", ""), "https://" + route["hostname"]
+                        "",
+                        route.get("previousExternalUrl", ""),
+                        "https://" + route["hostname"],
                     }:
                         row.value = {"externalUrl": "https://" + route["hostname"]}
         except DomainError as error:
@@ -798,8 +1074,12 @@ class CloudflareManagement:
                 await self.sync()
                 await self.sync_vpn_dns()
             except (DomainError, OSError, ValueError):
-                self.svc.events.record("cloudflare.sync_failed", "cloudflare",
-                                       "Cloudflare background synchronization failed; check app configuration", "warning")
+                self.svc.events.record(
+                    "cloudflare.sync_failed",
+                    "cloudflare",
+                    "Cloudflare background synchronization failed; check app configuration",
+                    "warning",
+                )
             await asyncio.sleep(60)
 
 
@@ -839,6 +1119,11 @@ async def disconnect(request: Request):
 @router.post("/tunnels")
 async def create(body: NewTunnel, request: Request):
     return result(await services(request).cloudflare_management.create(body.name))
+
+
+@router.post("/publish", status_code=202)
+async def publish(body: PublishApp, request: Request):
+    return result(await services(request).cloudflare_management.publish(body))
 
 
 @router.post("/vpn-dns")

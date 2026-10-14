@@ -30,10 +30,10 @@ describe("App domain configuration", () => {
     expect(html).toContain("Jellyfin");
     expect(html).not.toContain("MediaSeed</option>");
     expect(html).toContain("DNS conflict");
-    expect(html).toContain("stopped");
-    expect(html).toContain("Connect app domain");
+    expect(html).not.toContain("Install local connector");
+    expect(html).toContain("Set up domain automatically");
   });
-  it("cannot publish before a tunnel and domain exist", () => {
+  it("cannot publish without an installed app and domain", () => {
     const html = renderToStaticMarkup(
       <CloudflareAppRoutes
         data={{ apps: [] }}
@@ -43,6 +43,22 @@ describe("App domain configuration", () => {
         change={vi.fn()}
       />,
     );
-    expect(html).toContain('disabled="">Connect app domain');
+    expect(html).toContain('disabled="">Set up domain automatically');
+  });
+  it("sets up the connection without requiring an existing tunnel", () => {
+    const html = renderToStaticMarkup(
+      <CloudflareAppRoutes
+        data={{
+          apps: [{ packageId: "org.mediahub.mediavpn", name: "MediaVPN" }],
+          tunnels: [],
+        }}
+        zones={[{ id: "zone", name: "example.com" }]}
+        discovered={[]}
+        busy={false}
+        change={vi.fn()}
+      />,
+    );
+    expect(html).toContain("<button>Set up domain automatically</button>");
+    expect(html).not.toContain("Choose a tunnel</option>");
   });
 });

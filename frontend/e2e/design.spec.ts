@@ -220,7 +220,7 @@ async function designFixtures(page: Page) {
     },
     {
       hash: "b".repeat(40),
-      name: "Blender Open Movies Â· 4K Collection",
+      name: "Blender Open Movies · 4K Collection",
       progress: 0.36,
       state: "downloading",
       dlspeed: 4 * mib,
@@ -345,7 +345,7 @@ async function designFixtures(page: Page) {
       source: "Seedbox",
       event: "torrent.completed",
       severity: "info",
-      message: "Debian 13.0.0 er fÃ¦rdighentet og seeder.",
+      message: "Debian 13.0.0 er færdighentet og seeder.",
       timestamp: new Date(now - 8 * 60000).toISOString(),
     },
     {
@@ -361,7 +361,7 @@ async function designFixtures(page: Page) {
       source: "MediaHub",
       event: "backup.created",
       severity: "info",
-      message: "Den automatiske sikkerhedskopi er fuldfÃ¸rt.",
+      message: "Den automatiske sikkerhedskopi er fuldført.",
       timestamp: new Date(now - 57 * 60000).toISOString(),
     },
   ];
@@ -809,7 +809,7 @@ test("complete desktop control center and consistent workspace examples", async 
     Number.isFinite(Date.parse((await date.getAttribute("datetime")) || "")),
   ).toBe(true);
   await expect(date).toContainText(
-    /mandag|tirsdag|onsdag|torsdag|fredag|lÃ¸rdag|sÃ¸ndag/,
+    /mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag/,
   );
   await expect(page.locator(".control-summary .summary-status")).toHaveCount(4);
   await expect(
@@ -905,7 +905,7 @@ test("mobile control center, navigation and narrow content remain usable", async
   });
   await page.screenshot({ path: `${examples}/dashboard-mobile-viewport.png` });
   await page
-    .getByRole("button", { name: "Ã…bn navigation", exact: true })
+    .getByRole("button", { name: "Åbn navigation", exact: true })
     .click();
   await expect(page.locator("aside.sidebar")).toBeVisible();
   await page
@@ -944,7 +944,7 @@ test("global search supports the keyboard, navigation and focus restoration", as
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
   const trigger = page.getByRole("button", {
-    name: "SÃ¸g efter sider og services",
+    name: "Søg efter sider og services",
     exact: true,
   });
   await trigger.focus();
@@ -1759,7 +1759,7 @@ test("empty and failed storage have readable mobile states", async ({
   );
   await page.goto("/storage");
   await expect(
-    page.getByText("Intet lÃ¦sbart medielager konfigureret endnu."),
+    page.getByText("Intet læsbart medielager konfigureret endnu."),
   ).toBeVisible();
   await contained(page);
   await expect(page.locator("html")).toHaveAttribute(
@@ -2697,19 +2697,19 @@ test("per-torrent cleanup Never overrides just the selected torrent and remains 
   expect(state.items.slice(1)).toEqual(unchanged);
   await expect(trigger).toHaveAttribute(
     "title",
-    new RegExp(translated("Never â€” keep torrent and files")),
+    new RegExp(translated("Never — keep torrent and files")),
   );
   const row = page
     .locator(".torrent-table tbody > tr")
     .filter({ has: page.getByText(selected.name, { exact: true }) });
   await expect(row.locator(".torrent-cleanup-override")).toHaveText(
-    translated("Individual rule Â· Never"),
+    translated("Individual rule · Never"),
   );
   await expect(page.locator(".torrent-cleanup-override")).toHaveCount(1);
   await page.reload();
   await expect(trigger).toBeVisible();
   await expect(row.locator(".torrent-cleanup-override")).toHaveText(
-    translated("Individual rule Â· Never"),
+    translated("Individual rule · Never"),
   );
   await trigger.click();
   await expect(
