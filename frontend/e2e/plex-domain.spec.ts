@@ -1,9 +1,20 @@
+import { textOutsideCards } from "./text-containment";
 import { expect, test } from "@playwright/test";
-for (const width of [1440, 390])
+for (const width of [1440, 768, 390, 320])
   test(`Plex installation settings and managed domain ${width}`, async ({
     page,
   }) => {
-    await page.clock.install();
+    await page.addInitScript(() => {
+      class Source extends EventTarget {
+        onopen: (() => void) | null = null;
+        close() {}
+        constructor() {
+          super();
+          queueMicrotask(() => this.onopen?.());
+        }
+      }
+      window.EventSource = Source as unknown as typeof EventSource;
+    });
     await page.setViewportSize({ width, height: 1000 });
     const writes: unknown[] = [];
     const errors: string[] = [];
@@ -154,9 +165,9 @@ for (const width of [1440, 390])
     ).toBeDisabled();
     claimed = true;
     linking = false;
-    await page.clock.runFor(5100);
     await expect(page.locator(".plex-account-setup")).toContainText(
       "Plex is linked to your account",
+      { timeout: 10000 },
     );
     await expect(page.locator(".plex-account-setup a")).toHaveAttribute(
       "href",
@@ -173,16 +184,32 @@ for (const width of [1440, 390])
       "Open Plex to finish setup and add your media libraries.",
     );
     await popup.getByRole("button", { name: "Dismiss notification" }).click();
-    await page.clock.runFor(300);
     await expect(popup).toHaveCount(0);
     await expect(page.locator(".plex-account-setup")).toContainText(
       "Open Plex to finish setup and add your media libraries.",
     );
     await page.reload();
+    await page.bringToFront();
     await expect(page.locator(".plex-account-setup")).toContainText(
       "Plex is linked to your account",
+      { timeout: 10000 },
     );
     await expect(popup).toHaveCount(0);
+    for (const panel of [".plex-account-setup", ".app-vpn-domain"]) {
+      expect(
+        await page.locator(panel + " h2").evaluate((heading) => {
+          const h = heading.getBoundingClientRect(),
+            p = heading.closest(".panel")!.getBoundingClientRect();
+          return h.left - p.left >= 12 && h.top - p.top >= 12;
+        }),
+      ).toBe(true);
+    }
+    await page.getByLabel("Subdomain", { exact: true }).fill("a".repeat(100));
+    expect(await textOutsideCards(page)).toEqual([]);
+    await page.screenshot({
+      path: test.info().outputPath("plex-panels.png"),
+      fullPage: true,
+    });
     expect(claims).toHaveLength(1);
     expect(errors).toEqual([]);
     expect(

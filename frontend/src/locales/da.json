@@ -4080,6 +4080,7 @@
   "App settings, accounts and VPN profiles will be removed. Reinstalling starts with a fresh setup. Media files and downloads will be kept.": "Appens indstillinger, konti og VPN-profiler fjernes. Geninstallation starter med en frisk opsætning. Mediefiler og downloads bevares.",
   "Resetting app settings": "Nulstiller appens opsætning",
   "App settings and credentials are removed for a fresh installation. Media and downloads are preserved. Active transfers or playback will stop.": "Appens indstillinger og loginoplysninger fjernes, så geninstallation starter forfra. Mediefiler og downloads bevares. Aktive overførsler og afspilning stopper.",
+  "Open MediaVPN": "Åbn MediaVPN",
   "Plex domain through MediaVPN": "Plex-domæne gennem MediaVPN",
   "MediaVPN manages this domain, its certificate and the current VPN address automatically.": "MediaVPN administrerer automatisk domænet, certifikatet og den aktuelle VPN-adresse.",
   "Enable the shared gateway and connect Cloudflare in MediaVPN first.": "Aktivér først den fælles gateway og forbind Cloudflare i MediaVPN.",

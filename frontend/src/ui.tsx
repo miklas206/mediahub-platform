@@ -357,7 +357,7 @@ export function Application() {
 function MemberApps({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
   const apps = useData<{ id: string; name: string; openUrl?: string }[]>("/apps?include_health=false");
   if (user.totpRequired && !user.totpEnabled) return <main className="page stack"><Suspense fallback={<Loading />}><SecuritySettings /></Suspense><button onClick={() => window.location.reload()}>{t("Continue")}</button></main>;
-  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><LanguageSettings compact /><button onClick={() => void onLogout()}>{t("Sign out")}</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>{t("My apps")}</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{t("Open app")}</a> : <span>{t("Login integration not configured")}</span>}</article>)}</div></section></main>;
+  return <main className="page stack"><div className="panel-heading"><h1>MediaHub</h1><span>{user.username}</span><LanguageSettings compact /><button onClick={() => void onLogout()}>{t("Sign out")}</button></div>{apps.error && <NotificationPopup tone="danger">{apps.error}</NotificationPopup>}<section><h2>{t("My apps")}</h2><div className="apps-grid">{(apps.data || []).map(app => <article className="panel phase-content" key={app.id}><h3>{app.name}</h3>{app.openUrl ? <a className="primary" href={app.openUrl}>{t("Open app")}</a> : <span>{t("Login integration not configured")}</span>}</article>)}</div></section></main>;
 }
 
 function Login({

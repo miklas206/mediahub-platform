@@ -64,80 +64,96 @@ export function AppVPNDomainPanel({ appId }: { appId: string }) {
     }
   }
   return (
-    <section className="panel">
-      <h2>{t("Plex domain through MediaVPN")}</h2>
-      {(error || failure) && (
-        <NotificationPopup tone="danger">{failure || error}</NotificationPopup>
-      )}
-      {notice && <NotificationPopup tone="success">{notice}</NotificationPopup>}
-      <p>
-        {t(
-          "MediaVPN manages this domain, its certificate and the current VPN address automatically.",
+    <section className="panel app-vpn-domain">
+      <div className="panel-heading">
+        <h2>{t("Plex domain through MediaVPN")}</h2>
+      </div>
+      <div className="phase-content">
+        {(error || failure) && (
+          <NotificationPopup tone="danger">
+            {failure || error}
+          </NotificationPopup>
         )}
-      </p>
-      {data && !ready && (
+        {notice && (
+          <NotificationPopup tone="success">{notice}</NotificationPopup>
+        )}
         <p>
           {t(
-            "Enable the shared gateway and connect Cloudflare in MediaVPN first.",
+            "MediaVPN manages this domain, its certificate and the current VPN address automatically.",
           )}
         </p>
-      )}
-      {data && (
-        <form className="settings-form" onSubmit={(event) => void save(event)}>
-          <label>
-            {t("Domain")}
-            <select
-              value={value.zoneId}
-              disabled={busy || !ready}
-              onChange={(event) =>
-                setDraft({ ...value, zoneId: event.target.value })
-              }
-            >
-              {!value.zoneId && <option value="">{t("Choose")}</option>}
-              {data.zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t("Subdomain")}
-            <input
-              value={value.label}
-              maxLength={100}
-              required
-              disabled={busy || !ready}
-              onChange={(event) =>
-                setDraft({ ...value, label: event.target.value })
-              }
-            />
-          </label>
-          <p className="muted">
-            {value.label}.
-            {data.zones.find((zone) => zone.id === value.zoneId)?.name || "..."}
+        {data && !ready && (
+          <p>
+            {t(
+              "Enable the shared gateway and connect Cloudflare in MediaVPN first.",
+            )}
           </p>
-          {route && (
-            <p role="status">
-              {route.hostname}:{" "}
-              {t(
-                route.httpsVerified
-                  ? "HTTPS verified"
-                  : route.message || "Checking...",
-              )}
+        )}
+        {data && (
+          <form
+            className="settings-form"
+            onSubmit={(event) => void save(event)}
+          >
+            <label>
+              {t("Domain")}
+              <select
+                value={value.zoneId}
+                disabled={busy || !ready}
+                onChange={(event) =>
+                  setDraft({ ...value, zoneId: event.target.value })
+                }
+              >
+                {!value.zoneId && <option value="">{t("Choose")}</option>}
+                {data.zones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t("Subdomain")}
+              <input
+                value={value.label}
+                maxLength={100}
+                required
+                disabled={busy || !ready}
+                onChange={(event) =>
+                  setDraft({ ...value, label: event.target.value })
+                }
+              />
+            </label>
+            <p className="muted">
+              {value.label}.
+              {data.zones.find((zone) => zone.id === value.zoneId)?.name ||
+                "..."}
             </p>
-          )}
-          <div className="button-row">
-            <button
-              type="submit"
-              disabled={busy || !ready || !value.zoneId || !value.label.trim()}
-            >
-              {t("Save Plex domain")}
-            </button>
-            <Link to="/store/mediavpn">{t("Open MediaVPN")}</Link>
-          </div>
-        </form>
-      )}
+            {route && (
+              <p role="status">
+                {route.hostname}:{" "}
+                {t(
+                  route.httpsVerified
+                    ? "HTTPS verified"
+                    : route.message || "Checking...",
+                )}
+              </p>
+            )}
+            <div className="button-row">
+              <button
+                type="submit"
+                disabled={
+                  busy || !ready || !value.zoneId || !value.label.trim()
+                }
+              >
+                {t("Save Plex domain")}
+              </button>
+              <Link className="button-link" to="/store/mediavpn">
+                {t("Open MediaVPN")}
+              </Link>
+            </div>
+          </form>
+        )}
+      </div>
     </section>
   );
 }

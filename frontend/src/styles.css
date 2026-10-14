@@ -705,6 +705,7 @@ nav a.active {
   min-width: 0;
 }
 .panel {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--surface);
@@ -712,6 +713,9 @@ nav a.active {
   overflow: hidden;
 }
 .panel-heading {
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2859,3 +2863,13 @@ td time {
 [data-reduced-motion="true"] .operation-progress-track.indeterminate > span { animation: none; }
 .app-removal-dialog .operation-progress { margin-block: 18px; }
 .app-removal-dialog .operation-progress-heading strong { flex-shrink: 0; }
+
+/* Keep variable app names, domains and translated guidance inside their cards. */
+.panel :is(h1, h2, h3, p, dt, dd, li, label, a) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.panel-heading > *, .phase-content > *, .button-row > * { min-width: 0; }
+.button-row { align-items: center; }
+.button-row :is(button, a) { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.plex-account-setup .settings-form, .app-vpn-domain .settings-form { padding: 0; }

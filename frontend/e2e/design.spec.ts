@@ -1,3 +1,4 @@
+import {textOutsideCards} from "./text-containment";
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { AppInfo, Metrics, Storage } from "../src/contracts";
@@ -3244,4 +3245,16 @@ test("SMB password reset tool is guided, translated and downloads without sendin
     path: "../.qa/smb-password-reset-mobile.png",
     animations: "disabled",
   });
+});
+
+for (const width of [1440, 768, 390, 320]) test(`text containment audit ${width}`, async ({page}) => {
+  await page.setViewportSize({width,height:1000});
+  const routes = ["/", "/overview", "/settings", "/settings?section=Appearance", "/settings?section=Users", "/settings?section=Security", "/settings?section=Integrations", "/settings?section=Updates", "/settings?section=Healthcheck", "/settings?section=Activity", "/settings?section=Logs", "/store/mediavpn", "/store/mediaseed", "/apps/install/plex", "/apps/install/jellyfin"];
+  for (const route of routes) {
+    await page.goto(route);
+    await expect(page.locator("main h1").first()).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    expect(await textOutsideCards(page), route).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), route).toBe(true);
+  }
 });

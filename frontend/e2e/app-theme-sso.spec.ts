@@ -1,3 +1,4 @@
+import {textOutsideCards} from "./text-containment";
 import {expect,test} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -115,6 +116,7 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
    const download=await downloadPromise;expect(download.suggestedFilename()).toBe(`mediaseed-${suffix}.zip`);
   }
  } else await expect(page.locator('.app-settings-extension')).toHaveCount(0);
+ expect(await textOutsideCards(page)).toEqual([]);
  await page.screenshot({path:test.info().outputPath(`${app}-${width}-settings.png`),fullPage:true});
  await page.locator('#app-settings').screenshot({path:test.info().outputPath(`${app}-${width}-settings-dialog.png`)});
  await page.keyboard.press('Escape');await expect(page.locator('#app-settings')).toBeHidden();

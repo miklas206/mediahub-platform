@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.21
+
+- Restore standard heading and content spacing in Plex account and VPN domain panels. Align actions, wrap long domains and translated card text, and pad ordinary users app cards. Translate the MediaVPN opening link into Danish.
+- Add rendered text containment checks across hub settings/install screens and standalone app tabs/dialogs at desktop, tablet and mobile widths. Preserve intentional table scrolling and filename ellipsis.
+
 ## 0.6.20
 
 - Show a success popup with a direct Plex configuration link after verified account linking. Keep the next-step guidance on the page after the popup closes; do not repeat the popup when opening an already linked server.
