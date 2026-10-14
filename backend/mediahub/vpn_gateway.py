@@ -57,8 +57,14 @@ class GatewayRoute(StrictModel):
     label: str = Field(min_length=1, max_length=100)
 
 
+class AppDomainChoice(StrictModel):
+    zoneId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
+    label: str = Field(min_length=1, max_length=100)
+
+
 class GatewayConfig(StrictModel):
     enabled: bool
+    expectedRevision: int | None = Field(default=None, ge=0)
     profileId: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     routes: list[GatewayRoute] = Field(default_factory=list, max_length=32)
 
@@ -502,6 +508,8 @@ class VPNGateway:
     async def configure(self, body):
         async with self.lock:
             state = self.state()
+            if body.expectedRevision is not None and body.expectedRevision != state.get("revision", 0):
+                raise DomainError("revision_conflict", "Gateway settings changed; review the latest configuration and retry", 409)
             if not body.enabled:
                 # Disabling must work when an app is gone, its LAN host is down,
                 # or Cloudflare discovery is unavailable. Keep saved selections.
@@ -1232,3 +1240,23 @@ async def reconcile(request: Request):
     service = services(request).vpn_gateway
     service.schedule()
     return result(service.snapshot())
+
+
+@router.put("/apps/{app_id}/domain")
+async def app_domain(app_id: str, body: AppDomainChoice, request: Request):
+    svc = services(request)
+    app = svc.apps.get(app_id)
+    if app["packageId"] != "org.mediahub.plex" or app["isMock"] or app["state"] in {"removing", "uninstalled"}:
+        raise DomainError("app_unavailable", "Choose an installed Plex server", 409)
+    service = svc.vpn_gateway
+    state = service.state()
+    if not state["enabled"] or not state.get("profileId"):
+        raise DomainError("gateway_required", "Enable the shared gateway in MediaVPN before choosing an app domain", 409)
+    routes = [{key: row[key] for key in ("id", "packageId", "zoneId", "label")} for row in state["routes"]]
+    previous = next((row for row in routes if row["packageId"] == app["packageId"]), None)
+    selected = {"packageId": app["packageId"], "zoneId": body.zoneId, "label": body.label}
+    if previous:
+        previous.update(selected)
+    else:
+        routes.append(selected)
+    return result(await service.configure(GatewayConfig(enabled=True, profileId=state["profileId"], routes=routes, expectedRevision=state.get("revision", 0))))

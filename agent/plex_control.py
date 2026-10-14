@@ -346,6 +346,7 @@ class PlexControl:
         if running and mounted:
             try:
                 identity = await self.plex_get(policy, "/identity")
+                report["plex"]["claimed"] = {"0": False, "1": True}.get(identity.get("claimed"))
                 libraries = await self.plex_get(policy, "/library/sections")
                 sessions = await self.plex_get(policy, "/status/sessions")
                 report["plex"].update(

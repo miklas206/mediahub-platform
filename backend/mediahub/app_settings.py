@@ -61,7 +61,7 @@ def describe(svc, package_id):
         "ssoManaged": package_id in svc.config.sso_app_urls,
         "routingManaged": routing_managed,
         "removableApp": removable,
-        "configurationPath": {"org.mediahub.cloudflared": "/store/cloudflare", "org.mediahub.plex": "/apps/install/plex", "org.mediahub.jellyfin": "/apps/install/jellyfin", "org.mediahub.seedbox": "/apps/install/seedbox"}.get(package_id),
+        "configurationPath": {"org.mediahub.cloudflared": "/store/cloudflare", "org.mediahub.plex": f"/apps/{installed.id}" if installed else "/apps/install/plex", "org.mediahub.jellyfin": "/apps/install/jellyfin", "org.mediahub.seedbox": "/apps/install/seedbox"}.get(package_id),
     }
 
 

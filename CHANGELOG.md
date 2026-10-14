@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.16
+
+- Open Plex settings on the actual installation page. Use the installed server's saved domain or approved local address with `/web`, instead of falling back to Plex account-wide web settings.
+- Add managed Plex domain selection on its installation page. Merge only that app's selection into the existing VPN gateway configuration, reject concurrent changes, and keep DNS/certificate/IP management in the existing gateway. Guide fresh installations through prerequisites.
+- Surface the server's Plex account claim status and explain unfinished setup before remote access.
+
 ## 0.6.15
 
 - Bundle MediaVPN 0.2.7. Validate API response types and JSON decoding, preserving actionable endpoint and HTTP status errors instead of exposing JSON parser errors. Never replay an activation automatically after an invalid response.

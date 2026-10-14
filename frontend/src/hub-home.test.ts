@@ -224,3 +224,24 @@ it("passes the explicit Light choice only to a first-party app", () => {
   expect(url.searchParams.get("mediahub_mode")).toBe("light");
   expect(url.searchParams.get("a")).toBe("1");
 });
+
+it("opens the installed Plex server and uses its own installation settings path", () => {
+  const entries = buildHubEntries({
+    catalog,
+    apps: [
+      {
+        ...seedbox,
+        id: "plex-installation-unique",
+        packageId: "org.mediahub.plex",
+        detailPath: "/apps/plex-installation-unique",
+        externalUrl: "https://plex.example.com",
+      },
+    ],
+    integrations: [],
+    deployment: null,
+  });
+  expect(entries.find((entry) => entry.name === "Plex")).toMatchObject({
+    path: "https://plex.example.com/web",
+    settingsPath: "/apps/plex-installation-unique",
+  });
+});

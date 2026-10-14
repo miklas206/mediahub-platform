@@ -238,15 +238,16 @@ async def app_runtime(app_id: str, request: Request, user=Depends(authenticated)
     adapter = services(request).apps.adapter(app_id)
     if not hasattr(adapter, "definition"):
         raise DomainError("runtime_unavailable", "This app has no remote runtime view", 404)
-    return result(
-        {
-            "view": adapter.definition.view_id,
-            "report": await adapter.status(),
-            "operatorUrl": services(request).config.operator_app_urls.get(
-                adapter.definition.package_id
-            ),
-        }
-    )
+    svc = services(request)
+    report = await adapter.status()
+    operator_url = svc.config.operator_app_urls.get(adapter.definition.package_id)
+    if adapter.definition.package_id == "org.mediahub.plex":
+        from mediahub.app_settings import saved_address
+
+        operator_url = saved_address(svc, adapter.definition.package_id) or report.get("url")
+        if operator_url:
+            operator_url = operator_url.rstrip("/") + "/web"
+    return result({"view": adapter.definition.view_id, "report": report, "operatorUrl": operator_url})
 
 
 @router.post("/apps/{app_id}/actions/{action}")

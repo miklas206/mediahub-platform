@@ -175,7 +175,8 @@ export function buildHubEntries({
       const installed = apps?.find(
         (app) =>
           (app.packageId === entry.id ||
-            (entry.id === "org.mediahub.seedbox" && app.packageId === "org.mediahub.mediaseed")) &&
+            (entry.id === "org.mediahub.seedbox" &&
+              app.packageId === "org.mediahub.mediaseed")) &&
           !app.isMock,
       );
       const fjordHub = entry.id === "org.mediahub.fjordhub";
@@ -215,10 +216,16 @@ export function buildHubEntries({
         category: definition.category,
         configured,
         removableApp: installed?.removable ? installed : undefined,
-        settingsPath: installed ? `/app-settings/${installed.packageId}` : undefined,
+        settingsPath: installed
+          ? installed.packageId === "org.mediahub.plex"
+            ? installed.detailPath || `/apps/${installed.id}`
+            : `/app-settings/${installed.packageId}`
+          : undefined,
         external: installed?.externalUrl ? true : undefined,
         path:
-          installed?.externalUrl ||
+          (installed?.externalUrl && installed.packageId === "org.mediahub.plex"
+            ? installed.externalUrl.replace(/\/$/, "") + "/web"
+            : installed?.externalUrl) ||
           installed?.detailPath ||
           (integration
             ? `/integrations/${encodeURIComponent(integration.id)}`
@@ -279,7 +286,7 @@ export function buildHubEntries({
       });
     }
   }
-  if (!entries.some(entry => entry.id === "org.mediahub.mediavpn")) {
+  if (!entries.some((entry) => entry.id === "org.mediahub.mediavpn")) {
     entries.push({
       id: "org.mediahub.mediavpn",
       name: "MediaVPN",
@@ -292,7 +299,9 @@ export function buildHubEntries({
       action: "Set up",
     });
   }
-  return entries.sort((left, right) => Number(right.configured) - Number(left.configured));
+  return entries.sort(
+    (left, right) => Number(right.configured) - Number(left.configured),
+  );
 }
 
 export function HubHome({

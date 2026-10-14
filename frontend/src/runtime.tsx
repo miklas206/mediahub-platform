@@ -25,12 +25,17 @@ import { SeedboxWebUI } from "./seedbox-webui";
 import { CloudflareManagementPanel } from "./cloudflare-management";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
-import { PlexInstallProgress, type PlexInstallOperation } from "./plex-install-progress";
+import { AppVPNDomainPanel } from "./app-vpn-domain";
+import {
+  PlexInstallProgress,
+  type PlexInstallOperation,
+} from "./plex-install-progress";
 
 export type Runtime = {
   operation?: PlexInstallOperation;
   plex?: {
     running: boolean;
+    claimed?: boolean | null;
     version: string | null;
     startedAt: string | null;
     libraries: { id: string; name: string; type: string; count?: number }[];
@@ -163,20 +168,7 @@ export type Runtime = {
 const stamp = (n?: number | null) =>
   n ? new Date(n * 1000).toLocaleString(getLocale()) : t("Not verified");
 const size = (n?: number | null) => (n == null ? t("Unavailable") : bytes(n));
-const localPlexUrl = () => {
-  if (typeof window === "undefined") return "";
-  const hostname = window.location.hostname.toLowerCase();
-  const isPrivate =
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.startsWith("10.") ||
-    hostname.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-  return isPrivate
-    ? `http://${window.location.hostname}:32400/web`
-    : "https://app.plex.tv/desktop/#!/settings/web/general";
-};
+
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="runtime-row">
@@ -609,7 +601,10 @@ function PlexPanel({
         </div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
-      <PlexInstallProgress job={r.operation} connectionLost={r.agentOnline === false} />
+      <PlexInstallProgress
+        job={r.operation}
+        connectionLost={r.agentOnline === false}
+      />
       {appId && (
         <Panel title={t("Recently added media")}>
           <div className="plex-library-preview">
@@ -1005,8 +1000,7 @@ export function AppRuntimePage() {
     }
   };
   const control = data?.report.control;
-  const operatorUrl =
-    data?.operatorUrl || (data?.view === "plex" ? localPlexUrl() : "");
+  const operatorUrl = data?.operatorUrl || "";
   const checkUpdate = async () => {
     setBusy(true);
     setActionError("");
@@ -1043,7 +1037,9 @@ export function AppRuntimePage() {
     if (
       !(await confirm(
         rollback
-          ? t("Restore the previous Plex version and database? Media files are not changed.")
+          ? t(
+              "Restore the previous Plex version and database? Media files are not changed.",
+            )
           : t(
               "Update Plex? Active playback will stop. A configuration rollback snapshot is saved first.",
             ),
@@ -1068,6 +1064,7 @@ export function AppRuntimePage() {
   };
   const extraCards = (
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
+      {data?.view === "plex" && appId && <AppVPNDomainPanel appId={appId} />}
       {data?.view === "cloudflare" && (
         <div
           className="layout-card"
@@ -1097,7 +1094,9 @@ export function AppRuntimePage() {
             {translateText(updateResult) ||
               t("No release check has been run in this session.")}
           </p>
-          {actionError && <NotificationPopup tone="danger">{actionError}</NotificationPopup>}
+          {actionError && (
+            <NotificationPopup tone="danger">{actionError}</NotificationPopup>
+          )}
           <p className="muted">
             {t(
               "No automatic update or restart is performed. That avoids choosing the wrong installation method and unexpectedly interrupting the tunnel.",
@@ -1147,13 +1146,24 @@ export function AppRuntimePage() {
                 </button>
               ))}
             </div>
-            {actionError && <NotificationPopup tone="danger">{actionError}</NotificationPopup>}
+            {actionError && (
+              <NotificationPopup tone="danger">{actionError}</NotificationPopup>
+            )}
             {data.view === "plex" && (
               <>
+                {data.report.plex?.claimed === false && (
+                  <p role="status">
+                    {t(
+                      "This Plex server is not linked to a Plex account yet. Open this server's Plex Web and finish account setup before enabling remote access.",
+                    )}
+                  </p>
+                )}
                 <div className="runtime-toolbar">
-                  <a className="runtime-primary-link" href={operatorUrl}>
-                    {t("Open Plex settings")}
-                  </a>
+                  {operatorUrl && (
+                    <a className="runtime-primary-link" href={operatorUrl}>
+                      {t("Open Plex settings")}
+                    </a>
+                  )}
                   <button
                     disabled={busy || !!error || !data.report.available}
                     onClick={checkUpdate}

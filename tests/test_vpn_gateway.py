@@ -878,3 +878,43 @@ def test_dedicated_legacy_plex_vpn_blocks_second_managed_provider(logged_in, gat
     assert response.status_code == 409
     assert not remote["machineCalls"] and not mutations(remote)
     client.request.assert_awaited_once_with("GET", "/v1/plex/status")
+
+
+def test_plex_domain_edit_preserves_other_app_routes(logged_in, gateway, monkeypatch):
+    service, remote = gateway
+    configure(logged_in, service)
+    before = copy.deepcopy(service.state()["routes"][0])
+    monkeypatch.setattr(service.svc.apps, "get", Mock(return_value={"packageId":"org.mediahub.plex","isMock":False,"state":"running"}))
+    monkeypatch.setattr(service,"upstream",AsyncMock(return_value={"upstream":"http://192.168.1.50:32400"}))
+    response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"plex"})
+    assert response.status_code == 200, response.text
+    routes = service.state()["routes"]
+    assert routes[0]["id"] == before["id"]
+    assert routes[0]["hostname"] == before["hostname"]
+    assert routes[1]["hostname"] == "plex.example.com"
+    assert routes[1]["packageId"] == "org.mediahub.plex"
+    response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"movies"})
+    assert response.status_code == 200
+    assert service.state()["routes"][0]["id"] == before["id"]
+    assert service.state()["routes"][1]["hostname"] == "movies.example.com"
+
+
+def test_domain_editor_rejects_concurrent_gateway_change(logged_in, gateway):
+    service, _ = gateway
+    configure(logged_in, service)
+    before = service.state()
+    response = logged_in.put(BASE+"/config",json={**BODY,"expectedRevision":before.get("revision",0)-1})
+    assert response.status_code == 409
+    assert service.state() == before
+
+
+def test_plex_runtime_open_url_uses_saved_domain_and_local_server(logged_in, monkeypatch):
+    svc=logged_in.app.state.services
+    monkeypatch.setattr(svc.apps,"adapter",Mock(return_value=SimpleNamespace(
+        definition=SimpleNamespace(package_id="org.mediahub.plex",view_id="plex"),
+        status=AsyncMock(return_value={"url":"http://192.168.1.50:32400","available":True}))))
+    svc.config.operator_app_urls["org.mediahub.plex"]="https://app.plex.tv/desktop/#!/settings/web/general"
+    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "http://192.168.1.50:32400/web"
+    with svc.sessions.begin() as db:
+        db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
+    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "https://plex.example.com/web"
