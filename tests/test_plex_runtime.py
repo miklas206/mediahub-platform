@@ -465,3 +465,18 @@ def test_exited_preparation_helper_is_deleted_after_stop_reports_already_stopped
     runtime.request = AsyncMock(side_effect=[DomainError('stopped', 'Already stopped', 409), {}])
     asyncio.run(runtime.remove_helper('owned-prepare'))
     assert runtime.request.call_args_list[-1].args == ('DELETE', '/containers/owned-prepare')
+
+
+@pytest.mark.parametrize("running,mounted,matching", [(True, True, True), (False, True, True), (True, False, True), (True, True, False)])
+def test_failed_start_recovery_requires_owned_running_runtime_and_storage(tmp_path, running, mounted, matching):
+    from unittest.mock import AsyncMock
+    policy = SimpleNamespace(installationId='plex-main' if matching else 'other-plex')
+    control = SimpleNamespace(policy=lambda: policy,
+                              inspect=AsyncMock(return_value={'State': {'Running': running}}),
+                              storage_verified=AsyncMock(return_value=mounted))
+    runtime = PlexRuntime(control, None, tmp_path)
+    runtime.operation = {'action': 'install', 'state': 'failed', 'phase': 'start', 'installationId': 'plex-main'}
+    result = asyncio.run(runtime.installation_status())['operation']
+    assert (result['state'] == 'succeeded') is (running and mounted and matching)
+    if not matching:
+        control.inspect.assert_not_called()

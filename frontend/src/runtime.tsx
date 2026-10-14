@@ -1252,7 +1252,7 @@ export function AppRuntimePage() {
   return (
     <div className="stack">
       <div className="runtime-toolbar">
-        <Link to="/apps">{t("← All apps")}</Link>
+        <Link to="/">{t("Back to MediaHub")}</Link>
         <button onClick={reload}>{t("Refresh status")}</button>
         {data?.view === "seedbox" && (
           <Link to={`/apps/${appId}/install`}>{t("Review installation")}</Link>

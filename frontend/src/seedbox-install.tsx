@@ -1,7 +1,7 @@
 import { translateText, t } from "./i18n";
 
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "./api";
 import { ErrorBox, Panel } from "./phase2";
 import { SeedboxMediaHubLogin } from "./seedbox-mediahub-login";
@@ -64,7 +64,6 @@ type Plan = {
 };
 
 export function SeedboxInstallPage() {
-  const { appId } = useParams();
   const [data, setData] = useState<Wizard | null>(null),
     [plan, setPlan] = useState<Plan | null>(null);
   const [failure, setFailure] = useState(""),
@@ -167,7 +166,7 @@ export function SeedboxInstallPage() {
     data?.transaction.state === "Installing" ? 10 : (data?.step ?? 0);
   return (
     <div className="stack seedbox-wizard">
-      <Link to={appId ? `/apps/${appId}` : "/apps"}>{t("← Apps")}</Link>
+      <Link to="/">{t("Back to MediaHub")}</Link>
       {targets && !targets.bound && (
         <Panel title={t("Choose your dedicated Seedbox host")}>
           <p>
@@ -557,8 +556,8 @@ export function SeedboxInstallPage() {
                     "Installation safety gates passed. Use live app status for current VPN, storage and client health.",
                   )}
                 </p>
-                <Link to={appId ? `/apps/${appId}` : "/apps"}>
-                  {t("Open installed apps →")}
+                <Link to="/">
+                  {t("Back to MediaHub")}
                 </Link>
               </>
             )}

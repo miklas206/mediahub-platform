@@ -1324,7 +1324,7 @@ export function UpdatesPage({
                 </div>
                 <details className="update-card-details">
                   <summary>{t("Open app & recovery →")}</summary>
-                  <Link to={app.detailPath || "/apps"}>{app.name}</Link>
+                  <Link to={app.detailPath || "/"}>{app.name}</Link>
                 </details>
                 {!isPlex && !isCloudflare && (
                   <details className="update-card-details">

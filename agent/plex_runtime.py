@@ -433,7 +433,7 @@ class PlexRuntime:
             f"os.chown(p,{policy.uid},{policy.gid}); "
         )
         mounts = [plan["container"]["HostConfig"]["Mounts"][0]]
-        if initialize:
+        if initialize or plan.get("appdataPath"):
             appdata = policy.storage[plan["installation"]["appdataStorageId"]].path
             mounts.append(
                 {"Type": "bind", "Source": appdata, "Target": "/appdata", "ReadOnly": False}
@@ -447,10 +447,21 @@ class PlexRuntime:
                 # bypass permissions on the host-owned media pool in an LXC.
                 f"os.setegid({policy.gid}); os.seteuid({policy.uid}); "
                 f"r=pathlib.Path('/appdata')/{plan['installation']['installationId']!r}; "
-                "assert not r.exists() or (r.is_dir() and not r.is_symlink() and not any(r.iterdir())); "
-                "r.mkdir(mode=0o750, exist_ok=True); "
-                "[(r/d).mkdir(mode=0o750) "
-                f"for d in {PERSISTENT_DIRECTORIES!r}]; "
+            )
+            if initialize:
+                code += (
+                    "assert not r.exists() or (r.is_dir() and not r.is_symlink() and not any(r.iterdir())); "
+                    "r.mkdir(mode=0o755, exist_ok=True); "
+                    "[(r/d).mkdir(mode=0o755) "
+                    f"for d in {PERSISTENT_DIRECTORIES!r}]; "
+                )
+            # In an unprivileged LXC, Docker's namespace root cannot bypass
+            # FUSE directory permissions. Only app-owned mount roots need
+            # read/traverse access; never chmod files, secrets or media mounts.
+            code += (
+                f"dirs=[r,*[r/d for d in {PERSISTENT_DIRECTORIES!r}]]; "
+                f"assert all(d.is_dir() and not d.is_symlink() and d.stat().st_uid=={policy.uid} for d in dirs); "
+                "[d.chmod((d.stat().st_mode & 0o777)|0o005) for d in dirs]; "
                 "os.seteuid(0); os.setegid(0); "
             )
         code += "pathlib.Path('/config/.prepared').touch(mode=0o600); time.sleep(180)"
@@ -554,6 +565,22 @@ class PlexRuntime:
         self.install_task = asyncio.create_task(self._run_install(body))
         return {"state": "accepted", "installationId": body.installation.installationId,
                 "message": self.operation["message"]}
+
+    async def installation_status(self):
+        # A corrected mount permission may allow a previously blocked start.
+        # Accept recovery only for the exact owned, running runtime and storage.
+        if (self.operation.get("action") == "install"
+                and self.operation.get("state") == "failed"
+                and self.operation.get("phase") == "start"):
+            with contextlib.suppress(DomainError, OSError, ValueError):
+                policy = self.control.policy()
+                if policy.installationId == self.operation.get("installationId"):
+                    row = await self.control.inspect(policy)
+                    if row["State"].get("Running") and await self.control.storage_verified(policy):
+                        self.operation.update(state="succeeded", phase="complete", progress=100,
+                                              message="Plex started; account and libraries are being checked")
+                        save_json(self.install_operation_path, self.operation)
+        return {"operation": self.operation}
 
     async def _run_install(self, body):
         try:

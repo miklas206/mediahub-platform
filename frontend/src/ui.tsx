@@ -666,7 +666,7 @@ function Shell({
                         .map((app) => (
                           <div key={app.id}>
                             <NavLink
-                              to={app.detailPath || "/apps"}
+                              to={app.detailPath || "/"}
                               className="app-shortcut"
                               title={
                                 app.packageId === "org.mediahub.windows-share"
@@ -996,32 +996,7 @@ function Shell({
                       />
                     }
                   />
-                  <Route
-                    path="/apps"
-                    element={
-                      <Apps
-                        data={navigationApps}
-                        error={navigationAppsError}
-                        reload={reloadNavigationApps}
-                        integrations={navigationIntegrations}
-                        extraCards={
-                          <section className="store-callout">
-                            <div>
-                              <strong>{t("Looking for another app?")}</strong>
-                              <p>
-                                {t(
-                                  "Browse guided installations without mixing them into the apps you already run.",
-                                )}
-                              </p>
-                            </div>
-                            <NavLink className="primary" to="/">
-                              {t("Home")}
-                            </NavLink>
-                          </section>
-                        }
-                      />
-                    }
-                  />
+                  <Route path="/apps" element={<Navigate to="/" replace />} />
                   <Route
                     path="/storage"
                     element={<Navigate to="/" replace />}

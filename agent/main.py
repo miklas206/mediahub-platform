@@ -511,7 +511,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.get("/v1/plex/install-status")
     async def plex_install_status():
-        return {"operation": plex_runtime.operation}
+        return await plex_runtime.installation_status()
 
     @app.get("/v1/plex/recent-media")
     async def plex_recent_media():

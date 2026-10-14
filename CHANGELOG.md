@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9
+
+- Redirect the removed standalone Apps page to the hub home and send app return links directly home.
+
+- Allow Docker to traverse only the owned Plex persistent mount directories on FUSE storage in unprivileged Proxmox containers. Keep files, encrypted preferences and media permissions unchanged. Prepare fresh installs and repair older directory modes before runtime starts.
+- Recognize recovery of an installation blocked at container start only after matching runtime ownership, running state and mounted storage are verified.
+
 ## 0.6.8
 
 - Bundle MediaVPN 0.2.2 with compact Connection, Apps and domains, and Settings tabs. Render profiles before slower gateway checks; prevent overlapping refreshes and retain setup drafts.

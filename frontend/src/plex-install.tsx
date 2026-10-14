@@ -109,7 +109,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   };
   return (
     <div className="stack app-install-page">
-      {!embedded && <Link to="/apps">{t("← Apps")}</Link>}
+      {!embedded && <Link to="/">{t("Back to MediaHub")}</Link>}
       <header>
         <p className="eyebrow">{t("YOUR MEDIA, YOUR SERVER")}</p>
         <h1>
@@ -144,7 +144,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                   "Installation continues on the Agent even if this page is closed. Do not start another installation.",
                 )}
           </p>
-          <Link to="/apps">{t("View installed apps")}</Link>
+          <Link to="/">{t("Back to MediaHub")}</Link>
           {job?.state === "failed" && (
             <button
               onClick={() => {
