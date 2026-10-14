@@ -259,3 +259,72 @@ test("live polling preserves disclosures, checkbox focus and unsaved fields", as
   await expect(field).toBeFocused();
   expect(writes).toEqual([]);
 });
+
+
+for (const endpoint of ["hub-apps", "hub-web-gateway"])
+  test(`HTML proxy errors on ${endpoint} preserve status and recover automatically`, async ({page}) => {
+    await page.clock.install();
+    await mock(page, "da", true);
+    let failing = false;
+    let recovered = false;
+    await page.route(`**/api/${endpoint}`, async route => {
+      if (failing) await route.fulfill({status:502,contentType:"text/html",body:"<!DOCTYPE html><html>Bad Gateway</html>"});
+      else if (endpoint === "hub-apps" && recovered)
+        await route.fulfill({json:{gateway:{ready:true},apps:[{id:"plex",name:"Plex",enabled:true,ready:false}]}});
+      else await route.fallback();
+    });
+    await page.goto(process.env.MEDIAVPN_QA_URL! + "/");
+    await page.locator("#tab-apps").click();
+    const apps = page.locator('details[data-disclosure="apps"]');
+    await apps.locator("summary").click();
+    await expect(apps).toContainText("Plex");
+    const popups: string[] = [];
+    await page.exposeFunction("recordPopup", (text:string) => popups.push(text));
+    await page.evaluate(() => {
+      new MutationObserver(() => {
+        const text=document.querySelector("#message")?.textContent;
+        if (text) (window as unknown as {recordPopup:(text:string)=>void}).recordPopup(text);
+      }).observe(document.querySelector("#message")!,{childList:true,subtree:true,characterData:true});
+    });
+    failing = true;
+    await page.clock.runFor(5100);
+    await expect(page.locator("#message")).toContainText(`/api/${endpoint} (HTTP 502)`);
+    await expect(page.locator("#message")).not.toContainText("Unexpected token");
+    await expect(apps).toHaveJSProperty("open",true);
+    await expect(apps).toContainText("Plex");
+    const count=popups.length;
+    await page.clock.runFor(5100);
+    expect(popups.length).toBe(count);
+    failing = false; recovered = true;
+    await page.clock.runFor(5100);
+    await expect(apps).toHaveJSProperty("open",true);
+    if (endpoint === "hub-apps") await expect(apps).toContainText("Ikke forbundet");
+    failing = true;
+    await page.clock.runFor(5100);
+    await expect.poll(() => popups.length).toBeGreaterThan(count);
+  });
+
+
+for (const [status, contentType, body] of [
+  [502,"text/html","<!DOCTYPE html><html>Bad Gateway</html>"],
+  [200,"text/html","<!DOCTYPE html><html>Login</html>"],
+  [200,"application/json","invalid-json"],
+] as const)
+  test(`Plex activation handles ${status} ${contentType} without replaying the action`, async ({page}) => {
+    await page.clock.install();
+    await mock(page,"da",true);
+    let writes=0;
+    await page.route("**/api/hub-web-gateway/plex-port",async route => {
+      writes++;
+      await route.fulfill({status,contentType,body});
+    });
+    await page.goto(process.env.MEDIAVPN_QA_URL! + "/");
+    await page.locator("#tab-apps").click();
+    const toggle=page.locator(".plex-port-card input");
+    await toggle.check();
+    await expect(page.locator("#message")).toContainText(`/api/hub-web-gateway/plex-port (HTTP ${status})`);
+    await expect(page.locator("#message")).not.toContainText("Unexpected token");
+    await expect(toggle).not.toBeChecked();
+    await page.clock.runFor(10100);
+    expect(writes).toBe(1);
+  });

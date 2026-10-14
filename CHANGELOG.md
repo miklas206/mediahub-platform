@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.15
+
+- Bundle MediaVPN 0.2.7. Validate API response types and JSON decoding, preserving actionable endpoint and HTTP status errors instead of exposing JSON parser errors. Never replay an activation automatically after an invalid response.
+- Preserve the last successful app status if one gateway status request fails, avoid repeating the same background notification until recovery, and continue live updates without collapsing open sections.
+
 ## 0.6.14
 
 - Restrict shared VPN transformation to the real Plex server. Recover owned stopped preparation helpers while preserving isolated helper networking, entrypoints and app data. Keep saved Plex start intent across interrupted VPN changes and inspect the installed server name for status.
