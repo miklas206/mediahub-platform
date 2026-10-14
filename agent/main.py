@@ -46,6 +46,7 @@ from agent.fixtures import containers
 from agent.gpu_setup import GPUSetup
 from agent.plex_control import PlexControl
 from agent.plex_media import PlexMedia
+from agent.plex_remote_access import RemoteAccessChoice as PlexRemoteAccessChoice
 from agent.plex_runtime import PlexRuntime
 from agent.seedbox_control import SeedboxControl
 from agent.seedbox_install import PrepareSeedbox, SeedboxInstaller
@@ -668,6 +669,11 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/plex/uninstall-status")
     async def plex_uninstall_status():
         return await plex_runtime.uninstall_status()
+
+    @app.put("/v1/plex/shared-remote-access", dependencies=[Depends(secure_workflow)])
+    async def plex_shared_remote_access(body: PlexRemoteAccessChoice):
+        from agent.plex_remote_access import configure
+        return await configure(plex_runtime, shared_vpn, body)
 
     @app.post("/v1/plex/uninstall", dependencies=[Depends(secure_workflow)], status_code=202)
     async def plex_uninstall(body: RemoveRuntimeRequest):

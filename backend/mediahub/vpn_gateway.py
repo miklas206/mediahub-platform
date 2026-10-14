@@ -30,6 +30,7 @@ from mediahub.cloudflare_management import API, hostname
 from mediahub.contracts import StrictModel
 from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.plex_forwarding import PlexForwarding
 
 KEY = "vpn-web-gateway"
 PHASE = "http_request_origin"
@@ -43,6 +44,10 @@ RULE_FIELDS = ("ref", "description", "expression", "action", "action_parameters"
 class Credentials(StrictModel):
     accountId: str = Field(pattern=r"^[a-fA-F0-9]{32}$")
     token: SecretStr = Field(min_length=20, max_length=512)
+
+
+class PlexPortChoice(StrictModel):
+    enabled: bool
 
 
 class GatewayRoute(StrictModel):
@@ -88,6 +93,7 @@ class VPNGateway:
         self.profiles = []
         self.zones = []
         self.discovery_issue = None
+        self.plex_forwarding = PlexForwarding(self)
 
     def state(self):
         with self.svc.sessions() as db:
@@ -236,6 +242,7 @@ class VPNGateway:
                 "publicPort",
                 "checkedAt",
                 "torrentPort",
+                "plexPort",
             )
         }
         output["routes"] = [
@@ -359,6 +366,7 @@ class VPNGateway:
             "accountId": state["accountId"],
             "enabled": state["enabled"],
             "profileId": state["profileId"],
+            "plexPort": self.plex_forwarding.public(state),
             "routes": routes,
             "apps": self.svc.cloudflare_management.public()["apps"],
             "zones": copy.deepcopy(self.zones),
@@ -599,6 +607,18 @@ class VPNGateway:
         self.schedule()
         return self.snapshot()
 
+    async def configure_plex_port(self, enabled):
+        async with self.lock:
+            state = self.state()
+            if enabled:
+                if not state["enabled"]:
+                    raise DomainError("gateway_required", "Enable the shared gateway before adding Plex remote access", 409)
+                await self.plex_forwarding.target()
+            state.update(plexPortEnabled=enabled, plexPortManaged=True, plexPortStatus={"ready": False}, revision=state.get("revision", 0) + 1)
+            self.save(state)
+        self.schedule()
+        return self.snapshot()
+
     async def check_legacy_provider(self):
         for binding in self.svc.shared_vpn.bindings():
             if binding["id"] == "plex":
@@ -819,6 +839,8 @@ class VPNGateway:
             or reply.get("profileId") != payload["profileId"]
         ):
             return False
+        if "plex" in payload and reply.get("plex") != payload["plex"]:
+            return False
         actual = reply.get("routes")
         if not isinstance(actual, list) or any(not isinstance(row, dict) for row in actual):
             return False
@@ -941,6 +963,13 @@ class VPNGateway:
                     "profileId": state["profileId"],
                     "routes": machine_routes,
                 }
+                if state.get("plexPortManaged"):
+                    payload["plex"] = None
+                    if state.get("plexPortEnabled") and payload["enabled"]:
+                        try:
+                            payload["plex"] = await self.plex_forwarding.target()
+                        except DomainError as error:
+                            state["plexPortStatus"] = {"ready": False, "message": error.message}
                 desired = fingerprint(payload)
                 reply = await self.vpn()
                 self.gateway = self.sanitized_gateway(reply)
@@ -996,6 +1025,11 @@ class VPNGateway:
                             {"id": zone_id, "code": error.code, "message": error.message}
                         )
                 if not active:
+                    if state.get("plexPortManaged"):
+                        try:
+                            await self.plex_forwarding.apply(state, {"plexPort": {"ready": False}})
+                        except DomainError as error:
+                            state["plexPortStatus"] = {"ready": False, "message": error.message}
                     for row in state["routes"]:
                         if not state["enabled"]:
                             row.update(
@@ -1060,6 +1094,11 @@ class VPNGateway:
                         state["issues"].append(
                             {"id": zone_id, "code": error.code, "message": error.message}
                         )
+                if state.get("plexPortManaged"):
+                    try:
+                        await self.plex_forwarding.apply(state, reply)
+                    except DomainError as error:
+                        state["plexPortStatus"] = {"ready": False, "message": error.message}
                 state["checks"] = [
                     {
                         "id": "provider",
@@ -1088,6 +1127,8 @@ class VPNGateway:
                         "publicIp": None,
                         "publicPort": None,
                     }
+                if state.get("plexPortEnabled"):
+                    state["plexPortStatus"] = {"ready": False, "message": error.message}
                 state["issues"].append({"code": error.code, "message": error.message})
                 for row in state["routes"]:
                     if row.get("status") not in {"blocked", "conflict"}:
@@ -1162,6 +1203,11 @@ async def disconnect(request: Request):
 @router.put("/config", status_code=202)
 async def configure(body: GatewayConfig, request: Request):
     return result(await services(request).vpn_gateway.configure(body))
+
+
+@router.put("/plex-port", status_code=202)
+async def plex_port(body: PlexPortChoice, request: Request):
+    return result(await services(request).vpn_gateway.configure_plex_port(body.enabled))
 
 
 @router.post("/reconcile", status_code=202)

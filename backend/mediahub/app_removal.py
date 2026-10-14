@@ -72,6 +72,11 @@ async def removal_status(svc, app_id):
         ):
             db.get(InstalledApp, app_id).state = "uninstalled"
             db.delete(binding)
+            if app["packageId"] == "org.mediahub.plex":
+                gateway = db.scalar(select(Setting).where(Setting.key == "vpn-web-gateway"))
+                if gateway and gateway.value.get("plexPortManaged"):
+                    gateway.value = {**gateway.value, "plexPortEnabled": False,
+                                     "plexPortApplied": False, "plexPortStatus": {}}
             configuration = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == app["packageId"]))
             if configuration:
                 db.delete(configuration)

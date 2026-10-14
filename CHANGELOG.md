@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.8
+
+- Bundle MediaVPN 0.2.2 with compact Connection, Apps and domains, and Settings tabs. Render profiles before slower gateway checks; prevent overlapping refreshes and retain setup drafts.
+- Add optional, separate Proton TCP forwarding for installed Plex servers attached to the shared VPN. Automatically prepare the relay dependency on fresh installs and upgrades.
+- Verify the public Plex server identity before reporting remote access ready; renew only the owned lease and block forwarding when provider state becomes stale. Preserve and restore previous Plex remote-access settings when disabling the feature.
+
 ## 0.6.7
 
 - Migrate old Plex removal receipts when the verified owned runtime is absent. Reset only owned configuration before a fresh reinstall.

@@ -13,7 +13,7 @@ spec.loader.exec_module(module)
 
 def test_fresh_install_builds_helpers_and_pulls_provider_without_starting_anything(tmp_path, monkeypatch):
     source = tmp_path / "source"
-    for folder, files in [("relay_image", ["Dockerfile", "runtime.py"]), ("gateway_image", ["Dockerfile", "config.py", "observer.py", "natpmp.py"])]:
+    for folder, files in [("relay_image", ["Dockerfile", "runtime.py"]), ("gateway_image", ["Dockerfile", "config.py", "observer.py", "natpmp.py", "plex_port.py"])]:
         directory = source / "mediavpn" / folder
         directory.mkdir(parents=True)
         for name in files:

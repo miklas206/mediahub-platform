@@ -144,7 +144,7 @@ def prepare_vpn_helpers(context, root):
     """Prepare native gateway dependencies without starting any provider or app."""
     definitions = (
         ("relay", "relay_image", ("Dockerfile", "runtime.py"), "org.mediahub.vpn.relay-source"),
-        ("gateway", "gateway_image", ("Dockerfile", "config.py", "observer.py", "natpmp.py"), "org.mediahub.gateway.source"),
+        ("gateway", "gateway_image", ("Dockerfile", "config.py", "observer.py", "natpmp.py", "plex_port.py"), "org.mediahub.gateway.source"),
     )
     images = {}
     for kind, folder, names, label in definitions:

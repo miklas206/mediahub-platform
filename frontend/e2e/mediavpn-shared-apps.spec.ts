@@ -76,10 +76,11 @@ for (const language of ["en", "da"])
         });
       });
       await page.goto(process.env.MEDIAVPN_QA_URL! + "/static/index.html");
+      await page.locator("#tab-apps").click();
       const panel = page.locator("#web-gateway");
       await expect(
         panel.getByRole("heading", {
-          name: da ? "Fælles VPN-gateway" : "Shared VPN gateway",
+          name: da ? "Apps og domæner" : "Apps and domains",
         }),
       ).toBeVisible();
       await panel
