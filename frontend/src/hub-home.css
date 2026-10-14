@@ -434,3 +434,6 @@
 .app-uptime { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .app-uptime time { font-variant-numeric: tabular-nums; color: var(--text); }
 .app-status-page .app-address-form { padding: 0; }
+
+.hub-card-stop { margin: 0 20px 16px; width: calc(100% - 40px); }
+.app-control-logs { max-height: 360px; overflow: auto; overflow-wrap: anywhere; }

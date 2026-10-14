@@ -13,6 +13,7 @@ CLOUDFLARE = "org.mediahub.cloudflared"
 def forget_settings(db, package):
     changed = False
     for model, column, key in [(Setting, Setting.key, "app_address:" + package),
+                               (Setting, Setting.key, "app_runtime_control:" + package),
                                (AppConfiguration, AppConfiguration.package_id, package)]:
         row = db.scalar(select(model).where(column == key))
         if row:

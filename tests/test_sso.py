@@ -12,6 +12,20 @@ def configure(client):
         db.add(InstalledApp(package_id="org.mediahub.mediaseed", name="MediaSeed", version="0.1.0", state="running"))
 
 
+def test_local_authorization_stays_local_with_a_saved_public_domain(logged_in):
+    configure(logged_in)
+    package = "org.mediahub.mediaseed"
+    local = "https://192.168.1.50:18800"
+    logged_in.app.state.services.config.sso_app_urls[package] = local
+    assert logged_in.put("/api/v1/app-settings/" + package, json={"externalUrl": "https://seed.example.com"}).status_code == 200
+    params = {"packageId": package, "state": "s" * 64, "challenge": "c" * 43, "appOrigin": local}
+    response = logged_in.get("/api/v1/sso/authorize", params=params, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"].startswith(local + "/auth/hub/callback?")
+    for invalid in ["https://attacker.example", "http://192.168.1.50:18800", "https://192.168.1.50:18800.attacker.example"]:
+        assert logged_in.get("/api/v1/sso/authorize", params={**params, "appOrigin": invalid}, follow_redirects=False).status_code == 403
+
+
 def authorize(client):
     verifier = "v" * 64
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
@@ -175,5 +189,7 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
             with TestClient(app, base_url=local_origin) as local:
                 redirect = local.get("/auth/hub/start", follow_redirects=False)
                 assert redirect.status_code == 303
-                assert redirect.headers["location"] == browser_origin + "/auth/hub/start"
-                assert "set-cookie" not in redirect.headers
+                local_url = urlsplit(redirect.headers["location"])
+                assert local_url.path == "/api/v1/sso/authorize"
+                assert parse_qs(local_url.query)["appOrigin"] == [local_origin]
+                assert "set-cookie" in redirect.headers

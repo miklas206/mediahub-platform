@@ -27,20 +27,26 @@ class Exchange(StrictModel):
     verifier: str = Field(pattern=r"^[A-Za-z0-9_-]{43,128}$")
 
 
-def configured_app(svc, package_id):
+def configured_app(svc, package_id, app_origin=None):
     from mediahub.app_settings import saved_address
     from mediahub.managed_apps import unavailable
 
     origin = svc.config.sso_app_urls.get(package_id)
     if not origin or unavailable(svc, package_id):
         raise DomainError("sso_unavailable", "SSO is not configured for this installed app", 409)
-    return saved_address(svc, package_id) or origin
+    canonical = saved_address(svc, package_id) or origin
+    if app_origin is not None:
+        allowed = {origin, canonical, svc.config.operator_app_urls.get(package_id)}
+        if app_origin not in allowed or not app_origin.startswith("https://"):
+            raise DomainError("sso_origin", "This app login address is not registered", 403)
+        return app_origin
+    return canonical
 
 
 @router.get("/sso/origin")
-def app_origin(request: Request, packageId: str):
+def app_origin(request: Request, packageId: str, appOrigin: str | None = Query(default=None, max_length=2048)):
     # Public configuration only; identities and grants remain authenticated.
-    return result({"origin": configured_app(services(request), packageId)})
+    return result({"origin": configured_app(services(request), packageId, appOrigin)})
 
 
 def identity(svc, db, grant):
@@ -60,15 +66,15 @@ def identity(svc, db, grant):
 
 
 @router.get("/sso/authorize")
-def authorize(request: Request, packageId: str, state: str = Query(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"), challenge: str = Query(pattern=r"^[A-Za-z0-9_-]{43}$")):
+def authorize(request: Request, packageId: str, state: str = Query(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"), challenge: str = Query(pattern=r"^[A-Za-z0-9_-]{43}$"), appOrigin: str | None = Query(default=None, max_length=2048)):
     svc = services(request)
-    origin = configured_app(svc, packageId)
+    origin = configured_app(svc, packageId, appOrigin)
     try:
         user = authenticated(request)
     except DomainError as error:
         if error.status != 401 and error.code != "enrollment_required":
             raise
-        resume = "/api/v1/sso/authorize?" + urlencode({"packageId": packageId, "state": state, "challenge": challenge})
+        resume = "/api/v1/sso/authorize?" + urlencode({"packageId": packageId, "state": state, "challenge": challenge, **({"appOrigin": origin} if appOrigin is not None else {})})
         return RedirectResponse("/?" + urlencode({"sso": resume}), status_code=303)
     svc.auth.app_role(user["id"], packageId)
     code = secrets.token_urlsafe(48)

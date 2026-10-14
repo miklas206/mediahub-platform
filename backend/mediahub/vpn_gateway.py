@@ -1018,7 +1018,11 @@ class VPNGateway:
                     if payload["enabled"]:
                         await self.check_legacy_provider()
                         payload["cloudflareToken"] = self.store.get("api_token").decode()
-                    reply = await self.vpn("PUT", payload)
+                    await self.vpn("PUT", payload)
+                    # The write acknowledgement intentionally reports applying,
+                    # without a verified provider endpoint. Read the accepted
+                    # configuration and current provider observation separately.
+                    reply = await self.vpn()
                     state["machineFingerprint"] = desired
                     self.save(state)
                 if not self.machine_matches(reply, payload):

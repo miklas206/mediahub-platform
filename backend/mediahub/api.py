@@ -175,9 +175,9 @@ async def _apps_with_health(svc):
 
     async def with_health(app):
         async with slots:
-            from mediahub.app_settings import runtime_summary
+            from mediahub.app_settings import controls, runtime_summary
             summary = await runtime_summary(svc, app)
-            return {**app, **summary, "health": (await svc.apps.health(app["id"])).model_dump()}
+            return {**app, **summary, "controls": controls(svc, app), "health": (await svc.apps.health(app["id"])).model_dump()}
 
     return await asyncio.gather(*(with_health(app) for app in svc.apps.list() if app.get("packageId") != "org.mediahub.cloudflared"))
 

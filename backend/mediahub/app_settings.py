@@ -138,6 +138,35 @@ class AddressSettings(StrictModel):
     externalUrl: str = Field(default="", max_length=2048)
 
 
+def controls(svc, app):
+    try:
+        adapter = svc.apps.adapter(app["id"])
+        actions = (
+            ["start", "stop", "restart"]
+            if (
+                getattr(adapter, "managed", False)
+                or (
+                    hasattr(adapter, "action")
+                    and hasattr(getattr(adapter, "definition", None), "binding_key")
+                )
+            )
+            else []
+        )
+        package = app["packageId"]
+        return {
+            "actions": actions,
+            "logs": callable(getattr(adapter, "logs", None)),
+            "updateCheck": callable(getattr(adapter, "updateCheck", None)),
+            "updatePath": "/settings?section=Updates"
+            if getattr(adapter, "managed", False)
+            else "/apps/install/" + package.removeprefix("org.mediahub.")
+            if getattr(getattr(adapter, "definition", None), "view_id", None) == "container"
+            else None,
+        }
+    except DomainError:
+        return {"actions": [], "logs": False, "updateCheck": False, "updatePath": None}
+
+
 async def runtime_summary(svc, app):
     unknown = {"running": None, "startedAt": None, "runtimeAvailable": False}
     try:
@@ -194,6 +223,7 @@ async def settings(package_id: str, request: Request):
     data = describe(svc, package_id)
     if data["installationId"]:
         app = svc.apps.get(data["installationId"])
+        data["controls"] = controls(svc, app)
         summary = await runtime_summary(svc, app)
         data.update(summary)
         if summary["runtimeAvailable"]:

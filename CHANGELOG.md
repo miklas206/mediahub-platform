@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.23
+
+- Keep local MediaSeed/MediaVPN login on the approved LAN origin even when a public domain is saved. Carry the selected allowlisted origin through hub authorization and login resume. Bundle MediaVPN 0.2.9 and MediaSeed 0.1.4.
+- Read accepted VPN configuration and the current provider endpoint after applying a gateway change; never use the pending write acknowledgement as a verified public address. Include the accepted Plex target in the machine acknowledgement.
+- Add confirmed Stop app controls on home cards and common runtime panels on app status pages. Managed stop/start preserves the owned running-container selection, excludes inactive original clients when resuming a VPN client, and preserves media/configuration. Managed logs show retained lifecycle events. Updates use existing app/Core update workflows.
+
 ## 0.6.22
 
 - Expand app settings into live status pages with health, installed version, owned containers, local/domain links and address editing. Preserve Plex-specific setup and managed domain controls, adding its addresses and uptime.

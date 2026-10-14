@@ -13,6 +13,42 @@ SEED = "org.mediahub.mediaseed"
 VPN = "org.mediahub.mediavpn"
 
 
+def test_owned_stop_and_start_preserve_vpn_client_choice(logged_in, tmp_path, monkeypatch):
+    from mediahub.managed_apps import ManagedAdapter
+
+    svc, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch, runtime=True)
+    app = next(iter(rows.values()))
+    app["Config"]["Labels"]["com.docker.compose.service"] = "app"
+    clone = deepcopy(app)
+    clone.update(Id="b" * 64, Name="/owned-vpn-client")
+    clone["Config"]["Labels"] = {"org.mediahub.mediavpn.seedbox": "mediaseed"}
+    original = deepcopy(app)
+    original.update(Id="c" * 64, Name="/original-qbittorrent")
+    original["Config"]["Labels"]["com.docker.compose.service"] = "qbittorrent"
+    original["State"]["Running"] = False
+    rows.update({clone["Id"]: clone, original["Id"]: original})
+    docker = manager.docker
+
+    async def request(method, path, **kwargs):
+        if method == "POST" and path.endswith("/start"):
+            calls.append((method, path))
+            rows[path.split("/")[2]]["State"]["Running"] = True
+            return {}
+        return await docker(method, path, **kwargs)
+
+    monkeypatch.setattr(manager, "docker", request)
+    adapter = ManagedAdapter(manager, SEED)
+    assert asyncio.run(adapter.stop()) == "stopped"
+    assert not app["State"]["Running"] and not clone["State"]["Running"]
+    # A new Core adapter can recover the saved selection after its own restart.
+    adapter = ManagedAdapter(manager, SEED)
+    assert asyncio.run(adapter.start()) == "running"
+    assert app["State"]["Running"] and clone["State"]["Running"]
+    assert not original["State"]["Running"]
+    assert not any(method == "DELETE" for method, path in calls)
+    assert asyncio.run(adapter.logs())["entries"]
+
+
 def test_uptime_uses_primary_app_not_initialization_container(logged_in, tmp_path, monkeypatch):
     from mediahub.managed_apps import ManagedAdapter
 
@@ -40,7 +76,9 @@ def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False)
     svc = logged_in.app.state.services
     policy = {package: {"installationId": "synthetic-installation", "project": "synthetic-app"}}
     if runtime:
-        policy[package]["runtimeLabels"] = {"org.mediahub.mediavpn.owner": "mediavpn"}
+        policy[package]["runtimeLabels"] = ({"org.mediahub.mediavpn.seedbox": "mediaseed"} if package == SEED else {"org.mediahub.mediavpn.owner": "mediavpn"})
+        if package == SEED:
+            policy[package].update(integrationUrl="http://127.0.0.1:18802", integrationTokenFile=str(tmp_path / "synthetic-integration.token"))
     path = tmp_path / "policy.json"
     path.write_text(json.dumps(policy))
     svc.config.managed_apps_policy_file = path

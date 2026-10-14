@@ -7,6 +7,7 @@ export type Health = {
   checks: { name: string; status: string; message: string }[];
 };
 export type AppInfo = {
+  controls?: {actions: string[];logs: boolean;updateCheck:boolean;updatePath?:string|null};
   localUrl?: string | null;
   startedAt?: string | null;
   running?: boolean | null;

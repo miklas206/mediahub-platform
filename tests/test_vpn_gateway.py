@@ -175,6 +175,24 @@ def mutations(remote):
     return [call for call in remote["calls"] if call[0] != "GET"]
 
 
+def test_apply_acknowledgement_is_not_used_as_provider_observation(logged_in, gateway, monkeypatch):
+    service, remote = gateway
+    original = service.vpn
+
+    async def machine(method="GET", body=None):
+        reply = await original(method, body)
+        if method == "PUT":
+            reply.update(ready=False, providerReady=False, phase="applying", publicIp=None, publicPort=None)
+        return reply
+
+    monkeypatch.setattr(service, "vpn", machine)
+    configured = configure(logged_in, service)
+    assert configured["routes"][0]["httpsVerified"] is True
+    assert remote["records"]
+    assert any(method == "PUT" for method, body in remote["machineCalls"])
+    assert remote["machineCalls"][-1][0] == "GET"
+
+
 @pytest.mark.parametrize("all_offline", [False, True])
 def test_app_restart_keeps_dns_selections_and_recovers_without_readding(logged_in, gateway, monkeypatch, all_offline):
     service, remote = gateway

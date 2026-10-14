@@ -1,3 +1,4 @@
+import { StopAppButton } from "./app-controls";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, Search, Settings2 } from "lucide-react";
@@ -90,6 +91,8 @@ export type HubEntry = {
   external?: boolean;
   settingsPath?: string;
   removableApp?: InstalledAppInfo;
+  runtimeAppId?: string;
+  canStop?: boolean;
   localUrl?: string | null;
   externalUrl?: string | null;
   startedAt?: string | null;
@@ -342,6 +345,8 @@ export function buildHubEntries({
             : undefined),
         localUrl: app?.localUrl || separate?.url || integration?.baseUrl,
         externalUrl: app?.externalUrl,
+        runtimeAppId: app?.id,
+        canStop: app?.controls?.actions.includes("stop"),
         running: app?.running,
         startedAt: app?.startedAt,
         observedAt: app?.observedAt,
@@ -600,6 +605,19 @@ export function HubHome({
                     </Link>
                   )}
                 </div>
+                {entry.canStop && entry.runtimeAppId && (
+                  <StopAppButton
+                    appId={entry.runtimeAppId}
+                    name={entry.name}
+                    packageId={
+                      entry.id === "org.mediahub.seedbox"
+                        ? "org.mediahub.mediaseed"
+                        : entry.id
+                    }
+                    running={entry.running}
+                    onChanged={onAppRemoved}
+                  />
+                )}
                 {entry.removableApp && (
                   <AppUninstall
                     app={entry.removableApp}

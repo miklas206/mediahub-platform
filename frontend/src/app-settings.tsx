@@ -1,3 +1,4 @@
+import { AppControlPanel, type AppControls } from "./app-controls";
 import { t } from "./i18n";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -9,6 +10,8 @@ import { AppAddressLinks, AppUptime } from "./app-uptime";
 import type { Health } from "./contracts";
 
 type AppSettings = {
+  installationId?: string | null;
+  controls?: AppControls;
   name: string;
   packageId: string;
   externalUrl: string;
@@ -220,6 +223,16 @@ export function AppSettingsPage({
               )}
             </div>
           </section>
+          {!embedded && (
+            <AppControlPanel
+              appId={data.installationId}
+              name={data.name}
+              packageId={packageId}
+              controls={data.controls}
+              openUrl={data.externalUrl || data.localUrl}
+              onChanged={reload}
+            />
+          )}
         </>
       )}
     </div>

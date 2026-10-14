@@ -302,6 +302,7 @@ def test_plex_uninstall_forgets_address_and_domain_selection_for_fresh_setup(log
         db.flush()
         identifier=app.id
         db.add(Setting(key="plex_installation",value={"hostId":"local","installationId":"plex-main"}))
+        db.add(Setting(key="app_runtime_control:org.mediahub.plex",value={"installationId":"plex-main","desired":"stopped","resume":[]}))
         db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
         db.add(Setting(key="vpn-web-gateway",value={"routes":[plex,other],"retired":[],"revision":4,"plexPortManaged":True,"plexPortEnabled":True}))
     agent=SimpleNamespace(request=AsyncMock(return_value={"state":"succeeded","installationId":"plex-main","dataPreserved":True,"configurationReset":True}))
@@ -314,6 +315,7 @@ def test_plex_uninstall_forgets_address_and_domain_selection_for_fresh_setup(log
     with svc.sessions() as db:
         assert db.scalar(select(Setting).where(Setting.key=="app_address:org.mediahub.plex")) is None
         assert db.scalar(select(Setting).where(Setting.key=="plex_installation")) is None
+        assert db.scalar(select(Setting).where(Setting.key=="app_runtime_control:org.mediahub.plex")) is None
         value=db.scalar(select(Setting).where(Setting.key=="vpn-web-gateway")).value
         assert value["routes"] == [other]
         assert value["retired"] == [{**plex,"previousExternalUrl":""}]

@@ -86,6 +86,22 @@ class ManagedAdapter:
                 "startedAt": row.get("State", {}).get("StartedAt") if row.get("State", {}).get("Running") else None} for row in rows],
         }
 
+    async def start(self):
+        from mediahub.managed_control import control
+        return await control(self, "start")
+
+    async def stop(self):
+        from mediahub.managed_control import control
+        return await control(self, "stop")
+
+    async def restart(self):
+        from mediahub.managed_control import control
+        return await control(self, "restart")
+
+    async def logs(self):
+        from mediahub.managed_control import logs
+        return logs(self)
+
     async def health(self):
         try:
             rows = await self.observed_containers()
