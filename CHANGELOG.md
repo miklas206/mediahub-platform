@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.18
+
+- Restore the exact approved, published hub VPN domain during startup. Host validation and SSO no longer wait for the first Cloudflare/VPN reconciliation after an update. Disabled and unconfirmed domains are not added.
+
 ## 0.6.17
 
 - Open Plex Web directly at `/web/index.html`. Avoid Plex's `/web` redirect to an HTTP URL behind the HTTPS VPN gateway, which otherwise reaches a different route and returns 404.

@@ -100,6 +100,15 @@ class VPNGateway:
         self.zones = []
         self.discovery_issue = None
         self.plex_forwarding = PlexForwarding(self)
+        # Restore approved published hub origins before any SSO/API request;
+        # startup must not depend on the next external reconciliation cycle.
+        state = self.state()
+        if state.get("enabled"):
+            for row in state.get("routes", []):
+                ledger = state.get("records", {}).get(row.get("id"), {})
+                if (row.get("packageId") == "mediahub" and ledger.get("id")
+                        and ledger.get("applied", {}).get("name") == row.get("hostname")):
+                    self.svc.cloudflare_management.allow_hub_origin(row["hostname"])
 
     def state(self):
         with self.svc.sessions() as db:

@@ -918,3 +918,14 @@ def test_plex_runtime_open_url_uses_saved_domain_and_local_server(logged_in, mon
     with svc.sessions.begin() as db:
         db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
     assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "https://plex.example.com/web/index.html"
+
+
+@pytest.mark.parametrize("published,enabled", [(True,True),(False,True),(True,False)])
+def test_startup_restores_only_approved_published_hub_origin(logged_in,gateway,published,enabled):
+    service, _ = gateway
+    state=service.state()
+    state.update(enabled=enabled,routes=[{"id":"d"*32,"packageId":"mediahub","hostname":"hub.example.com"}],records={"d"*32:{"id":"record-id","applied":{"name":"hub.example.com"}}} if published else {})
+    service.save(state)
+    service.svc.config.allowed_origins=[]
+    VPNGateway(service.svc)
+    assert ("https://hub.example.com" in service.svc.config.allowed_origins) is (published and enabled)
