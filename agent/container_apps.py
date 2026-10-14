@@ -330,6 +330,9 @@ class ContainerApps:
                     await self.request("POST", f"/containers/{plan['name']}/start")
                 self.operations.pop(app, None)
                 return {"state": "installed", "url": plan["url"], "dataPreserved": True}
+            previous = self.record(app)
+            if previous and previous.get("resetRequired"):
+                raise DomainError("removal_incomplete", "Complete app removal and configuration reset before reinstalling", 409)
             self.install_progress(app, "preparing", 5, "Preparing installation")
             self.tasks[app] = asyncio.create_task(self.provision(app, plan))
             return {"state": "accepted", "url": plan["url"], "dataPreserved": True}
@@ -512,6 +515,34 @@ class ContainerApps:
             "healthVerified": verified,
         }
 
+    async def reset_configuration(self, app, record):
+        from agent.app_reset import clear_directory
+
+        policy = self.policy()
+        if not await self.storage_control.storage_verified(policy):
+            raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
+        mounts = record["container"]["HostConfig"]["Mounts"]
+        configs = [m for m in mounts if m["Target"] == "/config"]
+        allowed = {Path(c.path) / ("mediahub-" + app) for c in policy.storage.values() if c.kind == "appdata"}
+        if len(configs) != 1 or Path(configs[0]["Source"]) not in allowed:
+            raise DomainError("unsafe_storage", "App configuration path is not approved", 409)
+        root = Path(configs[0]["Source"])
+        for mount in mounts:
+            path = Path(mount["Source"])
+            if mount["Target"] not in {"/config", "/cache"} and (path == root or path in root.parents or root in path.parents):
+                raise DomainError("unsafe_storage", "App configuration overlaps media", 409)
+        for row in await self.request("GET", "/containers/json?all=1"):
+            inspected = await self.request("GET", "/containers/" + row["Id"] + "/json")
+            if any(Path(m["Source"]) == root or root in Path(m["Source"]).parents
+                   for m in inspected.get("Mounts", [])):
+                raise DomainError("app_dependency", "Another container uses this app configuration", 409)
+        await asyncio.to_thread(clear_directory, root)
+        # Keep the ownership receipt until the next install; it makes retries safe.
+        record["configurationReset"] = True
+        record["resetRequired"] = False
+        record["desiredRunning"] = False
+        save_json(self.record_path(app), record)
+
     async def action(self, app, action, confirmation=None):
         self.app(app)
         if self.locks[app].locked():
@@ -527,6 +558,9 @@ class ContainerApps:
                 raise DomainError("not_installed", "Install the app first", 409)
             if action == "uninstall" and confirmation != record["name"]:
                 raise DomainError("confirmation_required", "Confirm the installation name", 409)
+            if action == "uninstall":
+                record["resetRequired"] = True
+                save_json(self.record_path(app), record)
             inspected = await self.request(
                 "GET", f"/containers/{record['name']}/json", missing=True
             )
@@ -534,6 +568,7 @@ class ContainerApps:
                 if action == "uninstall":
                     record["desiredRunning"] = False
                     save_json(self.record_path(app), record)
+                    await self.reset_configuration(app, record)
                     self.operations.pop(app, None)
                     return {"state": "succeeded", "dataPreserved": True}
                 raise DomainError("not_installed", "Container is missing", 409)
@@ -551,6 +586,7 @@ class ContainerApps:
                 if inspected["State"].get("Running"):
                     await self.request("POST", f"/containers/{record['name']}/stop?t=30")
                 await self.request("DELETE", f"/containers/{record['name']}?force=false&v=false")
+                await self.reset_configuration(app, record)
                 self.operations.pop(app, None)
                 return {"state": "succeeded", "dataPreserved": True}
             if (action == "start" and inspected["State"].get("Running")) or (

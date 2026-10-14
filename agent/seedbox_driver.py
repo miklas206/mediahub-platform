@@ -389,9 +389,14 @@ class ScopedDriver:
 
     async def remove_runtime(self):
         # Container identity and ownership checked immediately before each deletion.
-        # No filesystem deletes, volume deletion, image pruning or force removal.
+        # Configuration reset is a separate, policy-scoped step in the controller.
         for service in ("torrent", "vpn"):
-            item = await self.container(service)
+            try:
+                item = await self.container(service)
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code == 404:
+                    continue
+                raise
             if item["State"]["Running"]:
                 raise ValueError("Runtime must be stopped before removal")
             await self.request(

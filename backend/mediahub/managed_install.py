@@ -88,6 +88,9 @@ class ManagedInstaller:
         return read_json(path) if path.exists() else {"state": "idle"}
 
     async def plan(self, package):
+        removal = self.manager.saved(package) if package in self.manager.policy else None
+        if removal and removal.get("state") != "succeeded":
+            raise DomainError("removal_incomplete", "Complete app removal and configuration reset before reinstalling", 409)
         dependencies = getattr(self.svc, "app_dependencies", None)
         if dependencies:
             dependencies.require_ready()

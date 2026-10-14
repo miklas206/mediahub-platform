@@ -277,7 +277,7 @@ for (const width of [1440, 390, 320]) test(`reference apps, overview, Light and 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path:`test-results/reference-apps-${width}.png`, animations:"disabled" });
   await page.getByRole("button", {name:"Uninstall: Jellyfin",exact:true}).click();
-  await expect(page.getByRole("dialog", {name:"Remove Jellyfin",exact:true})).toContainText("Media files and app data will be kept");
+  await expect(page.getByRole("dialog", {name:"Remove Jellyfin",exact:true})).toContainText("App settings, accounts and VPN profiles will be removed");
   const removal = page.getByRole("dialog", {name:"Remove Jellyfin",exact:true});
   expect(await removal.evaluate(el => el.parentElement === document.body && el.matches(':modal'))).toBe(true);
   const removalBounds = (await removal.boundingBox())!;
@@ -476,7 +476,7 @@ for (const width of [1440, 390, 320]) test(`themed removal content remains insid
     await page.goto('/');
     await page.getByRole('button',{name:'Uninstall: Jellyfin',exact:true}).click();
     const modal=page.getByRole('dialog',{name:'Remove Jellyfin',exact:true});
-    await expect(modal).toContainText('Media files and app data will be kept');
+    await expect(modal).toContainText('App settings, accounts and VPN profiles will be removed');
     const inside=await modal.evaluate(el=>{
       const r=el.getBoundingClientRect();
       return el.matches(':modal') && el.scrollWidth<=el.clientWidth && [...el.querySelectorAll('h3,p,button')].every(child=>{
@@ -567,7 +567,7 @@ for (const width of [1440,320]) test(`uninstall progress and older Agent activit
  const modal=page.getByRole('dialog',{name:'Remove Jellyfin',exact:true});
  const bar=modal.getByRole('progressbar');
  await expect(bar).toHaveAttribute('aria-valuenow','50');
- await expect(modal).toContainText('Checking preserved data');
+ await expect(modal).toContainText('Resetting app settings');
  await page.keyboard.press('Escape');
  await page.getByRole('button',{name:'Uninstall: Jellyfin',exact:true}).click();
  await expect(bar).toHaveAttribute('aria-valuenow','50');

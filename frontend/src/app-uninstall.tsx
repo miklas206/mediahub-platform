@@ -112,7 +112,7 @@ export function AppUninstall({
     progress: busy ? 0 : status?.progress ?? 0,
     indeterminate: !busy && typeof status?.progress !== "number",
     message: status?.state === "failed" ? status.message || "Removal could not be verified." : t("Removing runtime on the server... You can leave this page and return."),
-    steps: typeof status?.progress === "number" ? ["Checking ownership", "Stopping and removing containers", "Checking preserved data"].map((label, index) => ({
+    steps: typeof status?.progress === "number" ? ["Checking ownership", "Stopping and removing containers", "Resetting app settings"].map((label, index) => ({
       label, state: index < phase ? "complete" : index > phase ? "pending" : status?.state === "failed" ? "error" : "running",
     })) : [],
     details: [],
@@ -157,8 +157,10 @@ export function AppUninstall({
               ? t(
                   "Only the connection saved in MediaHub is removed. Shared folders, files and mapped Windows drives stay in place.",
                 )
-              : t(
-                  "Media files and app data will be kept. This does not free space used by downloads or libraries.",
+              : app.packageId === "org.mediahub.cloudflared"
+                ? t("Remove Cloudflare monitoring from MediaHub. The tunnel, DNS and published routes keep running.")
+                : t(
+                  "App settings, accounts and VPN profiles will be removed. Reinstalling starts with a fresh setup. Media files and downloads will be kept.",
                 )}
           </p>
           {error && (

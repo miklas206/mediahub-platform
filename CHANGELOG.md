@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+- Reset app settings, accounts, VPN profiles and owned configuration when uninstalling MediaVPN, MediaSeed, Plex and managed container apps. Keep media and downloaded files.
+- Clear saved Hub app configuration after verified removal, and require Agents to verify the configuration reset before reporting success.
+- Block reinstall after an incomplete reset; allow bounded cleanup retries. Preserve host provisioning and integration identities for fresh app setup.
+- Explain the fresh-install behavior in the removal confirmation and progress UI.
+
 ## Unreleased
 
 ## 0.6.3

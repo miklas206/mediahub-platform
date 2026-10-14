@@ -478,8 +478,9 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/container-apps/{app_id}/uninstall-status")
     async def container_uninstall_status(app_id: str):
         report = await container_apps.status(app_id)
-        return {"state": "succeeded" if report["state"] in {"removed", "not-installed"} else "ready",
-                "installationId": report["installationId"], "dataPreserved": True}
+        return {"state": "succeeded" if report["state"] == "not-installed" or (report["state"] == "removed" and (container_apps.record(app_id) or {}).get("configurationReset")) else "ready",
+                "installationId": report["installationId"], "dataPreserved": True,
+                "configurationReset": report["state"] == "not-installed" or bool((container_apps.record(app_id) or {}).get("configurationReset"))}
 
     @app.post("/v1/container-apps/{app_id}/uninstall", dependencies=[Depends(secure_workflow)])
     async def container_uninstall(app_id: str, body: ContainerRemoval):

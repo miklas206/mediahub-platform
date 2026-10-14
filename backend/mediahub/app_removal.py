@@ -1,8 +1,8 @@
-"""Explicit, data-preserving removal through the owning Agent."""
+"""Explicit app reset through the owning Agent; external media is preserved."""
 
 from sqlalchemy import select
 
-from mediahub.db import InstalledApp, Setting
+from mediahub.db import AppConfiguration, InstalledApp, Setting
 from mediahub.errors import DomainError
 from mediahub.windows_share import PACKAGE_ID as WINDOWS_SHARE
 from mediahub.windows_share import SETTING_KEY as WINDOWS_SHARE_KEY
@@ -51,6 +51,8 @@ async def removal_status(svc, app_id):
         raise DomainError(
             "removal_unverified", "Runtime removal has not passed its final checks", 409
         )
+    if report.get("state") == "succeeded" and report.get("configurationReset") is not True:
+        raise DomainError("reset_unverified", "App configuration reset has not been verified. Update the Agent and retry removal.", 409)
     if report.get("state") == "succeeded":
         with svc.sessions() as db:
             binding = db.scalar(select(Setting).where(Setting.key == definition.binding_key))
@@ -70,6 +72,9 @@ async def removal_status(svc, app_id):
         ):
             db.get(InstalledApp, app_id).state = "uninstalled"
             db.delete(binding)
+            configuration = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == app["packageId"]))
+            if configuration:
+                db.delete(configuration)
     if report.get("state") == "succeeded" and app["state"] != "removing":
         report = {
             **report,
@@ -81,7 +86,7 @@ async def removal_status(svc, app_id):
         **report,
         "mode": "runtime",
         "message": report.get("message")
-        or "Remove the app containers and stop their services. Media, downloads, settings and credentials are preserved. Active transfers or playback will stop.",
+        or "Remove the app containers and stop their services. App settings and credentials are removed for a fresh installation. Media and downloads are preserved. Active transfers or playback will stop.",
     }
 
 
@@ -137,7 +142,10 @@ async def remove_app(svc, app_id, confirmed):
             )
             if binding:
                 db.delete(binding)
-        return {"state": "succeeded", "dataPreserved": True}
+            configuration = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == app["packageId"]))
+            if configuration:
+                db.delete(configuration)
+        return {"state": "succeeded", "dataPreserved": True, "configurationReset": True}
     response = await svc.hosts.client(adapter.host_id).request(
         "POST",
         adapter.definition.agent_prefix + "/uninstall",

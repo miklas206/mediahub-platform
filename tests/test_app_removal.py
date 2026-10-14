@@ -72,6 +72,7 @@ def test_remote_removal_keeps_registration_until_confirmed(logged_in, monkeypatc
         "state": "succeeded",
         "installationId": "seedbox-test",
         "dataPreserved": True,
+        "configurationReset": True,
     }
     assert logged_in.get(path).status_code == 200
     assert not any(a["id"] == aid for a in svc.apps.list())
@@ -90,6 +91,7 @@ def test_plex_removal_verifies_ownership_and_keeps_data(tmp_path):
             record=MagicMock(),
         )
         runtime = PlexRuntime(control, None, tmp_path)
+        runtime.reset_configuration = AsyncMock()
         runtime.request = AsyncMock(return_value={})
         runtime.checkpoint = AsyncMock()
         with pytest.raises(DomainError):
@@ -119,6 +121,7 @@ def test_plex_ownership_failure_never_deletes(tmp_path):
             record=MagicMock(),
         )
         runtime = PlexRuntime(control, None, tmp_path)
+        runtime.reset_configuration = AsyncMock()
         runtime.request = AsyncMock()
         await runtime.uninstall("plex-test")
         await runtime.update_task
@@ -147,6 +150,7 @@ def test_failed_plex_install_can_be_removed_without_managed_policy(tmp_path, par
         }
         save_json(tmp_path / "plex-install-operation.json", operation)
         runtime = PlexRuntime(control, None, tmp_path)
+        runtime.reset_configuration = AsyncMock()
         runtime.policy = lambda: SimpleNamespace(hostId="local")
         persistent = tmp_path / "media-and-appdata"
         persistent.write_bytes(b"keep existing data")
@@ -196,6 +200,7 @@ def test_failed_plex_install_can_be_removed_without_managed_policy(tmp_path, par
                 "state": "succeeded",
                 "installationId": "plex-test",
                 "dataPreserved": True,
+                "configurationReset": True,
             }
             assert all(
                 "/containers/" in path and "v=false" in path
@@ -222,6 +227,7 @@ def test_failed_plex_removal_does_not_guess_identity_or_interrupt_installer(tmp_
             policy=lambda: (_ for _ in ()).throw(DomainError("plex_disabled", "Unavailable", 503)),
         )
         runtime = PlexRuntime(control, None, tmp_path)
+        runtime.reset_configuration = AsyncMock()
         runtime.policy = lambda: SimpleNamespace(hostId="local")
         runtime.request = AsyncMock()
         with pytest.raises(DomainError):
@@ -264,6 +270,7 @@ def test_peer_removal_must_succeed_before_forgetting_app_binding(logged_in, monk
                 "state": "succeeded",
                 "installationId": "mediahub-jellyfin",
                 "dataPreserved": True,
+                "configurationReset": True,
             }
         )
     )

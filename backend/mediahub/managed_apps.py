@@ -1,4 +1,4 @@
-"""Explicit operator-owned app registrations and data-preserving Docker removal.
+"""Explicit operator-owned app registrations and configuration-resetting Docker removal.
 
 An address alone never grants lifecycle control. The read-only operator policy
 binds each installation to Compose labels and optional owned runtime labels.
@@ -18,7 +18,7 @@ from pydantic import Field, field_validator
 from sqlalchemy import select
 
 from mediahub.contracts import Health, HealthCheck, StrictModel
-from mediahub.db import InstalledApp
+from mediahub.db import AppConfiguration, InstalledApp
 from mediahub.errors import DomainError
 
 PACKAGES = {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}
@@ -374,7 +374,7 @@ class ManagedApps:
                 **{
                     key: value
                     for key, value in saved.items()
-                    if key not in {"containers", "volumes", "confirmation"}
+                    if key not in {"containers", "volumes", "confirmation", "resetPlan"}
                 },
                 "installationId": saved["confirmation"],
             }
@@ -387,7 +387,7 @@ class ManagedApps:
             "state": "ready",
             "installationId": confirmation,
             "mode": "runtime",
-            "message": "Appens containere fjernes, og aktive overførsler stopper. Downloads, appdata, credentials og VPN-profiler bevares.",
+            "message": "Appens containere, indstillinger, konti og VPN-profiler fjernes. Mediefiler og downloads bevares. Geninstallation starter med en frisk opsætning.",
         }
 
     async def remove(self, package, confirmed):
@@ -429,7 +429,8 @@ class ManagedApps:
                 "confirmation": confirmation,
                 "containers": rows,
                 "volumes": sorted(volumes),
-                "message": "Afinstallation er startet. Data bevares.",
+                "message": "Afinstallation er startet. Appens opsætning nulstilles; mediefiler og downloads bevares.",
+                "resetPlan": self.reset_plan(package),
             }
             if retry_snapshot:
                 job["containers"] = saved["containers"]
@@ -437,6 +438,61 @@ class ManagedApps:
             self.save(package, job)
             self.tasks[package] = asyncio.create_task(self.run(package, job))
             return await self.status(package)
+
+    def reset_plan(self, package):
+        """Reset only config mounts from the host-approved immutable install recipe."""
+        policy = self.policy[package]
+        if not policy.installFile:
+            raise DomainError("reset_unavailable", "Prepare the app installer before removing its configuration", 409)
+        recipe = json.loads(policy.installFile.read_text())
+        if recipe.get("installationId") != policy.installationId or recipe.get("packageId") != package:
+            raise DomainError("installation_changed", "App reset ownership changed", 409)
+        app = next(item for item in recipe["containers"]
+                   if item["spec"]["Labels"].get("com.docker.compose.service") == "app")
+        mounts = {}
+        protected = []
+        for item in recipe["containers"]:
+            spec = item["spec"]
+            if spec["Labels"].get("com.docker.compose.project") != policy.project:
+                raise DomainError("installation_changed", "App reset ownership changed", 409)
+            for bind in spec.get("HostConfig", {}).get("Binds") or []:
+                source, target, *_ = bind.split(":")
+                mount = {"Type": "bind", "Source": source, "Target": target, "ReadOnly": False}
+                if target in {"/data", "/config", "/secrets"}:
+                    # Named Compose volumes are encoded as Binds too.
+                    mount["Type"] = "bind" if source.startswith("/") else "volume"
+                    mounts[target] = mount
+                else:
+                    protected.append(source)
+            for mount in spec.get("HostConfig", {}).get("Mounts") or []:
+                if mount["Target"] in {"/data", "/config", "/secrets"}:
+                    mounts[mount["Target"]] = {key: mount[key] for key in ("Type", "Source", "Target")}
+                else:
+                    protected.append(mount["Source"])
+        if "/data" not in mounts or (package.endswith("mediaseed") and not {"/config", "/secrets"} <= mounts.keys()):
+            raise DomainError("reset_unavailable", "App configuration mounts are incomplete", 409)
+        for mount in mounts.values():
+            source = Path(mount["Source"])
+            if (str(source) in protected or source == Path("/") or ".." in source.parts
+                    or any(source in Path(other).parents or Path(other) in source.parents for other in protected)):
+                raise DomainError("unsafe_storage", "App configuration overlaps protected storage", 409)
+        return {"image": app["spec"]["Image"], "mounts": list(mounts.values())}
+
+    async def reset_configuration(self, package, plan):
+        from agent.app_reset import reset_mounts
+
+        rows = await self.docker("GET", "/containers/json?all=1")
+        for row in rows:
+            inspected = await self.docker("GET", "/containers/" + row["Id"] + "/json")
+            for mount in inspected.get("Mounts", []):
+                for target in plan["mounts"]:
+                    actual = mount.get("Name") if target["Type"] == "volume" else mount.get("Source")
+                    source = target["Source"]
+                    if actual and (actual == source or Path(source) in Path(actual).parents):
+                        raise DomainError("app_dependency", "Another container still uses the app configuration", 409)
+        await reset_mounts(self.docker, plan["image"], plan["mounts"],
+                           keep=("integrations",) if package.endswith("mediavpn") else (),
+                           initialize_seed=package.endswith("mediaseed"))
 
     async def disconnect_client(self, policy):
         if not policy.integrationUrl:
@@ -602,25 +658,30 @@ class ManagedApps:
                     raise DomainError(
                         "removal_unverified", "App containers remain after removal", 409
                     )
+                await self.reset_configuration(package, job.get("resetPlan") or self.reset_plan(package))
                 for volume in job["volumes"]:
                     await self.docker("GET", "/volumes/" + quote(volume, safe=""))
                 with self.svc.sessions.begin() as db:
                     app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
                     if app:
                         app.state = "uninstalled"
+                    settings = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == package))
+                    if settings:
+                        db.delete(settings)
                 (
                     self.svc.config.data_dir
                     / ("managed-install-" + package.rsplit(".", 1)[-1] + ".json")
                 ).unlink(missing_ok=True)
                 self.svc.events.record(
-                    "app.uninstalled", package, "Managed runtime removed; persistent data preserved"
+                    "app.uninstalled", package, "Managed runtime and configuration removed; media and downloads preserved"
                 )
                 job.update(
                     state="succeeded",
                     progress=100,
                     phase="complete",
                     dataPreserved=True,
-                    message="Appen er afinstalleret. Data er bevaret.",
+                    configurationReset=True,
+                    message="Appen er afinstalleret og opsætningen nulstillet. Mediefiler og downloads er bevaret.",
                 )
 
             except DomainError as error:

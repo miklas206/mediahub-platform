@@ -23,6 +23,8 @@ def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False)
     svc.config.managed_apps_policy_file = path
     svc.config.operator_app_urls[package] = "http://127.0.0.1:18802"
     manager = ManagedApps(svc)
+    manager.reset_plan = lambda package: {"image": "sha256:" + "a" * 64, "mounts": []}
+    manager.reset_configuration = AsyncMock()
     svc.managed_apps = manager
     rows = {
         "a" * 64: {

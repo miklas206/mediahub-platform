@@ -10,6 +10,8 @@ The hub stack runs the Core and local Agent in one process, behind an HTTPS pass
 
 Media mounts are external to the hub database and app data. Reinstalling the hub must preserve those mounts and their contents. Configure the existing movie, series, other-media and download paths explicitly; never format, recursively change ownership, or delete a media directory during app cleanup.
 
+Uninstalling an app removes its saved settings, accounts, VPN profiles and app-owned databases. Reinstallation starts with a fresh setup. Media files and downloads remain on their existing storage. Host provisioning, TLS and Hub integration identities remain available to prepare the next installation. Updates continue to preserve app settings.
+
 A fresh installation opens the administrator setup wizard. App data and accounts are not copied from beta. Independent MediaSeed/MediaVPN provisioning currently requires operator-owned Compose configuration; a configured address alone does not install an app. See [app management](docs/app-runtime.md) and [installation](docs/install.md).
 
 ## Updates

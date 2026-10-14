@@ -143,6 +143,7 @@ def test_uninstall_missing_container_clears_saved_running_intent(tmp_path):
     plan["desiredRunning"] = True
     save_json(runtime.record_path("jellyfin"), plan)
     runtime.request = AsyncMock(return_value=None)
+    runtime.reset_configuration = AsyncMock()
     asyncio.run(runtime.action("jellyfin", "uninstall", "mediahub-jellyfin"))
     assert runtime.record("jellyfin")["desiredRunning"] is False
 
@@ -217,6 +218,7 @@ def test_runtime_ownership_checks_and_data_preserving_removal(tmp_path):
     runtime.request = AsyncMock(return_value=inspected)
     with pytest.raises(DomainError):
         asyncio.run(runtime.action("radarr", "uninstall", "wrong"))
+    runtime.reset_configuration = AsyncMock()
     result = asyncio.run(runtime.action("radarr", "uninstall", "mediahub-radarr"))
     assert result["dataPreserved"] is True
     assert runtime.record_path("radarr").exists()

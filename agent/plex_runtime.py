@@ -54,7 +54,7 @@ class PlexRuntime:
                     "message": self.operation.get("message")}
         path = self.state_dir / "plex-removal.json"
         record = read_json(path) if path.exists() else {}
-        if record.get("installationId") == installation_id:
+        if record.get("installationId") == installation_id and record.get("configurationReset"):
             from urllib.parse import quote
 
             filters = quote(
@@ -76,6 +76,7 @@ class PlexRuntime:
                     "state": "succeeded",
                     "installationId": installation_id,
                     "dataPreserved": True,
+                    "configurationReset": True,
                 }
         operation = self.operation if self.operation.get("action") == "remove-runtime" else {}
         return {
@@ -110,7 +111,7 @@ class PlexRuntime:
         failed_install = policy is None or self.operation.get("failedInstallation") or (
             self.operation.get("action") == "install" and self.operation.get("state") == "failed")
         receipt = self.state_dir / "plex-removal.json"
-        failed_install = failed_install or (receipt.exists() and read_json(receipt).get("installationId") == identity)
+        failed_install = failed_install or self.operation.get("action") == "remove-runtime" or (receipt.exists() and read_json(receipt).get("installationId") == identity)
         self.operation = {"state": "running", "action": "remove-runtime",
                           "installationId": identity,
                           "hostId": self.operation.get("hostId"),
@@ -121,6 +122,46 @@ class PlexRuntime:
         else:
             self.update_task = asyncio.create_task(self.remove_runtime(policy))
         return {"state": "accepted", "dataPreserved": True}
+
+    async def reset_configuration(self, identity):
+        from agent.app_reset import reset_mounts
+
+        approved = self.policy()
+        plan_path = self.state_dir / "plex-reset-plan.json"
+        if not plan_path.exists():
+            plan_path = self.state_dir / "plex-plan.json"
+        if not plan_path.exists():
+            self.vault.delete(identity)
+            self.vault.delete(identity + "-rollback")
+            return
+        plan = read_json(plan_path)
+        if plan["installation"]["installationId"] != identity:
+            raise DomainError("installation_changed", "Plex reset identity changed", 409)
+        allowed = {Path(choice.path) / identity for choice in approved.storage.values() if choice.kind == "appdata"}
+        roots = [Path(plan["appdataPath"])]
+        if roots[0] not in allowed:
+            raise DomainError("unsafe_storage", "Plex reset directory is not approved", 409)
+        if not await self.control.storage_verified(approved):
+            raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
+        # Each directory is installation-owned; parent storage and media are excluded.
+        for root in roots:
+            if not root.exists():
+                continue
+            if root.resolve() != root:
+                raise DomainError("unsafe_storage", "Plex configuration path changed", 409)
+            mounts = [{"Type": "bind", "Source": str(root), "Target": "/data", "ReadOnly": False}]
+            for row in await self.request("GET", "/containers/json?all=1"):
+                inspected = await self.request("GET", "/containers/" + row["Id"] + "/json")
+                if any(Path(m["Source"]) == root or root in Path(m["Source"]).parents
+                       for m in inspected.get("Mounts", [])):
+                    raise DomainError("app_dependency", "Another container uses Plex configuration", 409)
+            await reset_mounts(self.request, approved.initImage, mounts, uid=approved.uid, gid=approved.gid)
+        self.vault.delete(identity)
+        self.vault.delete(identity + "-rollback")
+        self.last_saved = None
+        self.libraries_ready = False
+        for name in ("plex-plan.json", "plex-update-recovery.json"):
+            (self.state_dir / name).unlink(missing_ok=True)
 
     async def remove_failed_install(self, installation_id, policy):
         try:
@@ -154,10 +195,11 @@ class PlexRuntime:
                     await self.request("DELETE", f"/containers/{item['Id']}?force=false&v=false")
                 if await self.request("GET", "/containers/json?all=true&filters=" + filters):
                     raise DomainError("removal_unverified", "Runtime removal has not passed its final checks", 409)
-                save_json(self.state_dir / "plex-removal.json", {"installationId": installation_id})
-                self.operation.update(state="succeeded", message="Plex runtime removed; media, settings and credentials preserved")
             if self.shared_vpn:
                 await self.shared_vpn.cleanup_removed("plex")
+            await self.reset_configuration(installation_id)
+            save_json(self.state_dir / "plex-removal.json", {"installationId": installation_id, "configurationReset": True})
+            self.operation.update(state="succeeded", message="Plex runtime and settings removed; media preserved")
         except DomainError as error:
             self.operation.update(state="failed", message=error.message)
         except Exception:
@@ -179,16 +221,12 @@ class PlexRuntime:
                     if item["State"].get("Running"):
                         await self.request("POST", f"/containers/{item['Id']}/stop?t=30")
                     await self.request("DELETE", f"/containers/{item['Id']}?force=false&v=false")
-                save_json(
-                    self.state_dir / "plex-removal.json", {"installationId": policy.installationId}
-                )
-                self.operation.update(
-                    state="succeeded",
-                    message="Plex runtime removed; media, settings and credentials preserved",
-                )
                 self.control.record("runtime_removed")
             if self.shared_vpn:
                 await self.shared_vpn.cleanup_removed("plex")
+            await self.reset_configuration(policy.installationId)
+            save_json(self.state_dir / "plex-removal.json", {"installationId": policy.installationId, "configurationReset": True})
+            self.operation.update(state="succeeded", message="Plex runtime and settings removed; media preserved")
         except Exception:
             self.operation.update(
                 state="failed", message="Runtime removal stopped; persistent data was not deleted"
@@ -395,7 +433,8 @@ class PlexRuntime:
                 # bypass permissions on the host-owned media pool in an LXC.
                 f"os.setegid({policy.gid}); os.seteuid({policy.uid}); "
                 f"r=pathlib.Path('/appdata')/{plan['installation']['installationId']!r}; "
-                "r.mkdir(mode=0o750); "
+                "assert not r.exists() or (r.is_dir() and not r.is_symlink() and not any(r.iterdir())); "
+                "r.mkdir(mode=0o750, exist_ok=True); "
                 "[(r/d).mkdir(mode=0o750) "
                 f"for d in {PERSISTENT_DIRECTORIES!r}]; "
                 "os.seteuid(0); os.setegid(0); "
@@ -530,6 +569,7 @@ class PlexRuntime:
                     "Media storage is not verified; installation blocked",
                     409,
                 )
+            save_json(self.state_dir / "plex-reset-plan.json", plan)
             self.install_progress("download", 10, "Downloading app image", indeterminate=True)
             image = await pull_latest(self.control.socket, "lscr.io/linuxserver/plex")
             plan["container"]["Image"] = publisher_reference(image, "lscr.io/linuxserver/plex")

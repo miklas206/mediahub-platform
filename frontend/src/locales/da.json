@@ -4076,5 +4076,8 @@
   "Remove obsolete VPN connection": "Fjern efterladt VPN-forbindelse",
   "Obsolete VPN connection removed; data preserved": "Den efterladte VPN-forbindelse er fjernet; data er bevaret",
   "Stop the remaining app container before cleaning its VPN connection": "Stop den tilbageværende app-container, før du rydder dens VPN-forbindelse op",
-  "Connection is no longer an orphan; refresh and review again": "Forbindelsen er ikke længere efterladt; opdatér siden, og gennemgå den igen"
+  "Connection is no longer an orphan; refresh and review again": "Forbindelsen er ikke længere efterladt; opdatér siden, og gennemgå den igen",
+  "App settings, accounts and VPN profiles will be removed. Reinstalling starts with a fresh setup. Media files and downloads will be kept.": "Appens indstillinger, konti og VPN-profiler fjernes. Geninstallation starter med en frisk opsætning. Mediefiler og downloads bevares.",
+  "Resetting app settings": "Nulstiller appens opsætning",
+  "App settings and credentials are removed for a fresh installation. Media and downloads are preserved. Active transfers or playback will stop.": "Appens indstillinger og loginoplysninger fjernes, så geninstallation starter forfra. Mediefiler og downloads bevares. Aktive overførsler og afspilning stopper."
 }
