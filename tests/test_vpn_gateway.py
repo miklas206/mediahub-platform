@@ -914,7 +914,7 @@ def test_plex_runtime_open_url_uses_saved_domain_and_local_server(logged_in, mon
         definition=SimpleNamespace(package_id="org.mediahub.plex",view_id="plex"),
         status=AsyncMock(return_value={"url":"http://192.168.1.50:32400","available":True}))))
     svc.config.operator_app_urls["org.mediahub.plex"]="https://app.plex.tv/desktop/#!/settings/web/general"
-    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "http://192.168.1.50:32400/web"
+    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "http://192.168.1.50:32400/web/index.html"
     with svc.sessions.begin() as db:
         db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
-    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "https://plex.example.com/web"
+    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "https://plex.example.com/web/index.html"

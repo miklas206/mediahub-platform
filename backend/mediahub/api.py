@@ -246,7 +246,7 @@ async def app_runtime(app_id: str, request: Request, user=Depends(authenticated)
 
         operator_url = saved_address(svc, adapter.definition.package_id) or report.get("url")
         if operator_url:
-            operator_url = operator_url.rstrip("/") + "/web"
+            operator_url = operator_url.rstrip("/") + "/web/index.html"
     return result({"view": adapter.definition.view_id, "report": report, "operatorUrl": operator_url})
 
 

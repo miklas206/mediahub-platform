@@ -241,7 +241,7 @@ it("opens the installed Plex server and uses its own installation settings path"
     deployment: null,
   });
   expect(entries.find((entry) => entry.name === "Plex")).toMatchObject({
-    path: "https://plex.example.com/web",
+    path: "https://plex.example.com/web/index.html",
     settingsPath: "/apps/plex-installation-unique",
   });
 });

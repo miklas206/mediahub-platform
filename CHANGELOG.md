@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.17
+
+- Open Plex Web directly at `/web/index.html`. Avoid Plex's `/web` redirect to an HTTP URL behind the HTTPS VPN gateway, which otherwise reaches a different route and returns 404.
+
 ## 0.6.16
 
 - Open Plex settings on the actual installation page. Use the installed server's saved domain or approved local address with `/web`, instead of falling back to Plex account-wide web settings.

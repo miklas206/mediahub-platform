@@ -50,7 +50,7 @@ for (const width of [1440, 390])
       else if (path === "/apps/plex-unique/runtime")
         data = {
           view: "plex",
-          operatorUrl: "https://plex.example.com/web",
+          operatorUrl: "https://plex.example.com/web/index.html",
           report: {
             available: true,
             health: "healthy",
@@ -100,7 +100,7 @@ for (const width of [1440, 390])
     await page.goto("/apps/plex-unique");
     await expect(
       page.getByRole("link", { name: "Open Plex settings" }),
-    ).toHaveAttribute("href", "https://plex.example.com/web");
+    ).toHaveAttribute("href", "https://plex.example.com/web/index.html");
     await expect(
       page.getByText("This Plex server is not linked to a Plex account yet.", {
         exact: false,

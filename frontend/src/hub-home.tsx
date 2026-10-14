@@ -224,7 +224,7 @@ export function buildHubEntries({
         external: installed?.externalUrl ? true : undefined,
         path:
           (installed?.externalUrl && installed.packageId === "org.mediahub.plex"
-            ? installed.externalUrl.replace(/\/$/, "") + "/web"
+            ? installed.externalUrl.replace(/\/$/, "") + "/web/index.html"
             : installed?.externalUrl) ||
           installed?.detailPath ||
           (integration
