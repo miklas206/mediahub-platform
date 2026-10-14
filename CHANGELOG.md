@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.27
+
+- Bundle MediaSeed 0.1.6: reconcile a stale MediaSeed-owned qBittorrent RSS item when the same feed is recreated with a new ID. Remove only exact-URL duplicate RSS registrations no longer referenced by any configured feed; preserve torrents, media and other RSS items.
+
 ## 0.6.26
 
 - Bundle MediaVPN 0.2.11: identify RSS torrent metadata requests with the observed qBittorrent version, avoiding tracker rejection of Python default requests. Keep bounded responses, HTTPS/host validation, disabled redirects and verified VPN gating.
