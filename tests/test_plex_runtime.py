@@ -438,7 +438,8 @@ def test_reinstall_requires_matching_removal_and_absent_owned_containers(tmp_pat
 @pytest.mark.parametrize('owned', [True, False])
 def test_reinstall_recovers_only_stopped_owned_prepare_helper(tmp_path, owned):
     from unittest.mock import AsyncMock
-    from agent.install_files import save_json, read_json
+
+    from agent.install_files import read_json, save_json
     policy_file = tmp_path / 'managed.json'
     policy_file.write_text('retained')
     policy = SimpleNamespace(installationId='plex-test', vpnEnabled=False)
@@ -465,6 +466,54 @@ def test_exited_preparation_helper_is_deleted_after_stop_reports_already_stopped
     runtime.request = AsyncMock(side_effect=[DomainError('stopped', 'Already stopped', 409), {}])
     asyncio.run(runtime.remove_helper('owned-prepare'))
     assert runtime.request.call_args_list[-1].args == ('DELETE', '/containers/owned-prepare')
+
+
+@pytest.mark.parametrize("name", ["mediahub-test", "mediahub-test-prepare", "mediahub-test-backup", "mediahub-test-restore"])
+def test_shared_vpn_transforms_only_actual_plex_server(tmp_path, monkeypatch, name):
+    import json
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    control = SimpleNamespace(socket="unused", policy_file=None)
+    runtime = PlexRuntime(control, None, tmp_path)
+    labels = {"org.mediahub.package": "org.mediahub.plex", "org.mediahub.installation": "test"}
+    original = {"Image": "owned-image", "Labels": labels, "Entrypoint": ["python", "-c", "prepare"], "HostConfig": {"NetworkMode": "none"}}
+    transformed = {**original, "HostConfig": {"NetworkMode": "container:verified-relay"}}
+    runtime.shared_vpn = SimpleNamespace(prepare=AsyncMock(return_value=transformed))
+    seen = []
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(201, json={"Id": "synthetic"})
+    client = httpx.AsyncClient
+    monkeypatch.setattr("agent.plex_runtime.httpx.AsyncClient", lambda **kwargs: client(transport=httpx.MockTransport(handler), base_url="http://docker"))
+    asyncio.run(runtime.request("POST", "/containers/create?name=" + name, body=original))
+    assert seen == [transformed if name == "mediahub-test" else original]
+    assert runtime.shared_vpn.prepare.await_count == (1 if name == "mediahub-test" else 0)
+
+
+@pytest.mark.parametrize("owned,running", [(True, False), (False, False), (True, True)])
+def test_prepare_recovers_only_stopped_owned_helper_and_excludes_vpn_labels(tmp_path, owned, running):
+    from unittest.mock import AsyncMock
+    runtime = PlexRuntime(SimpleNamespace(), None, tmp_path)
+    labels = {"org.mediahub.package": "org.mediahub.plex", "org.mediahub.installation": "test", "org.mediahub.vpn.namespace": "relay"}
+    plan = {"name": "mediahub-test", "container": {"Labels": labels, "HostConfig": {"Mounts": [{"Type": "volume", "Source": "owned"}]}}}
+    previous = {"Name": "/mediahub-test-prepare", "State": {"Running": running}, "Config": {"Labels": {**labels, "org.mediahub.package": "org.mediahub.plex" if owned else "foreign"}}}
+    replies = [[{"Id": "old", "Names": ["/mediahub-test-prepare"]}], previous]
+    runtime.request = AsyncMock(side_effect=replies + [{}, {"Id": "new"}, {}, b"prepared"])
+    policy = SimpleNamespace(uid=1000, gid=1000, initImage="owned-core-image")
+    if owned and not running:
+        assert asyncio.run(runtime.helper(policy, plan)) == "mediahub-test-prepare"
+        assert runtime.request.call_args_list[2].args == ("DELETE", "/containers/old?force=false&v=false")
+        body = runtime.request.call_args_list[3].kwargs["body"]
+        assert body["HostConfig"]["NetworkMode"] == "none"
+        assert body["Entrypoint"][0] == "python"
+        assert "org.mediahub.vpn.namespace" not in body["Labels"]
+        assert body["Labels"]["org.mediahub.plex.role"] == "preparation"
+    else:
+        with pytest.raises(DomainError):
+            asyncio.run(runtime.helper(policy, plan))
+        assert runtime.request.await_count == 2
 
 
 @pytest.mark.parametrize("running,mounted,matching", [(True, True, True), (False, True, True), (True, False, True), (True, True, False)])

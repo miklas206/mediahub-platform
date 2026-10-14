@@ -443,11 +443,13 @@ class SharedVPN:
                     )
                     if current:
                         self.apps.verify(current, record)
-                if not current and state.get("phase") not in {"changing", "blocked"}:
+                if not current and state.get("phase") not in {"changing", "starting", "blocked"}:
                     raise DomainError(
                         "app_not_installed", "Install the app before selecting shared VPN", 409
                     )
-                if current and state.get("phase") not in {"changing", "blocked"}:
+                if app == "plex":
+                    state["desiredRunning"] = self.plex.control.intent(policy)
+                elif current and state.get("phase") not in {"changing", "starting", "blocked"}:
                     state["desiredRunning"] = bool(current["State"].get("Running"))
                 original = state.get("original", copy.deepcopy(record["container"]))
                 # Preserve the latest installed image across VPN off/on, rather
@@ -496,7 +498,7 @@ class SharedVPN:
                     record["container"] = spec
                     save_json(record_path, record)
                     await self.request("POST", "/containers/create?name=" + record["name"], spec)
-                    state["phase"] = "ready"
+                    state["phase"] = "starting"
                     save_json(self.path(app), state)
                     if state.get("desiredRunning"):
                         if app == "plex":
@@ -526,8 +528,11 @@ class SharedVPN:
     async def status(self, app):
         value = self.state(app)
         row = await self.owned_relay(app) if value["enabled"] else None
+        name = "mediahub-" + app
+        if app == "plex" and value["enabled"]:
+            name = read_json(self.config.state_dir / "plex-plan.json")["name"]
         current = (
-            await self.request("GET", "/containers/mediahub-" + app + "/json", missing=True)
+            await self.request("GET", "/containers/" + name + "/json", missing=True)
             if value["enabled"]
             else None
         )
@@ -562,7 +567,7 @@ class SharedVPN:
             for app in SUPPORTED:
                 state = self.state(app)
                 if not state["enabled"] and not (
-                    state.get("requestedEnabled") and state.get("phase") in {"changing", "blocked"}
+                    state.get("requestedEnabled") and state.get("phase") in {"changing", "starting", "blocked"}
                 ):
                     continue
                 try:
@@ -576,7 +581,7 @@ class SharedVPN:
                     current = await self.request(
                         "GET", "/containers/" + record["name"] + "/json", missing=True
                     )
-                    if current and await self.ready(app, current):
+                    if state.get("phase") == "ready" and current and await self.ready(app, current):
                         # Updating Agent source also updates this prerequisite.
                         row = await self.owned_relay(app)
                         if row["Image"] == await self.build_image():

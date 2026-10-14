@@ -317,3 +317,48 @@ def test_core_orphan_cleanup_requires_uninstalled_app_and_exact_owned_peer(
             agent.request.assert_not_awaited()
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("desired", [True, False])
+def test_plex_recovery_uses_saved_running_intent(tmp_path, desired):
+    control, peer, events, path = controller(tmp_path)
+    record = read_json(path)
+    record["name"] = "mediahub-plex-main"
+    save_json(tmp_path / "plex-plan.json", record)
+    policy = SimpleNamespace(vpnEnabled=False)
+    current = {"Id": "plex-created", "State": {"Running": False}}
+    from unittest.mock import Mock
+    control.plex = SimpleNamespace(
+        control=SimpleNamespace(lock=asyncio.Lock(), policy=lambda: policy,
+                                inspect=AsyncMock(return_value=current), intent=Mock(return_value=desired)),
+        start=AsyncMock(), stop=AsyncMock(),
+    )
+    original_request = control.request
+    async def request(method, url, body=None, missing=False):
+        if method == "GET" and url == "/containers/mediahub-plex-main/json":
+            return current
+        return await original_request(method, url, body, missing)
+    control.request = request
+    control.prepare = AsyncMock(return_value=record["container"])
+    control.status = AsyncMock(return_value={"enabled": True})
+    save_json(control.path("plex"), {"enabled": True, "requestedEnabled": True,
+                                    "phase": "starting", "peer": peer, "desiredRunning": True})
+    async def starting(_):
+        assert control.state("plex")["phase"] == "starting"
+    control.plex.start.side_effect = starting
+    asyncio.run(control.configuration("plex", peer, True))
+    assert control.plex.start.await_count == int(desired)
+    assert control.state("plex")["phase"] == "ready"
+    assert control.state("plex")["desiredRunning"] is desired
+
+
+def test_plex_status_checks_installed_container_name(tmp_path):
+    control, peer, events, path = controller(tmp_path)
+    save_json(tmp_path / "plex-plan.json", {"name": "mediahub-plex-main"})
+    save_json(control.path("plex"), {"enabled": True, "phase": "ready"})
+    control.owned_relay = AsyncMock(return_value={"State":{"Running":True,"Health":{"Status":"healthy"}}})
+    control.request = AsyncMock(return_value={"State":{"Running":True}})
+    control.ready = AsyncMock(return_value=True)
+    result = asyncio.run(control.status("plex"))
+    assert result["ready"] is True
+    control.request.assert_awaited_once_with("GET", "/containers/mediahub-plex-main/json", missing=True)

@@ -221,3 +221,41 @@ test("Plex port choice sends only an enable flag and stays pending until verifie
   await toggle.uncheck();
   await expect(toggle).not.toBeChecked();
 });
+
+
+test("live polling preserves disclosures, checkbox focus and unsaved fields", async ({page}) => {
+  await page.clock.install();
+  const writes = await mock(page, "en", true);
+  let connected = false;
+  let reads = 0;
+  await page.route("**/api/hub-apps", async route => {
+    reads++;
+    await route.fulfill({json: {gateway: {enabled:true, ready:true, profileId:profile.id, profiles:[profile]},
+      apps:[{id:"plex", name:"Plex", enabled:true, ready:connected}]}});
+  });
+  await page.goto(process.env.MEDIAVPN_QA_URL! + "/");
+  await page.locator("#tab-apps").click();
+  const apps = page.locator('details[data-disclosure="apps"]');
+  const technical = page.locator('details[data-disclosure="technical"]');
+  await apps.locator("summary").click();
+  await technical.locator("summary").click();
+  await apps.locator("input").focus();
+  await expect(apps).toContainText("Not connected");
+  connected = true;
+  const before = reads;
+  await page.clock.runFor(5100);
+  await expect.poll(() => reads).toBeGreaterThan(before);
+  await expect(apps).toHaveJSProperty("open", true);
+  await expect(technical).toHaveJSProperty("open", true);
+  await expect(apps).toContainText("Plex \u00b7 Connected");
+  await expect(apps.locator("input")).toBeFocused();
+  await page.getByRole("button", {name:"Edit gateway setup"}).click();
+  const field = page.locator('.gateway-route input[type="text"]');
+  await field.fill("unsaved-name");
+  connected = false;
+  await page.clock.runFor(5100);
+  await expect(apps).toContainText("Not connected");
+  await expect(field).toHaveValue("unsaved-name");
+  await expect(field).toBeFocused();
+  expect(writes).toEqual([]);
+});

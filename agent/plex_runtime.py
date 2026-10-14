@@ -255,9 +255,17 @@ class PlexRuntime:
             ) from None
 
     async def request(self, method, path, *, body=None, payload=None, binary=False):
+        from urllib.parse import parse_qs, urlsplit
+
         if (self.shared_vpn and method == "POST" and path.startswith("/containers/create")
                 and body and body.get("Labels", {}).get("org.mediahub.package") == "org.mediahub.plex"):
-            body = await self.shared_vpn.prepare("plex", body)
+            expected = "mediahub-" + body["Labels"].get("org.mediahub.installation", "")
+            if self.control.policy_file and Path(self.control.policy_file).exists():
+                expected = self.control.policy().container
+            # Preparation, backup and restore helpers share ownership labels,
+            # but their entrypoints, mounts and isolated networking must survive.
+            if parse_qs(urlsplit(path).query).get("name") == [expected]:
+                body = await self.shared_vpn.prepare("plex", body)
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(uds=str(self.control.socket)),
@@ -417,13 +425,22 @@ class PlexRuntime:
 
     async def helper(self, policy, plan, initialize=False):
         name = plan["name"] + "-prepare"
-        labels = plan["container"]["Labels"]
+        labels = {key: value for key, value in plan["container"]["Labels"].items()
+                  if not key.startswith("org.mediahub.vpn.")}
+        labels["org.mediahub.plex.role"] = "preparation"
         # Never overwrite an unrelated container with the same name.
         listing = await self.request("GET", "/containers/json?all=1")
-        if any("/" + name in row.get("Names", []) for row in listing):
-            raise DomainError(
-                "plex_prepare_exists", "Previous Plex preparation requires recovery", 409
-            )
+        for row in listing:
+            if "/" + name not in row.get("Names", []):
+                continue
+            previous = await self.request("GET", "/containers/" + row["Id"] + "/json")
+            owned = previous.get("Config", {}).get("Labels", {})
+            if (previous.get("Name") != "/" + name
+                    or previous.get("State", {}).get("Running") is not False
+                    or any(owned.get(key) != labels.get(key) for key in
+                           ("org.mediahub.package", "org.mediahub.installation"))):
+                raise DomainError("plex_prepare_exists", "Previous Plex preparation requires recovery", 409)
+            await self.request("DELETE", "/containers/" + row["Id"] + "?force=false&v=false")
         code = (
             "import pathlib,os,time,json; "
             "assert pathlib.Path('/sys/fs/cgroup/memory.swap.max').read_text().strip()=='0', 'Swap must be disabled'; "

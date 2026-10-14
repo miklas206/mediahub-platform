@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.14
+
+- Restrict shared VPN transformation to the real Plex server. Recover owned stopped preparation helpers while preserving isolated helper networking, entrypoints and app data. Keep saved Plex start intent across interrupted VPN changes and inspect the installed server name for status.
+- Bundle MediaVPN 0.2.6: preserve expanded sections and edits during automatic status updates every five seconds, with immediate refresh on return to the page. Status polling only reads existing endpoints.
+
 ## 0.6.13
 
 - Bundle MediaVPN 0.2.5. Restore Settings beside Sign out, with appearance controls in the existing dialog. Keep Cloudflare as its own workspace tab alongside Connection and Apps and domains.
