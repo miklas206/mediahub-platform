@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.25
+
+- Bundle MediaSeed 0.1.5 and MediaVPN 0.2.10: accept both current /torrent/download/ and legacy /torrents/download/ RSS links on the approved tracker. Preserve HTTPS/host/path validation, duplicate history, storage selection and fresh VPN gating.
+
 ## 0.6.24
 
 - Move the home-card stop control into the action row, with a compact stop icon, quieter styling, keyboard focus and explicit stopping feedback. Preserve confirmation and runtime behavior.
