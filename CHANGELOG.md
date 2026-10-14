@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.26
+
+- Bundle MediaVPN 0.2.11: identify RSS torrent metadata requests with the observed qBittorrent version, avoiding tracker rejection of Python default requests. Keep bounded responses, HTTPS/host validation, disabled redirects and verified VPN gating.
+
 ## 0.6.25
 
 - Bundle MediaSeed 0.1.5 and MediaVPN 0.2.10: accept both current /torrent/download/ and legacy /torrents/download/ RSS links on the approved tracker. Preserve HTTPS/host/path validation, duplicate history, storage selection and fresh VPN gating.
