@@ -1,11 +1,35 @@
 # Optional GPU access for Jellyfin
 
+From **v0.5.36**, the new Proxmox installer offers host driver preparation, and
+the in-app existing-instance guide includes `--install-drivers` in its initial
+setup command. The host step detects NVIDIA/Intel/AMD display hardware, reuses
+working drivers and installs missing supported Debian/Proxmox packages. NVIDIA
+setup includes headers for the running Proxmox kernel, DKMS and NVENC/NVDEC
+libraries. Intel/AMD reuse the kernel driver and Proxmox firmware, or install the
+appropriate Debian firmware when Proxmox does not supply it.
+
+Host package installation asks for **DRIVERS** separately from the LXC restart
+confirmation. If required Debian components are unavailable, **REPOSITORY**
+approves adding a GPU-only official Debian source without rewriting existing
+repositories. Automation must explicitly pass `--drivers-yes` to approve both.
+APT removal plans are rejected. Working NVIDIA drivers receive only matching
+version-pinned video libraries; incompatible candidates are rejected. VFIO GPU
+assignments are preserved. No host reboot or live driver unload is automatic.
+
+If DKMS, Secure Boot, a bound nouveau driver or unsupported kernel/hardware
+prevents access, the guide stops before LXC sharing, explains the issue and can
+be rerun after operator recovery/reboot. Inside the guest, the existing step
+still stages matching NVIDIA libraries and installs/configures NVIDIA Container
+Toolkit; Jellyfin's official image supplies its FFmpeg/VAAPI video libraries.
+The final synthetic hardware encode verifies the complete path.
+
 MediaHub's Proxmox guide lists driver-ready NVIDIA, Intel and AMD GPUs before
 creating the guest. Paste the displayed GPU ID to share that GPU with the new
 MediaHub LXC, or press Enter for CPU only. `MEDIAHUB_GPU=<exact ID>` can preselect
 the GPU when running the guide. Selection does not detach the GPU from Proxmox
-or assign it exclusively to a VM. GPUs bound to VFIO or missing a working host
-driver must be prepared by the operator first.
+or assign it exclusively to a VM. Missing host drivers can be prepared by the
+new driver step. VFIO assignments remain an
+operator decision and are never changed by this guide.
 
 The guide uses free `devN` slots, preserving the VPN TUN device and storage.
 Intel/AMD use only the selected `/dev/dri/renderD*` node. NVIDIA uses its selected

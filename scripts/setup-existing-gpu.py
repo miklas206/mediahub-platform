@@ -10,7 +10,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from proxmox_gpu import configure, discover, run
+from proxmox_gpu import configure, discover, prepare_host_drivers, run
 
 
 def guest(ctid, *args):
@@ -21,6 +21,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ctid", help="Existing MediaHub LXC ID")
     parser.add_argument("--gpu", help="Exact ID from the discovered list")
+    parser.add_argument(
+        "--install-drivers",
+        action="store_true",
+        help="Prepare missing Proxmox GPU drivers before sharing",
+    )
+    parser.add_argument(
+        "--drivers-yes",
+        action="store_true",
+        help="Explicitly approve host GPU package/repository installation",
+    )
     parser.add_argument(
         "--repair-video-access",
         action="store_true",
@@ -38,6 +48,10 @@ def main():
         help="Explicitly authorize stopping/restarting this guest and its Docker services",
     )
     args = parser.parse_args()
+    if args.install_drivers and (args.test_only or args.repair_video_access):
+        raise ValueError(
+            "Host driver installation belongs to initial GPU setup, not repair/test-only"
+        )
     if args.repair_video_access and args.test_only:
         raise ValueError("Choose repair or test-only, not both")
     if os.geteuid() != 0 or not Path("/etc/pve").is_dir():
@@ -88,6 +102,8 @@ def main():
     token = uuid.uuid4().hex
     helper = "/root/mediahub-gpu-tool-" + token + ".py"
     if not args.test_only and not args.repair_video_access:
+        if args.install_drivers:
+            prepare_host_drivers(args.drivers_yes)
         choices = discover()
         if not choices:
             raise ValueError(

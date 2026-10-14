@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.36
+
+- Add guided Proxmox host GPU driver/firmware preparation to fresh installation and existing-instance GPU setup. Offer matching kernel headers, DKMS, NVIDIA NVENC/NVDEC libraries and Intel/AMD firmware, with explicit host-package/repository confirmation and APT removal protection.
+- Reuse functioning drivers, pin missing NVIDIA video libraries to the running driver version, preserve VFIO/VM assignments and stop for kernel/Secure Boot/reboot recovery instead of unloading live drivers or rebooting the node. Continue with existing guest runtime installation and hardware-encoding verification after the host is ready.
+
 ## 0.5.35
 
 - Fix the in-app GPU test rejecting the official Jellyfin image's automatically created `/config` and `/cache` volumes. Override those paths with bounded tmpfs in both UI and CLI tests, retaining the ban on disk volumes, bind mounts and unapproved mounts.

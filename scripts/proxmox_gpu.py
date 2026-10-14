@@ -13,7 +13,265 @@ from pathlib import Path
 
 
 def run(*args):
-    return subprocess.check_output(list(map(str, args)), text=True).strip()
+    return subprocess.check_output(
+        list(map(str, args)), text=True, env={**os.environ, "LC_ALL": "C"}
+    ).strip()
+
+
+def host_gpu_inventory():
+    result = []
+    for device in sorted(Path("/sys/bus/pci/devices").glob("*")):
+        try:
+            if not (device / "class").read_text().strip().startswith("0x03"):
+                continue
+            vendor = {"0x10de": "nvidia", "0x8086": "intel", "0x1002": "amd"}.get(
+                (device / "vendor").read_text().strip()
+            )
+            if not vendor:
+                continue
+            driver = (device / "driver").resolve().name if (device / "driver").exists() else ""
+            name = run("lspci", "-s", device.name) if shutil.which("lspci") else device.name
+            result.append({"pci": device.name, "vendor": vendor, "driver": driver, "name": name})
+        except OSError:
+            continue
+    return result
+
+
+def package_candidate(package):
+    output = run("apt-cache", "policy", package)
+    candidate = re.search(r"^\s*Candidate:\s*(\S+)", output, re.M)
+    return candidate.group(1) if candidate and candidate.group(1) != "(none)" else None
+
+
+def host_gpu_ready(gpu, grants):
+    if gpu["vendor"] != "nvidia":
+        return any(g["vendor"] == gpu["vendor"] and g["id"].endswith(gpu["pci"]) for g in grants)
+    try:
+        information = (Path("/proc/driver/nvidia/gpus") / gpu["pci"] / "information").read_text()
+    except OSError:
+        return False
+    match = re.search(r"^GPU UUID:\s*(GPU-[a-fA-F0-9-]+)\s*$", information, re.M)
+    return bool(
+        match and any(g["vendor"] == "nvidia" and g["uuid"] == match.group(1) for g in grants)
+    )
+
+
+def nvidia_driver_ready():
+    if not shutil.which("nvidia-smi"):
+        return False
+    try:
+        if not run("nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"):
+            return False
+        libraries = run("ldconfig", "-p")
+        return all(
+            name in libraries
+            for name in (
+                "libcuda.so.1",
+                "libnvidia-ml.so.1",
+                "libnvidia-encode.so.1",
+                "libnvcuvid.so.1",
+            )
+        )
+    except subprocess.CalledProcessError:
+        return False
+
+
+def install_host_packages(packages, preserve_driver=False):
+    packages = sorted(set(packages))
+    if not packages:
+        return
+    # Simulate first and prohibit removal even when dependency resolution changes.
+    plan = run("apt-get", "--simulate", "--no-remove", "install", *packages)
+    if re.search(r"^Remv\s", plan, re.M):
+        raise ValueError(
+            "Driver installation would remove existing packages; inspect the APT plan first"
+        )
+    if preserve_driver and re.search(
+        r"^Inst (?:nvidia-driver|nvidia-(?:open-)?kernel-dkms)\b", plan, re.M
+    ):
+        raise ValueError(
+            "Matching video libraries would replace the working NVIDIA driver; inspect APT dependencies first"
+        )
+    print(plan, flush=True)
+    subprocess.run(
+        ["apt-get", "install", "--no-remove", "-y", *packages],
+        check=True,
+        env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+    )
+
+
+def enable_driver_repository(codename, yes):
+    if codename not in {"bookworm", "trixie"}:
+        raise ValueError("Automatic GPU packages support Debian bookworm/trixie Proxmox hosts")
+    print(
+        "GPU packages are missing from APT. Add official Debian contrib/non-free/non-free-firmware components for "
+        + codename
+        + ". Existing repositories are preserved.",
+        flush=True,
+    )
+    if (
+        not yes
+        and input("Type REPOSITORY to enable the GPU package repository: ").strip() != "REPOSITORY"
+    ):
+        raise ValueError("Driver package repository was not enabled; no GPU was shared")
+    keyring = Path("/usr/share/keyrings/debian-archive-keyring.gpg")
+    if not keyring.is_file():
+        raise ValueError("Debian archive signing keyring is missing")
+    path = Path("/etc/apt/sources.list.d/mediahub-gpu-drivers.sources")
+    content = f"Types: deb\nURIs: https://deb.debian.org/debian\nSuites: {codename}\nComponents: contrib non-free non-free-firmware\nSigned-By: {keyring}\n"
+    if path.is_symlink() or (path.exists() and path.read_text() != content):
+        raise ValueError("Refusing to replace an existing GPU package source")
+    if not path.exists():
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        with os.fdopen(fd, "w") as output:
+            output.write(content)
+    subprocess.run(["apt-get", "update"], check=True)
+
+
+def prepare_host_drivers(yes=False):
+    """Explicit host setup; never unload a driver, rebind VFIO or reboot a node."""
+    devices = host_gpu_inventory()
+    if not devices:
+        print(
+            "No NVIDIA, Intel or AMD display GPU detected. CPU-only installation remains available."
+        )
+        return
+    eligible = [gpu for gpu in devices if gpu["driver"] != "vfio-pci"]
+    for gpu in devices:
+        print(gpu["name"] + " [" + (gpu["driver"] or "no driver") + "]", flush=True)
+    if not eligible:
+        raise ValueError(
+            "All GPUs are assigned to VFIO/VMs. Host driver installation will not reassign them"
+        )
+    ready = discover()
+    pending = [gpu for gpu in eligible if not host_gpu_ready(gpu, ready)]
+    nvidia = any(g["vendor"] == "nvidia" for g in eligible)
+    if not pending and (not nvidia or nvidia_driver_ready()):
+        print(
+            "GPU host drivers, video libraries and devices are already ready. Existing drivers were preserved."
+        )
+        return
+    if any(g["vendor"] == "nvidia" and g["driver"] == "vfio-pci" for g in devices) and nvidia:
+        raise ValueError(
+            "Mixed NVIDIA host/VFIO GPUs require a manual driver plan; VM assignments are preserved"
+        )
+    print(
+        "Driver setup may install kernel headers, DKMS, video libraries and firmware. It may require a Proxmox reboot affecting all guests. No automatic reboot, driver unload or guest stop will occur.",
+        flush=True,
+    )
+    if (
+        not yes
+        and input("Type DRIVERS to install required GPU host packages: ").strip() != "DRIVERS"
+    ):
+        raise ValueError("Host driver installation cancelled; no LXC changes were made")
+    system = {}
+    for line in Path("/etc/os-release").read_text().splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            system[key] = value.strip('"')
+    codename = system.get("VERSION_CODENAME")
+    if system.get("ID") != "debian" or codename not in {"bookworm", "trixie"}:
+        raise ValueError(
+            "Automatic driver setup supports Debian-based Proxmox bookworm/trixie hosts"
+        )
+    subprocess.run(["apt-get", "update"], check=True)
+    packages = []
+    preserve_driver = False
+    if nvidia and not nvidia_driver_ready():
+        # Do not let APT replace an already working externally installed driver.
+        working = False
+        if shutil.which("nvidia-smi"):
+            try:
+                working = bool(run("nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"))
+            except subprocess.CalledProcessError:
+                pass
+        if working:
+            versions = set(
+                run(
+                    "nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"
+                ).splitlines()
+            )
+            if len(versions) != 1:
+                raise ValueError("Cannot determine one working NVIDIA driver version")
+            version = versions.pop()
+            preserve_driver = True
+            if any(not package_candidate(p) for p in ("libnvcuvid1", "libnvidia-encode1")):
+                enable_driver_repository(codename, yes)
+                subprocess.run(["apt-get", "update"], check=True)
+            for package in ("libnvcuvid1", "libnvidia-encode1"):
+                candidate = package_candidate(package)
+                if not candidate or not candidate.split(":")[-1].startswith(version + "-"):
+                    raise ValueError(
+                        "APT has no video libraries matching the running NVIDIA driver "
+                        + version
+                        + "; the working driver was preserved"
+                    )
+                packages.append(package + "=" + candidate)
+        else:
+            kernel = run("uname", "-r")
+            if not re.fullmatch(r"[a-zA-Z0-9_.+-]+-pve", kernel):
+                raise ValueError("Expected a supported Proxmox kernel")
+            headers = next(
+                (
+                    p
+                    for p in ("proxmox-headers-" + kernel, "pve-headers-" + kernel)
+                    if package_candidate(p)
+                ),
+                None,
+            )
+            if not headers:
+                raise ValueError(
+                    "Headers for the running Proxmox kernel are unavailable. Update the host kernel/repositories and reboot before continuing"
+                )
+            packages += [
+                headers,
+                "dkms",
+                "build-essential",
+                "nvidia-driver",
+                "nvidia-kernel-dkms",
+                "libnvcuvid1",
+                "libnvidia-encode1",
+            ]
+    if any(g["vendor"] in {"intel", "amd"} for g in pending):
+        # Proxmox normally supplies graphics firmware through pve-firmware;
+        # avoid conflicting Debian firmware packages when it is installed.
+        try:
+            bundled = (
+                run("dpkg-query", "-W", "-f=${db:Status-Status}", "pve-firmware") == "installed"
+            )
+        except subprocess.CalledProcessError:
+            bundled = False
+        if not bundled:
+            if any(g["vendor"] == "amd" for g in pending):
+                packages += ["firmware-amd-graphics"]
+            if any(g["vendor"] == "intel" for g in pending):
+                packages += [
+                    "firmware-intel-graphics" if codename == "trixie" else "firmware-misc-nonfree"
+                ]
+    if any(not package_candidate(p.split("=")[0]) for p in packages):
+        enable_driver_repository(codename, yes)
+    missing = [p for p in packages if not package_candidate(p.split("=")[0])]
+    if missing:
+        raise ValueError("Required GPU packages are unavailable: " + ", ".join(missing))
+    install_host_packages(packages, preserve_driver=preserve_driver)
+    if nvidia and any(
+        g["driver"] == "nouveau" or g["driver"] == "nvidia" and "nvidia-driver" in packages
+        for g in pending
+    ):
+        raise ValueError(
+            "GPU host packages installed. Reboot Proxmox at a suitable time, then rerun this guide. Running driver modules were not replaced"
+        )
+    for vendor in sorted({g["vendor"] for g in pending}):
+        module = {"nvidia": "nvidia_uvm", "intel": "i915", "amd": "amdgpu"}[vendor]
+        subprocess.run(["modprobe", module], check=False)
+    now = discover()
+    if (nvidia and not nvidia_driver_ready()) or any(
+        not host_gpu_ready(gpu, now) for gpu in pending
+    ):
+        raise ValueError(
+            "Driver packages installed but GPU is not ready. Check DKMS/Secure Boot or kernel support and reboot Proxmox when appropriate; no LXC changes were made"
+        )
+    print("GPU host drivers and devices are ready. Continue with LXC sharing.")
 
 
 def nvidia_minor(uuid, bus):
@@ -216,6 +474,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true")
     parser.add_argument(
+        "--prepare-drivers",
+        action="store_true",
+        help="Install missing host drivers/firmware with confirmation",
+    )
+    parser.add_argument(
+        "--drivers-yes",
+        action="store_true",
+        help="Explicitly authorize host GPU packages and official Debian GPU sources without prompts",
+    )
+    parser.add_argument(
         "--check", action="store_true", help="Validate the choice without changing a container"
     )
     parser.add_argument("--gpu", help="Exact GPU ID from --list; never a device path")
@@ -224,6 +492,9 @@ def main():
     args = parser.parse_args()
     if os.geteuid() != 0 or not Path("/etc/pve").is_dir():
         raise ValueError("Run from the Proxmox node shell as root")
+    if args.prepare_drivers:
+        prepare_host_drivers(args.drivers_yes)
+        return
     gpus = discover()
     if args.list:
         for gpu in gpus:

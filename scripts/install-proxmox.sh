@@ -31,6 +31,10 @@ if [ -f "$SCRIPT_DIR/proxmox_gpu.py" ]; then
 else
     curl -fsSL https://raw.githubusercontent.com/miklas206/mediahub-platform/main/scripts/proxmox_gpu.py -o "$GPU_HELPER"
 fi
+read -r -p 'Check/install missing GPU host drivers and firmware? [y/N]: ' GPU_DRIVERS
+if [[ "$GPU_DRIVERS" =~ ^[yY]$ ]]; then
+    python3 "$GPU_HELPER" --prepare-drivers
+fi
 printf '\nAvailable GPUs (optional; shared with this LXC, not reassigned from the host):\n'
 python3 "$GPU_HELPER" --list
 GPU_ID=${MEDIAHUB_GPU:-}

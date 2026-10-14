@@ -57,11 +57,11 @@ export function gpuPreparationCommand(ctid: string, repair = false) {
   if (!/^[1-9][0-9]{2,8}$/.test(ctid)) return "";
   return `(
   set -e
-  install -d -m 700 /root/mediahub-gpu-tools-v0.5.35
+  install -d -m 700 /root/mediahub-gpu-tools-v0.5.36
   for script in setup-existing-gpu.py proxmox_gpu.py gpu_setup.py; do
-    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.35/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.35/$script"
+    curl -fsSL "https://raw.githubusercontent.com/miklas206/mediahub-platform/v0.5.36/scripts/$script" -o "/root/mediahub-gpu-tools-v0.5.36/$script"
   done
-  python3 /root/mediahub-gpu-tools-v0.5.35/setup-existing-gpu.py --ctid ${ctid}${repair ? " --repair-video-access" : ""}
+  python3 /root/mediahub-gpu-tools-v0.5.36/setup-existing-gpu.py --ctid ${ctid}${repair ? " --repair-video-access" : " --install-drivers"}
 )`;
 }
 
@@ -309,6 +309,13 @@ function GPUWizard() {
                 <p className="muted">
                   {t(
                     "Repair keeps the LXC and Docker running, removes unnecessary NVIDIA administrative devices and recreates only MediaHub Core/Agent before testing.",
+                  )}
+                </p>
+              )}
+              {!repair && (
+                <p className="muted">
+                  {t(
+                    "The guide checks host drivers and offers to install missing GPU drivers, firmware and video libraries before sharing. It preserves working drivers. If Proxmox needs a reboot or Secure Boot approval, setup pauses and tells you what to do; the node never reboots automatically.",
                   )}
                 </p>
               )}
