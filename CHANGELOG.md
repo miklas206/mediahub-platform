@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.7
+
+- Migrate old Plex removal receipts when the verified owned runtime is absent. Reset only owned configuration before a fresh reinstall.
+- Recover stopped, owned Plex preparation helpers and partial configuration scaffolds. Fresh reinstalls create new preferences instead of requiring deleted encrypted identity records.
+
 ## 0.6.6
 
 - Map TUN into the MediaVPN management container on fresh installs and when updating existing Compose configurations. Preserve saved profiles, credentials and app domains.

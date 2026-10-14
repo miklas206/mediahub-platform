@@ -132,11 +132,23 @@ class PlexRuntime:
         plan_path = self.state_dir / "plex-reset-plan.json"
         if not plan_path.exists():
             plan_path = self.state_dir / "plex-plan.json"
-        if not plan_path.exists():
+        if not plan_path.exists() and (not self.control.policy_file or not Path(self.control.policy_file).exists()):
             self.vault.delete(identity)
             self.vault.delete(identity + "-rollback")
             return
-        plan = read_json(plan_path)
+        if not plan_path.exists():
+            retained = self.control.policy()
+            candidates = {Path(choice.path) / identity for choice in approved.storage.values() if choice.kind == "appdata"}
+            roots = [root for root in candidates if any(root in Path(m.source).parents and not m.readOnly for m in retained.mounts)]
+            if len(roots) > 1:
+                raise DomainError("unsafe_storage", "Plex configuration ownership is ambiguous", 409)
+            if not roots:
+                self.vault.delete(identity)
+                self.vault.delete(identity + "-rollback")
+                return
+            plan = {"installation": {"installationId": identity}, "appdataPath": str(roots[0])}
+        else:
+            plan = read_json(plan_path)
         if plan["installation"]["installationId"] != identity:
             raise DomainError("installation_changed", "Plex reset identity changed", 409)
         allowed = {Path(choice.path) / identity for choice in approved.storage.values() if choice.kind == "appdata"}
@@ -162,7 +174,7 @@ class PlexRuntime:
         self.vault.delete(identity + "-rollback")
         self.last_saved = None
         self.libraries_ready = False
-        for name in ("plex-plan.json", "plex-update-recovery.json"):
+        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json"):
             (self.state_dir / name).unlink(missing_ok=True)
 
     async def remove_failed_install(self, installation_id, policy):
@@ -482,6 +494,7 @@ class PlexRuntime:
     async def remove_helper(self, name):
         with contextlib.suppress(DomainError):
             await self.request("POST", f"/containers/{name}/stop?t=2")
+        with contextlib.suppress(DomainError):
             await self.request("DELETE", f"/containers/{name}")
 
     async def can_reinstall(self, installation_id):
@@ -492,6 +505,31 @@ class PlexRuntime:
         policy = self.control.policy()
         if policy.installationId != installation_id:
             return False
+        receipt = self.state_dir / "plex-removal.json"
+        saved = read_json(receipt) if receipt.exists() else {}
+        if saved.get("installationId") == installation_id:
+            from urllib.parse import quote
+            labels = ["org.mediahub.installation=" + installation_id, "org.mediahub.package=org.mediahub.plex"]
+            rows = await self.request("GET", "/containers/json?all=true&filters=" + quote(json.dumps({"label": labels})))
+            for row in rows:
+                name = "/mediahub-" + installation_id + "-prepare"
+                if row.get("Names") != [name]:
+                    return False
+                actual = await self.request("GET", "/containers/" + row["Id"] + "/json")
+                owned = actual.get("Config", {}).get("Labels", {})
+                if (actual.get("Name") != name or actual.get("State", {}).get("Running") is not False
+                        or owned.get("org.mediahub.package") != "org.mediahub.plex"
+                        or owned.get("org.mediahub.installation") != installation_id):
+                    return False
+                await self.request("DELETE", "/containers/" + row["Id"] + "?force=false&v=false")
+            if policy.vpnEnabled and await self.vpn._container(required=False):
+                return False
+            if self.shared_vpn:
+                if self.shared_vpn.state("plex").get("enabled") or await self.shared_vpn.owned_relay("plex"):
+                    return False
+            # Also clear an owned scaffold left by a failed first reinstall.
+            await self.reset_configuration(installation_id)
+            save_json(receipt, {"installationId": installation_id, "configurationReset": True})
         status = await self.uninstall_status(check_installing=False)
         return status.get("state") == "succeeded" and status.get("dataPreserved") is True
 
@@ -597,14 +635,18 @@ class PlexRuntime:
                     ManualPortMappingMode="1",
                 )
                 content = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-                if policy.reuseEncryptedPreferences or reinstall:
+                if policy.reuseEncryptedPreferences and not reinstall:
                     content = self.vault.get(body.installation.installationId)
                     if ET.fromstring(content).tag != "Preferences":
                         raise DomainError(
                             "plex_identity_invalid", "Encrypted Plex identity is invalid", 409
                         )
                 else:
-                    self.vault.put(body.installation.installationId, content)
+                    reference = body.installation.installationId
+                    if self.vault.status(reference)["configured"]:
+                        self.vault.replace(reference, content)
+                    else:
+                        self.vault.put(reference, content)
                 files = {
                     "Library/Application Support/Plex Media Server/Preferences.xml": content,
                     ".claim": body.claimToken.get_secret_value().encode()

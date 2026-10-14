@@ -33,6 +33,7 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     )
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.policy = lambda: policy
+    runtime.reset_configuration = AsyncMock()
     runtime.helper = AsyncMock(return_value="owned-prepare-helper")
     runtime.archive_write = AsyncMock()
     publisher = "lscr.io/linuxserver/plex@sha256:" + "c" * 64
@@ -89,7 +90,7 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     assert not any("/images/" in path and method == "DELETE" for method, path in calls)
     assert not list(tmp_path.glob(".metadata-*"))
     if reinstall:
-        assert b'preserved-identity' in runtime.vault.get(spec.installationId)
+        assert b'preserved-identity' not in runtime.vault.get(spec.installationId)
         assert not (tmp_path / "plex-removal.json").exists()
         assert not any(path == "/volumes/create" for _, path in calls)
         assert not any(method == "DELETE" and path.startswith("/volumes/") for method, path in calls)
@@ -425,9 +426,42 @@ def test_reinstall_requires_matching_removal_and_absent_owned_containers(tmp_pat
         installationId="plex-test", vpnEnabled=False))
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.request = AsyncMock(return_value=containers)
+    runtime.reset_configuration = AsyncMock()
     if receipt is not None:
         save_json(tmp_path / "plex-removal.json", receipt)
     assert asyncio.run(runtime.can_reinstall("plex-test")) is expected
     assert asyncio.run(runtime.can_reinstall("other-install")) is False
     assert policy_file.read_text() == "retained ownership"
     assert not any(call.args[0] != "GET" for call in runtime.request.await_args_list)
+
+
+@pytest.mark.parametrize('owned', [True, False])
+def test_reinstall_recovers_only_stopped_owned_prepare_helper(tmp_path, owned):
+    from unittest.mock import AsyncMock
+    from agent.install_files import save_json, read_json
+    policy_file = tmp_path / 'managed.json'
+    policy_file.write_text('retained')
+    policy = SimpleNamespace(installationId='plex-test', vpnEnabled=False)
+    runtime = PlexRuntime(SimpleNamespace(policy_file=policy_file, policy=lambda: policy), None, tmp_path)
+    save_json(tmp_path / 'plex-removal.json', {'installationId': 'plex-test'})
+    helper = {'Id': 'helper', 'Names': ['/mediahub-plex-test-prepare']}
+    actual = {'Name': '/mediahub-plex-test-prepare', 'State': {'Running': False},
+              'Config': {'Labels': {'org.mediahub.package': 'org.mediahub.plex' if owned else 'foreign', 'org.mediahub.installation': 'plex-test'}}}
+    runtime.request = AsyncMock(side_effect=[[helper], actual, {}, []] if owned else [[helper], actual])
+    runtime.reset_configuration = AsyncMock()
+    assert asyncio.run(runtime.can_reinstall('plex-test')) is owned
+    if owned:
+        assert runtime.request.call_args_list[2].args == ('DELETE', '/containers/helper?force=false&v=false')
+        runtime.reset_configuration.assert_awaited_once_with('plex-test')
+        assert read_json(tmp_path / 'plex-removal.json')['configurationReset']
+    else:
+        runtime.reset_configuration.assert_not_awaited()
+        assert all(call.args[0] == 'GET' for call in runtime.request.call_args_list)
+
+
+def test_exited_preparation_helper_is_deleted_after_stop_reports_already_stopped(tmp_path):
+    from unittest.mock import AsyncMock
+    runtime = PlexRuntime(SimpleNamespace(), None, tmp_path)
+    runtime.request = AsyncMock(side_effect=[DomainError('stopped', 'Already stopped', 409), {}])
+    asyncio.run(runtime.remove_helper('owned-prepare'))
+    assert runtime.request.call_args_list[-1].args == ('DELETE', '/containers/owned-prepare')
