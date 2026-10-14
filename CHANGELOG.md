@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.20
+
+- Show a success popup with a direct Plex configuration link after verified account linking. Keep the next-step guidance on the page after the popup closes; do not repeat the popup when opening an already linked server.
+
 ## 0.6.19
 
 - Add guided Plex account linking after installation and on the existing server page. Request a fresh short-lived token only after the image download. Apply it through the existing protected RAM configuration and container claim mechanism, verify the claim, encrypt updated preferences, and clear the token on success or failure. No browser SSH setup is required.

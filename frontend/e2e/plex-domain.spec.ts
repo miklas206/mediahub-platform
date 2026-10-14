@@ -162,6 +162,27 @@ for (const width of [1440, 390])
       "href",
       "https://plex.example.com/web/index.html",
     );
+    const popup = page
+      .locator(".notification-popup.success")
+      .filter({ hasText: "Plex is linked to your account" });
+    await expect(popup).toBeVisible();
+    await expect(
+      popup.getByRole("link", { name: "Open Plex for configuration" }),
+    ).toHaveAttribute("href", "https://plex.example.com/web/index.html");
+    await expect(popup).toContainText(
+      "Open Plex to finish setup and add your media libraries.",
+    );
+    await popup.getByRole("button", { name: "Dismiss notification" }).click();
+    await page.clock.runFor(300);
+    await expect(popup).toHaveCount(0);
+    await expect(page.locator(".plex-account-setup")).toContainText(
+      "Open Plex to finish setup and add your media libraries.",
+    );
+    await page.reload();
+    await expect(page.locator(".plex-account-setup")).toContainText(
+      "Plex is linked to your account",
+    );
+    await expect(popup).toHaveCount(0);
     expect(claims).toHaveLength(1);
     expect(errors).toEqual([]);
     expect(

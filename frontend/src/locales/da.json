@@ -4087,6 +4087,8 @@
   "Plex domain saved. MediaVPN manages DNS and HTTPS automatically.": "Plex-domænet er gemt. MediaVPN administrerer automatisk DNS og HTTPS.",
   "This Plex server is not linked to a Plex account yet. Open this server's Plex Web and finish account setup before enabling remote access.": "Denne Plex-server er endnu ikke knyttet til en Plex-konto. Åbn serverens Plex Web, og færdiggør kontoopsætningen, før du aktiverer fjernadgang.",
   "Link Plex to your account": "Tilknyt Plex til din konto",
+  "Open Plex to finish setup and add your media libraries.": "Åbn Plex for at færdiggøre opsætningen og tilføje dine mediebiblioteker.",
+  "Open Plex for configuration": "Åbn Plex for konfigurering",
   "Plex is linked to your account": "Plex er knyttet til din konto",
   "Plex is linked to an account": "Plex er knyttet til en konto",
   "Finish account setup here after installation. MediaHub links the server from its own network, including when it uses MediaVPN.": "Færdiggør kontoopsætningen her efter installationen. MediaHub tilknytter serveren fra dens eget netværk, også når den bruger MediaVPN.",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "./api";
 import { useData } from "./use-data";
 import { t } from "./i18n";
@@ -14,6 +14,14 @@ export function PlexAccountSetup() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
+  const previouslyClaimed = useRef<boolean | null | undefined>(undefined);
+  const [showConfigurationPrompt, setShowConfigurationPrompt] = useState(false);
+  useEffect(() => {
+    if (previouslyClaimed.current === false && data?.claimed === true) {
+      setShowConfigurationPrompt(true);
+    }
+    if (data?.claimed != null) previouslyClaimed.current = data.claimed;
+  }, [data?.claimed]);
   const running = busy || data?.operation.state === "running";
   useEffect(() => {
     if (data?.claimed === true && !running) return;
@@ -45,9 +53,28 @@ export function PlexAccountSetup() {
       {data?.claimed === true ? (
         <>
           <p role="status">{t("Plex is linked to your account")}</p>
+          <p>{t("Open Plex to finish setup and add your media libraries.")}</p>
+          {showConfigurationPrompt && (
+            <NotificationPopup tone="success">
+              <p>{t("Plex is linked to your account")}</p>
+              <p>
+                {t("Open Plex to finish setup and add your media libraries.")}
+              </p>
+              {data.openUrl && (
+                <a
+                  className="button"
+                  href={data.openUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t("Open Plex for configuration")}
+                </a>
+              )}
+            </NotificationPopup>
+          )}
           {data.openUrl && (
             <a href={data.openUrl} target="_blank" rel="noopener noreferrer">
-              {t("Open Plex")}
+              {t("Open Plex for configuration")}
             </a>
           )}
         </>
