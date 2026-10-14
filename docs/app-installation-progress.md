@@ -37,3 +37,20 @@ the Agent confirms removal. An active installation cannot be removed concurrentl
 
 Validation uses synthetic Agent/Docker responses and an isolated Playwright
 Chromium with mocked API responses. It does not install or remove a live app.
+
+## Obsolete shared VPN connections (0.6.3)
+
+Plex/Jellyfin uninstall now fences saved relay intent before removing the app,
+then removes its verified relay and matching gateway peer before discarding the
+hub binding. This prevents the VPN reconciler from bringing an uninstalled app
+back. A failed peer cleanup retains the binding so the operation can be retried.
+
+Earlier installations can leave gateway peers behind after the app registration
+has been marked uninstalled. The MediaVPN setup page lists those entries under
+**Obsolete VPN connections**, even though they are absent from the installed-app
+selector. Cleanup is explicit and requires a known paired host, the exact
+host/app-derived peer ID, an uninstalled app without a binding, and a confirmation
+digest of the Agent's current installation/container snapshot. Running app
+containers, changed snapshots, foreign ownership and other namespace consumers
+block cleanup. Only verified stopped remnants and app relays are removed;
+profiles, keys, volumes, media and app data stay in place.

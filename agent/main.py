@@ -447,6 +447,14 @@ def create_agent(config: AgentConfig | None = None):
     async def container_options(app_id: str):
         return await container_apps.options(app_id)
 
+    @app.get("/v1/shared-vpn/{app_name}/cleanup", dependencies=[Depends(secure_workflow)])
+    async def vpn_cleanup_preview(app_name: str):
+        return await shared_vpn.removal_preview(app_name)
+
+    @app.post("/v1/shared-vpn/{app_name}/cleanup", dependencies=[Depends(secure_workflow)])
+    async def vpn_cleanup(app_name: str, body: RemoveRuntimeRequest):
+        return await shared_vpn.remove_connection(app_name, body.confirmedInstallationId)
+
     @app.get("/v1/gpu-setup")
     async def gpu_setup_status():
         return await gpu_setup.status()
@@ -475,7 +483,11 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.post("/v1/container-apps/{app_id}/uninstall", dependencies=[Depends(secure_workflow)])
     async def container_uninstall(app_id: str, body: ContainerRemoval):
+        if app_id == "jellyfin":
+            await shared_vpn.remove_connection(app_id, body.confirmedInstallationId, fence_only=True)
         response = await container_apps.action(app_id, "uninstall", body.confirmedInstallationId)
+        if app_id == "jellyfin":
+            await shared_vpn.cleanup_removed(app_id)
         return {**response, "state": "accepted"}
 
     @app.post("/v1/container-apps/{app_id}/actions/{action}", dependencies=[Depends(secure_workflow)])
@@ -658,6 +670,7 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.post("/v1/plex/uninstall", dependencies=[Depends(secure_workflow)], status_code=202)
     async def plex_uninstall(body: RemoveRuntimeRequest):
+        await shared_vpn.remove_connection("plex", body.confirmedInstallationId, fence_only=True)
         return await plex_runtime.uninstall(body.confirmedInstallationId)
 
     @app.post("/v1/seedbox/uninstall", status_code=202)

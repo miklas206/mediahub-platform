@@ -51,6 +51,12 @@ async def removal_status(svc, app_id):
         raise DomainError(
             "removal_unverified", "Runtime removal has not passed its final checks", 409
         )
+    if report.get("state") == "succeeded":
+        with svc.sessions() as db:
+            binding = db.scalar(select(Setting).where(Setting.key == definition.binding_key))
+            if not binding or report.get("installationId") != binding.value.get("installationId"):
+                raise DomainError("installation_changed", "Installation identity could not be verified", 409)
+        await svc.shared_vpn.forget_peer(app["packageId"], adapter.host_id)
     with svc.sessions.begin() as db:
         binding = db.scalar(select(Setting).where(Setting.key == definition.binding_key))
         if not binding or report.get("installationId") != binding.value.get("installationId"):

@@ -122,9 +122,12 @@ def test_namespace_restart_invalidates_app_readiness(tmp_path):
 def test_healthy_relay_does_not_report_missing_app_ready(tmp_path):
     control, _, _, _ = controller(tmp_path)
     save_json(control.path("jellyfin"), {"enabled": True, "phase": "blocked"})
-    control.owned_relay = AsyncMock(return_value={
-        "Id": "relay", "State": {"Running": True, "Health": {"Status": "healthy"}},
-    })
+    control.owned_relay = AsyncMock(
+        return_value={
+            "Id": "relay",
+            "State": {"Running": True, "Health": {"Status": "healthy"}},
+        }
+    )
     control.request = AsyncMock(return_value=None)
     status = asyncio.run(control.status("jellyfin"))
     assert status["handshakeVerified"] is True
@@ -154,6 +157,7 @@ def test_shared_vpn_changes_require_csrf_and_reject_extra_fields(logged_in, monk
     csrf = logged_in.headers.pop("X-MediaHub-CSRF")
     assert logged_in.put("/api/v1/shared-vpn/gateway", json={"enabled": False}).status_code == 403
     machine.assert_not_awaited()
+
     logged_in.headers["X-MediaHub-CSRF"] = csrf
     response = logged_in.put(
         "/api/v1/shared-vpn/gateway",
@@ -162,3 +166,154 @@ def test_shared_vpn_changes_require_csrf_and_reject_extra_fields(logged_in, monk
     assert response.status_code == 422
     assert "synthetic-private-value" not in response.text
     machine.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "case", ["stopped", "running", "foreign-relay", "foreign-app", "stale", "other-consumer"]
+)
+def test_obsolete_cleanup_verifies_snapshot_ownership_and_preserves_data(tmp_path, case):
+    control, _, _, path = controller(tmp_path)
+    current = {"Id": "owned-app", "State": {"Running": case == "running"}}
+    relay = {
+        "Id": "owned-relay",
+        "Config": {
+            "Labels": {"org.mediahub.vpn.relay": "other" if case == "foreign-relay" else "jellyfin"}
+        },
+        "HostConfig": {"Privileged": False, "NetworkMode": "bridge"},
+        "State": {"Running": True},
+    }
+    mutations = []
+    data = tmp_path / "preserved-data"
+    data.write_bytes(b"media and profile data")
+    save_json(
+        control.path("jellyfin"), {"enabled": True, "requestedEnabled": True, "phase": "ready"}
+    )
+
+    async def request(method, url, body=None, missing=False):
+        if method == "GET":
+            if url == "/containers/mediahub-jellyfin/json":
+                return copy.deepcopy(current) if current else None
+            if url == "/containers/mediahub-vpn-jellyfin/json":
+                return copy.deepcopy(relay) if relay else None
+            if url == "/containers/json?all=1":
+                return (
+                    [{"Id": "unrelated", "HostConfig": {"NetworkMode": "container:owned-relay"}}]
+                    if case == "other-consumer"
+                    else []
+                )
+        mutations.append((method, url))
+        if method == "DELETE" and "owned-app" in url:
+            current.clear()
+        if method == "DELETE" and "owned-relay" in url:
+            relay.clear()
+        return {}
+
+    control.request = request
+    if case == "foreign-app":
+        control.apps.verify = lambda *args: (_ for _ in ()).throw(
+            DomainError("ownership_mismatch", "Ownership mismatch", 409)
+        )
+
+    async def run():
+        if case == "foreign-relay":
+            with pytest.raises(DomainError):
+                await control.removal_preview("jellyfin")
+            return
+        preview = await control.removal_preview("jellyfin")
+        if case == "stale":
+            current["Id"] = "replacement"
+        if case != "stopped":
+            with pytest.raises(DomainError):
+                await control.remove_connection("jellyfin", preview["installationId"])
+            assert control.state("jellyfin")["enabled"] is True
+        else:
+            report = await control.remove_connection("jellyfin", preview["installationId"])
+            assert report["dataPreserved"] is True
+            assert not current and not relay
+            assert control.state("jellyfin")["enabled"] is False
+            assert control.state("jellyfin")["requestedEnabled"] is False
+            assert read_json(path)["desiredRunning"] is False
+            assert (await control.cleanup_removed("jellyfin"))["state"] == "succeeded"
+
+    asyncio.run(run())
+    if case != "stopped":
+        assert mutations == []
+    assert not any("v=true" in url or "/volumes/" in url for _, url in mutations)
+    assert data.read_bytes() == b"media and profile data"
+
+
+def test_uninstall_fence_prevents_reconciliation_without_recreating_app(tmp_path):
+    control, _, events, path = controller(tmp_path)
+    control.owned_relay = AsyncMock(return_value=None)
+    save_json(
+        control.path("jellyfin"), {"enabled": True, "requestedEnabled": True, "phase": "blocked"}
+    )
+    asyncio.run(control.remove_connection("jellyfin", "mediahub-jellyfin", fence_only=True))
+    assert control.state("jellyfin")["enabled"] is False
+    assert control.state("jellyfin")["requestedEnabled"] is False
+    assert read_json(path)["desiredRunning"] is False
+    assert not any(method != "GET" for method, _, _ in events)
+
+
+@pytest.mark.parametrize(
+    "state,binding,peer_matches",
+    [
+        ("uninstalled", False, True),
+        ("running", False, True),
+        ("uninstalled", True, True),
+        ("uninstalled", False, False),
+    ],
+)
+def test_core_orphan_cleanup_requires_uninstalled_app_and_exact_owned_peer(
+    logged_in, monkeypatch, state, binding, peer_matches
+):
+    import hashlib
+
+    from mediahub.db import InstalledApp, Setting
+
+    svc = logged_in.app.state.services
+    service = svc.shared_vpn
+    identifier = hashlib.sha256(b"local:jellyfin").hexdigest()[:40]
+    gateway = {
+        "peers": [{"id": identifier if peer_matches else "unknown-peer", "name": "Jellyfin"}]
+    }
+    with svc.sessions.begin() as db:
+        db.add(
+            InstalledApp(
+                package_id="org.mediahub.jellyfin",
+                name="Jellyfin",
+                state=state,
+                version="unknown",
+                is_mock=False,
+            )
+        )
+        if binding:
+            db.add(Setting(key="container_installation_jellyfin", value={"hostId": "local"}))
+    svc.managed_apps.policy["org.mediahub.mediavpn"] = SimpleNamespace(
+        managementTokenFile="configured"
+    )
+    service.vpn = AsyncMock(return_value=gateway)
+    agent = SimpleNamespace(
+        trusted_transport=True,
+        request=AsyncMock(
+            side_effect=[
+                {"installationId": "f" * 64},
+                {"state": "succeeded", "dataPreserved": True},
+            ]
+        ),
+    )
+    monkeypatch.setattr(svc.hosts, "client", lambda host: agent)
+
+    async def run():
+        if state == "uninstalled" and not binding and peer_matches:
+            assert (await service.cleanup_orphan(identifier))["dataPreserved"]
+            agent.request.assert_any_await(
+                "POST", "/v1/shared-vpn/jellyfin/cleanup", {"confirmedInstallationId": "f" * 64}
+            )
+            service.vpn.assert_any_await("DELETE", "/peers/" + identifier)
+        else:
+            with pytest.raises(DomainError):
+                await service.cleanup_orphan(identifier)
+            agent.request.assert_not_awaited()
+
+    asyncio.run(run())

@@ -270,6 +270,8 @@ class SharedVPN:
 
     async def ready(self, app, inspected):
         state = self.state(app)
+        if state.get("phase") == "removing":
+            return False
         if state.get("phase") in {"changing", "blocked"} and state.get("requestedEnabled"):
             return False
         if not state["enabled"]:
@@ -285,6 +287,127 @@ class SharedVPN:
             and row["State"].get("Running")
             and row["State"].get("Health", {}).get("Status") == "healthy"
         )
+
+    def removal_record(self, app):
+        self.path(app)  # Fixed app allowlist; never accept paths from the caller.
+        if app == "plex":
+            path = self.config.state_dir / "plex-plan.json"
+            record = read_json(path) if path.exists() else None
+            identity = (record or {}).get("installation", {}).get("installationId")
+            if not identity:
+                identity = self.plex.operation.get("installationId", "plex-main")
+        else:
+            path = self.apps.record_path(app)
+            record = self.apps.record(app)
+            identity = (record or {}).get("name", "mediahub-" + app)
+        return path, record, identity
+
+    async def removal_preview(self, app):
+        _, record, identity = self.removal_record(app)
+        current = await self.request(
+            "GET",
+            "/containers/" + (record or {}).get("name", "mediahub-" + app) + "/json",
+            missing=True,
+        )
+        relay = await self.owned_relay(app)
+        digest = hashlib.sha256(
+            json.dumps(
+                [identity, record, (current or {}).get("Id"), (relay or {}).get("Id")],
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        return {
+            "installationId": digest,
+            "running": bool(current and current.get("State", {}).get("Running")),
+        }
+
+    async def cleanup_removed(self, app):
+        preview = await self.removal_preview(app)
+        return await self.remove_connection(app, preview["installationId"])
+
+    async def remove_connection(self, app, confirmed, *, fence_only=False):
+        # Match configuration's lock order, so a reconciler cannot recreate the
+        # app between fencing its intent and removing its namespace.
+        async with self.lock:
+            operation_lock = self.plex.control.lock if app == "plex" else self.apps.locks.get(app)
+            self.path(app)
+            task = getattr(self.plex, "install_task", None) if app == "plex" else getattr(self.apps, "tasks", {}).get(app)
+            if task and not task.done():
+                raise DomainError("operation_busy", "Wait for the current app operation", 409)
+            if operation_lock.locked():
+                raise DomainError("operation_busy", "Wait for the current app operation", 409)
+            async with operation_lock:
+                path, record, identity = self.removal_record(app)
+                expected = (
+                    identity if fence_only else (await self.removal_preview(app))["installationId"]
+                )
+                if confirmed != expected:
+                    raise DomainError(
+                        "confirmation_required", "Exact installation confirmation required", 409
+                    )
+                current = await self.request(
+                    "GET",
+                    "/containers/" + (record or {}).get("name", "mediahub-" + app) + "/json",
+                    missing=True,
+                )
+                if current:
+                    if not record:
+                        raise DomainError(
+                            "vpn_relay_ownership", "App ownership could not be verified", 409
+                        )
+                    if app == "plex":
+                        current = await self.plex.control.inspect(self.plex.control.policy())
+                    else:
+                        self.apps.verify(current, record)
+                    if not fence_only and current.get("State", {}).get("Running"):
+                        raise DomainError(
+                            "app_dependency",
+                            "Stop the remaining app container before cleaning its VPN connection",
+                            409,
+                        )
+                relay = await self.owned_relay(app)
+                if relay and not fence_only:
+                    listing = await self.request("GET", "/containers/json?all=1")
+                    names = {relay["Id"], "mediahub-vpn-" + app}
+                    for row in listing:
+                        mode = row.get("HostConfig", {}).get("NetworkMode", "")
+                        if (
+                            mode.startswith("container:")
+                            and mode[10:] in names
+                            and row["Id"] != (current or {}).get("Id")
+                        ):
+                            raise DomainError(
+                                "app_dependency",
+                                "Another app uses this runtime. Disconnect it before removal.",
+                                409,
+                            )
+                state = self.state(app)
+                state.update(
+                    enabled=False, requestedEnabled=False, desiredRunning=False, phase="removing"
+                )
+                save_json(self.path(app), state)
+                if record:
+                    record["desiredRunning"] = False
+                    save_json(path, record)
+                if fence_only:
+                    return {"state": "ready", "installationId": identity}
+                if current:
+                    await self.request(
+                        "DELETE", "/containers/" + current["Id"] + "?force=false&v=false"
+                    )
+                if relay:
+                    if relay.get("State", {}).get("Running"):
+                        await self.request("POST", "/containers/" + relay["Id"] + "/stop?t=10")
+                    await self.request(
+                        "DELETE", "/containers/" + relay["Id"] + "?force=false&v=false"
+                    )
+                if await self.owned_relay(app):
+                    raise DomainError(
+                        "removal_unverified", "Runtime removal has not passed its final checks", 409
+                    )
+                state.update(phase="removed")
+                save_json(self.path(app), state)
+                return {"state": "succeeded", "installationId": identity, "dataPreserved": True}
 
     async def configuration(self, app, peer, enabled):
         async with self.lock:
@@ -386,8 +509,16 @@ class SharedVPN:
                     save_json(self.path(app), state)
                 except Exception as error:
                     state["phase"] = "blocked"
-                    state["errorCode"] = error.code if isinstance(error, DomainError) else "vpn_app_recreation_failed"
-                    state["message"] = error.message if isinstance(error, DomainError) else "App recreation failed; persistent data retained"
+                    state["errorCode"] = (
+                        error.code
+                        if isinstance(error, DomainError)
+                        else "vpn_app_recreation_failed"
+                    )
+                    state["message"] = (
+                        error.message
+                        if isinstance(error, DomainError)
+                        else "App recreation failed; persistent data retained"
+                    )
                     save_json(self.path(app), state)
                     raise
                 return await self.status(app)
@@ -395,10 +526,18 @@ class SharedVPN:
     async def status(self, app):
         value = self.state(app)
         row = await self.owned_relay(app) if value["enabled"] else None
-        current = await self.request("GET", "/containers/mediahub-" + app + "/json", missing=True) if value["enabled"] else None
-        ready = bool(value["enabled"] and value.get("phase") == "ready"
-                     and current and current.get("State", {}).get("Running")
-                     and await self.ready(app, current))
+        current = (
+            await self.request("GET", "/containers/mediahub-" + app + "/json", missing=True)
+            if value["enabled"]
+            else None
+        )
+        ready = bool(
+            value["enabled"]
+            and value.get("phase") == "ready"
+            and current
+            and current.get("State", {}).get("Running")
+            and await self.ready(app, current)
+        )
         return {
             "enabled": value["enabled"],
             "phase": value.get("phase", "idle"),
@@ -410,8 +549,11 @@ class SharedVPN:
             "publicKey": self.identity(app)["publicKey"],
             "ready": ready,
             "errorCode": value.get("errorCode"),
-            "message": value.get("message") or (
-                "App is stopped or missing; the VPN relay alone is not an active app" if value["enabled"] and not ready else None
+            "message": value.get("message")
+            or (
+                "App is stopped or missing; the VPN relay alone is not an active app"
+                if value["enabled"] and not ready
+                else None
             ),
         }
 

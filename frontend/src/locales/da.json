@@ -4068,5 +4068,13 @@
   "Manage app VPN connections": "Administrér apps' VPN-forbindelser",
   "App VPN connections": "Apps' VPN-forbindelser",
   "Disconnect apps from the shared VPN here before uninstalling MediaVPN. MediaSeed can also be disconnected from its own VPN settings.": "Frakobl apps fra den fælles VPN her, før du afinstallerer MediaVPN. MediaSeed kan også frakobles i sine egne VPN-indstillinger.",
-  "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN": "Frakobl Plex og Jellyfin fra den fælles VPN, før du afinstallerer MediaVPN"
+  "Disconnect Plex and Jellyfin from shared VPN before removing MediaVPN": "Frakobl Plex og Jellyfin fra den fælles VPN, før du afinstallerer MediaVPN",
+  "Obsolete VPN connections": "Efterladte VPN-forbindelser",
+  "These apps are uninstalled, but their VPN connections remain. Remove the obsolete connections before uninstalling MediaVPN.": "Disse apps er afinstalleret, men deres VPN-forbindelser er stadig gemt. Fjern de efterladte forbindelser, før du afinstallerer MediaVPN.",
+  "Remove obsolete {value0} connection": "Fjern efterladt {value0}-forbindelse",
+  "Remove this obsolete VPN connection? The app is already uninstalled. Media and VPN profiles are preserved.": "Vil du fjerne denne efterladte VPN-forbindelse? Appen er allerede afinstalleret. Medier og VPN-profiler bevares.",
+  "Remove obsolete VPN connection": "Fjern efterladt VPN-forbindelse",
+  "Obsolete VPN connection removed; data preserved": "Den efterladte VPN-forbindelse er fjernet; data er bevaret",
+  "Stop the remaining app container before cleaning its VPN connection": "Stop den tilbageværende app-container, før du rydder dens VPN-forbindelse op",
+  "Connection is no longer an orphan; refresh and review again": "Forbindelsen er ikke længere efterladt; opdatér siden, og gennemgå den igen"
 }

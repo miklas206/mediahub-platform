@@ -5,8 +5,10 @@ import { Panel } from "./phase2";
 import { NotificationPopup } from "./notification-popup";
 import { t, translateText } from "./i18n";
 import { useData } from "./use-data";
+import { useConfirm } from "./confirmation-dialog";
 
 type Shared = {
+  orphans?: { id: string; name: string; hostId: string }[];
   gateway: {
     enabled: boolean;
     ready: boolean;
@@ -27,6 +29,7 @@ type Shared = {
 };
 
 export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
+  const confirm = useConfirm();
   const { data, error, reload } = useData<Shared>("/shared-vpn");
   const [profile, setProfile] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,6 +62,31 @@ export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
       reload();
     } catch (error) {
       setPending(null);
+      setFailure((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function cleanup(id: string) {
+    if (
+      !(await confirm(
+        "Remove this obsolete VPN connection? The app is already uninstalled. Media and VPN profiles are preserved.",
+        {
+          title: "Remove obsolete VPN connection",
+          confirmLabel: "Remove connection",
+          danger: true,
+        },
+      ))
+    )
+      return;
+    setBusy(true);
+    setFailure("");
+    setMessage("");
+    try {
+      await api("/shared-vpn/orphans/" + id + "/cleanup", "POST", {});
+      setMessage(t("Obsolete VPN connection removed; data preserved"));
+      reload();
+    } catch (error) {
       setFailure((error as Error).message);
     } finally {
       setBusy(false);
@@ -170,6 +198,27 @@ export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
           </label>
         </div>
       ))}
+      {!!data?.orphans?.length && (
+        <section className="stack">
+          <h3>{t("Obsolete VPN connections")}</h3>
+          <p>
+            {t(
+              "These apps are uninstalled, but their VPN connections remain. Remove the obsolete connections before uninstalling MediaVPN.",
+            )}
+          </p>
+          {data.orphans.map((orphan) => (
+            <div className="runtime-toolbar" key={orphan.id}>
+              <strong>{orphan.name}</strong>
+              <span className="muted">{orphan.hostId}</span>
+              <button disabled={busy} onClick={() => void cleanup(orphan.id)}>
+                {t("Remove obsolete {value0} connection", {
+                  value0: orphan.name,
+                })}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
       <p className="muted">
         {t(
           "MediaSeed requires port forwarding on the chosen profile. Other hosts must be paired with MediaHub and able to reach the gateway over your private network.",

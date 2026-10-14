@@ -386,3 +386,28 @@ for (const language of ["en", "da"]) for (const width of [1440, 320]) test(`Medi
   expect(writes).toEqual(["/shared-vpn/apps/jellyfin"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
+
+for (const language of ["en", "da"]) for (const width of [1440, 320]) test(`Uninstalled Jellyfin VPN remains visible for explicit cleanup (${language}, ${width}px)`, async ({page}) => {
+  await page.setViewportSize({width, height: 950});
+  let removed = false;
+  const writes: string[] = [];
+  await mockHub(page, (path, route) => {
+    if (route.request().method() !== "GET") writes.push(path);
+    if (path === "/mediavpn/status") return {configured: true, available: true};
+    if (path === "/managed-install/prerequisites") return {state: "ready"};
+    if (path === "/managed-install/org.mediahub.mediavpn") return {alreadyRunning: true, operation: {state: "idle"}};
+    if (path === "/shared-vpn") return {gateway: {enabled: true, ready: true, profiles: []}, apps: [], orphans: removed ? [] : [{id: "verified-peer", name: "Jellyfin", hostId: "local"}]};
+    if (path === "/shared-vpn/orphans/verified-peer/cleanup") {removed = true; return {state: "succeeded", dataPreserved: true};}
+  }, language);
+  await page.goto("/store/mediavpn");
+  await expect(page.getByRole("heading", {name: language === "da" ? "Efterladte VPN-forbindelser" : "Obsolete VPN connections"})).toBeVisible();
+  expect(writes).toEqual([]);
+  await page.getByRole("button", {name: language === "da" ? "Fjern efterladt Jellyfin-forbindelse" : "Remove obsolete Jellyfin connection"}).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(writes).toEqual([]);
+  await page.getByRole("button", {name: language === "da" ? "Fjern forbindelse" : "Remove connection", exact: true}).click();
+  await expect.poll(() => removed).toBe(true);
+  await expect(page.getByRole("heading", {name: language === "da" ? "Efterladte VPN-forbindelser" : "Obsolete VPN connections"})).toHaveCount(0);
+  expect(writes).toEqual(["/shared-vpn/orphans/verified-peer/cleanup"]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});

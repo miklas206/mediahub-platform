@@ -69,7 +69,9 @@ class PlexRuntime:
             )
             containers = await self.request("GET", "/containers/json?all=true&filters=" + filters)
             vpn = await self.vpn._container(required=False) if policy and policy.vpnEnabled else None
-            if not containers and vpn is None:
+            relay = await self.shared_vpn.owned_relay("plex") if self.shared_vpn else None
+            assigned = self.shared_vpn.state("plex").get("enabled") if self.shared_vpn else False
+            if not containers and vpn is None and relay is None and not assigned:
                 return {
                     "state": "succeeded",
                     "installationId": installation_id,
@@ -107,6 +109,8 @@ class PlexRuntime:
             raise DomainError("operation_busy", "Another Plex operation is running", 409)
         failed_install = policy is None or self.operation.get("failedInstallation") or (
             self.operation.get("action") == "install" and self.operation.get("state") == "failed")
+        receipt = self.state_dir / "plex-removal.json"
+        failed_install = failed_install or (receipt.exists() and read_json(receipt).get("installationId") == identity)
         self.operation = {"state": "running", "action": "remove-runtime",
                           "installationId": identity,
                           "hostId": self.operation.get("hostId"),
@@ -152,6 +156,8 @@ class PlexRuntime:
                     raise DomainError("removal_unverified", "Runtime removal has not passed its final checks", 409)
                 save_json(self.state_dir / "plex-removal.json", {"installationId": installation_id})
                 self.operation.update(state="succeeded", message="Plex runtime removed; media, settings and credentials preserved")
+            if self.shared_vpn:
+                await self.shared_vpn.cleanup_removed("plex")
         except DomainError as error:
             self.operation.update(state="failed", message=error.message)
         except Exception:
@@ -181,6 +187,8 @@ class PlexRuntime:
                     message="Plex runtime removed; media, settings and credentials preserved",
                 )
                 self.control.record("runtime_removed")
+            if self.shared_vpn:
+                await self.shared_vpn.cleanup_removed("plex")
         except Exception:
             self.operation.update(
                 state="failed", message="Runtime removal stopped; persistent data was not deleted"

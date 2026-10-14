@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from mediahub.api import administrator, result, services
 from mediahub.contracts import StrictModel
-from mediahub.db import InstalledApp, Setting
+from mediahub.db import Host, InstalledApp, Setting
 from mediahub.errors import DomainError
 
 router = APIRouter(prefix="/shared-vpn", dependencies=[Depends(administrator)])
@@ -84,11 +84,15 @@ class SharedVPN:
                 ("jellyfin", "container_installation_jellyfin"),
             ):
                 row = db.scalar(select(Setting).where(Setting.key == key))
-                installed = db.scalar(select(InstalledApp).where(
-                    InstalledApp.package_id == "org.mediahub." + app,
-                    InstalledApp.is_mock.is_(False),
-                    InstalledApp.state.not_in({"uninstalled", "removing", "installing", "failed"}),
-                ))
+                installed = db.scalar(
+                    select(InstalledApp).where(
+                        InstalledApp.package_id == "org.mediahub." + app,
+                        InstalledApp.is_mock.is_(False),
+                        InstalledApp.state.not_in(
+                            {"uninstalled", "removing", "installing", "failed"}
+                        ),
+                    )
+                )
                 if row and installed:
                     choices.append(
                         {
@@ -111,6 +115,90 @@ class SharedVPN:
                 "agent_tls_required", "Shared VPN requires a trusted HTTPS Agent", 409
             )
         return binding, client
+
+    def orphan_bindings(self, gateway):
+        peers = {peer.get("id") for peer in gateway.get("peers", [])}
+        orphans = []
+        with self.svc.sessions() as db:
+            hosts = list(db.scalars(select(Host)))
+            for app, key in (
+                ("plex", "plex_installation"),
+                ("jellyfin", "container_installation_jellyfin"),
+            ):
+                installed = db.scalar(
+                    select(InstalledApp).where(InstalledApp.package_id == "org.mediahub." + app)
+                )
+                binding = db.scalar(select(Setting).where(Setting.key == key))
+                if (
+                    not installed
+                    or installed.state != "uninstalled"
+                    or installed.is_mock
+                    or binding
+                ):
+                    continue
+                for host in hosts:
+                    identifier = hashlib.sha256((host.id + ":" + app).encode()).hexdigest()[:40]
+                    if identifier in peers:
+                        orphans.append(
+                            {
+                                "id": identifier,
+                                "app": app,
+                                "name": "Plex" if app == "plex" else "Jellyfin",
+                                "hostId": host.id,
+                            }
+                        )
+        return orphans
+
+    async def forget_peer(self, package, host):
+        if package not in {"org.mediahub.plex", "org.mediahub.jellyfin"}:
+            return
+        policy = self.svc.managed_apps.policy.get("org.mediahub.mediavpn")
+        if not policy or not policy.managementTokenFile:
+            return
+        identifier = hashlib.sha256((host + ":" + package.rsplit(".", 1)[-1]).encode()).hexdigest()[
+            :40
+        ]
+        gateway = await self.vpn()
+        if any(peer.get("id") == identifier for peer in gateway.get("peers", [])):
+            await self.vpn("DELETE", "/peers/" + identifier)
+
+    async def cleanup_orphan(self, identifier):
+        async with self.lock:
+            orphan = next(
+                (
+                    item
+                    for item in self.orphan_bindings(await self.vpn())
+                    if item["id"] == identifier
+                ),
+                None,
+            )
+            if not orphan:
+                raise DomainError(
+                    "installation_changed",
+                    "Connection is no longer an orphan; refresh and review again",
+                    409,
+                )
+            client = self.svc.hosts.client(orphan["hostId"])
+            if not client.trusted_transport:
+                raise DomainError(
+                    "agent_tls_required", "Shared VPN requires a trusted HTTPS Agent", 409
+                )
+            endpoint = "/v1/shared-vpn/" + orphan["app"] + "/cleanup"
+            preview = await client.request("GET", endpoint)
+            result = await client.request(
+                "POST", endpoint, {"confirmedInstallationId": preview["installationId"]}
+            )
+            if result.get("state") != "succeeded" or result.get("dataPreserved") is not True:
+                raise DomainError(
+                    "removal_unverified", "Runtime removal has not passed its final checks", 409
+                )
+            await self.forget_peer("org.mediahub." + orphan["app"], orphan["hostId"])
+            self.svc.events.record(
+                "vpn.orphan_removed",
+                orphan["app"],
+                "Removed obsolete app VPN connection; data preserved",
+            )
+            return {"state": "succeeded", "dataPreserved": True}
 
     async def public(self):
         gateway = await self.vpn()
@@ -138,7 +226,12 @@ class SharedVPN:
                     {
                         **item,
                         "enabled": state["enabled"],
-                        "ready": bool(gateway["ready"] and state.get("ready", state["handshakeVerified"] and state["phase"] == "ready")),
+                        "ready": bool(
+                            gateway["ready"]
+                            and state.get(
+                                "ready", state["handshakeVerified"] and state["phase"] == "ready"
+                            )
+                        ),
                         "phase": state["phase"],
                         "errorCode": state.get("errorCode"),
                         "message": state.get("message"),
@@ -146,14 +239,18 @@ class SharedVPN:
                 )
             except DomainError:
                 apps.append({**item, "enabled": None, "ready": False, "phase": "unavailable"})
-        return {"gateway": gateway, "apps": apps}
+        return {"gateway": gateway, "apps": apps, "orphans": self.orphan_bindings(gateway)}
 
     def seed_installed(self):
         with self.svc.sessions() as db:
             app = db.scalar(
                 select(InstalledApp).where(InstalledApp.package_id == "org.mediahub.mediaseed")
             )
-            return bool(app and not app.is_mock and app.state not in {"uninstalled", "removing", "installing", "failed"})
+            return bool(
+                app
+                and not app.is_mock
+                and app.state not in {"uninstalled", "removing", "installing", "failed"}
+            )
 
     async def assign(self, app, enabled):
         async with self.lock:
@@ -231,3 +328,8 @@ async def gateway(body: GatewayChoice, request: Request):
 @router.put("/apps/{app}")
 async def application(app: str, body: AppChoice, request: Request):
     return result(await secure(request).assign(app, body.enabled))
+
+
+@router.post("/orphans/{identifier}/cleanup")
+async def cleanup_orphan(identifier: str, request: Request):
+    return result(await secure(request).cleanup_orphan(identifier))

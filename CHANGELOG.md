@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.6.3
+
+- Fence Plex/Jellyfin VPN reconciliation before uninstalling, remove verified app relays, and remove the matching shared-gateway peer before forgetting the hub installation binding.
+- Show obsolete VPN connections for apps confirmed uninstalled, with explicit, snapshot-confirmed cleanup. Reject active containers, changed snapshots, foreign ownership and namespaces used by other containers. Preserve VPN profiles, keys, media, volumes and app data.
+
 ## 0.6.2
 
 - Restore app VPN connection controls on the MediaVPN setup page so apps can be disconnected before uninstalling the VPN runtime. Keep provider/domain configuration in MediaVPN.
