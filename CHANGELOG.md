@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.28
+
+- Fix false relay health failures between normal WireGuard rekeys while rejecting expired sessions. Bundle MediaVPN 0.2.12: independent torrent mapping revision and consistent observed generation prevent unrelated Plex/web changes from recreating the torrent client.
+- Bundle MediaSeed 0.1.7: explain the retained private RSS link, display the saved start date and verify the server date receipt before resetting the edit form. Existing URLs are preserved on blank-field edits.
+
 ## 0.6.27
 
 - Bundle MediaSeed 0.1.6: reconcile a stale MediaSeed-owned qBittorrent RSS item when the same feed is recreated with a new ID. Remove only exact-URL duplicate RSS registrations no longer referenced by any configured feed; preserve torrents, media and other RSS items.

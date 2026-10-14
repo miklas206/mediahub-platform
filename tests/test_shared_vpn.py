@@ -362,3 +362,13 @@ def test_plex_status_checks_installed_container_name(tmp_path):
     result = asyncio.run(control.status("plex"))
     assert result["ready"] is True
     control.request.assert_awaited_once_with("GET", "/containers/mediahub-plex-main/json", missing=True)
+
+
+@pytest.mark.parametrize("age,expected", [(0, True), (89, True), (120, True), (165, True), (179, True), (180, False), (181, False), (-1, False)])
+def test_relay_health_respects_wireguard_session_window(monkeypatch, age, expected):
+    from agent.relay_image import runtime as relay
+    monkeypatch.setattr(relay, "CONFIG", SimpleNamespace(read_text=lambda: "{}"))
+    monkeypatch.setattr(relay, "validate", lambda value: {"mode": "client"})
+    monkeypatch.setattr(relay.time, "time", lambda: 1000)
+    monkeypatch.setattr(relay, "command", lambda *args: "synthetic-key " + str(1000 - age) if args[0] == "wg" else "")
+    assert relay.health() is expected
