@@ -3,18 +3,38 @@ for (const width of [1440, 390])
   test(`Plex installation settings and managed domain ${width}`, async ({
     page,
   }) => {
+    await page.clock.install();
     await page.setViewportSize({ width, height: 1000 });
     const writes: unknown[] = [];
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     let label = "plex";
+    let claimed = false;
+    let linking = false;
+    const claims: unknown[] = [];
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname.replace(
         /^\/api(?:\/v1)?/,
         "",
       );
       let data: unknown = [];
-      if (path === "/auth/status") data = { needsSetup: false };
+      if (path === "/plex/account") {
+        if (route.request().method() === "POST") {
+          claims.push(route.request().postDataJSON());
+          linking = true;
+          data = { state: "accepted" };
+        } else
+          data = {
+            claimed,
+            openUrl: "https://plex.example.com/web/index.html",
+            operation: {
+              state: linking ? "running" : "idle",
+              message: linking
+                ? "Linking Plex to your account"
+                : "Plex account setup is required",
+            },
+          };
+      } else if (path === "/auth/status") data = { needsSetup: false };
       else if (path === "/auth/me")
         data = {
           id: "test",
@@ -114,6 +134,35 @@ for (const width of [1440, 390])
     await expect(
       page.getByText("Plex domain saved.", { exact: false }),
     ).toBeVisible();
+    await page
+      .getByLabel("Plex claim token", { exact: true })
+      .fill("claim-synthetic-browser-token");
+    await page
+      .getByRole("button", { name: "Link Plex account", exact: true })
+      .click();
+    await expect
+      .poll(() => claims)
+      .toEqual([{ claimToken: "claim-synthetic-browser-token" }]);
+    await expect(
+      page.getByLabel("Plex claim token", { exact: true }),
+    ).toHaveValue("");
+    await expect(
+      page.getByRole("button", {
+        name: "Linking Plex to your account",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    claimed = true;
+    linking = false;
+    await page.clock.runFor(5100);
+    await expect(page.locator(".plex-account-setup")).toContainText(
+      "Plex is linked to your account",
+    );
+    await expect(page.locator(".plex-account-setup a")).toHaveAttribute(
+      "href",
+      "https://plex.example.com/web/index.html",
+    );
+    expect(claims).toHaveLength(1);
     expect(errors).toEqual([]);
     expect(
       await page.evaluate(

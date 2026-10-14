@@ -37,6 +37,8 @@ class PlexRuntime:
         self.operation = {"state": "idle", "message": "No operation running"}
         self.update_task = None
         self.install_task = None
+        self.account_task = None
+        self.account_operation = {"state": "idle", "message": "Plex account setup has not started"}
         self.install_operation_path = self.state_dir / "plex-install-operation.json"
         if self.install_operation_path.exists():
             self.operation = read_json(self.install_operation_path)
@@ -108,7 +110,8 @@ class PlexRuntime:
                 "confirmation_required", "Exact installation confirmation required", 409
             )
         if (self.operation.get("state") == "running" or self.control.lock.locked()
-                or (self.install_task and not self.install_task.done())):
+                or (self.install_task and not self.install_task.done())
+                or (self.account_task and not self.account_task.done())):
             raise DomainError("operation_busy", "Another Plex operation is running", 409)
         failed_install = policy is None or self.operation.get("failedInstallation") or (
             self.operation.get("action") == "install" and self.operation.get("state") == "failed")
@@ -174,6 +177,7 @@ class PlexRuntime:
         self.vault.delete(identity + "-rollback")
         self.last_saved = None
         self.libraries_ready = False
+        self.account_operation = {"state": "idle", "message": "Plex account setup has not started"}
         for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json"):
             (self.state_dir / name).unlink(missing_ok=True)
 
@@ -617,6 +621,10 @@ class PlexRuntime:
         save_json(self.install_operation_path, self.operation)
 
     async def close(self):
+        if self.account_task and not self.account_task.done():
+            self.account_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.account_task
         if self.install_task and not self.install_task.done():
             self.install_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -989,13 +997,15 @@ class PlexRuntime:
             }
 
     async def update(self):
-        if self.update_task and not self.update_task.done():
-            raise DomainError("plex_busy", "A Plex update is already running", 409)
+        if ((self.update_task and not self.update_task.done())
+                or (self.account_task and not self.account_task.done())):
+            raise DomainError("plex_busy", "Another Plex operation is running", 409)
         # Validate ownership before admitting a background operation.
         await self.control.inspect(self.control.policy())
         # Ownership inspection yields; another request may have admitted an update.
-        if self.update_task and not self.update_task.done():
-            raise DomainError("plex_busy", "A Plex update is already running", 409)
+        if ((self.update_task and not self.update_task.done())
+                or (self.account_task and not self.account_task.done())):
+            raise DomainError("plex_busy", "Another Plex operation is running", 409)
         self.operation = {"state": "running", "message": "Checking the image publisher"}
         self.update_task = asyncio.create_task(self._update())
         return self.operation

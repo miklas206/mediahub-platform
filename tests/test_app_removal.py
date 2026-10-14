@@ -290,3 +290,53 @@ def test_peer_removal_must_succeed_before_forgetting_app_binding(logged_in, monk
     assert logged_in.get(endpoint).status_code == 200
     assert svc.apps.get(identifier)["state"] == "uninstalled"
     forget.assert_awaited_with("org.mediahub.jellyfin", "local")
+
+
+def test_plex_uninstall_forgets_address_and_domain_selection_for_fresh_setup(logged_in,monkeypatch):
+    svc=logged_in.app.state.services
+    plex={"id":"plex-route","packageId":"org.mediahub.plex","hostname":"plex.example.com","previousExternalUrl":"https://old.example.com"}
+    other={"id":"hub-route","packageId":"mediahub","hostname":"hub.example.com"}
+    with svc.sessions.begin() as db:
+        app=InstalledApp(package_id="org.mediahub.plex",name="Plex",version="1",state="removing",is_mock=False)
+        db.add(app)
+        db.flush()
+        identifier=app.id
+        db.add(Setting(key="plex_installation",value={"hostId":"local","installationId":"plex-main"}))
+        db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
+        db.add(Setting(key="vpn-web-gateway",value={"routes":[plex,other],"retired":[],"revision":4,"plexPortManaged":True,"plexPortEnabled":True}))
+    agent=SimpleNamespace(request=AsyncMock(return_value={"state":"succeeded","installationId":"plex-main","dataPreserved":True,"configurationReset":True}))
+    monkeypatch.setattr(svc.hosts,"client",lambda host:agent)
+    monkeypatch.setattr(svc.shared_vpn,"forget_peer",AsyncMock())
+    monkeypatch.setattr(svc.vpn_gateway,"schedule",MagicMock())
+    register_remote_apps(svc)
+    response=logged_in.get("/api/v1/apps/"+identifier+"/uninstall")
+    assert response.status_code == 200,response.text
+    with svc.sessions() as db:
+        assert db.scalar(select(Setting).where(Setting.key=="app_address:org.mediahub.plex")) is None
+        assert db.scalar(select(Setting).where(Setting.key=="plex_installation")) is None
+        value=db.scalar(select(Setting).where(Setting.key=="vpn-web-gateway")).value
+        assert value["routes"] == [other]
+        assert value["retired"] == [{**plex,"previousExternalUrl":""}]
+        assert value["plexPortEnabled"] is False
+    svc.vpn_gateway.schedule.assert_called_once()
+
+
+@pytest.mark.parametrize("state", ["uninstalled","running"])
+def test_upgrade_cleans_old_uninstalled_settings_only(logged_in,state):
+    from mediahub.app_removal import reconcile_removed_settings
+    svc=logged_in.app.state.services
+    route={"id":"old-plex-route","packageId":"org.mediahub.plex","hostname":"plex.example.com"}
+    with svc.sessions.begin() as db:
+        db.add(InstalledApp(package_id="org.mediahub.plex",name="Plex",version="1",state=state,is_mock=False))
+        db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
+        db.add(Setting(key="vpn-web-gateway",value={"routes":[route],"retired":[],"revision":2,"plexPortEnabled":True}))
+    reconcile_removed_settings(svc)
+    with svc.sessions() as db:
+        address=db.scalar(select(Setting).where(Setting.key=="app_address:org.mediahub.plex"))
+        value=db.scalar(select(Setting).where(Setting.key=="vpn-web-gateway")).value
+        assert (address is None) is (state=="uninstalled")
+        assert value["routes"] == ([] if state=="uninstalled" else [route])
+        before=dict(value)
+    reconcile_removed_settings(svc)
+    with svc.sessions() as db:
+        assert db.scalar(select(Setting).where(Setting.key=="vpn-web-gateway")).value == before

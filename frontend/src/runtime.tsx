@@ -25,6 +25,7 @@ import { SeedboxWebUI } from "./seedbox-webui";
 import { CloudflareManagementPanel } from "./cloudflare-management";
 import { CountryFlag, countryLabel } from "./country-flag";
 import { PlexPosters } from "./plex-posters";
+import { PlexAccountSetup } from "./plex-account-setup";
 import { AppVPNDomainPanel } from "./app-vpn-domain";
 import {
   PlexInstallProgress,
@@ -1064,6 +1065,7 @@ export function AppRuntimePage() {
   };
   const extraCards = (
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
+      {data?.view === "plex" && <PlexAccountSetup />}
       {data?.view === "plex" && appId && <AppVPNDomainPanel appId={appId} />}
       {data?.view === "cloudflare" && (
         <div

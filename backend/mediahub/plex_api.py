@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
 from mediahub.api import administrator, result, services
-from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
+from mediahub.apps.plex import PlexAccountClaim, PlexInstallation, PlexInstallRequest
 from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
@@ -103,3 +103,27 @@ async def update(request: Request):
 @router.post("/rollback")
 async def rollback(request: Request):
     return await installed_action(request, "rollback")
+
+
+def account_target(request):
+    svc = services(request)
+    with svc.sessions() as db:
+        binding = db.scalar(select(Setting).where(Setting.key == "plex_installation"))
+        app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == "org.mediahub.plex"))
+        if not binding or not app or app.state in {"uninstalled", "removing"}:
+            raise DomainError("plex_not_installed", "Install Plex first", 409)
+        host = binding.value["hostId"]
+    return target(request, host)
+
+
+@router.get("/account")
+async def account_status(request: Request):
+    from mediahub.app_settings import saved_address
+    reply = await account_target(request).request("GET", "/v1/plex/account")
+    address = saved_address(services(request), "org.mediahub.plex") or reply.get("localUrl")
+    return result({**reply, "openUrl": address.rstrip("/") + "/web/index.html" if address else None})
+
+
+@router.post("/account", status_code=202)
+async def claim_account(body: PlexAccountClaim, request: Request):
+    return result(await account_target(request).request("POST", "/v1/plex/account", {"claimToken": body.claimToken.get_secret_value()}))

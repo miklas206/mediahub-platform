@@ -118,7 +118,7 @@ for (const width of [1440, 390, 320])
         "hub.example.com",
       );
       await expect(page.locator("#panel-connection")).toBeHidden();
-      await expect(page.locator(".plex-port-card input")).toBeDisabled();
+      await expect(page.locator(".plex-port-card")).toHaveCount(0);
       if (language === "da" && width !== 320)
         await page.screenshot({
           path: test.info().outputPath("apps-tabs.png"),
@@ -328,3 +328,22 @@ for (const [status, contentType, body] of [
     await page.clock.runFor(10100);
     expect(writes).toBe(1);
   });
+
+
+test("uninstalled Plex disappears from live VPN settings and saved domains",async({page})=>{
+ await page.clock.install();
+ await mock(page,"en",true);
+ let removed=false;
+ await page.route("**/api/hub-web-gateway",async route=>{
+  if (!removed) return route.fallback();
+  await route.fulfill({json:{configured:true,enabled:true,apps:[{packageId:"mediahub",name:"MediaHub"}],zones:[],routes:[],gateway:{ready:true},plexPort:{available:false,enabled:false,ready:false}}});
+ });
+ await page.goto(process.env.MEDIAVPN_QA_URL!+"/");
+ await page.locator("#tab-apps").click();
+ await expect(page.locator(".plex-port-card")).toBeVisible();
+ removed=true;
+ await page.clock.runFor(5100);
+ await expect(page.locator(".plex-port-card")).toHaveCount(0);
+ await page.getByRole("button",{name:"Edit gateway setup"}).click();
+ await expect(page.locator(".gateway-route")).toHaveCount(0);
+});

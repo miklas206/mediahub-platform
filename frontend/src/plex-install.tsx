@@ -2,6 +2,7 @@ import { translateText, t } from "./i18n";
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { PlexAccountSetup } from "./plex-account-setup";
 import { Film, ShieldCheck } from "lucide-react";
 import { api } from "./api";
 import { ErrorBox, Panel, useLoad } from "./phase2";
@@ -22,7 +23,6 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [appdata, setAppdata] = useState("");
   const [name, setName] = useState("MediaHub");
-  const [claim, setClaim] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [digest, setDigest] = useState("");
@@ -94,10 +94,8 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
       await api("/plex/install", "POST", {
         installation: spec(),
         reviewedPlanDigest: digest,
-        ...(claim ? { claimToken: claim } : {}),
       });
       setDone(true);
-      setClaim("");
       window.dispatchEvent(new Event("apps-changed"));
     } catch (e) {
       setFailure((e as Error).message);
@@ -127,6 +125,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
         job={job}
         connectionLost={!!status.error && installing}
       />
+      {completed && <PlexAccountSetup />}
       {done || installing || completed ? (
         <Panel
           title={t(
@@ -229,30 +228,12 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                     ))}
                 </select>
               </label>
-              <label>
-                {t("Plex claim token · optional")}
-                <input
-                  type="password"
-                  autoComplete="off"
-                  value={claim}
-                  maxLength={256}
-                  disabled={busy}
-                  onChange={(e) => setClaim(e.target.value)}
-                />
-              </label>
             </div>
-            <p className="muted">
+            <p>
               {t(
-                "A short-lived claim token connects the server to your Plex account. It is sent only over HTTPS, never included in logs, and kept only in protected runtime memory.",
+                "Link your Plex account in the next step, after the server has finished installing.",
               )}
             </p>
-            <a
-              href="https://www.plex.tv/claim/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t("Get a claim token from Plex")}
-            </a>
           </Panel>
           <Panel title={t("3 · Review and install")}>
             <p>

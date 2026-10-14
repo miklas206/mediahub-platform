@@ -37,3 +37,7 @@ class PlexInstallRequest(StrictModel):
     installation: PlexInstallation
     reviewedPlanDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
     claimToken: SecretStr | None = Field(default=None, exclude=True, max_length=256)
+
+
+class PlexAccountClaim(StrictModel):
+    claimToken: SecretStr = Field(exclude=True, min_length=12, max_length=256)

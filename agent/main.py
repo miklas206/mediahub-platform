@@ -22,7 +22,7 @@ from mediahub.apps.containers import (
     ContainerRemoval,
 )
 from mediahub.apps.manifest import DeviceRequirement
-from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
+from mediahub.apps.plex import PlexAccountClaim, PlexInstallation, PlexInstallRequest
 from mediahub.apps.seedbox import SeedboxInstallation
 from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction, TorrentRetention, VPNLocation
 from mediahub.apps.seedbox_wizard import (
@@ -520,6 +520,16 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/plex/artwork/{rating_key}")
     async def plex_artwork(rating_key: str):
         return await plex_media.artwork(rating_key)
+
+    @app.get("/v1/plex/account", dependencies=[Depends(secure_workflow)])
+    async def plex_account_status():
+        from agent.plex_account import status
+        return await status(plex_runtime)
+
+    @app.post("/v1/plex/account", dependencies=[Depends(secure_workflow)], status_code=202)
+    async def plex_account_claim(body: PlexAccountClaim):
+        from agent.plex_account import queue
+        return await queue(plex_runtime, body)
 
     @app.get("/v1/plex/install-options")
     async def plex_install_options():

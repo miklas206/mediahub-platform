@@ -4085,5 +4085,22 @@
   "Enable the shared gateway and connect Cloudflare in MediaVPN first.": "Aktivér først den fælles gateway og forbind Cloudflare i MediaVPN.",
   "Save Plex domain": "Gem Plex-domæne",
   "Plex domain saved. MediaVPN manages DNS and HTTPS automatically.": "Plex-domænet er gemt. MediaVPN administrerer automatisk DNS og HTTPS.",
-  "This Plex server is not linked to a Plex account yet. Open this server's Plex Web and finish account setup before enabling remote access.": "Denne Plex-server er endnu ikke knyttet til en Plex-konto. Åbn serverens Plex Web, og færdiggør kontoopsætningen, før du aktiverer fjernadgang."
+  "This Plex server is not linked to a Plex account yet. Open this server's Plex Web and finish account setup before enabling remote access.": "Denne Plex-server er endnu ikke knyttet til en Plex-konto. Åbn serverens Plex Web, og færdiggør kontoopsætningen, før du aktiverer fjernadgang.",
+  "Link Plex to your account": "Tilknyt Plex til din konto",
+  "Plex is linked to your account": "Plex er knyttet til din konto",
+  "Plex is linked to an account": "Plex er knyttet til en konto",
+  "Finish account setup here after installation. MediaHub links the server from its own network, including when it uses MediaVPN.": "Færdiggør kontoopsætningen her efter installationen. MediaHub tilknytter serveren fra dens eget netværk, også når den bruger MediaVPN.",
+  "Get a fresh claim token from Plex": "Hent et frisk tilknytningstoken fra Plex",
+  "Paste the token below and link this server. The token is short-lived; get it only when you are ready.": "Indsæt tokenet nedenfor, og tilknyt denne server. Tokenet er kortlivet; hent det først, når du er klar.",
+  "Plex claim token": "Plex-tilknytningstoken",
+  "Linking Plex to your account": "Knytter Plex til din konto",
+  "Link Plex account": "Tilknyt Plex-konto",
+  "Plex restarts briefly to apply the token. Media and VPN settings are preserved. The token is cleared after the attempt.": "Plex genstarter kortvarigt for at bruge tokenet. Medier og VPN-indstillinger bevares. Tokenet ryddes efter forsøget.",
+  "Plex account setup is required": "Plex-kontoen skal tilknyttes",
+  "Checking Plex account status...": "Kontrollerer Plex-kontoens status...",
+  "Link your Plex account in the next step, after the server has finished installing.": "Tilknyt din Plex-konto i næste trin, når serveren er færdig med at blive installeret.",
+  "Plex did not confirm account linking. Get a fresh claim token and retry.": "Plex bekræftede ikke kontotilknytningen. Hent et frisk tilknytningstoken, og prøv igen.",
+  "Plex account linking failed; media and configuration were preserved": "Plex-kontotilknytningen mislykkedes; medier og opsætning blev bevaret",
+  "Start Plex before linking your account": "Start Plex, før du tilknytter din konto",
+  "Plex account status could not be verified": "Plex-kontoens status kunne ikke bekræftes"
 }

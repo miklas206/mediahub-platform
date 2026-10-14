@@ -123,6 +123,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         await svc.managed_installer.initialize()
         svc.cloudflare_management = CloudflareManagement(svc)
         svc.shared_vpn = SharedVPN(svc)
+        from mediahub.app_removal import reconcile_removed_settings
+        reconcile_removed_settings(svc)
         svc.vpn_gateway = VPNGateway(svc)
         from mediahub.app_dependencies import AppDependencies
         svc.app_dependencies = AppDependencies(svc)

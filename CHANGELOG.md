@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.19
+
+- Add guided Plex account linking after installation and on the existing server page. Request a fresh short-lived token only after the image download. Apply it through the existing protected RAM configuration and container claim mechanism, verify the claim, encrypt updated preferences, and clear the token on success or failure. No browser SSH setup is required.
+- Reset saved opening addresses and selected gateway domains after confirmed app removal. Upgrade older uninstalled Plex/Jellyfin/Seedbox registrations, queue ownership-checked DNS cleanup, and preserve active apps and media.
+- Bundle MediaVPN 0.2.8: hide Plex forwarding for uninstalled servers and refresh domain drafts when confirmed server selections change.
+
 ## 0.6.18
 
 - Restore the exact approved, published hub VPN domain during startup. Host validation and SSO no longer wait for the first Cloudflare/VPN reconciliation after an update. Disabled and unconfirmed domains are not added.
