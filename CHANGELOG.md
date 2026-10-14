@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.13
+
+- Bundle MediaVPN 0.2.5. Restore Settings beside Sign out, with appearance controls in the existing dialog. Keep Cloudflare as its own workspace tab alongside Connection and Apps and domains.
+- Preserve existing theme preferences, Plex SSO fixes and DNS ownership during updates.
+
 ## 0.6.12
 
 - Add the missing administrator-scoped MediaVPN SSO endpoint for Plex remote access. Preserve actionable prerequisite errors through the actual app-to-hub request path.

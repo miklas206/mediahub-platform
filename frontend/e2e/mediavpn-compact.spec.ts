@@ -128,13 +128,13 @@ for (const width of [1440, 390, 320])
       await expect(
         page.locator("#panel-cloudflare #web-gateway"),
       ).toBeVisible();
-      await expect(page.locator(".topbar .app-settings-button")).toHaveCount(0);
-      await page.locator("#tab-appearance").click();
+      await expect(page.locator(".vpn-tabs [role=tab]")).toHaveCount(3);
+      await page.locator(".topbar .app-settings-button").click();
       await expect(
-        page.locator("#panel-appearance .theme-switch select"),
+        page.locator("#app-settings .theme-switch select"),
       ).toBeVisible();
       await page
-        .locator("#panel-appearance .theme-switch select")
+        .locator("#app-settings .theme-switch select")
         .selectOption("classic");
       await expect
         .poll(() =>
@@ -143,16 +143,18 @@ for (const width of [1440, 390, 320])
         .toBe("classic");
       if (language === "da" && width !== 320)
         await page.screenshot({
-          path: test.info().outputPath("appearance-tab.png"),
+          path: test.info().outputPath("appearance-settings.png"),
           fullPage: true,
         });
-      await expect(page.locator("#panel-appearance #web-gateway")).toHaveCount(
+      await expect(page.locator("#app-settings #web-gateway")).toHaveCount(
         0,
       );
-      await expect(page.locator("#app-settings")).not.toHaveJSProperty(
+      await expect(page.locator("#app-settings")).toHaveJSProperty(
         "tagName",
         "DIALOG",
       );
+      await page.locator(".app-settings-close").click();
+      await expect(page.locator("#app-settings")).toBeHidden();
       await page.locator("#tab-connection").focus();
       await page.keyboard.press("ArrowRight");
       await expect(page.locator("#tab-apps")).toHaveAttribute(
@@ -165,7 +167,7 @@ for (const width of [1440, 390, 320])
         ),
       ).toBe(true);
       await page.keyboard.press("End");
-      await expect(page.locator("#tab-appearance")).toHaveAttribute(
+      await expect(page.locator("#tab-cloudflare")).toHaveAttribute(
         "aria-selected",
         "true",
       );
