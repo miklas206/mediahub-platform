@@ -14,6 +14,7 @@ import "./sidebar-themes.css";
 import "./navigation-layouts.css";
 import "./select-controls.css";
 import "./brand-icons.css";
+import "./responsive-workspace.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

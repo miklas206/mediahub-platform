@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.37
+
+- Provision approved Other media locations for independent apps on fresh installation and upgrade. Recover a missing Other entry from the existing Plex approval only when storage identity anchors match, without changing credentials, media or explicit app policy.
+- Automatically adapt the main workspace to screen width, up to 2400 CSS pixels, with fluid text and spacing. Keep the existing navigation choices and mobile layouts.
+
 ## 0.6.36
 
 - Resolve Overview host RAM capacity from the local Docker daemon instead of LXCFS meminfo virtualized to the 64 MiB sampler. Refresh capacity every 15 seconds with bounded requests and reject unverified/inconsistent observations. Existing 0.6.35 snapshots are corrected immediately without a sampler restart; fresh installs and upgrades use the same path.

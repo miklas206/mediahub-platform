@@ -358,8 +358,20 @@ def approved_media_storage(root):
     markers = policy.get("storageMarkers", {})
     if not markers or any(Path(p).read_text().strip() != value for p, value in markers.items()):
         raise ValueError("Media storage marker changed")
+    approved = dict(policy.get("storage", {}))
+    # Older installers omitted Other from the app policy, although the user
+    # had already approved it for Plex on the same verified media filesystem.
+    legacy_path = root / "agent/plex-install.json"
+    if not any(v.get("kind") == "other" for v in approved.values()) and legacy_path.is_file():
+        legacy = json.loads(legacy_path.read_text())
+        other = {k: v for k, v in legacy.get("storage", {}).items() if v.get("kind") == "other" and k not in approved}
+        if other:
+            for field in ("hostMountSnapshot", "requiredMounts", "requiredFilesystemUuids", "storageMarkers"):
+                if legacy.get(field, {}) != policy.get(field, {}):
+                    raise ValueError("Other media requires matching approved storage identity")
+            approved.update(other)
     locations = []
-    for identifier, value in policy.get("storage", {}).items():
+    for identifier, value in approved.items():
         if value.get("kind") not in {"movies", "tv", "downloads", "other"}:
             continue
         if (

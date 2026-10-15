@@ -120,6 +120,35 @@ def test_approved_storage_checks_mount_identity_and_preserves_local_volume(tmp_p
     assert len(calls) == count
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_other_storage_is_inherited_only_from_verified_policy(tmp_path, monkeypatch, legacy):
+    root, _, _, _ = fixture(tmp_path, monkeypatch)
+    media = tmp_path / "media"
+    other = media / "other"
+    other.mkdir(parents=True)
+    marker = media / ".identity"
+    marker.write_text("volume")
+    evidence = tmp_path / "snapshot.json"
+    evidence.write_text(json.dumps({"scope": "host-mount-namespace", "available": True, "observedAt": time.time(), "mounts": [{"path": str(media), "source": "disk", "options": ["rw"]}]}))
+    (root / "agent").mkdir(exist_ok=True)
+    shared = {"hostMountSnapshot": str(evidence), "requiredMounts": {str(media): "disk"}, "storageMarkers": {str(marker): "volume"}}
+    entry = {"other": {"kind": "other", "label": "Other Media", "path": str(other)}}
+    policy = root / "agent/container-apps.json"
+    policy.write_text(json.dumps({**shared, "storage": {} if legacy else entry}))
+    plex = root / "agent/plex-install.json"
+    plex.write_text(json.dumps({**shared, "storage": entry}))
+    original = policy.read_bytes()
+    locations = module.approved_media_storage(root)
+    assert locations[0]["path"] == "/downloads/media/other"
+    assert locations[0]["source"] == str(other)
+    assert module.approved_media_storage(root) == locations
+    assert policy.read_bytes() == original  # No runtime policy or media mutation.
+    if legacy:
+        plex.write_text(json.dumps({**shared, "storageMarkers": {}, "storage": entry}))
+        with pytest.raises(ValueError, match="matching approved"):
+            module.approved_media_storage(root)
+
+
 def test_media_storage_rejects_changed_existing_target():
     cfg = {
         "services": {

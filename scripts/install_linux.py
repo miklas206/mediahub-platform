@@ -357,7 +357,7 @@ def main():
     container_policy["gpus"] = gpus
     container_policy["storage"] = {
         kind: {"label": kind.title(), "kind": kind, "path": str(path)}
-        for kind, path in folders.items() if kind in {"appdata", "movies", "tv", "downloads"}
+        for kind, path in folders.items() if kind in {"appdata", "movies", "tv", "downloads", "other"}
     }
     new_file(root / "agent/container-apps.json", json.dumps(container_policy), 0o600, 10001, 10001)
     common = {
