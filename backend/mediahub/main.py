@@ -138,6 +138,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.update_queue = UpdateQueue(svc)
         svc.resources = AppResources(svc)
         svc.imports = ImportPlanner(sessions, svc.agent, svc.apps)
+        await svc.system.refresh_host_capacity(svc.managed_apps.docker)
         svc.snapshot = svc.system.status()
         app.state.services = svc
         svc.setup = SetupService(svc)
@@ -150,6 +151,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             while True:
                 await asyncio.sleep(config.sample_seconds)
                 try:
+                    await svc.system.refresh_host_capacity(svc.managed_apps.docker)
                     svc.snapshot = svc.system.status()
                     events.publish("system.status", svc.snapshot)
                 except Exception:

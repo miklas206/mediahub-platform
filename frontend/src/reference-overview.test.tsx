@@ -10,6 +10,12 @@ const metrics = { host:{sampledAt:Date.now()/1000,scope:"docker-host",cpu:{perce
 const apps = [{id:"seed",name:"MediaSeed",packageId:"org.mediahub.mediaseed",isMock:false,health:{status:"healthy"}}] as AppInfo[];
 function render(live=true) {return renderToStaticMarkup(<MemoryRouter><ReferenceOverview metrics={metrics} apps={apps} reports={{}} dashboard={{}} live={live} failed={false}/></MemoryRouter>);}
 describe("compact Overview observations", () => {
+  it("shows the system disk separately from media or Core data storage", () => {
+    const original = metrics.host;
+    metrics.host = {...original!, systemDisk: {usedBytes:23*1024**3,totalBytes:32*1024**3,freeBytes:9*1024**3,percent:71.875,scope:"host-system-filesystem"}};
+    const html=render();expect(html).toContain("System disk");expect(html).toContain("23.0 GiB / 32.0 GiB");expect(html).toContain("9.0 GiB free");
+    metrics.host = original;
+  });
   it("shows host usage instead of the Core limit and never falls back to Core", () => {
     const original = metrics.host;
     expect(render()).toContain("12.0%");

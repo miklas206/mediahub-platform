@@ -4,7 +4,7 @@ import { ReferenceOverview } from "./reference-overview";
 import { serviceSnapshots } from "./service-snapshots";
 import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
-import { canRunMaintenance, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
+import { canRunMaintenance, cleanupSpaceMessage, installedAppsHealth, type MaintenanceState } from "./maintenance-health";
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
@@ -1814,7 +1814,7 @@ function MaintenancePage() {
   const cleanup = useData<{
     state: string;
     message: string;
-    reclaimedBytes?: number;
+    reclaimedBytes?: number | null;
   }>("/maintenance");
   useEffect(() => {
     const timer = window.setInterval(cleanup.reload, 5000);
@@ -1940,15 +1940,15 @@ function MaintenancePage() {
           operationId?: string;
           state: string;
           message: string;
-          reclaimedBytes?: number;
+          reclaimedBytes?: number | null;
         }>("/maintenance");
         if (result.operationId !== started.operationId) continue;
         if (result.state === "failed") throw new Error(result.message);
         if (result.state === "succeeded") {
-          setCleanupNotice({ message: result.message, tone: "success" });
+          setCleanupNotice({ message: cleanupSpaceMessage(result), tone: "success" });
           details.push(result.message);
           details.push(
-            `Freed ${((result.reclaimedBytes || 0) / 1024 ** 3).toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })} GiB of system disk space.`,
+            cleanupSpaceMessage(result),
           );
           steps[4].state = "complete";
           completed = true;
@@ -2036,6 +2036,7 @@ function MaintenancePage() {
           <Notice tone={cleanupNotice.tone}>{translateText(cleanupNotice.message)}</Notice>
         )}
         {operation && <OperationProgress operation={operation} />}
+        {cleanup.data && ["succeeded", "failed"].includes(cleanup.data.state) && <div className="maintenance-cleanup-result"><small>{t(cleanup.data.state === "succeeded" ? "Last completed cleanup" : "Last interrupted cleanup")}</small><strong>{cleanupSpaceMessage(cleanup.data)}</strong><small>{t("Measured from the change in free disk space during cleanup. Other activity can affect this measurement.")}</small></div>}
         <div className="maintenance-grid">
           <MaintenanceCard
             icon={<Server size={19} />}

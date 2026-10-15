@@ -433,7 +433,7 @@
 }
 .overview-resource-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 .overview-resource-row article {
@@ -747,3 +747,9 @@
 :root[data-look="soft-orbit"] .theme-nav-icon { background: var(--accent-bg); border-radius: 7px; width: 25px; height: 25px; }
 :root[data-look="floating-layers"] .theme-nav-icon { background: var(--raised); border: 1px solid var(--accent-line); border-radius: 6px; width: 27px; height: 27px; box-shadow: 0 2px 0 #0003; }
 :root[data-look="edge-signal"] .theme-nav-icon { border-left: 2px solid var(--accent); padding-left: 4px; width: 25px; }
+
+.overview-resource-row article[data-pressure="true"] { border-color: var(--warning); }
+.overview-resource-row article[data-pressure="true"] progress { accent-color: var(--warning); }
+.overview-resource-row article[data-pressure="true"] progress::-webkit-progress-value { background: var(--warning); }
+.overview-resource-row article[data-pressure="true"] progress::-moz-progress-bar { background: var(--warning); }
+@media (min-width: 701px) and (max-width: 1100px) { .overview-resource-row { grid-template-columns: repeat(2,minmax(0,1fr)); } }

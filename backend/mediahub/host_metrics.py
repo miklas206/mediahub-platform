@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -21,12 +22,16 @@ class HostSampler:
         total = mem["MemTotal"]
         used = total - mem["MemAvailable"]
         cache = mem.get("Cached", 0) + mem.get("Buffers", 0)
+        parent_limit = None
         if (group / "memory.current").is_file():
             current = int((group / "memory.current").read_text())
             stat = dict(line.split() for line in (group / "memory.stat").read_text().splitlines())
             limit = (group / "memory.max").read_text().strip()
             if limit != "max":
-                total = min(total, int(limit))
+                parent_limit = int(limit)
+            # LXCFS virtualizes meminfo for the reading process, even via a bind.
+            # Only the parent cgroup or the Docker daemon can establish capacity.
+            total = parent_limit
             cache = int(stat.get("file", 0))
             used = max(0, current - cache)
         lines = (root / "stat").read_text().splitlines()
@@ -64,26 +69,60 @@ class HostSampler:
                 100, max(0, (counter - self.previous[1]) / (clock - self.previous[0]) / cores * 100)
             )
         self.previous = (clock, counter, mode)
+        system_disk = None
+        try:
+            disk = shutil.disk_usage(root / "os-release")
+            system_disk = {
+                "totalBytes": disk.total,
+                "usedBytes": disk.used,
+                "freeBytes": disk.free,
+                "percent": disk.used / disk.total * 100,
+                "scope": "host-system-filesystem",
+            }
+        except (OSError, ZeroDivisionError):
+            pass
         return {
             "sampledAt": time.time(),
             "scope": "docker-host",
+            "systemDisk": system_disk,
             "cpu": {"percent": percent, "cores": cores, "scope": "docker-host"},
             "ram": {
                 "totalBytes": total,
                 "usedBytes": used,
-                "availableBytes": max(0, total - used),
+                "availableBytes": max(0, total - used) if total else None,
                 "cacheBytes": cache,
-                "percent": used / total * 100,
+                "percent": used / total * 100 if total else None,
                 "scope": "docker-host",
+                "parentLimitBytes": parent_limit,
             },
         }
 
 
-def read_host_metrics(data_dir):
+def read_host_metrics(data_dir, capacity=None):
     try:
         result = json.loads((data_dir / "host-metrics/host-metrics.json").read_text())
         if result["scope"] != "docker-host" or not 0 <= time.time() - result["sampledAt"] <= 15:
             return None
+        if (
+            not capacity
+            or type(capacity.get("memoryBytes")) is not int
+            or capacity["memoryBytes"] <= 0
+        ):
+            return None
+        ram = result["ram"]
+        total = capacity["memoryBytes"]
+        parent = ram.get("parentLimitBytes")
+        if type(parent) is int and parent > 0:
+            total = min(total, parent)
+        used = ram["usedBytes"]
+        if type(used) is not int or not 0 <= used <= total:
+            return None
+        ram.update(
+            totalBytes=total,
+            availableBytes=total - used,
+            percent=used / total * 100,
+            capacitySource="docker-daemon",
+        )
         return result
     except (OSError, ValueError, KeyError, TypeError):
         return None

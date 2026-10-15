@@ -43,7 +43,7 @@ def test_lxc_total_uses_parent_memory_and_cpuset_not_core_limit(tmp_path, monkey
     monkeypatch.setattr("mediahub.host_metrics.time.monotonic", lambda: next(clock))
     first = sampler.sample()
     assert first["ram"]["usedBytes"] == 1500000000
-    assert first["ram"]["totalBytes"] == 16 * 1024**3
+    assert first["ram"]["totalBytes"] is None  # resolved from the Docker daemon in Core
     assert first["cpu"]["cores"] == 8
     assert first["cpu"]["percent"] is None
     (host / "cgroup/cpu.stat").write_text("usage_usec 4000000\n")
@@ -70,8 +70,73 @@ def test_stale_or_missing_snapshot_does_not_become_core_usage(tmp_path):
     path = tmp_path / "host-metrics/host-metrics.json"
     path.parent.mkdir()
     for age, expected in [(1, True), (20, False), (-20, False)]:
-        path.write_text(json.dumps({"sampledAt": time.time() - age, "scope": "docker-host"}))
-        assert (read_host_metrics(tmp_path) is not None) == expected
+        path.write_text(
+            json.dumps(
+                {"sampledAt": time.time() - age, "scope": "docker-host", "ram": {"usedBytes": 1024}}
+            )
+        )
+        assert (read_host_metrics(tmp_path, {"memoryBytes": 16 * 1024**3}) is not None) == expected
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_lxcfs_reader_limit_is_not_used_as_host_capacity(tmp_path, legacy):
+    host = fixture_host(tmp_path)
+    (host / "meminfo").write_text("MemTotal: 65536 kB\nMemAvailable: 54000 kB\nCached: 1024 kB\n")
+    snapshot = HostSampler(host).sample()
+    if legacy:
+        snapshot["ram"].update(totalBytes=64 * 1024**2, availableBytes=0, percent=3999)
+        snapshot["ram"].pop("parentLimitBytes", None)
+    path = tmp_path / "host-metrics/host-metrics.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(snapshot))
+    assert read_host_metrics(tmp_path) is None
+    corrected = read_host_metrics(tmp_path, {"memoryBytes": 16 * 1024**3})
+    assert corrected["ram"]["totalBytes"] == 16 * 1024**3
+    assert corrected["ram"]["usedBytes"] == 1500000000
+    assert 0 < corrected["ram"]["percent"] < 100
+
+
+def test_invalid_capacity_or_inconsistent_usage_is_not_displayed(tmp_path):
+    path = tmp_path / "host-metrics/host-metrics.json"
+    path.parent.mkdir()
+    path.write_text(
+        json.dumps({"scope": "docker-host", "sampledAt": time.time(), "ram": {"usedBytes": 2000}})
+    )
+    for value in [0, -1, True, None, "16GB", 1000]:
+        assert read_host_metrics(tmp_path, {"memoryBytes": value}) is None
+
+
+def test_daemon_capacity_is_refreshed_and_failures_invalidate_it(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from mediahub.system import SystemService
+
+    service = SystemService(SimpleNamespace(data_dir=tmp_path))
+    clock = [0]
+    calls = []
+    monkeypatch.setattr("mediahub.system.time.monotonic", lambda: clock[0])
+
+    async def docker(method, path):
+        calls.append((method, path))
+        if clock[0] >= 30:
+            raise OSError("synthetic unavailable")
+        return {"MemTotal": (16 if clock[0] < 15 else 32) * 1024**3}
+
+    async def check():
+        await service.refresh_host_capacity(docker)
+        assert service.host_capacity["memoryBytes"] == 16 * 1024**3
+        clock[0] = 5
+        await service.refresh_host_capacity(docker)
+        assert len(calls) == 1
+        clock[0] = 15
+        await service.refresh_host_capacity(docker)
+        assert service.host_capacity["memoryBytes"] == 32 * 1024**3
+        clock[0] = 30
+        await service.refresh_host_capacity(docker)
+        assert service.host_capacity is None
+
+    asyncio.run(check())
 
 
 def test_history_separates_old_cache_inflated_measurements():
@@ -79,6 +144,24 @@ def test_history_separates_old_cache_inflated_measurements():
     updated = {**old, "memoryAccounting": "excluding-file-cache-v2"}
     assert allocation_key(old) != allocation_key(updated)
     assert allocation_key(updated) == allocation_key(dict(updated))
+
+
+def test_system_disk_uses_host_os_file_not_download_or_core_volume(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    host = fixture_host(tmp_path)
+    paths = []
+
+    def usage(path):
+        paths.append(path)
+        return SimpleNamespace(total=32 * 1024**3, used=23 * 1024**3, free=9 * 1024**3)
+
+    monkeypatch.setattr("mediahub.host_metrics.shutil.disk_usage", usage)
+    snapshot = HostSampler(host).sample()
+    assert paths == [host / "os-release"]
+    assert snapshot["systemDisk"]["totalBytes"] == 32 * 1024**3
+    assert snapshot["systemDisk"]["freeBytes"] == 9 * 1024**3
+    assert snapshot["systemDisk"]["scope"] == "host-system-filesystem"
 
 
 @pytest.mark.parametrize("key", ["file", "total_cache", "cache"])
@@ -120,5 +203,12 @@ def test_fresh_and_older_install_prepare_sampler_without_restarting_apps(
     assert sampler["read_only"] is True
     assert sampler["cap_drop"] == ["ALL"]
     assert all(v.endswith(":ro") for v in sampler["volumes"][:3])
+    assert sampler["volumes"][3] == {
+        "type": "bind",
+        "source": "/etc/os-release",
+        "target": "/host/os-release",
+        "read_only": True,
+        "bind": {"create_host_path": False},
+    }
     assert (root / "data/config.json").read_text() == "preserved"
     assert all("never" in call and "--no-build" in call for call in calls)

@@ -68,9 +68,10 @@ export function ReferenceOverview({
       icon: Cpu,
       value:
         live && metrics.host?.cpu.percent != null
-          ? `${metrics.host.cpu.percent.toFixed(1)}%`
+          ? `${metrics.host.cpu.percent.toLocaleString(getLocale(), {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`
           : "\u2014",
       percent: live ? metrics.host?.cpu.percent : null,
+      detail: live && metrics.host?.cpu.percent != null ? t("{used} of {total} CPU cores", {used: (metrics.host.cpu.percent / 100 * metrics.host.cpu.cores).toLocaleString(getLocale(), {maximumFractionDigits: 2}), total: metrics.host.cpu.cores.toLocaleString(getLocale())}) : "",
     },
     {
       name: "RAM",
@@ -79,14 +80,23 @@ export function ReferenceOverview({
         ? `${bytes(metrics.host.ram.usedBytes)} / ${bytes(metrics.host.ram.totalBytes)}`
         : "\u2014",
       percent: live ? metrics.host?.ram.percent : null,
+      detail: "",
     },
     {
-      name: capacity ? "Storage" : "Core storage",
+      name: "System disk",
+      icon: HardDrive,
+      value: live && metrics.host?.systemDisk ? `${bytes(metrics.host.systemDisk.usedBytes)} / ${bytes(metrics.host.systemDisk.totalBytes)}` : "\u2014",
+      percent: live ? metrics.host?.systemDisk?.percent : null,
+      detail: live && metrics.host?.systemDisk ? t("{free} free", {free: bytes(metrics.host.systemDisk.freeBytes)}) : t("Waiting for system disk measurements"),
+    },
+    {
+      name: capacity ? "Media storage" : "Core storage",
       icon: HardDrive,
       value: live
         ? `${bytes(capacity?.used ?? metrics.disk.usedBytes)} / ${bytes(capacity?.total ?? metrics.disk.totalBytes)}`
         : "\u2014",
       percent: live ? (capacity?.percent ?? metrics.disk.percent) : null,
+      detail: "",
     },
   ];
   const seed = overviewEntry(managed, "org.mediahub.mediaseed");
@@ -146,11 +156,12 @@ export function ReferenceOverview({
       {live && !metrics.host && <p className="muted">{t("Total server measurements are unavailable. Automatic host preparation must complete and the host must allow read-only proc and cgroup access.")}</p>}
       <div className="overview-resource-row">
         {measurements.map((item) => (
-          <article key={item.name}>
+          <article key={item.name} data-pressure={item.name === "System disk" && item.percent != null && item.percent >= 90 ? "true" : undefined}>
             <item.icon size={23} />
             <div>
               <small>{t(item.name)}</small>
               <strong>{item.value}</strong>
+              {item.detail && <small>{item.detail}</small>}
               <progress
                 aria-label={t(item.name)}
                 max={100}

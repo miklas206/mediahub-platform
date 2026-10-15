@@ -448,8 +448,11 @@ class PlatformUpdateRuntime:
                 "message": str(value["message"])[:400],
                 "operationId": str(value.get("operationId", ""))[:32],
                 "freeBytes": max(0, int(value.get("freeBytes", 0))),
-                "reclaimedBytes": max(0, int(value.get("reclaimedBytes", 0))),
+                "reclaimedBytes": max(0, value["reclaimedBytes"]) if type(value.get("reclaimedBytes")) is int else None,
             }
+            for key in ["freeBytesBefore", "freeBytesChange"]:
+                if type(value.get(key)) is int:
+                    report[key] = value[key]
             cleanup = value.get("helperCleanup")
             if isinstance(cleanup, dict):
                 planned = cleanup.get("planned", [])

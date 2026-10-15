@@ -389,6 +389,7 @@ export function AppResourceOverview() {
       name: string;
       memoryBytes: number | null;
       cpuCores: number | null;
+      components?: { name: string; memoryBytes: number | null; cpuCores: number | null }[];
     }[];
   }>("/resources");
   const reload = data.reload;
@@ -444,13 +445,14 @@ export function AppResourceOverview() {
           <h2>{t("App resources")}</h2>
           <p className="muted">
             {t(
-              "Current usage, assigned limits and recommendations for each installed app.",
+              "Current usage, assigned limits and recommendations for local installed apps.",
             )}
           </p>
           <small className="muted">{t("App measurements update about once a minute. RAM excludes file cache; peak is historical usage.")}</small>
         </div>
         <button onClick={reload}>{t("Refresh")}</button>
       </header>
+      <p className="muted">{t("The total also includes MediaHub, local support services and the operating system. App measurements refresh less often, so the figures need not add up exactly.")}</p>
       {(data.error || failure) && (
         <NotificationPopup tone="danger">
           {data.error || failure}
@@ -477,7 +479,7 @@ export function AppResourceOverview() {
         <p className="muted">{t("Collecting app resource measurements.")}</p>
       )}
       {data.data?.items?.length === 0 && (
-        <p className="muted">{t("No apps installed")}</p>
+        <p className="muted">{t("No local apps with resource telemetry are installed.")}</p>
       )}
       {data.data?.shared?.map((row) => (
         <div key={row.name} className="resource-shared">
@@ -493,9 +495,10 @@ export function AppResourceOverview() {
           </span>
           <small>
             {t(
-              "Shared by multiple apps. Shown once; limits require coordination of the shared service.",
+              row.name === "Shared VPN infrastructure" ? "Shared by multiple apps. Shown once; limits require coordination of the shared service." : "Local MediaHub services are measured separately from app limits.",
             )}
           </small>
+          {!!row.components?.length && <details><summary>{t("Included services")}</summary><ul>{row.components.map((component, index) => <li key={`${component.name}-${index}`}>{t(component.name)}: {component.memoryBytes == null ? "—" : bytes(component.memoryBytes)} · {component.cpuCores == null ? "—" : `${number(component.cpuCores)} ${t("CPU cores")}`}</li>)}</ul></details>}
         </div>
       ))}
     </section>

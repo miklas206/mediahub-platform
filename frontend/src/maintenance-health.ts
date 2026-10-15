@@ -1,4 +1,12 @@
 import { t } from "./i18n";
+import { bytes } from "./format";
+
+export function cleanupSpaceMessage(status: { reclaimedBytes?: number | null }): string {
+  const value = status.reclaimedBytes;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? t("Measured disk space freed: {amount}.", {amount: bytes(value)})
+    : t("Freed disk space could not be measured.");
+}
 
 export type MaintenanceState = "healthy" | "degraded" | "unknown";
 

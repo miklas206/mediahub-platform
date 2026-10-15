@@ -144,6 +144,7 @@ class AppDependencies:
                             "/proc/meminfo:/host/meminfo:ro",
                             "/proc/stat:/host/stat:ro",
                             "/sys/fs/cgroup:/host/cgroup:ro",
+                            "/etc/os-release:/host/os-release:ro",
                         ],
                         "NetworkMode": "bridge",
                         "Privileged": False,

@@ -1135,14 +1135,17 @@ class HostUpdater:
         helper_cleanup = {"planned": [], "removedImageIds": []}
 
         def report(state, message):
+            free = shutil.disk_usage(self.root).free
             self._atomic_json(
                 path,
                 {
                     "operationId": operation,
                     "state": state,
                     "message": message,
-                    "freeBytes": shutil.disk_usage(self.root).free,
-                    "reclaimedBytes": max(0, shutil.disk_usage(self.root).free - before),
+                    "freeBytes": free,
+                    "freeBytesBefore": before,
+                    "freeBytesChange": free - before,
+                    "reclaimedBytes": max(0, free - before),
                     "updatedAt": time.time(),
                     "helperCleanup": helper_cleanup,
                 },

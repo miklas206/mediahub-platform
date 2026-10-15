@@ -479,6 +479,13 @@ def prepare_host_metrics(root, compose, host=Path("/"), *, command=run):
             "/proc/meminfo:/host/meminfo:ro",
             "/proc/stat:/host/stat:ro",
             "/sys/fs/cgroup:/host/cgroup:ro",
+            {
+                "type": "bind",
+                "source": "/etc/os-release",
+                "target": "/host/os-release",
+                "read_only": True,
+                "bind": {"create_host_path": False},
+            },
             str(output) + ":/output",
         ],
         "logging": {"driver": "none"},

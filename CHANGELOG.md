@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.36
+
+- Resolve Overview host RAM capacity from the local Docker daemon instead of LXCFS meminfo virtualized to the 64 MiB sampler. Refresh capacity every 15 seconds with bounded requests and reject unverified/inconsistent observations. Existing 0.6.35 snapshots are corrected immediately without a sampler restart; fresh installs and upgrades use the same path.
+- Restrict Overview resource cards to local owned apps. External Cloudflare monitoring and remote hosts are excluded. Measure Core, proxy, Agent and resource sampler separately, and show named VPN helper components once. Clarify OS overhead and different sampling intervals; show CPU core equivalents beside the percentage.
+- Show system disk use and free space separately from media storage. Automatically provision a read-only host OS file bind into the sampler; no host directory is created if the source is missing.
+- Healthcheck cleanup reports dynamically formatted reclaimed space in its completion popup, operation details and persistent last-result view. Persist a single before/after free-space pair and signed change; missing measurements remain unavailable. Cleanup scope and preservation rules are unchanged.
+
 ## 0.6.35
 
 - Overview CPU/RAM now report the complete local Docker host (the MediaHub LXC on Proxmox), including Core, apps and shared services. A restricted read-only sampler is provisioned automatically for new and existing installations without recreating apps. Missing or stale host measurements are explicitly unavailable; Core limits are never presented as host capacity. Media storage retains the configured storage pool scope.

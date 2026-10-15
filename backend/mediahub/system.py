@@ -1,3 +1,4 @@
+import asyncio
 import platform
 import shutil
 import time
@@ -7,6 +8,7 @@ import psutil
 
 from mediahub import __version__
 from mediahub.db import now
+from mediahub.errors import DomainError
 from mediahub.host_metrics import read_host_metrics
 
 
@@ -18,7 +20,25 @@ class SystemService:
         self.previous_time = None
         self.previous_cgroup_cpu = None
         self.previous_cgroup_time = None
+        self.host_capacity = None
+        self.host_capacity_checked = None
         psutil.cpu_percent(None)  # first sample is intentionally discarded
+
+    async def refresh_host_capacity(self, docker):
+        timestamp = time.monotonic()
+        if self.host_capacity_checked is not None and timestamp - self.host_capacity_checked < 15:
+            return
+        self.host_capacity_checked = timestamp
+        try:
+            info = await asyncio.wait_for(docker("GET", "/info"), timeout=2)
+            if not isinstance(info, dict):
+                raise ValueError("Invalid Docker host capacity response")
+            total = info.get("MemTotal")
+            if type(total) is not int or total <= 0:
+                raise ValueError("Invalid Docker host memory capacity")
+            self.host_capacity = {"memoryBytes": total}
+        except (DomainError, OSError, ValueError, TypeError, TimeoutError):
+            self.host_capacity = None
 
     def status(self):
         memory = psutil.virtual_memory()
@@ -94,7 +114,7 @@ class SystemService:
             pass
         return {
             "hostname": platform.node(),
-            "host": read_host_metrics(self.config.data_dir),
+            "host": read_host_metrics(self.config.data_dir, self.host_capacity),
             "version": __version__,
             "timestamp": now(),
             "uptimeSeconds": time.time() - psutil.boot_time(),

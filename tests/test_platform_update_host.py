@@ -74,6 +74,30 @@ def test_cleanup_has_no_blanket_docker_prune_commands():
         assert '"prune"' not in inspect.getsource(method)
 
 
+@pytest.mark.parametrize("delta", [0, 2048, 2*1024**3, -4096])
+def test_maintenance_reports_measured_space_and_signed_change(tmp_path, monkeypatch, delta):
+    from types import SimpleNamespace
+    updater = HostUpdater(tmp_path)
+    updater.updates.mkdir()
+    request = {"action":"maintenance", "operationId":OPERATION}
+    (updater.updates / "request.json").write_text(json.dumps(request))
+    before=10*1024**3
+    free=[before]
+    monkeypatch.setattr("scripts.platform_update_host.shutil.disk_usage",lambda _:SimpleNamespace(free=free[0]))
+    monkeypatch.setattr(updater,"_atomic_json",lambda path,value,**kwargs:path.write_text(json.dumps(value)))
+    def clean(): free[0] += delta; return 3
+    monkeypatch.setattr(updater,"_cleanup_staging",clean)
+    monkeypatch.setattr(updater,"_cleanup_update_images",lambda:None)
+    monkeypatch.setattr(updater,"_cleanup_helper_images",lambda progress:None)
+    updater._maintenance(request)
+    report=json.loads((updater.updates/"maintenance-status.json").read_text())
+    assert report["state"]=="succeeded"
+    assert report["freeBytesBefore"]==before
+    assert report["freeBytes"]==before+delta
+    assert report["freeBytesChange"]==delta
+    assert report["reclaimedBytes"]==max(0,delta)
+
+
 def test_maintenance_skips_mounted_stage(tmp_path, monkeypatch):
     updater = HostUpdater(tmp_path)
     stage = updater.updates / "staging" / OPERATION

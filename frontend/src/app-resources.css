@@ -184,3 +184,9 @@
 .app-resource-measurements progress[data-pressure="true"]::-moz-progress-bar {
   background: var(--warning);
 }
+
+.resource-shared details { flex-basis: 100%; min-width: 0; }
+.resource-shared summary { cursor: pointer; color: var(--muted); }
+.resource-shared li { margin-block: .5rem; overflow-wrap: anywhere; }
+.maintenance-cleanup-result { display: grid; gap: .5rem; padding: 1rem; margin-block: 1rem; border: 1px solid var(--line); border-radius: 10px; }
+.maintenance-cleanup-result small { color: var(--muted); }

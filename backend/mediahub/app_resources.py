@@ -178,8 +178,19 @@ class AppResources:
         }
 
     def summary(self):
+        def local_app(app):
+            adapter = self.svc.apps.adapter(app["id"])
+            return isinstance(adapter, ManagedAdapter) or (
+                hasattr(adapter, "client_factory") and getattr(adapter, "host_id", None) == "local"
+            )
+
         return {
-            "items": [self.row(app) for app in self.svc.apps.list() if not app.get("isMock")],
+            "scope": "local-host",
+            "items": [
+                self.row(app)
+                for app in self.svc.apps.list()
+                if not app.get("isMock") and local_app(app)
+            ],
             "sampleIntervalSeconds": 60,
             "reductionWindowDays": 7,
             "shared": self.shared if time.time() - self.shared_at <= 90 else [],
@@ -228,51 +239,92 @@ class AppResources:
             }
 
     async def collect_shared(self):
-        from urllib.parse import quote
-
         self.shared_at = time.time()
-
         manager = self.svc.managed_apps
-        if "org.mediahub.mediavpn" not in manager.policy:
-            self.shared = []
-            return
+        groups = {"MediaHub and support services": [], "Shared VPN infrastructure": []}
         try:
-            rows = await manager.containers("org.mediahub.mediavpn")
-            selected = {
-                row["Id"]: row
-                for row in rows
-                if row["Config"]["Labels"].get("org.mediahub.mediavpn.owner") == "mediavpn"
-            }
-            filters = quote('{"label":["org.mediahub.vpn.relay"]}')
-            relays = await manager.docker("GET", "/containers/json?all=false&filters=" + filters)
-            for relay in relays:
-                row = await manager.docker("GET", "/containers/" + relay["Id"] + "/json")
-                if row.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.relay"):
-                    selected[row["Id"]] = row
-            measured = []
-            for row in selected.values():
-                if row["State"].get("Running"):
-                    measured.append(
-                        metrics_of(
-                            await manager.docker(
-                                "GET", "/containers/" + row["Id"] + "/stats?stream=false"
-                            )
+            summaries = await manager.docker("GET", "/containers/json?all=false")
+            selected = {}
+            for row in summaries:
+                labels = row.get("Labels") or {}
+                project = labels.get("com.docker.compose.project")
+                service = labels.get("com.docker.compose.service")
+                name = (row.get("Names") or [""])[0].lstrip("/")
+                group = label = None
+                if project == "mediahub-platform" and service in {"core", "agent", "proxy"}:
+                    group = "MediaHub and support services"
+                    label = {
+                        "core": "MediaHub Core",
+                        "agent": "MediaHub Agent",
+                        "proxy": "HTTPS gateway",
+                    }[service]
+                elif project == "mediahub-host-metrics" and service == "sampler":
+                    group, label = "MediaHub and support services", "Host resource sampler"
+                elif (
+                    "org.mediahub.mediavpn" in manager.policy
+                    and not labels.get("org.mediahub.mediavpn.seedbox")
+                    and not (
+                        project == manager.policy["org.mediahub.mediavpn"].project
+                        and service in {"app", "sso-proxy"}
+                    )
+                ):
+                    if labels.get("org.mediahub.vpn.relay"):
+                        group, label = "Shared VPN infrastructure", "VPN app routing"
+                    elif labels.get("org.mediahub.mediavpn.owner") == "mediavpn":
+                        group = "Shared VPN infrastructure"
+                        label = {
+                            "mediavpn-web": "Web gateway",
+                            "mediavpn-shared-gateway": "VPN gateway",
+                            "mediavpn-torrent-lease": "Torrent port forwarding",
+                            "mediavpn-plex-lease": "Plex port forwarding",
+                        }.get(name, "VPN connection")
+                if group:
+                    selected[row["Id"]] = (group, label)
+            slots = asyncio.Semaphore(4)
+
+            async def measure(identifier, group, label):
+                async with slots:
+                    metrics = metrics_of(
+                        await manager.docker(
+                            "GET", "/containers/" + identifier + "/stats?stream=false"
                         )
                     )
+                groups[group].append(
+                    {
+                        "name": label,
+                        "memoryBytes": metrics["memoryBytes"],
+                        "cpuCores": metrics["cpuCores"],
+                    }
+                )
+
+            await asyncio.gather(
+                *(
+                    measure(identifier, group, label)
+                    for identifier, (group, label) in selected.items()
+                )
+            )
             self.shared = [
                 {
-                    "name": "Shared VPN infrastructure",
-                    "memoryBytes": sum(row["memoryBytes"] for row in measured)
-                    if measured and all(row["memoryBytes"] is not None for row in measured)
+                    "name": name,
+                    "components": components,
+                    "memoryBytes": sum(row["memoryBytes"] for row in components)
+                    if all(row["memoryBytes"] is not None for row in components)
                     else None,
-                    "cpuCores": sum(row["cpuCores"] for row in measured)
-                    if measured and all(row["cpuCores"] is not None for row in measured)
+                    "cpuCores": sum(row["cpuCores"] for row in components)
+                    if all(row["cpuCores"] is not None for row in components)
                     else None,
                 }
+                for name, components in groups.items()
+                if components
             ]
         except (DomainError, OSError, ValueError, KeyError, TypeError):
             self.shared = [
-                {"name": "Shared VPN infrastructure", "memoryBytes": None, "cpuCores": None}
+                {
+                    "name": "Local infrastructure measurements unavailable",
+                    "memoryBytes": None,
+                    "cpuCores": None,
+                    "components": [],
+                }
             ]
 
     async def poll(self):

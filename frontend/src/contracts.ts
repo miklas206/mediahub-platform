@@ -37,7 +37,7 @@ export type User = {
   appearance?: Appearance | null;
 };
 export type Metrics = {
-  host?: { sampledAt: number; scope: string; cpu: Metrics["cpu"]; ram: Metrics["ram"] } | null;
+  host?: { sampledAt: number; scope: string; cpu: Metrics["cpu"]; ram: Metrics["ram"]; systemDisk?: Metrics["disk"] | null } | null;
   hostname: string;
   version: string;
   timestamp: string;
