@@ -1,4 +1,6 @@
 {
+  "This app updates independently from MediaHub Core.": "Denne app opdateres uafhængigt af MediaHub Core.",
+  "Update only {name}?": "Opdatér kun {name}?",
   "Maintenance completed. Removed {files} old update files and {images} unused MediaHub helper images. Media, app data, containers, build cache and rollback backups were preserved.": "Vedligeholdelsen er færdig. Fjernede {files} gamle opdateringsfiler og {images} ubrugte MediaHub-hjælpeimages. Medier, appdata, containere, buildcache og rollback-backups er bevaret.",
   "Check the platform, apps and storage, then remove old update files and verified unused MediaHub helper images. Services keep running.": "Kontrollér platform, apps og lager, og fjern derefter gamle opdateringsfiler og verificeret ubrugte MediaHub-hjælpeimages. Tjenesterne kører videre.",
   "Movies, TV series, downloads, app data, Docker volumes, build cache and rollback backups are preserved. Maintenance only removes known disposable update files and owned helper images that no container or recovery configuration uses.": "Film, serier, downloads, appdata, Docker-volumes, buildcache og rollback-backups bevares. Vedligeholdelse fjerner kun kendte midlertidige opdateringsfiler og egne hjælpeimages, som ingen container eller gendannelseskonfiguration bruger.",

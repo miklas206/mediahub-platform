@@ -59,11 +59,15 @@ class UpdateQueue:
                 kind = {"mediahub-core": "core", "seedbox-agent": "agent"}.get(identifier)
                 if kind is None:
                     app = self.svc.apps.get(identifier)
-                    if app["isMock"] or app["packageId"] != "org.mediahub.plex":
+                    if app["isMock"] or app["packageId"] not in {
+                        "org.mediahub.plex",
+                        "org.mediahub.mediaseed",
+                        "org.mediahub.mediavpn",
+                    }:
                         raise DomainError(
                             "manual_update_required", "This app requires a manual update", 409
                         )
-                    kind = "plex"
+                    kind = "managed" if app["packageId"] != "org.mediahub.plex" else "plex"
                 items.append(
                     {"id": identifier, "name": item["name"], "kind": kind, "state": "pending"}
                 )
@@ -108,6 +112,8 @@ class UpdateQueue:
         return await self.svc.apps.adapter(item["id"]).updateCheck()
 
     async def operation(self, item):
+        if item["kind"] == "managed":
+            return await self.svc.apps.adapter(item["id"]).update_operation()
         if item["kind"] == "agent":
             return self.svc.agent_updates.operation()
         if item["kind"] == "core":
@@ -120,6 +126,8 @@ class UpdateQueue:
         if item["kind"] == "core":
             return await self.svc.platform_update.install(checked)
         adapter = self.svc.apps.adapter(item["id"])
+        if item["kind"] == "managed":
+            return await adapter.update(checked)
         client = adapter.client_factory(adapter.host_id)
         if not client.trusted_transport:
             raise DomainError("agent_tls_required", "Plex requires a trusted HTTPS Agent", 409)

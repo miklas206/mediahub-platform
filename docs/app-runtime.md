@@ -36,3 +36,14 @@ Before lifecycle execution exists, Agent must translate approved inspection path
 to Docker-host bind sources, enforce app UID/GID access, verify actual mounts and
 reject unavailable storage. Do not treat a successful Agent directory inspection
 as permission to create arbitrary Docker mounts.
+
+
+## Independent first-party updates (Core 0.6.30+)
+
+MediaSeed and MediaVPN check their own main branch in `miklas206/mediaseed` and `miklas206/mediavpn`. Updates shows the actual installed container version and the independently checked latest version. Use **Check** and **Install update** on the selected app card. Update all explicitly includes every available selected component and keeps Core last.
+
+Existing installations first need Core 0.6.30 to obtain this update mechanism. A Core update does not install newer app code. It preserves the app image, source context, credentials, storage and running/stopped intent while backfilling required configuration. Configuration repairs can recreate an affected container using its existing image. A fresh installation builds the reviewed bundled versions as initial bootstrap.
+
+The selected app update downloads a commit-pinned source archive, verifies the app name/version and safe build inputs, then uses the owned host helper to build only that app's Compose project. A stopped app remains stopped. Existing configuration and data are retained; a build or startup failure restores the preceding Compose configuration. The operation journal survives Core restarts and reconnects to the same helper without repeating an uncertain installation. Recovery verifies helper completion and the installed source/version labels.
+
+Private app repositories require the encrypted GitHub token configured in MediaHub to have read access to each app repository (`Contents: read` for a fine-grained token). The Core repository's scoped deploy key does not grant access to app repositories. Missing access produces a failed version check; it never falls back to a bundled version presented as a verified upstream release.

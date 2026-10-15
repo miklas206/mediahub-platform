@@ -190,3 +190,42 @@ def test_queue_api_requires_https_and_does_not_start_on_get(logged_in, monkeypat
     )
     assert response.status_code == 403
     start.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["mediaseed", "mediavpn"])
+def test_queue_selected_first_party_app_does_not_launch_core_or_other_app(
+    logged_in, monkeypatch, kind
+):
+    queue = queue_fixture(logged_in, monkeypatch)
+    monkeypatch.setattr(
+        queue.svc.updates,
+        "summary",
+        lambda: {"items": [{"id": kind, "name": kind, "updateAvailable": True}]},
+    )
+    monkeypatch.setattr(
+        queue.svc.apps, "get", lambda _: {"packageId": "org.mediahub." + kind, "isMock": False}
+    )
+    launched = []
+
+    async def launch(item, checked):
+        launched.append(item["id"])
+        return {"state": "succeeded", "operationId": "selected"}
+
+    async def operation(item):
+        return (
+            {"state": "idle"}
+            if item["state"] == "pending"
+            else {"state": "succeeded", "operationId": "selected"}
+        )
+
+    monkeypatch.setattr(queue, "launch", launch)
+    monkeypatch.setattr(queue, "operation", operation)
+
+    async def scenario():
+        await queue.start([kind], uuid4())
+        await queue.task
+
+    asyncio.run(scenario())
+    assert launched == [kind]
+    assert queue.status()["state"] == "succeeded"
+    assert queue.status()["coreUpdated"] is False

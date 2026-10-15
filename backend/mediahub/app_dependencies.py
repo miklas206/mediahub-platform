@@ -26,7 +26,7 @@ class AppDependencies:
             # cooldown. Preparation can outlive the initial release check.
             await monitor.refresh_managed_versions("failed" if self.message else "ready")
 
-    async def _run(self):
+    async def _run(self, update=None):
         config, manager = self.svc.config, self.svc.managed_apps
         if not config.managed_apps_docker_socket or not config.managed_apps_policy_file:
             return
@@ -103,8 +103,25 @@ class AppDependencies:
                     "Env": ["DOCKER_CONFIG=/tmp/docker-config"],
                     "Entrypoint": ["python"],
                     "Cmd": ["/app/scripts/prepare_local_apps.py", "--root", str(root)]
-                    + self.lan_argument(),
-                    "Labels": {"org.mediahub.dependencies": "first-party"},
+                    + self.lan_argument()
+                    + (
+                        [
+                            "--app",
+                            update["kind"],
+                            "--app-source",
+                            str(root / "data" / update["source"]),
+                            "--app-commit",
+                            update["commit"],
+                            "--app-repository",
+                            update["repository"],
+                        ]
+                        if update
+                        else []
+                    ),
+                    "Labels": {
+                        "org.mediahub.dependencies": "first-party",
+                        **({"org.mediahub.app-update": update["operationId"]} if update else {}),
+                    },
                     "Healthcheck": {"Test": ["NONE"]},
                     "HostConfig": {
                         "Binds": [

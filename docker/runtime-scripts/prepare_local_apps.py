@@ -144,7 +144,12 @@ def prepare_vpn_helpers(context, root):
     """Prepare native gateway dependencies without starting any provider or app."""
     definitions = (
         ("relay", "relay_image", ("Dockerfile", "runtime.py"), "org.mediahub.vpn.relay-source"),
-        ("gateway", "gateway_image", ("Dockerfile", "config.py", "observer.py", "natpmp.py", "plex_port.py"), "org.mediahub.gateway.source"),
+        (
+            "gateway",
+            "gateway_image",
+            ("Dockerfile", "config.py", "observer.py", "natpmp.py", "plex_port.py"),
+            "org.mediahub.gateway.source",
+        ),
     )
     images = {}
     for kind, folder, names, label in definitions:
@@ -152,7 +157,9 @@ def prepare_vpn_helpers(context, root):
         if not source.is_dir():
             # Older reviewed bundles only included the relay; never invent sources.
             continue
-        digest = hashlib.sha256(b"".join((source / name).read_bytes().replace(b"\r\n", b"\n") for name in names)).hexdigest()
+        digest = hashlib.sha256(
+            b"".join((source / name).read_bytes().replace(b"\r\n", b"\n") for name in names)
+        ).hexdigest()
         tag = "mediahub-vpn-relay:1" if kind == "relay" else "mediahub-web-gateway:" + digest[:16]
         inspected = None
         try:
@@ -162,11 +169,23 @@ def prepare_vpn_helpers(context, root):
         if inspected and not inspected.get("Config", {}).get("Labels", {}).get(label):
             raise ValueError("VPN helper image ownership could not be verified")
         if not inspected or inspected["Config"]["Labels"][label] != digest:
-            run("docker", "build", "--pull", "--label", label + "=" + digest,
-                "--label", "org.mediahub.managed-component=vpn-" + kind,
-                "--tag", tag, str(source))
+            run(
+                "docker",
+                "build",
+                "--pull",
+                "--label",
+                label + "=" + digest,
+                "--label",
+                "org.mediahub.managed-component=vpn-" + kind,
+                "--tag",
+                tag,
+                str(source),
+            )
             inspected = json.loads(run("docker", "image", "inspect", tag))[0]
-        if not re.fullmatch(r"sha256:[a-f0-9]{64}", inspected.get("Id", "")) or inspected.get("Config", {}).get("Labels", {}).get(label) != digest:
+        if (
+            not re.fullmatch(r"sha256:[a-f0-9]{64}", inspected.get("Id", ""))
+            or inspected.get("Config", {}).get("Labels", {}).get(label) != digest
+        ):
             raise ValueError("VPN helper image could not be verified after preparation")
         images[kind] = inspected["Id"]
     if images:
@@ -402,7 +421,17 @@ def configure_media_storage(cfg, locations):
         # Both consumers use gid 1000. Host permissions are never changed here.
 
 
-def provision(root, lan, source=SOURCE):
+def provision(
+    root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None
+):
+    if app not in {None, "mediaseed", "mediavpn"}:
+        raise ValueError("Unsupported independent app")
+    if app and (not app_source or not re.fullmatch(r"[a-f0-9]{40}", app_commit or "")):
+        raise ValueError("Independent app requires pinned source")
+    if app:
+        expected = root / "data/app-updates"
+        if app_source.resolve() != app_source or not app_source.is_relative_to(expected):
+            raise ValueError("Independent app source must be staged in the approved data directory")
     ip = ipaddress.ip_address(lan)
     if (
         ip.version != 4
@@ -431,7 +460,7 @@ def provision(root, lan, source=SOURCE):
         ).encode()
     ).hexdigest()
     marker = root / "local-apps/source.json"
-    if marker.exists() and json.loads(marker.read_text()).get("fingerprint") == digest:
+    if not app and marker.exists() and json.loads(marker.read_text()).get("fingerprint") == digest:
         return
     policy_path = root / "data/managed-apps.json"
     policy = json.loads(policy_path.read_text()) if policy_path.exists() else {}
@@ -458,11 +487,15 @@ def provision(root, lan, source=SOURCE):
         os.chown(path.parent, uid, gid)
         if path.read_text().strip() != token:
             raise ValueError("Existing integration identities differ; no key was overwritten")
-    for kind in ("mediavpn", "mediaseed"):
+    for kind in (app,) if app else ("mediavpn", "mediaseed"):
         folder = projects / kind
         folder.mkdir(mode=0o700, exist_ok=True)
         context = folder / ("source-" + digest[:16])
-        shutil.copytree(bundle_root(source) / kind, context, dirs_exist_ok=True)
+        if app:
+            context = folder / ("source-" + app_commit)
+            shutil.copytree(app_source, context, dirs_exist_ok=True)
+        else:
+            shutil.copytree(bundle_root(source) / kind, context, dirs_exist_ok=True)
         package = "org.mediahub." + kind
         entry = policy.get(package)
         project = entry["project"] if entry else "mediahub-" + kind
@@ -480,6 +513,7 @@ def provision(root, lan, source=SOURCE):
         if before and not entry:
             raise ValueError("Existing app containers have no approved installation record")
         compose_path = folder / "compose.json"
+        rebuilding = bool(app) or not compose_path.exists()
         if compose_path.exists():
             cfg = json.loads(compose_path.read_text())
             if cfg.get("name") != project:
@@ -531,7 +565,7 @@ def provision(root, lan, source=SOURCE):
             browser_origin
         )
         metadata = context / "pyproject.toml"
-        if metadata.is_file():
+        if rebuilding and metadata.is_file():
             version = tomllib.loads(metadata.read_text())["project"]["version"]
             cfg["services"]["app"].setdefault("labels", {})["org.mediahub.app.version"] = version
         if kind == "mediavpn":
@@ -539,11 +573,22 @@ def provision(root, lan, source=SOURCE):
         repair_tls_permissions(folder, cfg)
         if kind == "mediaseed":
             configure_media_storage(cfg, locations)
+        if app:
+            cfg["services"]["app"].setdefault("labels", {}).update(
+                {
+                    "org.mediahub.app.commit": app_commit,
+                    "org.mediahub.app.repository": app_repository,
+                }
+            )
         for service, values in cfg["services"].items():
-            if "build" in values:
+            if rebuilding and ("build" in values or (app and service in {"app", "client-init"})):
                 values["build"] = {"context": str(context), "dockerfile": "Dockerfile"}
-                values["image"] = "mediahub-" + kind + ":bundled-" + digest[:16]
-            elif "image" in values:
+                values["image"] = (
+                    "mediahub-" + kind + ":source-" + app_commit[:16]
+                    if app
+                    else "mediahub-" + kind + ":bundled-" + digest[:16]
+                )
+            elif "image" in values and rebuilding:
                 run("docker", "pull", values["image"])
                 image = json.loads(run("docker", "image", "inspect", values["image"]))[0]
                 values["image"] = image["RepoDigests"][0]
@@ -557,7 +602,9 @@ def provision(root, lan, source=SOURCE):
             )
         previous_compose = compose_path.read_text() if compose_path.exists() else None
         private(
-            compose_path.with_suffix(".before-" + digest[:16] + ".json"),
+            compose_path.with_suffix(
+                ".before-" + (app_commit[:16] if app else digest[:16]) + ".json"
+            ),
             previous_compose or json.dumps(cfg),
         )
         command = ["docker", "compose", "-p", project, "-f", str(compose_path)]
@@ -565,16 +612,19 @@ def provision(root, lan, source=SOURCE):
             if approved_media_storage(root) != locations:
                 raise ValueError("Approved media storage changed during preparation")
             compose_path.write_text(json.dumps(cfg))
-            run(*command, "build", "app")
-            if kind == "mediavpn":
+            if rebuilding:
+                run(*command, "build", "app")
+            if kind == "mediavpn" and rebuilding:
                 prepare_vpn_helpers(context, root)
-            if kind == "mediaseed":
+            if kind == "mediaseed" and rebuilding:
                 run(*command, "build", "client-init")
                 # Initialization is idempotent and refuses mismatched existing secrets.
                 run(*command, "run", "--rm", "--no-deps", "client-init")
             services = ["app", "sso-proxy"] if kind == "mediavpn" else ["app", "qbittorrent"]
-            run(*command, "up", "--no-start", "--no-build", "--no-deps", *services)
-            if running:
+            changed = not previous_compose or json.loads(previous_compose) != cfg
+            if rebuilding or changed:
+                run(*command, "up", "--no-start", "--no-build", "--no-deps", *services)
+            if running and (rebuilding or changed):
                 run(
                     *command,
                     "up",
@@ -612,7 +662,8 @@ def provision(root, lan, source=SOURCE):
     policy_path.write_text(json.dumps(policy))
     prepare(policy_path, root / "data", Path("/data"), 10001, 10001)
     private(marker, "{}")
-    marker.write_text(json.dumps({"fingerprint": digest}))
+    if not app:
+        marker.write_text(json.dumps({"fingerprint": digest}))
 
 
 if __name__ == "__main__":
@@ -621,6 +672,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--lan-ip")
+    parser.add_argument("--app", choices=["mediaseed", "mediavpn"])
+    parser.add_argument("--app-source", type=Path)
+    parser.add_argument("--app-commit")
+    parser.add_argument("--app-repository")
     args = parser.parse_args()
     with (args.root / "updates/host-updater.lock").open("a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
@@ -629,4 +684,11 @@ if __name__ == "__main__":
             address = json.loads((args.root / "agent/container-apps.json").read_text())[
                 "bindAddress"
             ]
-        provision(args.root, address)
+        provision(
+            args.root,
+            address,
+            app=args.app,
+            app_source=args.app_source,
+            app_commit=args.app_commit,
+            app_repository=args.app_repository,
+        )

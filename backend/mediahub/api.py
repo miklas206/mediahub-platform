@@ -306,6 +306,26 @@ async def remove_runtime(
     return result(await remove_app(services(request), app_id, body.confirmedInstallationId))
 
 
+@router.post("/apps/{app_id}/update")
+async def update_managed_app(app_id: str, request: Request, user=Depends(administrator)):
+    from mediahub.managed_apps import ManagedAdapter
+
+    adapter = services(request).apps.adapter(app_id)
+    if not isinstance(adapter, ManagedAdapter):
+        raise DomainError("unsupported_update", "This app has no independent managed updater", 409)
+    return result(await adapter.update(await adapter.updateCheck()))
+
+
+@router.get("/apps/{app_id}/update-operation")
+async def managed_app_update_operation(app_id: str, request: Request, user=Depends(administrator)):
+    from mediahub.managed_apps import ManagedAdapter
+
+    adapter = services(request).apps.adapter(app_id)
+    if not isinstance(adapter, ManagedAdapter):
+        raise DomainError("unsupported_update", "This app has no independent managed updater", 409)
+    return result(await adapter.update_operation())
+
+
 @router.get("/apps/{app_id}/uninstall")
 async def uninstall_status(app_id: str, request: Request, user=Depends(administrator)):
     from mediahub.app_removal import removal_status

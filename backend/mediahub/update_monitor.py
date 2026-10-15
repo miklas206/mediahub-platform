@@ -198,12 +198,6 @@ class UpdateMonitor:
         async with self.lock:
             previous = self._load()
             by_id = {item["id"]: item for item in previous["items"]}
-            installed = self.services.platform_update.installed_source()
-            repository = self.services.settings.get().release_repository
-            core = by_id.get("mediahub-core", {})
-            same_source = bool(installed.get("repository") == repository and installed.get("commit")
-                               and core.get("latestVersion") == installed["commit"]
-                               and core.get("checkStatus") == "checked")
             for app in self.services.apps.list():
                 if app.get("packageId") not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"}:
                     continue
@@ -214,18 +208,29 @@ class UpdateMonitor:
                     local = await adapter.installed_version()
                 except (DomainError, OSError, ValueError, KeyError):
                     continue
-                item = {**by_id.get(app["id"], {"id": app["id"], "name": app["name"], "checkStatus": "unchecked"}),
-                        "installedVersion": local["installedVersion"],
-                        "bundledVersion": local["bundledVersion"], "preparationState": preparation_state,
-                        "updateAvailable": False}
-                if same_source:
-                    item.update(latestVersion=local["bundledVersion"],
-                                checkStatus="checked" if local["installedVersion"] == local["bundledVersion"] else "unchecked",
-                                message="This app is updated automatically with MediaHub Core.", stale=False)
-                    item.pop("errorCode", None)
-                    item.pop("retryAt", None)
+                item = {
+                    **by_id.get(
+                        app["id"],
+                        {"id": app["id"], "name": app["name"], "checkStatus": "unchecked"},
+                    ),
+                    "installedVersion": local["installedVersion"],
+                    "bundledVersion": local["bundledVersion"],
+                    "preparationState": preparation_state,
+                    "updateAvailable": False,
+                }
+                # A Core check never substitutes its bundle for an app release check.
+                item.update(
+                    checkStatus="unchecked",
+                    message="This app updates independently from MediaHub Core.",
+                    stale=True,
+                )
+                item.pop("retryAt", None)
+                item.pop("errorCode", None)
                 if preparation_state == "failed":
-                    item.update(checkStatus="failed", message="Automatic app preparation failed; existing data was retained")
+                    item.update(
+                        checkStatus="failed",
+                        message="Automatic app preparation failed; existing data was retained",
+                    )
                 by_id[app["id"]] = item
             self.check_finished_at = 0
             self._store_results(list(by_id.values()))

@@ -9,7 +9,7 @@ export type AvailableUpdate = {
   name: string;
   updateAvailable: boolean;
 };
-type Task = AvailableUpdate & { kind: "plex" | "core" | "agent" };
+type Task = AvailableUpdate & { kind: "plex" | "core" | "agent" | "managed" };
 export function updateAllPlan(items: AvailableUpdate[], apps: AppInfo[]) {
   const tasks: Task[] = [];
   const manual: AvailableUpdate[] = [];
@@ -22,10 +22,21 @@ export function updateAllPlan(items: AvailableUpdate[], apps: AppInfo[]) {
         (app) =>
           app.id === item.id &&
           !app.isMock &&
-          app.packageId === "org.mediahub.plex",
+          [
+            "org.mediahub.plex",
+            "org.mediahub.mediaseed",
+            "org.mediahub.mediavpn",
+          ].includes(app.packageId),
       )
     )
-      tasks.push({ ...item, kind: "plex" });
+      tasks.push({
+        ...item,
+        kind:
+          apps.find((app) => app.id === item.id)?.packageId ===
+          "org.mediahub.plex"
+            ? "plex"
+            : "managed",
+      });
     else manual.push(item);
   }
   tasks.sort((a, b) => Number(a.kind === "core") - Number(b.kind === "core"));
@@ -115,7 +126,9 @@ export async function runUpdateAll(
           ? "/updates/platform/install"
           : task.kind === "agent"
             ? "/updates/seedbox-agent/install"
-            : "/plex/update",
+            : task.kind === "managed"
+              ? `/apps/${task.id}/update`
+              : "/plex/update",
         "POST",
       );
       let current = started;
@@ -154,11 +167,13 @@ export async function runUpdateAll(
               ? await request<Status>("/updates/platform/operation")
               : task.kind === "agent"
                 ? await request<Status>("/updates/seedbox-agent/operation")
-                : (
-                    await request<{ report: { operation: Status } }>(
-                      `/apps/${encodeURIComponent(task.id)}/runtime`,
-                    )
-                  ).report.operation;
+                : task.kind === "managed"
+                  ? await request<Status>(`/apps/${task.id}/update-operation`)
+                  : (
+                      await request<{ report: { operation: Status } }>(
+                        `/apps/${encodeURIComponent(task.id)}/runtime`,
+                      )
+                    ).report.operation;
           if (!next) throw Error("Update status unavailable");
           if (
             task.kind !== "plex" &&

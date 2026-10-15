@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.30
+
+- Give MediaSeed and MediaVPN their own repository checks and selected-app source updates, with persisted operations and restart recovery. Core preparation preserves existing app images and versions while applying required configuration repairs. Fresh installs bootstrap MediaSeed 0.1.9 and MediaVPN 0.2.14; existing installations update apps individually.
+- Include the richer MediaSeed torrent/RSS interface for fresh installs and remove the fixed beta badges from both apps.
+
 ## 0.6.29
 
 - Persist Plex/shared-VPN controller decisions and bundle MediaVPN 0.2.13 with owner-scoped passive Docker lifecycle observation. Retain safe causes, operation IDs, provider/container generations, exit/OOM evidence, changed ports and verification stages across container replacement. Settings Logs aggregates durable diagnostics; existing Plex logs also survive restart. Fresh installs and upgrades initialize journals automatically in existing persistent data directories without changing media or credentials.

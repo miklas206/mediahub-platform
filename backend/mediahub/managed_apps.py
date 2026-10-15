@@ -157,51 +157,20 @@ class ManagedAdapter:
                 "preparationMessage": state.get("message")}
 
     async def updateCheck(self):
-        from packaging.version import Version
+        return await self.updater().check(self)
 
-        from mediahub.platform_source import GitHubSourceProvider
+    def updater(self):
+        from mediahub.app_updates import AppUpdates
 
-        local = {"installedVersion": None}
-        try:
-            local = await self.installed_version()
-            installed, latest = local["installedVersion"], local["bundledVersion"]
-            monitor = getattr(self.manager.svc, "updates", None)
-            repository = self.manager.svc.settings.get().release_repository
-            path = "docker/bundled/" + self.package.rsplit(".", 1)[-1] + "/pyproject.toml"
-            if monitor:
-                platform = await monitor.check_platform()
-                if platform.get("installedCommit") and platform.get("installedCommit") == platform.get("latestCommit"):
-                    # The immutable running Core already contains these exact
-                    # bundled sources; another GitHub request cannot add evidence.
-                    upstream = {"latestVersion": latest}
-                else:
-                    upstream = await monitor.source_metadata(path, installed or latest)
-            else:
-                upstream = await GitHubSourceProvider(
-                    installed or latest, project_path=path,
-                ).check(repository, self.manager.svc.release_credentials.token())
-            if local["preparationState"] == "preparing":
-                # A network check can span the helper replacing the app. Do
-                # not publish the label observed before that replacement.
-                local = await self.installed_version()
-                installed = local["installedVersion"]
-            remote_version = upstream.get("latestVersion")
-            newer = bool(remote_version and Version(remote_version) > Version(latest))
-            return {**local, "supported": False, "updateAvailable": False,
-                    "installedVersion": installed, "latestVersion": upstream["latestVersion"],
-                    "bundledVersion": latest, "repository": repository,
-                    "checkStatus": "failed" if local["preparationState"] == "failed" else "checked" if remote_version and installed == latest else "unchecked",
-                    "message": local["preparationMessage"] if local["preparationState"] == "failed" else
-                    "Choose the MediaHub update repository before checking app versions." if not remote_version else
-                    "A newer bundled app is available through the MediaHub Core update." if newer else
-                    "This app is updated automatically with MediaHub Core. Retry app preparation if its bundled update is missing."}
-        except DomainError as error:
-            return {**local, "supported": False, "updateAvailable": False,
-                    "checkStatus": "deferred" if getattr(error, "retry_at", None) else "failed",
-                    "errorCode": error.code, "message": error.message,
-                    **({"retryAt": error.retry_at} if getattr(error, "retry_at", None) else {})}
-        except (OSError, ValueError, KeyError):
-            return {"supported": False, "checkStatus": "failed", "message": "Bundled app version could not be verified"}
+        if not hasattr(self.manager, "app_updates"):
+            self.manager.app_updates = AppUpdates(self.manager)
+        return self.manager.app_updates
+
+    async def update(self, checked):
+        return await self.updater().start(self, checked)
+
+    async def update_operation(self):
+        return await self.updater().status(self)
 
 
 class ManagedApps:
@@ -736,9 +705,13 @@ class ManagedApps:
             self.save(package, job)
 
     async def close(self):
-        for task in self.tasks.values():
+        tasks = list(self.tasks.values())
+        updater = getattr(self, "app_updates", None)
+        if updater:
+            tasks.extend(updater.tasks.values())
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*self.tasks.values(), return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def unavailable(svc, package, removed_only=False):

@@ -3,7 +3,13 @@ import { translateText, t } from "./i18n";
 
 import { UpdateRestartNotice } from "./update-restart-notice";
 import { AgentUpdates } from "./agent-updates";
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 import { Bell, RefreshCw, Box, Download, Terminal } from "lucide-react";
 import { ServiceIcon } from "./service-icon";
@@ -99,8 +105,11 @@ type UpdateItem = {
 };
 
 export function platformUpdateReady(release?: PlatformRelease) {
-  return !!release?.installReady && release.updateAvailable === true &&
-    (!release.latestCommit || release.latestCommit !== release.installedCommit);
+  return (
+    !!release?.installReady &&
+    release.updateAvailable === true &&
+    (!release.latestCommit || release.latestCommit !== release.installedCommit)
+  );
 }
 
 type UpdateNotification = {
@@ -250,12 +259,24 @@ function queueOperation(job: QueueStatus): OperationState {
   };
 }
 
-function UpdateCard({ name, packageId, children }: { name: string; packageId?: string; children: ReactNode }) {
+function UpdateCard({
+  name,
+  packageId,
+  children,
+}: {
+  name: string;
+  packageId?: string;
+  children: ReactNode;
+}) {
   return (
     <article className="hub-app-card update-component-card">
       <header className="update-component-heading">
         <span className="hub-app-icon">
-          {packageId ? <ServiceIcon packageId={packageId} size={28} /> : <Box size={26} />}
+          {packageId ? (
+            <ServiceIcon packageId={packageId} size={28} />
+          ) : (
+            <Box size={26} />
+          )}
         </span>
         <h2>{name}</h2>
       </header>
@@ -281,7 +302,10 @@ export function UpdatesProgress({
         ))}
       <section className="updates-console" aria-label={t("Console")}>
         <details>
-          <summary><Terminal size={17} />{t("Console")}</summary>
+          <summary>
+            <Terminal size={17} />
+            {t("Console")}
+          </summary>
           <div className="updates-console-content">
             {entries.map(([id, operation]) => (
               <div key={id}>
@@ -307,7 +331,9 @@ export function UpdatesPage({
   const platform = useLoad<{ version: string }>("/system/status");
   const platformRelease = useLoad<PlatformRelease>("/updates/platform");
   const updateSummary = useLoad<UpdateSummary>("/updates/summary");
-  const prerequisites = useLoad<{ state: string; message?: string | null }>("/managed-install/prerequisites");
+  const prerequisites = useLoad<{ state: string; message?: string | null }>(
+    "/managed-install/prerequisites",
+  );
   const preparation = prerequisites.data;
   const reloadPreparation = prerequisites.reload;
   const reloadSummary = updateSummary.reload;
@@ -316,10 +342,15 @@ export function UpdatesPage({
     const previous = previousPreparation.current;
     previousPreparation.current = preparation?.state;
     if (previous !== "preparing" || preparation?.state !== "ready") return;
-    void Promise.allSettled((apps || [])
-      .filter(app => ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId))
-      .map(app => api(`/apps/${app.id}/update-check`, "POST")))
-      .then(reloadSummary);
+    void Promise.allSettled(
+      (apps || [])
+        .filter((app) =>
+          ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(
+            app.packageId,
+          ),
+        )
+        .map((app) => api(`/apps/${app.id}/update-check`, "POST")),
+    ).then(reloadSummary);
   }, [preparation?.state, apps, reloadSummary]);
   useEffect(() => {
     if (preparation?.state !== "preparing") return;
@@ -372,6 +403,30 @@ export function UpdatesPage({
     checkedOnEntry.current = true;
     void entryCheck.current();
   }, []);
+
+  async function installManaged(app: AppInfo) {
+    if (
+      busy ||
+      !(await confirm(t("Update only {name}?", { name: app.name }), {
+        title: app.name,
+        confirmLabel: t("Install update"),
+      }))
+    )
+      return;
+    setBusy(`install:${app.id}`);
+    try {
+      const job = await api<QueueStatus>("/updates/queue", "POST", {
+        requestId: crypto.randomUUID(),
+        ids: [app.id],
+      });
+      setServerBusy(job.state === "running");
+      setOperations((current) => ({ ...current, batch: queueOperation(job) }));
+    } catch (caught) {
+      reportError(caught);
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function installAll() {
     if (!apps || !batchPlan.tasks.length || busy) return;
@@ -718,11 +773,13 @@ export function UpdatesPage({
   }
 
   async function removePrivateAccess() {
-    if (!(await confirm("Remove private GitHub release access from MediaHub?", {
-      title: "Remove GitHub access?",
-      confirmLabel: "Remove access",
-      danger: true,
-    })))
+    if (
+      !(await confirm("Remove private GitHub release access from MediaHub?", {
+        title: "Remove GitHub access?",
+        confirmLabel: "Remove access",
+        danger: true,
+      }))
+    )
       return;
     const task = operationTask(
       "Remove private GitHub access",
@@ -977,7 +1034,17 @@ export function UpdatesPage({
   return (
     <div className="stack updates-page">
       {updating && <UpdateRestartNotice disconnected={restarting} />}
-      <ErrorBox error={error || (restarting ? "" : serverError || appsError || platformRelease.error || updateSummary.error)} />
+      <ErrorBox
+        error={
+          error ||
+          (restarting
+            ? ""
+            : serverError ||
+              appsError ||
+              platformRelease.error ||
+              updateSummary.error)
+        }
+      />
       {notice && (
         <NotificationPopup tone="success">
           {translateText(notice)}
@@ -987,22 +1054,25 @@ export function UpdatesPage({
       <section className="updates-actions" aria-label={t("Update all")}>
         <div className="update-policy-heading">
           <div className="button-row">
-              <button
-                className="primary"
-                disabled={!!busy || !apps || !batchPlan.tasks.length}
-                onClick={() => void installAll()}
-              >
-                <Download
-                  size={16}
-                  className={
-                    operations.batch?.status === "running" ? "spin" : ""
-                  }
-                />
-                {operations.batch?.status === "running"
-                  ? t("Updating all…")
-                  : t("Update all")}
-              </button>
-            <button disabled={!!busy} onClick={() => void checkAll()} aria-label={t("Check all now")} title={t("Check all now")}>
+            <button
+              className="primary"
+              disabled={!!busy || !apps || !batchPlan.tasks.length}
+              onClick={() => void installAll()}
+            >
+              <Download
+                size={16}
+                className={operations.batch?.status === "running" ? "spin" : ""}
+              />
+              {operations.batch?.status === "running"
+                ? t("Updating all…")
+                : t("Update all")}
+            </button>
+            <button
+              disabled={!!busy}
+              onClick={() => void checkAll()}
+              aria-label={t("Check all now")}
+              title={t("Check all now")}
+            >
               <RefreshCw
                 className={busy === "all-check" ? "spin" : ""}
                 size={16}
@@ -1030,8 +1100,15 @@ export function UpdatesPage({
                     ? t(
                         "Some update checks are deferred by GitHub's rate limit. Installed apps keep running.",
                       )
-                    : updateSummary.data.items.some(item => item.checkStatus === "unchecked" || item.checkStatus === "unsupported" || !item.latestVersion)
-                      ? t("Some components have not been checked or do not support automatic update checks")
+                    : updateSummary.data.items.some(
+                          (item) =>
+                            item.checkStatus === "unchecked" ||
+                            item.checkStatus === "unsupported" ||
+                            !item.latestVersion,
+                        )
+                      ? t(
+                          "Some components have not been checked or do not support automatic update checks",
+                        )
                       : t("All checked components are up to date")}
           </strong>
           {!!updateSummary.data?.notifications.length && (
@@ -1049,14 +1126,19 @@ export function UpdatesPage({
             </button>
           )}
         </div>
-        {updateSummary.data?.items.some((item) => item.checkStatus === "failed") && (
+        {updateSummary.data?.items.some(
+          (item) => item.checkStatus === "failed",
+        ) && (
           <details className="update-card-advanced">
             <summary>{t("Details")}</summary>
-            {updateSummary.data.items.filter((item) => item.checkStatus === "failed").map((item) => (
-              <p key={item.id}><strong>{item.name}:</strong> {translateText(item.message)}
-                {item.errorCode && <small> ({item.errorCode})</small>}
-              </p>
-            ))}
+            {updateSummary.data.items
+              .filter((item) => item.checkStatus === "failed")
+              .map((item) => (
+                <p key={item.id}>
+                  <strong>{item.name}:</strong> {translateText(item.message)}
+                  {item.errorCode && <small> ({item.errorCode})</small>}
+                </p>
+              ))}
           </details>
         )}
         {updateSummary.data?.items
@@ -1082,7 +1164,10 @@ export function UpdatesPage({
                         ? "Last verified release: {version} (stale, checked {time})"
                         : "Last verified release: {version} (stale)",
                     {
-                      version: item.id === "mediahub-core" ? item.latestVersion.slice(0, 7) : item.latestVersion,
+                      version:
+                        item.id === "mediahub-core"
+                          ? item.latestVersion.slice(0, 7)
+                          : item.latestVersion,
                       time: checkedAt(item.checkedAt),
                     },
                   )}
@@ -1129,8 +1214,14 @@ export function UpdatesPage({
               />
             </button>
             {platformUpdateReady(release) && (
-              <button className="primary" disabled={!!busy} onClick={() => void installPlatform()}>
-                {busy === "platform-install" ? t("Installing…") : t("Install update")}
+              <button
+                className="primary"
+                disabled={!!busy}
+                onClick={() => void installPlatform()}
+              >
+                {busy === "platform-install"
+                  ? t("Installing…")
+                  : t("Install update")}
               </button>
             )}
           </div>
@@ -1226,14 +1317,25 @@ export function UpdatesPage({
         {apps?.some(
           (app) => !app.isMock && app.packageId === "org.mediahub.seedbox",
         ) && (
-          <UpdateCard name={t("Seedbox Agent")} packageId="org.mediahub.seedbox">
+          <UpdateCard
+            name={t("Seedbox Agent")}
+            packageId="org.mediahub.seedbox"
+          >
             <div className="runtime-row">
               <span>{t("Installed")}</span>
-              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.installedVersion || t("Not checked")}</strong>
+              <strong>
+                {updateSummary.data?.items.find(
+                  (item) => item.id === "seedbox-agent",
+                )?.installedVersion || t("Not checked")}
+              </strong>
             </div>
             <div className="runtime-row">
               <span>{t("Latest")}</span>
-              <strong>{updateSummary.data?.items.find((item) => item.id === "seedbox-agent")?.latestVersion || t("Not checked")}</strong>
+              <strong>
+                {updateSummary.data?.items.find(
+                  (item) => item.id === "seedbox-agent",
+                )?.latestVersion || t("Not checked")}
+              </strong>
             </div>
             <details className="update-agent-details">
               <summary>{t("Update Agent")}</summary>
@@ -1246,22 +1348,34 @@ export function UpdatesPage({
           </UpdateCard>
         )}
         {apps
-          ?.filter((app) => !app.isMock && app.packageId !== "org.mediahub.cloudflared")
+          ?.filter(
+            (app) =>
+              !app.isMock && app.packageId !== "org.mediahub.cloudflared",
+          )
           .map((app) => {
             const version = versions[app.id];
             const isPlex = app.packageId === "org.mediahub.plex";
             const isCloudflare = app.packageId === "org.mediahub.cloudflared";
-            const isBundled = ["org.mediahub.mediaseed", "org.mediahub.mediavpn"].includes(app.packageId);
-            const bundled = updateSummary.data?.items.find((item) => item.id === app.id);
-            const preparationNeeded = isBundled && !!bundled?.installedVersion &&
-              bundled.installedVersion !== "managed" && !!bundled.bundledVersion &&
-              bundled.installedVersion !== bundled.bundledVersion;
+            const isBundled = [
+              "org.mediahub.mediaseed",
+              "org.mediahub.mediavpn",
+            ].includes(app.packageId);
+            const bundled = updateSummary.data?.items.find(
+              (item) => item.id === app.id,
+            );
             return (
-              <UpdateCard key={app.id} name={app.name} packageId={app.packageId}>
+              <UpdateCard
+                key={app.id}
+                name={app.name}
+                packageId={app.packageId}
+              >
                 <div className="runtime-row">
                   <span>{t("Installed")}</span>
                   <strong>
-                    {(isBundled && bundled?.installedVersion !== "managed" ? bundled?.installedVersion : null) || version?.plex?.version ||
+                    {(isBundled && bundled?.installedVersion !== "managed"
+                      ? bundled?.installedVersion
+                      : null) ||
+                      version?.plex?.version ||
                       version?.qBittorrent?.version ||
                       version?.cloudflare?.version ||
                       (isCloudflare
@@ -1273,18 +1387,59 @@ export function UpdatesPage({
                 </div>
                 <div className="runtime-row">
                   <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
-                  <span>{latest[app.id] || t("Not checked")}</span>
+                  <span>
+                    {(isBundled ? bundled?.latestVersion : null) ||
+                      latest[app.id] ||
+                      t("Not checked")}
+                  </span>
                 </div>
                 {isBundled && (
                   <>
-                    <p className="muted">{t("This app is updated automatically with MediaHub Core.")}</p>
-                    {prerequisites.data?.state === "failed" && <p>{t("App preparation failed. The installed app may still use older code; its data was preserved.")}</p>}
-                    {prerequisites.data?.state === "preparing" && <p role="status">{t("Preparing app prerequisites; refresh to follow progress")}</p>}
+                    <p className="muted">
+                      {t("This app updates independently from MediaHub Core.")}
+                    </p>
+                    {prerequisites.data?.state === "failed" && (
+                      <p>
+                        {t(
+                          "App preparation failed. The installed app may still use older code; its data was preserved.",
+                        )}
+                      </p>
+                    )}
+                    {prerequisites.data?.state === "preparing" && (
+                      <p role="status">
+                        {t(
+                          "Preparing app prerequisites; refresh to follow progress",
+                        )}
+                      </p>
+                    )}
                     <div className="button-row">
-                      <button disabled={!!busy || prerequisites.data?.state === "preparing"} onClick={() => void check(app)}>
-                        <RefreshCw size={16} />{t("Check release")}
+                      <button
+                        disabled={
+                          !!busy || prerequisites.data?.state === "preparing"
+                        }
+                        onClick={() => void check(app)}
+                      >
+                        <RefreshCw size={16} />
+                        {t("Check release")}
                       </button>
-                      {(prerequisites.data?.state === "failed" || preparationNeeded) && <button disabled={!!busy || prerequisites.data?.state === "preparing"} onClick={() => void retryAppPreparation()}>{t("Retry app preparation")}</button>}
+                      <button
+                        disabled={
+                          !!busy ||
+                          prerequisites.data?.state === "preparing" ||
+                          !bundled?.updateAvailable
+                        }
+                        onClick={() => void installManaged(app)}
+                      >
+                        {t("Install update")}
+                      </button>
+                      {prerequisites.data?.state === "failed" && (
+                        <button
+                          disabled={!!busy}
+                          onClick={() => void retryAppPreparation()}
+                        >
+                          {t("Retry app preparation")}
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -1330,7 +1485,8 @@ export function UpdatesPage({
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
                     <p className="muted">
-                      {t("VPN runtime")}: {version?.vpn?.version || t("Pinned Gluetun image")}
+                      {t("VPN runtime")}:{" "}
+                      {version?.vpn?.version || t("Pinned Gluetun image")}
                     </p>
                     <p className="muted">
                       {t(
@@ -1342,7 +1498,10 @@ export function UpdatesPage({
                 {isPlex && (
                   <details className="update-card-details">
                     <summary>{t("Update details")}</summary>
-                    <p>{plexChecks[app.id]?.message || plexChecks[app.id]?.reason}</p>
+                    <p>
+                      {plexChecks[app.id]?.message ||
+                        plexChecks[app.id]?.reason}
+                    </p>
                     <p className="muted">
                       {t(
                         "MediaHub checks the LinuxServer publisher image digest, not Plex's in-server updater. An image release may leave the Plex server version unchanged. A configuration rollback snapshot is created before replacing the runtime. Media files stay separate.",

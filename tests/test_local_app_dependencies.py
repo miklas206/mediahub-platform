@@ -259,7 +259,13 @@ def test_updates_install_prerequisites_but_do_not_start_stopped_apps(tmp_path, m
     media = tmp_path / "existing-movie.mkv"
     media.write_bytes(b"synthetic media sentinel")
     module.provision(root, "192.168.1.50", source)
-    assert any("build" in call and "app" in call for call in calls)
+    assert not any("build" in call for call in calls)
+    assert (
+        json.loads((root / "local-apps/mediavpn/compose.json").read_text())["services"]["app"][
+            "image"
+        ]
+        == "old-app"
+    )
     vpn = json.loads((root / "local-apps/mediavpn/compose.json").read_text())
     assert (
         vpn["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] == "mediahub-mediaseed"
@@ -279,53 +285,157 @@ def test_failed_build_restores_previous_compose_and_running_intent(tmp_path, mon
     root, source, calls, fail = fixture(tmp_path, monkeypatch, running=True)
     path = root / "local-apps/mediavpn/compose.json"
     previous = path.read_bytes()
+    other = (root / "local-apps/mediaseed/compose.json").read_bytes()
+    staged = root / "data/app-updates/mediavpn/test/source"
+    staged.mkdir(parents=True)
+    (staged / "Dockerfile").write_text("FROM scratch")
     fail[0] = True
     with pytest.raises(OSError):
-        module.provision(root, "192.168.1.50", source)
+        module.provision(
+            root,
+            "192.168.1.50",
+            source,
+            app="mediavpn",
+            app_source=staged,
+            app_commit="a" * 40,
+            app_repository="miklas206/mediavpn",
+        )
+    assert (root / "local-apps/mediaseed/compose.json").read_bytes() == other
     assert path.read_bytes() == previous
     assert any("-d" in call and "app" in call for call in calls)
     assert not (root / "local-apps/source.json").exists()
 
 
-def test_preparation_labels_the_actual_bundled_app_version(tmp_path, monkeypatch):
+@pytest.mark.parametrize("kind", ["mediaseed", "mediavpn"])
+def test_selected_update_changes_only_its_own_version_and_build(tmp_path, monkeypatch, kind):
+    root, source, calls, _ = fixture(tmp_path, monkeypatch)
+    other = "mediavpn" if kind == "mediaseed" else "mediaseed"
+    previous = (root / "local-apps" / other / "compose.json").read_bytes()
+    selected_path = root / "local-apps" / kind / "compose.json"
+    selected_cfg = json.loads(selected_path.read_text())
+    for service in selected_cfg["services"].values():
+        service.pop("build", None)  # Older installs can retain only an image reference.
+    selected_path.write_text(json.dumps(selected_cfg))
+    staged = root / "data/app-updates" / kind / "test/source"
+    staged.mkdir(parents=True)
+    (staged / "Dockerfile").write_text("FROM scratch")
+    (staged / "pyproject.toml").write_text('[project]\nversion="9.0.0"\n')
+    monkeypatch.setattr(module, "prepare_vpn_helpers", lambda *args: None)
+    module.provision(
+        root,
+        "192.168.1.50",
+        source,
+        app=kind,
+        app_source=staged,
+        app_commit="a" * 40,
+        app_repository="miklas206/" + kind,
+    )
+    cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
+    labels = cfg["services"]["app"]["labels"]
+    assert labels["org.mediahub.app.version"] == "9.0.0"
+    assert labels["org.mediahub.app.commit"] == "a" * 40
+    assert cfg["services"]["app"]["image"] == "mediahub-" + kind + ":source-" + "a" * 16
+    assert (root / "local-apps" / other / "compose.json").read_bytes() == previous
+    assert any("build" in call for call in calls)
+    assert not any("mediahub-" + other in call for call in calls)
+
+
+def test_core_preparation_preserves_installed_version(tmp_path, monkeypatch):
     root, source, _, _ = fixture(tmp_path, monkeypatch)
-    for kind, version in (("mediaseed", "0.1.1"), ("mediavpn", "0.1.3")):
-        (source / "bundled" / kind / "pyproject.toml").write_text('[project]\nversion = "' + version + '"\n')
+    for kind in ("mediaseed", "mediavpn"):
+        path = root / "local-apps" / kind / "compose.json"
+        cfg = json.loads(path.read_text())
+        cfg["services"]["app"]["labels"] = {"org.mediahub.app.version": "0.1.0"}
+        path.write_text(json.dumps(cfg))
+        (source / "bundled" / kind / "pyproject.toml").write_text('[project]\nversion="9.0.0"\n')
     module.provision(root, "192.168.1.50", source)
-    for kind, version in (("mediaseed", "0.1.1"), ("mediavpn", "0.1.3")):
+    for kind in ("mediaseed", "mediavpn"):
         cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
-        assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == version
+        assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == "0.1.0"
 
 
-@pytest.mark.parametrize('existing', [[], ['/dev/net/tun:/dev/net/tun:rw'], [{'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rw'}]])
+@pytest.mark.parametrize(
+    "existing",
+    [
+        [],
+        ["/dev/net/tun:/dev/net/tun:rw"],
+        [{"source": "/dev/net/tun", "target": "/dev/net/tun", "permissions": "rw"}],
+    ],
+)
 def test_vpn_tun_mapping_repairs_existing_compose_without_changing_other_settings(existing):
-    cfg = {'services': {'app': {'devices': [*existing, '/dev/dri:/dev/dri:rwm'], 'environment': {'EXISTING': 'keep'}, 'volumes': ['private:/data']}}}
+    cfg = {
+        "services": {
+            "app": {
+                "devices": [*existing, "/dev/dri:/dev/dri:rwm"],
+                "environment": {"EXISTING": "keep"},
+                "volumes": ["private:/data"],
+            }
+        }
+    }
     module.configure_vpn_tun(cfg)
     module.configure_vpn_tun(cfg)
-    app = cfg['services']['app']
-    assert app['devices'] == ['/dev/dri:/dev/dri:rwm', {'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rwm'}]
-    assert app['environment'] == {'EXISTING': 'keep'}
-    assert app['volumes'] == ['private:/data']
-    assert not app.get('privileged') and not app.get('cap_add')
+    app = cfg["services"]["app"]
+    assert app["devices"] == [
+        "/dev/dri:/dev/dri:rwm",
+        {"source": "/dev/net/tun", "target": "/dev/net/tun", "permissions": "rwm"},
+    ]
+    assert app["environment"] == {"EXISTING": "keep"}
+    assert app["volumes"] == ["private:/data"]
+    assert not app.get("privileged") and not app.get("cap_add")
 
 
 def test_vpn_tun_mapping_rejects_foreign_source():
-    cfg = {'services': {'app': {'devices': ['/unowned/device:/dev/net/tun:rwm']}}}
-    with pytest.raises(ValueError, match='unexpected source'):
+    cfg = {"services": {"app": {"devices": ["/unowned/device:/dev/net/tun:rwm"]}}}
+    with pytest.raises(ValueError, match="unexpected source"):
         module.configure_vpn_tun(cfg)
 
 
-def test_update_backfills_tun_in_saved_compose_and_keeps_stopped_apps_stopped(tmp_path, monkeypatch):
+def test_update_backfills_tun_in_saved_compose_and_keeps_stopped_apps_stopped(
+    tmp_path, monkeypatch
+):
     root, source, calls, _ = fixture(tmp_path, monkeypatch)
-    module.provision(root, '192.168.1.50', source)
-    cfg = json.loads((root / 'local-apps/mediavpn/compose.json').read_text())
-    assert cfg['services']['app']['devices'] == [{'source': '/dev/net/tun', 'target': '/dev/net/tun', 'permissions': 'rwm'}]
-    assert not any('up' in args and '-d' in args for args in calls)
+    module.provision(root, "192.168.1.50", source)
+    cfg = json.loads((root / "local-apps/mediavpn/compose.json").read_text())
+    assert cfg["services"]["app"]["devices"] == [
+        {"source": "/dev/net/tun", "target": "/dev/net/tun", "permissions": "rwm"}
+    ]
+    assert not any("up" in args and "-d" in args for args in calls)
 
 
 def test_fresh_runtime_declares_tun_device_without_extra_capabilities():
     import yaml
-    cfg = yaml.safe_load((SCRIPTS.parent / 'docker/bundled/mediavpn/compose.runtime.yaml').read_text())
-    app = cfg['services']['app']
-    assert app['devices'] == ['/dev/net/tun:/dev/net/tun:rwm']
-    assert not app.get('privileged') and not app.get('cap_add')
+
+    cfg = yaml.safe_load(
+        (SCRIPTS.parent / "docker/bundled/mediavpn/compose.runtime.yaml").read_text()
+    )
+    app = cfg["services"]["app"]
+    assert app["devices"] == ["/dev/net/tun:/dev/net/tun:rwm"]
+    assert not app.get("privileged") and not app.get("cap_add")
+
+
+def test_fresh_install_builds_and_labels_both_bootstrap_apps(tmp_path, monkeypatch):
+    root, source, calls, _ = fixture(tmp_path, monkeypatch)
+    original_run = module.run
+    for kind in ("mediaseed", "mediavpn"):
+        (root / "local-apps" / kind / "compose.json").unlink()
+        (source / "bundled" / kind / "hub-proxy.yaml").write_text("{}")
+        (source / "bundled" / kind / "pyproject.toml").write_text('[project]\nversion="1.2.3"\n')
+
+    def run(*args, env=None):
+        if "config" in args and "--format" in args:
+            project = args[args.index("-p") + 1]
+            services = {"app": {"build": {}, "environment": {}}, "sso-proxy": {}}
+            if project.endswith("mediaseed"):
+                services["client-init"] = {"build": {}}
+            return json.dumps({"name": project, "services": services})
+        return original_run(*args, env=env)
+
+    monkeypatch.setattr(module, "run", run)
+    monkeypatch.setattr(module, "certificate", lambda *args: None)
+    monkeypatch.setattr(module, "prepare_vpn_helpers", lambda *args: None)
+    module.provision(root, "192.168.1.50", source)
+    for kind in ("mediaseed", "mediavpn"):
+        cfg = json.loads((root / "local-apps" / kind / "compose.json").read_text())
+        assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == "1.2.3"
+        assert cfg["services"]["app"]["image"].startswith("mediahub-" + kind + ":bundled-")
+        assert any("build" in call and "mediahub-" + kind in call for call in calls)

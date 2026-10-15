@@ -196,3 +196,33 @@ describe("Seedbox Agent updates", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("Independent first-party updates", () => {
+  it("installs and polls only the selected app", async () => {
+    const seed = {
+      id: "seed",
+      name: "MediaSeed",
+      packageId: "org.mediahub.mediaseed",
+      isMock: false,
+    } as AppInfo;
+    const selected = updateAllPlan(
+      [{ id: "seed", name: "MediaSeed", updateAvailable: true }],
+      [seed],
+    );
+    expect(selected.tasks.map((item) => item.kind)).toEqual(["managed"]);
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ updateAvailable: true })
+      .mockResolvedValueOnce({ state: "running", operationId: "selected" })
+      .mockResolvedValueOnce({ state: "succeeded", operationId: "selected" });
+    expect(await runUpdateAll(selected, request, vi.fn(), pause)).toEqual({
+      coreUpdated: false,
+      failed: false,
+    });
+    expect(request.mock.calls.map((call) => call[0])).toEqual([
+      "/apps/seed/update-check",
+      "/apps/seed/update",
+      "/apps/seed/update-operation",
+    ]);
+  });
+});
