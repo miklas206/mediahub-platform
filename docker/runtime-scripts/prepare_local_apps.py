@@ -443,6 +443,58 @@ def build_app_images(command, cfg, kind, context, root):
         run(*command, "run", "--rm", "--no-deps", "--pull", "never", "client-init")
 
 
+def prepare_host_metrics(root, compose, host=Path("/"), *, command=run):
+    """Backfill an isolated read-only sampler without recreating Core or apps."""
+    core = compose["services"]["core"]
+    sources = [host / "proc/meminfo", host / "proc/stat", host / "sys/fs/cgroup"]
+    # In the dependency container these exact host paths are mounted under /host.
+    available = (
+        all(p.exists() for p in sources)
+        if host != Path("/")
+        else (Path("/host/meminfo").is_file() or all(p.exists() for p in sources))
+    )
+    if not available:
+        return
+    folder = root / "host-metrics"
+    output = root / "data/host-metrics"
+    for directory in [folder, output]:
+        if directory.is_symlink() or directory.resolve() != directory:
+            raise ValueError("Unsafe host metrics directory")
+    folder.mkdir(mode=0o700, exist_ok=True)
+    output.mkdir(mode=0o750, exist_ok=True)
+    os.chown(output, 10001, 10001)
+    service = {
+        "image": core["image"],
+        "user": "10001:10001",
+        "entrypoint": ["python", "-m", "mediahub.host_metrics"],
+        "network_mode": "none",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+        "restart": "unless-stopped",
+        "mem_limit": "64m",
+        "memswap_limit": "64m",
+        "healthcheck": {"disable": True},
+        "volumes": [
+            "/proc/meminfo:/host/meminfo:ro",
+            "/proc/stat:/host/stat:ro",
+            "/sys/fs/cgroup:/host/cgroup:ro",
+            str(output) + ":/output",
+        ],
+        "logging": {"driver": "none"},
+    }
+    path = folder / "compose.json"
+    if path.is_symlink():
+        raise ValueError("Unsafe host metrics Compose file")
+    config = {"name": "mediahub-host-metrics", "services": {"sampler": service}}
+    if path.exists():
+        previous = json.loads(path.read_text())
+        if previous.get("name") != config["name"]:
+            raise ValueError("Host metrics ownership changed")
+    path.write_text(json.dumps(config, indent=2))
+    command("docker", "compose", "-f", path, "up", "-d", "--no-build", "--pull", "never")
+
+
 def provision(
     root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None
 ):
@@ -469,6 +521,8 @@ def provision(
     if hub_compose.get("name") != "mediahub-platform":
         raise ValueError("MediaHub installation ownership changed")
     refresh_host_updater(root, source)
+    if not app:
+        prepare_host_metrics(root, hub_compose)
     browser_origin = hub_browser_origin(hub_compose, lan)
     locations = approved_media_storage(root)
     # Domain changes must invalidate the marker too, without changing internal API URLs.

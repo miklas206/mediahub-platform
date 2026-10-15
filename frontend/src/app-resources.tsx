@@ -447,6 +447,7 @@ export function AppResourceOverview() {
               "Current usage, assigned limits and recommendations for each installed app.",
             )}
           </p>
+          <small className="muted">{t("App measurements update about once a minute. RAM excludes file cache; peak is historical usage.")}</small>
         </div>
         <button onClick={reload}>{t("Refresh")}</button>
       </header>

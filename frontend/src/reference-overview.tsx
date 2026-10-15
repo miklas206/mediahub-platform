@@ -67,18 +67,18 @@ export function ReferenceOverview({
       name: "CPU",
       icon: Cpu,
       value:
-        live && metrics.cpu.percent != null
-          ? `${metrics.cpu.percent.toFixed(1)}%`
+        live && metrics.host?.cpu.percent != null
+          ? `${metrics.host.cpu.percent.toFixed(1)}%`
           : "\u2014",
-      percent: live ? metrics.cpu.percent : null,
+      percent: live ? metrics.host?.cpu.percent : null,
     },
     {
       name: "RAM",
       icon: MemoryStick,
-      value: live
-        ? `${bytes(metrics.ram.usedBytes)} / ${bytes(metrics.ram.totalBytes)}`
+      value: live && metrics.host
+        ? `${bytes(metrics.host.ram.usedBytes)} / ${bytes(metrics.host.ram.totalBytes)}`
         : "\u2014",
-      percent: live ? metrics.ram.percent : null,
+      percent: live ? metrics.host?.ram.percent : null,
     },
     {
       name: capacity ? "Storage" : "Core storage",
@@ -142,6 +142,8 @@ export function ReferenceOverview({
           <strong>{live ? uptime(metrics.coreUptimeSeconds) : "\u2014"}</strong>
         </div>
       </section>
+      <p className="muted">{t("CPU and RAM cover this server, including MediaHub, apps and shared services. RAM excludes file cache. Storage shows configured media storage. Remote servers are not included.")}</p>
+      {live && !metrics.host && <p className="muted">{t("Total server measurements are unavailable. Automatic host preparation must complete and the host must allow read-only proc and cgroup access.")}</p>}
       <div className="overview-resource-row">
         {measurements.map((item) => (
           <article key={item.name}>

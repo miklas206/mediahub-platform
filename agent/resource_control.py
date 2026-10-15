@@ -60,8 +60,14 @@ def resource_revision(binding):
 def metrics_of(stats):
     memory = stats.get("memory_stats", {})
     raw = memory.get("usage")
-    cache = memory.get("stats", {}).get(
-        "inactive_file", memory.get("stats", {}).get("total_inactive_file", 0)
+    detail = memory.get("stats", {})
+    # Proxmox discounts file cache, including active mmap cache used by torrents.
+    cache = detail.get(
+        "file",
+        detail.get(
+            "total_cache",
+            detail.get("cache", detail.get("inactive_file", detail.get("total_inactive_file", 0))),
+        ),
     )
     cpu, previous = stats.get("cpu_stats", {}), stats.get("precpu_stats", {})
     delta = cpu.get("cpu_usage", {}).get("total_usage", 0) - previous.get("cpu_usage", {}).get(
@@ -73,6 +79,8 @@ def metrics_of(stats):
     return {
         "memoryBytes": max(0, raw - cache) if isinstance(raw, int) else None,
         "chargedBytes": raw,
+        "cacheBytes": cache,
+        "memoryAccounting": "excluding-file-cache-v2",
         "cpuCores": cores,
     }
 
@@ -219,6 +227,7 @@ class DockerResources:
             "installationId": binding["installationId"],
             "revision": resource_revision(binding),
             "sampledAt": time.time(),
+            "memoryAccounting": "excluding-file-cache-v2",
             "running": bool(measured),
             "validSample": valid,
             "memoryBytes": sum(x["memoryBytes"] for x in measured)

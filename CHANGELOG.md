@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.35
+
+- Overview CPU/RAM now report the complete local Docker host (the MediaHub LXC on Proxmox), including Core, apps and shared services. A restricted read-only sampler is provisioned automatically for new and existing installations without recreating apps. Missing or stale host measurements are explicitly unavailable; Core limits are never presented as host capacity. Media storage retains the configured storage pool scope.
+- App RAM discounts active and inactive file cache, matching the Proxmox accounting convention more closely. Version the history accounting key so old cache-inflated peaks cannot generate recommendations using the new definition. Show the roughly one-minute app sampling interval in Overview.
+
 ## 0.6.34
 
 - Reuse the selected MediaSeed app image for its one-shot client initialization instead of issuing a second build. Apply the shared image configuration idempotently to fresh and existing approved Compose projects, preserving initializer entrypoint, user, isolated networking, volumes and secrets. Initialization still runs its existing compatibility checks and cannot pull a replacement image.

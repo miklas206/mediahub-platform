@@ -13,7 +13,12 @@ WEEK = 7 * 86400
 
 
 def allocation_key(snapshot):
-    return hashlib.sha256(json.dumps(snapshot["limits"], sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(
+            [snapshot["limits"], snapshot.get("memoryAccounting", "legacy-inactive-cache")],
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
 
 
 def recommendations(samples, limits, now):

@@ -4198,5 +4198,8 @@
   "Another app has an interrupted resource change. Resolve that app first.": "En anden app har en afbrudt ressourceændring. Afklar den først.",
   "App ownership changed during resource discovery.": "Appens ejerskab blev ændret under indlæsningen af ressourcer.",
   "The proposed limits no longer match this recommendation.": "De foreslåede grænser passer ikke længere til denne anbefaling.",
-  "The app is not installed on this Agent.": "Appen er ikke installeret på denne Agent."
+  "The app is not installed on this Agent.": "Appen er ikke installeret på denne Agent.",
+  "Total server measurements are unavailable. Automatic host preparation must complete and the host must allow read-only proc and cgroup access.": "Samlede servermålinger er ikke tilgængelige. Automatisk klargøring skal være færdig, og værten skal tillade læseadgang til proc og cgroup.",
+  "CPU and RAM cover this server, including MediaHub, apps and shared services. RAM excludes file cache. Storage shows configured media storage. Remote servers are not included.": "CPU og RAM gælder hele denne server, inklusive MediaHub, apps og fælles tjenester. RAM vises uden filcache. Lager viser det tilknyttede medielager. Eksterne servere er ikke medregnet.",
+  "App measurements update about once a minute. RAM excludes file cache; peak is historical usage.": "App-målinger opdateres cirka hvert minut. RAM vises uden filcache; peak er det højeste historiske forbrug."
 }

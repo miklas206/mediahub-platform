@@ -139,7 +139,12 @@ class AppDependencies:
                             str(root) + ":" + str(root),
                             "/var/run/docker.sock:/var/run/docker.sock",
                         ]
-                        + storage_binds,
+                        + storage_binds
+                        + [
+                            "/proc/meminfo:/host/meminfo:ro",
+                            "/proc/stat:/host/stat:ro",
+                            "/sys/fs/cgroup:/host/cgroup:ro",
+                        ],
                         "NetworkMode": "bridge",
                         "Privileged": False,
                         "CapDrop": ["ALL"],

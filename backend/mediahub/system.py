@@ -7,6 +7,7 @@ import psutil
 
 from mediahub import __version__
 from mediahub.db import now
+from mediahub.host_metrics import read_host_metrics
 
 
 class SystemService:
@@ -93,6 +94,7 @@ class SystemService:
             pass
         return {
             "hostname": platform.node(),
+            "host": read_host_metrics(self.config.data_dir),
             "version": __version__,
             "timestamp": now(),
             "uptimeSeconds": time.time() - psutil.boot_time(),
