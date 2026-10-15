@@ -199,7 +199,7 @@ class VPNGateway:
                 502,
             ) from None
 
-    async def vpn(self, method="GET", body=None):
+    async def vpn(self, method="GET", body=None, *, diagnostics=False):
         policies = self.svc.managed_apps.policy
         management = policies.get("org.mediahub.mediavpn")
         seed = policies.get("org.mediahub.mediaseed")
@@ -216,11 +216,11 @@ class VPNGateway:
         try:
             token = key.read_text().strip()
             async with httpx.AsyncClient(
-                timeout=45, trust_env=False, follow_redirects=False
+                timeout=5 if diagnostics else 45, trust_env=False, follow_redirects=False
             ) as client:
                 response = await client.request(
                     method,
-                    address + "/api/integration/web-gateway",
+                    address + ("/api/integration/diagnostics/logs" if diagnostics else "/api/integration/web-gateway"),
                     headers={"X-MediaHub-Key": token},
                     json=body,
                 )
@@ -230,6 +230,8 @@ class VPNGateway:
                     "MediaVPN could not apply the web gateway; check the profile, runtime and port forwarding",
                     409,
                 )
+            if diagnostics and len(response.content) > 1024 * 1024:
+                raise ValueError()
             value = response.json()
             if not isinstance(value, dict):
                 raise ValueError()

@@ -32,6 +32,10 @@ class PlexRuntime:
         self.control = control
         self.policy_file = install_policy_file
         self.state_dir = Path(state_dir)
+        from agent.diagnostics import Diagnostics
+
+        if self.control is not None:
+            self.control.diagnostics = Diagnostics(self.state_dir, "plex")
         self.vault = SecretStore(self.state_dir / "plex-secrets")
         self.last_saved = None
         self.operation = {"state": "idle", "message": "No operation running"}
@@ -738,6 +742,7 @@ class PlexRuntime:
 
     async def start(self, policy):
         """Restore encrypted preferences before the only container start path."""
+        self.control.diagnose("runtime.start_requested", container=policy.container)
         if self.shared_vpn and not await self.shared_vpn.ready("plex", await self.control.inspect(policy)):
             raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; Plex start blocked", 409)
         if not await self.control.storage_verified(policy):
@@ -781,6 +786,7 @@ class PlexRuntime:
             await self.remove_helper(helper)
 
     async def stop(self, policy):
+        self.control.diagnose("runtime.stop_requested", container=policy.container)
         # Keep the RAM volume alive through Plex's final preference flush. A
         # checkpoint failure must NEVER prevent stopping an unsafe container.
         helper = None

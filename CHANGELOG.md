@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.29
+
+- Persist Plex/shared-VPN controller decisions and bundle MediaVPN 0.2.13 with owner-scoped passive Docker lifecycle observation. Retain safe causes, operation IDs, provider/container generations, exit/OOM evidence, changed ports and verification stages across container replacement. Settings Logs aggregates durable diagnostics; existing Plex logs also survive restart. Fresh installs and upgrades initialize journals automatically in existing persistent data directories without changing media or credentials.
+
 ## 0.6.28
 
 - Fix false relay health failures between normal WireGuard rekeys while rejecting expired sessions. Bundle MediaVPN 0.2.12: independent torrent mapping revision and consistent observed generation prevent unrelated Plex/web changes from recreating the torrent client.

@@ -1449,6 +1449,7 @@
   "Activity will appear here.": "Aktivitet vises her.",
   "← Core logs / choose source": "← Core-logs / vælg kilde",
   "Core log buffer": "Core-logbuffer",
+  "Core and lifecycle logs": "Core- og driftslogs",
   "Log source": "Logkilde",
   "Agent / components": "Agent / komponenter",
   "No log entries": "Ingen logposter",

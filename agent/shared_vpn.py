@@ -15,6 +15,7 @@ from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from mediahub.errors import DomainError
 
+from agent.diagnostics import Diagnostics, cause, error_fields, trace_async
 from agent.install_files import read_json, save_json
 from agent.relay_image.runtime import validate
 
@@ -25,6 +26,7 @@ SUPPORTED = {"plex", "jellyfin"}
 class SharedVPN:
     def __init__(self, config, apps, plex):
         self.config, self.apps, self.plex = config, apps, plex
+        self.diagnostics = Diagnostics(config.state_dir, "shared_vpn")
         self.directory = config.state_dir / "shared-vpn"
         self.directory.mkdir(mode=0o700, exist_ok=True)
         if self.directory.is_symlink():
@@ -409,7 +411,9 @@ class SharedVPN:
                 save_json(self.path(app), state)
                 return {"state": "succeeded", "installationId": identity, "dataPreserved": True}
 
+    @trace_async("hub", "shared_vpn_configuration")
     async def configuration(self, app, peer, enabled):
+        self.diagnostics.record("configuration.requested", action=app, enabled=enabled, reason="configuration_requested")
         async with self.lock:
             state = self.state(app)
             operation_lock = self.plex.control.lock if app == "plex" else self.apps.locks[app]
@@ -480,11 +484,13 @@ class SharedVPN:
                 save_json(self.path(app), state)
                 # Stop before touching published ports. Volumes are never deleted.
                 if current and current["State"].get("Running"):
+                    self.diagnostics.record("app.stop_requested", action=app, container=current.get("Id"), reason="vpn_configuration_recreate")
                     if app == "plex":
                         await self.plex.stop(policy)
                     else:
                         await self.request("POST", "/containers/" + current["Id"] + "/stop?t=30")
                 if current:
+                    self.diagnostics.record("app.remove_requested", action=app, container=current.get("Id"), reason="vpn_configuration_recreate")
                     await self.request("DELETE", "/containers/" + current["Id"] + "?v=false")
                 state["enabled"] = enabled
                 save_json(self.path(app), state)
@@ -498,6 +504,7 @@ class SharedVPN:
                     record["container"] = spec
                     save_json(record_path, record)
                     await self.request("POST", "/containers/create?name=" + record["name"], spec)
+                    self.diagnostics.record("app.created", action=app, reason="vpn_configuration_recreate")
                     state["phase"] = "starting"
                     save_json(self.path(app), state)
                     if state.get("desiredRunning"):
@@ -510,6 +517,7 @@ class SharedVPN:
                     state.pop("message", None)
                     save_json(self.path(app), state)
                 except Exception as error:
+                    self.diagnostics.record("configuration.error", action=app, **error_fields(error))
                     state["phase"] = "blocked"
                     state["errorCode"] = (
                         error.code
@@ -586,9 +594,24 @@ class SharedVPN:
                         row = await self.owned_relay(app)
                         if row["Image"] == await self.build_image():
                             continue
-                    await self.configuration(
-                        app, state["peer"], state.get("requestedEnabled", state["enabled"])
-                    )
-                except (DomainError, OSError, ValueError, KeyError, TypeError):
+                    row = await self.owned_relay(app)
+                    reason = ("app_missing" if not current else "phase_requires_recovery" if state.get("phase") != "ready"
+                              else "relay_missing" if not row else "relay_stopped" if not row["State"].get("Running")
+                              else "relay_unhealthy" if row["State"].get("Health", {}).get("Status") != "healthy"
+                              else "app_stopped" if not current["State"].get("Running")
+                              else "namespace_changed" if current.get("HostConfig", {}).get("NetworkMode") != "container:" + row["Id"]
+                              else "namespace_label_changed" if current.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.namespace") != row["Id"]
+                              else "relay_generation_changed" if current.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.generation") != row["State"].get("StartedAt")
+                              else "relay_image_changed")
+                    with cause("supervisor", reason):
+                        self.diagnostics.record("reconcile.recreate_requested", action=app, reason=reason, phase=state.get("phase"),
+                                                container=(current or {}).get("Id"), generation=(row or {}).get("State", {}).get("StartedAt"),
+                                                expectedGeneration=(current or {}).get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.generation"),
+                                                health=(row or {}).get("State", {}).get("Health", {}).get("Status"))
+                        await self.configuration(
+                            app, state["peer"], state.get("requestedEnabled", state["enabled"])
+                        )
+                except (DomainError, OSError, ValueError, KeyError, TypeError) as error:
+                    self.diagnostics.record("reconcile.error", action=app, **error_fields(error))
                     pass
             await asyncio.sleep(10)

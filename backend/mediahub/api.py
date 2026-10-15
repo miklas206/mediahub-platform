@@ -456,7 +456,23 @@ async def save_settings(body: PlatformSettings, request: Request, user=Depends(a
 
 @router.get("/logs")
 async def logs(request: Request, user=Depends(authenticated)):
-    return result(list(recent_logs)[-100:])
+    from datetime import UTC, datetime
+
+    svc = services(request)
+    entries = list(recent_logs)[-100:]
+    for component, reader in (
+        ("agent", lambda: svc.agent.request("GET", "/v1/diagnostics/logs")),
+        ("mediavpn", lambda: svc.vpn_gateway.vpn(diagnostics=True)),
+    ):
+        try:
+            payload = await reader()
+            for entry in payload.get("entries", []):
+                entries.append({"timestamp": datetime.fromtimestamp(entry["timestamp"], UTC).isoformat(),
+                                "level": entry["severity"].upper(), "component": entry["type"], "message": entry["message"]})
+        except (DomainError, KeyError, TypeError, ValueError):
+            entries.append({"timestamp": datetime.now(UTC).isoformat(), "level": "WARNING", "component": component,
+                            "message": "Persistent lifecycle diagnostics unavailable from this component; update or check its connection."})
+    return result(sorted(entries, key=lambda entry: entry["timestamp"])[-400:])
 
 
 @router.get("/events/stream")

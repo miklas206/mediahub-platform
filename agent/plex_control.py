@@ -15,6 +15,7 @@ from mediahub.contracts import StrictModel
 from mediahub.errors import DomainError
 from pydantic import Field, field_validator
 
+from agent.diagnostics import Diagnostics, error_fields, trace_async
 from agent.install_files import read_json, save_json
 
 
@@ -70,6 +71,11 @@ class PlexControl:
         self.monitor_task = None
         self.storage_probe = None
         self.runtime = None
+        self.diagnostics = Diagnostics(Path(policy_file).parent, "plex") if policy_file else None
+
+    def diagnose(self, event, **fields):
+        if self.diagnostics:
+            self.diagnostics.record(event, **fields)
 
     async def storage_verified(self, policy):
         # A failed device may leave a kernel read blocked. Keep at most one worker.
@@ -105,6 +111,8 @@ class PlexControl:
                     if desired and mounted and self.runtime and policy.vpnEnabled:
                         vpn_ready = await self.runtime.vpn.reconcile(policy, running)
                     if running and (not mounted or not desired or not vpn_ready):
+                        self.diagnose("monitor.stop_requested", origin="supervisor", reason="storage_blocked" if not mounted else "vpn_blocked" if not vpn_ready else "desired_stopped",
+                                      desired=desired, mounted=mounted, vpnReady=vpn_ready, container=data.get("Id"))
                         if self.runtime:
                             await self.runtime.stop(policy)
                         else:
@@ -118,6 +126,8 @@ class PlexControl:
                         )
                         self.record(reason)
                     elif desired and mounted and vpn_ready and not running:
+                        self.diagnose("monitor.start_requested", origin="supervisor", reason="desired_running_container_stopped",
+                                      container=data.get("Id"), exitCode=data["State"].get("ExitCode"), oomKilled=data["State"].get("OOMKilled"))
                         if self.runtime:
                             await self.runtime.start(policy)
                         else:
@@ -127,7 +137,8 @@ class PlexControl:
                         await self.runtime.checkpoint(policy)
                         if mounted:
                             await self.runtime.ensure_libraries(policy)
-            except (DomainError, OSError, ValueError, KeyError, TypeError):
+            except (DomainError, OSError, ValueError, KeyError, TypeError) as error:
+                self.diagnose("monitor.error", origin="supervisor", reason="monitor_step_failed", **error_fields(error))
                 # Never act on an unowned runtime or print raw responses/configuration.
                 pass
             await asyncio.sleep(5)
@@ -139,6 +150,7 @@ class PlexControl:
                 await self.monitor_task
 
     def record(self, action):
+        self.diagnose("lifecycle." + action)
         self.events.append(
             {
                 "timestamp": time.time(),
@@ -409,13 +421,16 @@ class PlexControl:
             )
         return report
 
+    @trace_async("user", "explicit_plex_action")
     async def action(self, action):
         if action not in {"start", "stop", "restart"}:
             raise DomainError("unsupported_action", "Unsupported Plex action", 400)
         async with self.lock:
             policy = self.policy()
+            self.diagnose("action.requested", origin="user", reason="explicit_plex_action", action=action)
             await self.inspect(policy)
             if action != "stop" and not await self.storage_verified(policy):
+                self.diagnose("action.blocked", reason="storage_unavailable", action=action)
                 raise DomainError(
                     "storage_unavailable", "Plex storage is unavailable; start blocked", 409
                 )

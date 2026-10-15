@@ -1427,7 +1427,7 @@ function Logs() {
     );
   return (
     <Section
-      title={t("Core log buffer")}
+      title={t("Core and lifecycle logs")}
       aside={
         <button onClick={reload}>
           <RefreshCw size={15} />
@@ -1454,7 +1454,7 @@ function Logs() {
         {data?.map((log, i) => (
           <div key={i}>
             <time>
-              {new Date(log.timestamp).toLocaleTimeString(getLocale())}
+              {new Date(log.timestamp).toLocaleString(getLocale())}
             </time>
             <span>{log.level}</span>
             <span>{log.component}</span>

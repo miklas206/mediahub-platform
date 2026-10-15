@@ -557,9 +557,15 @@ def create_agent(config: AgentConfig | None = None):
         return {
             "entries": [
                 {**entry, "hostId": policy.hostId, "app": "org.mediahub.plex"}
-                for entry in plex.events[-100:]
+                for entry in (plex.diagnostics.entries() if plex.diagnostics else plex.events[-100:])
             ]
         }
+
+    @app.get("/v1/diagnostics/logs")
+    async def lifecycle_logs():
+        from agent.diagnostics import Diagnostics
+
+        return {"entries": Diagnostics(config.state_dir).entries()}
 
     @app.post("/v1/plex/update-check", dependencies=[Depends(secure_workflow)])
     async def plex_update_check():
