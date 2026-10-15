@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.38
+
+- Match Overview and Settings to the Apps page 1440-pixel content width. Remove viewport-driven text enlargement while preserving responsive mobile spacing and existing navigation.
+
 ## 0.6.37
 
 - Provision approved Other media locations for independent apps on fresh installation and upgrade. Recover a missing Other entry from the existing Plex approval only when storage identity anchors match, without changing credentials, media or explicit app policy.
