@@ -40,7 +40,7 @@ as permission to create arbitrary Docker mounts.
 
 ## Independent first-party updates (Core 0.6.30+)
 
-MediaSeed and MediaVPN check their own main branch in `miklas206/mediaseed` and `miklas206/mediavpn`. Updates shows the actual installed container version and the independently checked latest version. Use **Check** and **Install update** on the selected app card. Update all explicitly includes every available selected component and keeps Core last.
+From Core 0.6.32, version discovery uses read-only Git over HTTPS instead of GitHub REST metadata, retaining the existing encrypted token for private access. MediaSeed and MediaVPN check their own main branch in `miklas206/mediaseed` and `miklas206/mediavpn`. Updates shows the actual installed container version and the independently checked latest version. Use **Check** and **Install update** on the selected app card. Update all explicitly includes every available selected component and keeps Core last.
 
 Existing installations first need Core 0.6.30 to obtain this update mechanism. A Core update does not install newer app code. It preserves the app image, source context, credentials, storage and running/stopped intent while backfilling required configuration. Configuration repairs can recreate an affected container using its existing image. A fresh installation builds the reviewed bundled versions as initial bootstrap.
 

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from mediahub import __version__
 from mediahub.db import Setting
 from mediahub.errors import DomainError
+from mediahub.git_checks import GitHubGitChecks
 from mediahub.github_metadata import GitHubMetadata
 from mediahub.main_branch_watch import MAIN_CHECK_INTERVAL_SECONDS, MainBranchWatch
 from mediahub.platform_source import GitHubSourceProvider
@@ -25,11 +26,15 @@ class UpdateMonitor:
         self.check_task = None
         self.source_access = source_access(getattr(services, "config", None))
         data_dir = getattr(getattr(services, "config", None), "data_dir", None)
+        self.git_checks = (
+            GitHubGitChecks(data_dir, lambda: self.services.release_credentials.token())
+            if data_dir else None
+        )
         self.github_metadata = GitHubMetadata(
             state_file=data_dir / "github-cooldowns.json" if data_dir else None
         )
         self.main_watch = MainBranchWatch(
-            source_access=self.source_access, metadata_cache=self.github_metadata
+            source_access=self.source_access or self.git_checks, metadata_cache=self.github_metadata
         )
         self.check_finished_at = 0
         self.metadata_lock = asyncio.Lock()
@@ -185,7 +190,7 @@ class UpdateMonitor:
                 return copy.deepcopy(cached[1])
             result = await GitHubSourceProvider(
                 current_version, installed_commit,
-                source_access=self.source_access, metadata_cache=self.github_metadata,
+                source_access=self.source_access or self.git_checks, metadata_cache=self.github_metadata,
                 project_path=project_path,
             ).check(repository, token)
             self.source_checks[key] = (time.monotonic() + 60, copy.deepcopy(result))

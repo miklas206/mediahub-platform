@@ -252,7 +252,7 @@ class AgentUpdates:
         checked = await GitHubSourceProvider(
             version.get("version", "unknown"),
             version.get("sourceCommit"),
-            source_access=source_access(self.svc.config),
+            source_access=source_access(self.svc.config) or self.svc.updates.git_checks,
             metadata_cache=self.svc.updates.github_metadata,
         ).check(self.svc.settings.get().release_repository, self.svc.release_credentials.token())
         stored = self.saved_setup(identifier, address) is not None

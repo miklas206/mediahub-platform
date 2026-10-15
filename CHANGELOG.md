@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.32
+
+- Check Core, Agent, MediaSeed and MediaVPN main-branch versions using read-only Git instead of GitHub REST metadata. Reuse the existing repository-bound Core deploy key; otherwise use verified Git HTTPS with the existing encrypted token or anonymous public access. Share bounded five-minute metadata results and brief failure backoff by repository and credential identity. Credentials never enter Git URLs, command arguments or on-disk Git configuration. Existing source downloads, individual updates and rollback remain unchanged. Git and CA certificates are already provisioned by the Core image for fresh installations and upgrades.
+
 ## 0.6.31
 
 - Route independent MediaSeed/MediaVPN version checks through the same bounded GitHub metadata cache and provider cooldown as Core and Agent. Repeated checks reuse main metadata for five minutes and immutable project metadata for one hour; a rate limit on one component pauses other uncached checks sharing the credential identity. Installed versions and separate app repositories remain independent. No deployment or credential migration is required.

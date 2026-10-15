@@ -74,7 +74,7 @@ type PlatformRelease = {
   installedCommit?: string | null;
   latestCommit?: string | null;
   sourceChannel?: "main";
-  sourceAccessMethod?: "deploy-key" | "token" | "public";
+  sourceAccessMethod?: "deploy-key" | "token" | "public" | "git";
   latestVersion: string | null;
   updateAvailable: boolean;
   releaseUrl: string | null;

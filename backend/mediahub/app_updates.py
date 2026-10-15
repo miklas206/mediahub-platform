@@ -102,6 +102,7 @@ class AppUpdates:
             result = await GitHubSourceProvider(
                 valid_installed or "0.0.0",
                 labels.get("org.mediahub.app.commit"),
+                source_access=getattr(getattr(self.manager.svc, "updates", None), "git_checks", None),
                 metadata_cache=getattr(
                     getattr(self.manager.svc, "updates", None), "github_metadata", None
                 ),

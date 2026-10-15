@@ -46,6 +46,9 @@ class GitHubSSHSource:
                 409,
             )
 
+    def _remote(self):
+        return f"git@github.com:{self.repository}.git"
+
     def _environment(self):
         key, known = self.ssh_dir / "id_ed25519", self.ssh_dir / "known_hosts"
         git = shutil.which("git")
@@ -197,7 +200,7 @@ class GitHubSSHSource:
             # never checked out or executed, and is removed on success or failure.
             with tempfile.TemporaryDirectory(prefix="source-", dir=self.cache) as temporary:
                 root = Path(temporary)
-                remote = f"git@github.com:{self.repository}.git"
+                remote = self._remote()
                 if action in {"head", "metadata"}:
                     value = (
                         self._run(
@@ -262,8 +265,11 @@ class GitHubSSHSource:
             # Git/SSH output may include local paths or key details. Never publish it.
             raise DomainError(
                 "source_git_unavailable",
-                "GitHub source could not be read with the configured deploy key. "
-                "Check repository access, verified host key and available cache space.",
+                getattr(
+                    self, "failure_message",
+                    "GitHub source could not be read with the configured deploy key. "
+                    "Check repository access, verified host key and available cache space.",
+                ),
                 503,
             ) from None
         finally:

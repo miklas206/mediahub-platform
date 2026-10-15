@@ -120,8 +120,10 @@ class GitHubSourceProvider:
             "installReady": False,
             "updateMethod": "source",
             "sourceChannel": "main",
-            "privateAccessConfigured": bool(token or self.source_access),
-            "sourceAccessMethod": "deploy-key"
+            "privateAccessConfigured": bool(
+                token or (self.source_access and getattr(self.source_access, "private_access_configured", True))
+            ),
+            "sourceAccessMethod": getattr(self.source_access, "method", "deploy-key")
             if self.source_access
             else "token"
             if token
