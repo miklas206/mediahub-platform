@@ -421,6 +421,28 @@ def configure_media_storage(cfg, locations):
         # Both consumers use gid 1000. Host permissions are never changed here.
 
 
+def reuse_client_init_image(cfg):
+    """Fresh and older Compose configurations share the selected MediaSeed image."""
+    services = cfg["services"]
+    image = services["app"].get("image")
+    if not image or "client-init" not in services:
+        raise ValueError("MediaSeed app image and client initialization service are required")
+    services["client-init"]["image"] = image
+    services["client-init"].pop("build", None)
+
+
+def build_app_images(command, cfg, kind, context, root):
+    """Build the selected app once; initialization consumes its verified local image."""
+    if kind == "mediaseed":
+        reuse_client_init_image(cfg)
+    run(*command, "build", "app")
+    if kind == "mediavpn":
+        prepare_vpn_helpers(context, root)
+    else:
+        # Existing configuration/secrets are checked idempotently by client_init.
+        run(*command, "run", "--rm", "--no-deps", "--pull", "never", "client-init")
+
+
 def provision(
     root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None
 ):
@@ -592,6 +614,8 @@ def provision(
                 run("docker", "pull", values["image"])
                 image = json.loads(run("docker", "image", "inspect", values["image"]))[0]
                 values["image"] = image["RepoDigests"][0]
+        if kind == "mediaseed":
+            reuse_client_init_image(cfg)
         if kind == "mediavpn":
             cfg["services"]["app"]["environment"]["MEDIAVPN_SHARED_ADDRESS"] = lan
             cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] = (
@@ -613,13 +637,7 @@ def provision(
                 raise ValueError("Approved media storage changed during preparation")
             compose_path.write_text(json.dumps(cfg))
             if rebuilding:
-                run(*command, "build", "app")
-            if kind == "mediavpn" and rebuilding:
-                prepare_vpn_helpers(context, root)
-            if kind == "mediaseed" and rebuilding:
-                run(*command, "build", "client-init")
-                # Initialization is idempotent and refuses mismatched existing secrets.
-                run(*command, "run", "--rm", "--no-deps", "client-init")
+                build_app_images(command, cfg, kind, context, root)
             services = ["app", "sso-proxy"] if kind == "mediavpn" else ["app", "qbittorrent"]
             changed = not previous_compose or json.loads(previous_compose) != cfg
             if rebuilding or changed:

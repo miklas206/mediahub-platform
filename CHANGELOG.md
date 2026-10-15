@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.34
+
+- Reuse the selected MediaSeed app image for its one-shot client initialization instead of issuing a second build. Apply the shared image configuration idempotently to fresh and existing approved Compose projects, preserving initializer entrypoint, user, isolated networking, volumes and secrets. Initialization still runs its existing compatibility checks and cannot pull a replacement image.
+- Bundle MediaSeed 0.1.12 and MediaVPN 0.2.17 for fresh installations. Their Dockerfiles separate a stable dependency manifest from version metadata and application sources, so unchanged dependencies can reuse Docker layers. Installing changed application code uses existing build tools without resolving dependencies or accessing a package index. Existing apps keep their independent update versions.
+
 ## 0.6.33
 
 - Replace Overview's app list with measured per-app CPU cores, RAM working set, saved limits and observed peaks. Keep shared VPN infrastructure separate; stopped torrent templates are not counted twice. Unsupported runtimes show the required Agent/app upgrade instead of invented measurements.
