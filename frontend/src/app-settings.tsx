@@ -1,3 +1,4 @@
+import { AppResourceSettings } from "./app-resources";
 import { AppControlPanel, type AppControls } from "./app-controls";
 import { t } from "./i18n";
 import { useEffect, useState, type FormEvent } from "react";
@@ -157,6 +158,7 @@ export function AppSettingsPage({
               </div>
             </section>
           )}
+          {data.installationId && <AppResourceSettings appId={data.installationId} />}
           <section className="panel">
             <div className="panel-heading">
               <h2>{t("App addresses")}</h2>

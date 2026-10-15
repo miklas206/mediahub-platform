@@ -48,6 +48,7 @@ from agent.plex_control import PlexControl
 from agent.plex_media import PlexMedia
 from agent.plex_remote_access import RemoteAccessChoice as PlexRemoteAccessChoice
 from agent.plex_runtime import PlexRuntime
+from agent.resource_control import ResourceChange
 from agent.seedbox_control import SeedboxControl
 from agent.seedbox_install import PrepareSeedbox, SeedboxInstaller
 from agent.seedbox_status import SeedboxStatus
@@ -270,6 +271,9 @@ def create_agent(config: AgentConfig | None = None):
     container_apps.shared_vpn = shared_vpn
     gpu_setup = GPUSetup(container_apps)
     plex_runtime.shared_vpn = shared_vpn
+    from agent.app_resources import agent_resources
+    resources = agent_resources(config, plex_runtime, container_apps)
+
 
     @asynccontextmanager
     async def lifespan(app):
@@ -443,6 +447,24 @@ def create_agent(config: AgentConfig | None = None):
             raise DomainError(
                 "https_required", "Installation and credentials require verified HTTPS", 403
             )
+
+    @app.get("/v1/apps/{package}/resources", dependencies=[Depends(secure_workflow)])
+    async def app_resource_status(package: str):
+        return await resources.observe(package)
+
+    @app.put("/v1/apps/{package}/resources", dependencies=[Depends(secure_workflow)])
+    async def app_resource_change(package: str, body: ResourceChange):
+        if package == "plex":
+            lock = plex.lock
+            if plex_runtime.update_task and not plex_runtime.update_task.done():
+                raise DomainError("resources_busy", "Plex update is running; retry afterwards.", 409)
+        else:
+            container_apps.app(package)
+            lock = container_apps.locks[package]
+            if package in container_apps.tasks and not container_apps.tasks[package].done():
+                raise DomainError("resources_busy", "App installation is running; retry afterwards.", 409)
+        async with lock:
+            return await resources.change(package, body)
 
     @app.get("/v1/container-apps/{app_id}/install-options")
     async def container_options(app_id: str):

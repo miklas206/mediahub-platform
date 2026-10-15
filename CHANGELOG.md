@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.33
+
+- Replace Overview's app list with measured per-app CPU cores, RAM working set, saved limits and observed peaks. Keep shared VPN infrastructure separate; stopped torrent templates are not counted twice. Unsupported runtimes show the required Agent/app upgrade instead of invented measurements.
+- Add administrator-only manual resource edits on Overview and app settings, plus opt-out per app. Validate installation revision, host capacity, memory headroom and CPU affinity; persist limits before applying live Docker changes, verify the result and restore previous limits on failure. Journal interrupted operations without automatically repeating mutations.
+- Add persistent five-minute peak history, proposals for repeated pressure over an hour and conservative reductions after seven days with at least 80% coverage. Proposals require explicit approval and are checked again when approved. Fresh installs and existing versions initialize history automatically without resetting credentials or media.
+- Bootstrap MediaVPN 0.2.15 on fresh installs so recreated torrent clients inherit saved limits. Existing apps still update independently; MediaSeed editing explains when MediaVPN needs updating. Core updates preserve existing app versions and resource configuration.
+
 ## 0.6.32
 
 - Check Core, Agent, MediaSeed and MediaVPN main-branch versions using read-only Git instead of GitHub REST metadata. Reuse the existing repository-bound Core deploy key; otherwise use verified Git HTTPS with the existing encrypted token or anonymous public access. Share bounded five-minute metadata results and brief failure backoff by repository and credential identity. Credentials never enter Git URLs, command arguments or on-disk Git configuration. Existing source downloads, individual updates and rollback remain unchanged. Git and CA certificates are already provisioned by the Core image for fresh installations and upgrades.

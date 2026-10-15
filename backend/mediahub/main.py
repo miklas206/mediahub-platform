@@ -18,6 +18,7 @@ from mediahub.agent_client import AgentClient
 from mediahub.agent_updates import AgentUpdates
 from mediahub.agent_updates_api import router as agent_updates_router
 from mediahub.api import router
+from mediahub.app_resources import AppResources
 from mediahub.app_settings import router as app_settings_router
 from mediahub.apps.cloudflared import (
     register_cloudflared_app,
@@ -49,6 +50,7 @@ from mediahub.logging import request_id, setup_logging
 from mediahub.phase2_api import router as phase2_router
 from mediahub.platform_update_runtime import PlatformUpdateRuntime
 from mediahub.release_credentials import GitHubReleaseCredentials
+from mediahub.resource_api import router as resource_router
 from mediahub.security_api import router as security_router
 from mediahub.seedbox_reachability import SeedboxReachability
 from mediahub.seedbox_rss_feeds import RSSFeeds
@@ -134,6 +136,7 @@ def create_app(config: Config | None = None) -> FastAPI:
             register_cloudflared_app(svc)
         svc.updates = UpdateMonitor(svc)
         svc.update_queue = UpdateQueue(svc)
+        svc.resources = AppResources(svc)
         svc.imports = ImportPlanner(sessions, svc.agent, svc.apps)
         svc.snapshot = svc.system.status()
         app.state.services = svc
@@ -162,6 +165,7 @@ def create_app(config: Config | None = None) -> FastAPI:
                     logger.error("Host status temporarily unavailable")
                 await asyncio.sleep(15)
 
+        resource_collector = asyncio.create_task(svc.resources.poll())
         host_collector = asyncio.create_task(collect_hosts())
         integration_collector = asyncio.create_task(svc.integrations.poll())
         update_collector = asyncio.create_task(svc.updates.poll())
@@ -173,6 +177,9 @@ def create_app(config: Config | None = None) -> FastAPI:
         try:
             yield
         finally:
+            resource_collector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await resource_collector
             if svc.app_dependencies.task:
                 svc.app_dependencies.task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -310,6 +317,8 @@ def create_app(config: Config | None = None) -> FastAPI:
         )
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(resource_router, prefix="/api/v1")
+    app.include_router(resource_router, prefix="/api")
     app.include_router(app_settings_router, prefix="/api/v1")
     from mediahub.managed_install import router as managed_install_router
 

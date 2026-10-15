@@ -57,12 +57,27 @@ def test_plan_exposes_no_recipe_or_secrets_and_requires_approval(logged_in, tmp_
     assert logged_in.get("/api/v1/managed-install/" + PACKAGE).status_code == 409
 
 
+@pytest.mark.parametrize("saved_caps", [False, True])
 @pytest.mark.parametrize("existing", [False, True])
 def test_install_reuses_approved_data_and_clears_removal_state(
-    logged_in, tmp_path, monkeypatch, existing
+    logged_in, tmp_path, monkeypatch, existing, saved_caps
 ):
     svc, installer, recipe = prepare(logged_in, tmp_path, monkeypatch)
     spec = recipe["containers"][0]["spec"]
+    if saved_caps:
+        from agent.install_files import save_json
+
+        spec["Labels"]["com.docker.compose.service"] = "app"
+        svc.managed_apps.policy[PACKAGE].installFile.write_text(json.dumps(recipe))
+        save_json(
+            svc.config.data_dir / "app-resource-limits.json",
+            {
+                PACKAGE: {
+                    "installationId": "synthetic-installation",
+                    "components": {"app": {"memoryBytes": 2 * 1024**3, "cpuCores": 1.5}},
+                }
+            },
+        )
     container = {
         "Id": "owned",
         "Image": spec["Image"],
@@ -82,10 +97,12 @@ def test_install_reuses_approved_data_and_clears_removal_state(
         return {}
 
     monkeypatch.setattr(svc.managed_apps, "docker", docker)
+
     async def healthy_rows(package):
         if installer.journal(PACKAGE).exists():
             progress.append(installer.status(PACKAGE).get("progress", 0))
         return [{"State": {"Running": True}}]
+
     monkeypatch.setattr(svc.managed_apps, "containers", healthy_rows)
     svc.managed_apps.journal(PACKAGE).write_text(json.dumps({"state": "succeeded"}))
 
@@ -105,7 +122,12 @@ def test_install_reuses_approved_data_and_clears_removal_state(
         method == "DELETE" or path.startswith("/volumes/create") for method, path, _ in calls
     )
     creations = [body for method, path, body in calls if path.startswith("/containers/create")]
-    assert creations == ([] if existing else [spec])
+    if saved_caps and not existing:
+        assert creations[0]["HostConfig"]["Memory"] == 2 * 1024**3
+        assert creations[0]["HostConfig"]["CpuQuota"] == 150000
+        assert creations[0]["HostConfig"]["Binds"] == ["kept-data:/data"]
+    else:
+        assert creations == ([] if existing else [spec])
     assert "SECRET" not in installer.journal(PACKAGE).read_text()
     with svc.sessions() as db:
         assert (

@@ -1,3 +1,4 @@
+import { AppResourceOverview } from "./app-resources";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -13,7 +14,6 @@ import type { DashboardData } from "./dashboard-data";
 import { mediaCapacity } from "./dashboard-data";
 import { effectiveServiceStatus, type Reports } from "./control-center";
 import { useAppOverview, overviewEntry, overviewHealth } from "./app-overview";
-import { ServiceIcon } from "./service-icon";
 import { bytes, uptime } from "./format";
 import { t, translateText, getLocale } from "./i18n";
 import { useData } from "./use-data";
@@ -53,7 +53,6 @@ export function ReferenceOverview({
         ? overviewHealth(overviewEntry(managed, app.packageId))
         : effectiveServiceStatus(app, reports[app.id], live, failed);
   const states = (apps || []).filter((app) => !app.isMock).map(state);
-  const healthy = states.filter((value) => value === "healthy").length;
   const allHealthy =
     live &&
     !failed &&
@@ -163,62 +162,8 @@ export function ReferenceOverview({
           </article>
         ))}
       </div>
+      <AppResourceOverview />
       <div className="overview-columns">
-        <section>
-          <header>
-            <div>
-              <h2>{t("Connected apps")}</h2>
-              <small>
-                {apps && !failed && live
-                  ? `${healthy} / ${states.length} ${t("Running")}`
-                  : t("Status unavailable")}
-              </small>
-            </div>
-            <Link to="/">{t("View all")} &rarr;</Link>
-          </header>
-          <div className="overview-connected">
-            {(apps || [])
-              .filter((app) => !app.isMock)
-              .map((app) => {
-                const content = (
-                  <>
-                    <ServiceIcon packageId={app.packageId} size={26} />
-                    <span>
-                      <strong>{app.name}</strong>
-                      <small className={state(app)}>
-                        {t(
-                          state(app) === "healthy"
-                            ? "Running"
-                            : state(app) === "unknown"
-                              ? "Status unavailable"
-                              : "Check connection",
-                        )}
-                      </small>
-                    </span>
-                  </>
-                );
-                return app.openUrl || app.externalUrl ? (
-                  <a
-                    key={app.id}
-                    href={app.openUrl || app.externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {content}
-                  </a>
-                ) : (
-                  <Link key={app.id} to={app.detailPath || `/apps/${app.id}`}>
-                    {content}
-                  </Link>
-                );
-              })}
-            {!apps?.length && (
-              <p className="muted">
-                {t(failed ? "Status unavailable" : "No apps installed")}
-              </p>
-            )}
-          </div>
-        </section>
         <section>
           <header>
             <div>

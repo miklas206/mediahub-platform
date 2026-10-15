@@ -90,7 +90,11 @@ class ManagedInstaller:
     async def plan(self, package):
         removal = self.manager.saved(package) if package in self.manager.policy else None
         if removal and removal.get("state") != "succeeded":
-            raise DomainError("removal_incomplete", "Complete app removal and configuration reset before reinstalling", 409)
+            raise DomainError(
+                "removal_incomplete",
+                "Complete app removal and configuration reset before reinstalling",
+                409,
+            )
         dependencies = getattr(self.svc, "app_dependencies", None)
         if dependencies:
             dependencies.require_ready()
@@ -209,6 +213,22 @@ class ManagedInstaller:
                                 409,
                             )
                     else:
+                        from agent.resource_control import update_body
+
+                        saved_path = self.svc.config.data_dir / "app-resource-limits.json"
+                        saved = (
+                            read_json(saved_path).get(package, {}) if saved_path.is_file() else {}
+                        )
+                        component = {
+                            "app": "app",
+                            "qbittorrent": "client",
+                            "sso-proxy": "proxy",
+                        }.get(item["spec"]["Labels"].get("com.docker.compose.service"))
+                        caps = saved.get("components", {}).get(component)
+                        if saved.get("installationId") == policy.installationId and caps:
+                            item["spec"].setdefault("HostConfig", {}).update(
+                                update_body(caps, item["spec"])
+                            )
                         await self.manager.docker(
                             "POST", "/containers/create?name=" + name, body=item["spec"]
                         )

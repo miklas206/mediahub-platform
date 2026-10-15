@@ -120,6 +120,13 @@ class ContainerApps:
             return None
 
     async def request(self, method, path, body=None, missing=False):
+        if method == "POST" and path.startswith("/containers/create") and body:
+            from urllib.parse import parse_qs, urlsplit
+            from agent.resource_control import apply_saved_resources
+            package = body.get("Labels", {}).get("org.mediahub.package", "")
+            kind = package.removeprefix("org.mediahub.")
+            if kind in CONTAINER_APPS and parse_qs(urlsplit(path).query).get("name") == ["mediahub-" + kind]:
+                body = apply_saved_resources(body, self.state_dir, package)
         if not self.socket:
             raise DomainError("runtime_unavailable", "Docker socket is not configured", 503)
         try:

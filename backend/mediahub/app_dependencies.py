@@ -115,12 +115,23 @@ class AppDependencies:
                             "--app-repository",
                             update["repository"],
                         ]
-                        if update
+                        if update and "source" in update
+                        else [
+                            "--resources-app",
+                            update["kind"],
+                            "--resource-limits",
+                            json.dumps(update["resources"]),
+                        ]
+                        if update and "resources" in update
                         else []
                     ),
                     "Labels": {
                         "org.mediahub.dependencies": "first-party",
-                        **({"org.mediahub.app-update": update["operationId"]} if update else {}),
+                        **(
+                            {"org.mediahub.app-update": update["operationId"]}
+                            if update and "operationId" in update
+                            else {}
+                        ),
                     },
                     "Healthcheck": {"Test": ["NONE"]},
                     "HostConfig": {

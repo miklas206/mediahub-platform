@@ -274,6 +274,11 @@ class PlexRuntime:
             # but their entrypoints, mounts and isolated networking must survive.
             if parse_qs(urlsplit(path).query).get("name") == [expected]:
                 body = await self.shared_vpn.prepare("plex", body)
+        if method == "POST" and path.startswith("/containers/create") and body:
+            from agent.resource_control import apply_saved_resources
+            expected = self.control.policy().container if self.control.policy_file and Path(self.control.policy_file).exists() else "mediahub-" + body.get("Labels", {}).get("org.mediahub.installation", "")
+            if parse_qs(urlsplit(path).query).get("name") == [expected]:
+                body = apply_saved_resources(body, self.state_dir, "org.mediahub.plex")
         try:
             async with httpx.AsyncClient(
                 transport=httpx.AsyncHTTPTransport(uds=str(self.control.socket)),

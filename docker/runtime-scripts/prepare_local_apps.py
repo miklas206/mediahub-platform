@@ -666,6 +666,85 @@ def provision(
         marker.write_text(json.dumps({"fingerprint": digest}))
 
 
+def configure_resource_limits(root, kind, parts):
+    """Persist only logical limits in an already owned Compose project; do not restart."""
+    if kind not in {"mediaseed", "mediavpn"} or root.resolve() != root:
+        raise ValueError("Unsupported resource installation")
+    policy = json.loads((root / "data/managed-apps.json").read_text())
+    entry = policy["org.mediahub." + kind]
+    if entry["project"] != "mediahub-" + kind:
+        raise ValueError("Resource project ownership changed")
+    path = root / "local-apps" / kind / "compose.json"
+    if path.is_symlink():
+        raise ValueError("Resource Compose file must not be a symlink")
+    cfg = json.loads(path.read_text())
+    if cfg.get("name") != entry["project"]:
+        raise ValueError("Resource Compose ownership changed")
+    mapping = (
+        {"app": "app", "client": "qbittorrent"}
+        if kind == "mediaseed"
+        else {"app": "app", "proxy": "sso-proxy"}
+    )
+    if set(parts) != set(mapping):
+        raise ValueError("Unexpected resource components")
+    ids = run(
+        "docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=" + entry["project"]
+    ).split()
+    rows = json.loads(run("docker", "inspect", *ids)) if ids else []
+    for component, service in mapping.items():
+        limits = parts[component]
+        if set(limits) != {"memoryBytes", "cpuCores"}:
+            raise ValueError("Unexpected resource fields")
+        memory, cpu = limits["memoryBytes"], limits["cpuCores"]
+        if memory is not None and (
+            type(memory) is not int or not 64 * 1024**2 <= memory <= 4 * 1024**4
+        ):
+            raise ValueError("Invalid memory limit")
+        if cpu is not None and (type(cpu) not in {int, float} or not 0.01 <= cpu <= 1024):
+            raise ValueError("Invalid CPU limit")
+        values = cfg["services"][service]
+        existing = next(
+            (
+                row
+                for row in rows
+                if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+                == service
+            ),
+            None,
+        )
+        if not existing:
+            raise ValueError("Owned resource container is unavailable")
+        host = existing.get("HostConfig", {})
+        if memory:
+            values["mem_limit"] = memory
+            swap = host.get("MemorySwap", 0)
+            values["memswap_limit"] = (
+                -1 if swap == -1 else memory + max(0, swap - host.get("Memory", 0))
+            )
+        else:
+            values.pop("mem_limit", None)
+            values.pop("memswap_limit", None)
+        values.pop("cpus", None)
+        if cpu:
+            if host.get("NanoCpus", 0) > 0:
+                values.pop("cpu_quota", None)
+                values.pop("cpu_period", None)
+                values["cpus"] = cpu
+            else:
+                values["cpu_period"] = host.get("CpuPeriod") or 100000
+                values["cpu_quota"] = int(cpu * values["cpu_period"])
+        else:
+            values.pop("cpu_quota", None)
+            values.pop("cpu_period", None)
+    previous = path.with_suffix(".before-resources.json")
+    private(previous, "{}")
+    previous.write_bytes(path.read_bytes())
+    temporary = path.with_suffix(".resources-pending.json")
+    private(temporary, "{}")
+    temporary.write_text(json.dumps(cfg))
+    os.replace(temporary, path)
+
+
 if __name__ == "__main__":
     import fcntl
 
@@ -676,9 +755,16 @@ if __name__ == "__main__":
     parser.add_argument("--app-source", type=Path)
     parser.add_argument("--app-commit")
     parser.add_argument("--app-repository")
+    parser.add_argument("--resources-app", choices=["mediaseed", "mediavpn"])
+    parser.add_argument("--resource-limits")
     args = parser.parse_args()
     with (args.root / "updates/host-updater.lock").open("a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        if args.resources_app:
+            configure_resource_limits(
+                args.root, args.resources_app, json.loads(args.resource_limits)
+            )
+            raise SystemExit(0)
         address = args.lan_ip
         if not address:
             address = json.loads((args.root / "agent/container-apps.json").read_text())[

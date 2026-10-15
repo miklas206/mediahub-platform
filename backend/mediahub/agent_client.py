@@ -100,7 +100,9 @@ class AgentClient:
                 base_url=self._base_url(),
                 transport=transport,
                 timeout=(
-                    900
+                    (180 if method != "GET" else 20)
+                    if path.startswith("/v1/apps/") and path.endswith("/resources")
+                    else 900
                     if path.startswith("/v1/shared-vpn/") and method != "GET"
                     else 180
                     if path.startswith("/v1/backups/")
