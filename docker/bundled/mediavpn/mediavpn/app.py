@@ -26,11 +26,11 @@ from mediavpn.diagnostics import (
     container_fields,
     error_fields,
 )
+from mediavpn.profile_relays import ProfileRelays
 from mediavpn.proton import ProtonSelectionError, ProtonSelector, selected_configuration
 from mediavpn.runtime import Runtime
 from mediavpn.seedbox import Seedbox
 from mediavpn.shared_gateway import SharedGateway
-from mediavpn.shared_gateway import save as save_private
 from mediavpn.web_gateway import WebGateway, WebSettings, public_routes
 
 STATIC = Path(__file__).parent / "static"
@@ -140,6 +140,7 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
             connection.execute("ALTER TABLE profiles ADD COLUMN auto_country TEXT")
     seedbox = Seedbox(runtime, data)
     shared = SharedGateway(runtime, data, base)
+    relays = ProfileRelays(runtime, data, base, shared)
     web = WebGateway(runtime, data)
     seedbox.web_gateway = web
     web.torrent_enabled = lambda: bool(seedbox.settings()["enabled"] and seedbox.settings()["profileId"] == web.settings()["profileId"])
@@ -163,6 +164,8 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
             web.stop()
         if shared.profile() == identifier:
             shared.stop_helper()
+        else:
+            relays.stop(identifier)
         settings = seedbox.settings()
         if runtime.enabled and settings["enabled"] and settings["profileId"] == identifier:
             seedbox.stop()
@@ -181,31 +184,41 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
             while not stopping.is_set():
                 wakeup.clear()
                 try:
+                    failed_profiles = set()
                     with lock, database() as connection:
-                        if shared.profile():
-                            for other in connection.execute("SELECT id FROM profiles WHERE id != ?", (shared.profile(),)):
-                                candidate = runtime.container(other["id"])
-                                if candidate:
-                                    candidate.reload()
-                                    if candidate.attrs.get("State", {}).get("Running"):
-                                        runtime.stop(other["id"])
                         desired = connection.execute("SELECT id,port_forwarding,auto_country FROM profiles WHERE desired=1").fetchall()
                         for profile in desired:
-                            with cause("supervisor", "desired_profile_reconcile"):
-                                start_profile(profile)
-                                value = runtime.status(profile["id"])
-                                observation = {key: value.get(key) for key in ("state", "healthy", "publicIp", "forwardedPort")}
-                                if observations.get(profile["id"]) != observation:
-                                    previous = observations.get(profile["id"], {})
-                                    diagnostics.record("provider.observed", profile=profile["id"], reason="provider_state_changed",
-                                                       health=value.get("state"), publicIp=value.get("publicIp"), port=value.get("forwardedPort"),
-                                                       previousPublicIp=previous.get("publicIp"), previousPort=previous.get("forwardedPort"))
-                                    observations[profile["id"]] = observation
-                    web.reconcile()
-                    if stopping.is_set():
-                        break
-                    seedbox.reconcile()
-                    shared.reconcile()
+                            try:
+                                with cause("supervisor", "desired_profile_reconcile"):
+                                    start_profile(profile)
+                                    value = runtime.status(profile["id"])
+                                    observation = {key: value.get(key) for key in ("state", "healthy", "publicIp", "forwardedPort")}
+                                    if observations.get(profile["id"]) != observation:
+                                        previous = observations.get(profile["id"], {})
+                                        diagnostics.record("provider.observed", profile=profile["id"], reason="provider_state_changed",
+                                                           health=value.get("state"), publicIp=value.get("publicIp"), port=value.get("forwardedPort"),
+                                                           previousPublicIp=previous.get("publicIp"), previousPort=previous.get("forwardedPort"))
+                                        observations[profile["id"]] = observation
+                            except Exception as error:
+                                failed_profiles.add(profile["id"])
+                                diagnostics.record("supervisor.profile_error", profile=profile["id"], reason="dependent_safety_stop", **error_fields(error))
+                                try:
+                                    stop_attached(profile["id"])
+                                except Exception as stop_error:
+                                    diagnostics.record("supervisor.stop_error", profile=profile["id"], **error_fields(stop_error))
+                    for dependent, stop in [(web, web.stop), (seedbox, seedbox.stop), (shared, shared.stop_helper), *[(relay, relay.stop_helper) for relay in relays.all()]]:
+                        if stopping.is_set():
+                            break
+                        if dependent.settings().get("profileId") in failed_profiles:
+                            continue
+                        try:
+                            dependent.reconcile()
+                        except Exception as error:
+                            diagnostics.record("supervisor.dependent_error", reason=type(dependent).__name__, **error_fields(error))
+                            try:
+                                stop()
+                            except Exception as stop_error:
+                                diagnostics.record("supervisor.stop_error", reason=type(dependent).__name__, **error_fields(stop_error))
                 except Exception as error:
                     diagnostics.record("supervisor.error", origin="supervisor", reason="dependent_safety_stop", **error_fields(error))
                     try:
@@ -217,6 +230,11 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
                         shared.stop_helper()
                     except Exception:
                         pass
+                    for relay in relays.all():
+                        try:
+                            relay.stop_helper()
+                        except Exception:
+                            pass
                     try:
                         web.stop()
                     except Exception:
@@ -253,6 +271,7 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.shared_gateway = shared
+    app.state.profile_relays = relays
     app.state.web_gateway = web
     if not os.environ.get("MEDIAVPN_HUB_URL"):
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=[origin.hostname])
@@ -285,6 +304,8 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
         response.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"})
         if request.url.path.startswith("/api"):
             response.headers["Cache-Control"] = "no-store"
+        elif request.url.path == "/" or request.url.path.startswith("/static/") and request.url.path.endswith((".html", ".js", ".css")):
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     authorized = install_auth(app, database, base, hub_transport)
@@ -312,7 +333,7 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
 
     @app.get("/healthz")
     def health():
-        return {"status": "healthy", "version": "0.2.17"}
+        return {"status": "healthy", "version": "0.2.27"}
 
     @app.get("/api/runtime")
     def runtime_status(session=Depends(authorized)):
@@ -333,10 +354,10 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
         return await app.state.hub_login.vpn_apps(session["digest"])
 
     @app.put("/api/hub-apps/{app_id}")
-    async def hub_app_choice(app_id: str, body: Forwarding, session=Depends(authorized)):
+    async def hub_app_choice(app_id: str, body: SeedboxSettings, session=Depends(authorized)):
         if app_id not in {"mediaseed", "plex", "jellyfin"}:
             raise HTTPException(422, "Choose an installed MediaHub app")
-        return await app.state.hub_login.vpn_apps(session["digest"], "apps/" + app_id, "PUT", body.model_dump())
+        return await app.state.hub_login.vpn_apps(session["digest"], "apps/" + app_id, "PUT", body.model_dump(exclude_unset=True))
 
     @app.put("/api/hub-gateway")
     async def hub_gateway_choice(body: SeedboxSettings, session=Depends(authorized)):
@@ -396,14 +417,9 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
                     target = ipaddress.ip_address(urlsplit(row["upstream"]).hostname)
                     if target in overlay or target in ipaddress.ip_network("10.2.0.0/24"):
                         raise HTTPException(409, "An app origin overlaps the provider or private relay network")
-                current = seedbox.settings()
-                if current["enabled"] and current["profileId"] != body.profileId:
-                    seedbox.stop()
-                    save_private(seedbox.path, {"enabled": True, "profileId": body.profileId})
-                shared.configure(body.profileId, True)
+                select_shared_profile(body.profileId)
                 web.configure(body)
                 with database() as connection:
-                    connection.execute("UPDATE profiles SET desired=0 WHERE id != ?", (body.profileId,))
                     connection.execute("UPDATE profiles SET desired=1,port_forwarding=1 WHERE id=?", (body.profileId,))
             else:
                 # Stop only inbound helpers; outgoing selected apps and their tunnel
@@ -416,6 +432,22 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
                 "routes": public_routes(routes), "plex": body.plex.model_dump() if body.plex and body.enabled else None,
                 "checkedAt": time.time()}
 
+    def select_shared_profile(identifier):
+        previous = shared.profile()
+        if previous and previous != identifier and shared.settings()["peers"]:
+            raise HTTPException(409, "Move the apps from the existing gateway before changing its profile")
+        if identifier in relays.instances:
+            raise HTTPException(409, "This profile already has an app relay; keep its existing assignment")
+        shared.configure(identifier, True)
+        if previous and previous != identifier:
+            # Release the relay's LAN port before the new provider binds it.
+            # Preserve an independently desired old provider and its consumers.
+            old = find(previous)
+            if old["desired"]:
+                start_profile(old)
+            else:
+                runtime.stop(previous, remove=True)
+
     def configure_shared(body):
         diagnostics.record("request.shared_gateway", enabled=body.enabled, profile=body.profileId)
         with lock, seedbox.lock:
@@ -427,16 +459,8 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
                 overlay = ipaddress.ip_network("10.250.87.0/24")
                 if any(ipaddress.ip_interface(address).version == 4 and ipaddress.ip_interface(address).network.overlaps(overlay) for address in metadata["addresses"]):
                     raise HTTPException(409, "The VPN profile address overlaps the private app relay network")
-                current = seedbox.settings()
-                if current["enabled"] and current["profileId"] != body.profileId:
-                    raise HTTPException(409, "Select the same profile for MediaSeed before sharing the VPN")
-                with database() as connection:
-                    others = connection.execute("SELECT id FROM profiles WHERE id != ?", (body.profileId,)).fetchall()
-                    connection.execute("UPDATE profiles SET desired=0 WHERE id != ?", (body.profileId,))
-                for row in others:
-                    runtime.stop(row["id"])
                 stop_attached(body.profileId)
-                shared.configure(body.profileId, True)
+                select_shared_profile(body.profileId)
                 with database() as connection:
                     connection.execute("UPDATE profiles SET desired=1 WHERE id=?", (body.profileId,))
                 start_profile(selected)
@@ -468,11 +492,55 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
     def shared_peer_remove(identifier: str, session=Depends(shared_machine_authorized)):
         return shared.remove_peer(identifier)
 
+    @app.get("/api/integration/shared/profiles/{identifier}")
+    def profile_relay_status(identifier: str, session=Depends(shared_machine_authorized)):
+        find(identifier)
+        relay = relays.get(identifier)
+        return relay.public() if relay else {"enabled": False, "profileId": identifier, "ready": False, "peers": []}
+
+    @app.put("/api/integration/shared/profiles/{identifier}")
+    def prepare_profile_relay(identifier: str, session=Depends(shared_machine_authorized)):
+        with lock, seedbox.lock:
+            selected = find(identifier)
+            _, metadata = parse_wireguard((profiles / f"{identifier}.conf").read_text())
+            overlay = ipaddress.ip_network("10.250.87.0/24")
+            if any(ipaddress.ip_interface(address).version == 4 and ipaddress.ip_interface(address).network.overlaps(overlay) for address in metadata["addresses"]):
+                raise HTTPException(409, "The VPN profile address overlaps the private app relay network")
+            relay = relays.get(identifier, create=True)
+            relay.configure(identifier, True)
+            with database() as connection:
+                connection.execute("UPDATE profiles SET desired=1 WHERE id=?", (identifier,))
+            start_profile(selected)
+            wakeup.set()
+            return relay.public()
+
+    @app.post("/api/integration/shared/profiles/{identifier}/peers")
+    def profile_relay_peer(identifier: str, body: RelayPeer, session=Depends(shared_machine_authorized)):
+        find(identifier)
+        relay = relays.get(identifier)
+        if not relay:
+            raise HTTPException(409, "Prepare the profile relay first")
+        return relay.peer(body.id, body.publicKey, body.name)
+
+    @app.delete("/api/integration/shared/profiles/{identifier}/peers/{peer_id}")
+    def profile_relay_remove(identifier: str, peer_id: str, session=Depends(shared_machine_authorized)):
+        find(identifier)
+        relay = relays.get(identifier)
+        return relay.remove_peer(peer_id) if relay else {"profileId": identifier, "peers": []}
+
+    @app.delete("/api/integration/shared/app-peers/{peer_id}")
+    def remove_app_peers(peer_id: str, session=Depends(shared_machine_authorized)):
+        with lock:
+            for relay in [shared, *relays.all()]:
+                if any(peer["id"] == peer_id for peer in relay.settings()["peers"]):
+                    relay.remove_peer(peer_id)
+        return {"removed": True}
+
     def seedbox_overview():
         state = seedbox.status()
         with database() as connection:
             profiles = connection.execute("SELECT id,name,port_forwarding FROM profiles ORDER BY name").fetchall()
-        return {**state, "profiles": [{**dict(profile), **runtime.status(profile["id"])} for profile in profiles]}
+        return {**state, "torrentCapabilities": ["recheck", "queue-settings", "rss-settings"], "profiles": [{**dict(profile), **runtime.status(profile["id"])} for profile in profiles]}
 
     @app.get("/api/seedbox")
     def seedbox_status(session=Depends(authorized)):
@@ -508,8 +576,6 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
     def configure_seedbox(body):
         diagnostics.record("request.torrent_settings", enabled=body.enabled, profile=body.profileId)
         if body.enabled:
-            if shared.profile() and shared.profile() != body.profileId:
-                raise HTTPException(409, "MediaSeed must use the selected shared VPN profile")
             profile = find(body.profileId)
             if not profile["port_forwarding"]:
                 raise HTTPException(409, "Aktiver Proton port-forwarding paa profilen foerst")
@@ -524,6 +590,30 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
     @cause("hub", "torrent_settings_saved")
     def integration_settings(body: SeedboxSettings, session=Depends(machine_authorized)):
         return configure_seedbox(body)
+
+    class DownloadQueueSettings(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        maxActiveDownloads: int = Field(ge=1, le=100, strict=True)
+
+    @app.get("/api/integration/queue")
+    def integration_queue(session=Depends(machine_authorized)):
+        return seedbox.queue_settings()
+
+    @app.put("/api/integration/queue")
+    def integration_queue_settings(body: DownloadQueueSettings, session=Depends(machine_authorized)):
+        return seedbox.queue_settings(body.maxActiveDownloads)
+
+    class RssSettings(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        rssRefreshMinutes: int = Field(ge=1, le=1440, strict=True)
+
+    @app.get("/api/integration/rss")
+    def integration_rss(session=Depends(machine_authorized)):
+        return seedbox.rss_settings()
+
+    @app.put("/api/integration/rss")
+    def integration_rss_settings(body: RssSettings, session=Depends(machine_authorized)):
+        return seedbox.rss_settings(body.rssRefreshMinutes)
 
     @app.post("/api/integration/rpc")
     def integration_rpc(body: TorrentRpc, session=Depends(machine_authorized)):
@@ -680,6 +770,11 @@ def create_app(data_dir=None, base_url=None, runtime=None, hub_transport=None, s
             find(identifier)
             if shared.profile() == identifier:
                 raise HTTPException(409, "Disable shared VPN before deleting its profile")
+            relay = relays.get(identifier)
+            if relay and relay.settings()["peers"]:
+                raise HTTPException(409, "Remove this profile's app assignments before deleting it")
+            if relay:
+                relay.configure(identifier, False)
             diagnostics.record("request.profile_delete", profile=identifier, actor=session.get("id"))
             stop_attached(identifier)
             runtime.stop(identifier, remove=True)

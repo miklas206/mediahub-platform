@@ -164,10 +164,10 @@ document.querySelector('#server-form').onsubmit = async event => {
   });
 };
 function selectVPNTab(value, focus = false) {
-  if (!['connection', 'apps', 'cloudflare'].includes(value)) return;
+  if (!['connection', 'cloudflare'].includes(value)) return;
   vpnTab = value;
   for (const button of document.querySelectorAll('[data-vpn-tab]')) {
-    button.textContent = t(button.dataset.vpnTab === 'connection' ? 'Connection' : button.dataset.vpnTab === 'apps' ? 'Apps and domains' : 'Cloudflare');
+    (button.querySelector('.app-nav-label') || button).textContent = t(button.dataset.vpnTab === 'connection' ? 'Connection' : button.dataset.vpnTab === 'apps' ? 'Apps and domains' : 'Cloudflare');
     const selected = button.dataset.vpnTab === value;
     button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
     document.querySelector('#panel-' + button.dataset.vpnTab).hidden = !selected;
@@ -177,10 +177,10 @@ function selectVPNTab(value, focus = false) {
   globalThis.MediaVPNGateway?.setTab(value);
 }
 for (const button of document.querySelectorAll('[data-vpn-tab]')) {
-  button.textContent = t(button.dataset.vpnTab === 'connection' ? 'Connection' : button.dataset.vpnTab === 'apps' ? 'Apps and domains' : 'Cloudflare');
+  (button.querySelector('.app-nav-label') || button).textContent = t(button.dataset.vpnTab === 'connection' ? 'Connection' : button.dataset.vpnTab === 'apps' ? 'Apps and domains' : 'Cloudflare');
   button.onclick = () => selectVPNTab(button.dataset.vpnTab);
   button.onkeydown = event => {
-    const tabs = ['connection', 'apps', 'cloudflare']; const index = tabs.indexOf(button.dataset.vpnTab);
+    const tabs = ['connection', 'cloudflare']; const index = tabs.indexOf(button.dataset.vpnTab);
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); selectVPNTab(event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[tabs.length - 1] : tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
     }
@@ -191,15 +191,32 @@ async function refresh() {
   refreshing = refreshProfiles().finally(() => { refreshing = null; });
   return refreshing;
 }
+// Keep keyboard position and disclosures when a refreshed list replaces its rows.
+function preserveListInteraction(target, key) {
+  const controls = 'button, summary, a, input, select';
+  const active = document.activeElement;
+  const rows = [...target.children];
+  const focusedRow = rows.find(row => row.contains(active));
+  const focusedKey = focusedRow?.dataset[key];
+  const focusIndex = focusedRow ? [...focusedRow.querySelectorAll(controls)].indexOf(active) : -1;
+  const opened = new Set(rows.filter(row => row.querySelector('details[open]')).map(row => row.dataset[key]));
+  return () => {
+    for (const row of target.children) {
+      if (opened.has(row.dataset[key])) { const details = row.querySelector('details'); if (details) details.open = true; }
+      if (focusIndex >= 0 && row.dataset[key] === focusedKey) row.querySelectorAll(controls)[focusIndex]?.focus({preventScroll: true});
+    }
+  };
+}
+
 async function refreshProfiles() {
-  const [runtime, profiles] = await Promise.all([api('runtime'),api('profiles')]);
+  const [runtime, profiles, assignments] = await Promise.all([api('runtime'),api('profiles'), appRole === 'administrator' ? api('hub-apps').catch(error => ({error: error.message})) : Promise.resolve(null)]);
   document.querySelector('#runtime-state').textContent = runtime.enabled ? t("VPN runtime enabled · status checked now") : t("Preview · tunnel startup is blocked. No traffic uses the VPN yet.");
-  if (!gatewayRefresh) {
+  if (vpnTab === 'cloudflare' && !gatewayRefresh) {
     gatewayRefresh = refreshSharedApps(profiles).catch(error => notice(error.message)).finally(() => { gatewayRefresh = null; });
   }
   const activeProfile = profiles.find(profile => profile.healthy) || profiles.find(profile => profile.state === 'starting');
   if (activeProfile) document.querySelector('#runtime-state').textContent = [activeProfile.name, t(statusNames[activeProfile.state]), countryLabel(activeProfile.country), activeProfile.publicIp].filter(Boolean).join(' \u00b7 ');
-  const target = document.querySelector('#profiles'); target.replaceChildren();
+  const target = document.querySelector('#profiles'); const restoreInteraction = preserveListInteraction(target, 'profileId'); target.replaceChildren();
   if (!profiles.length) {
     const empty = node('div', undefined, 'empty');
     empty.append(node('div', '◇', 'empty-orbit'), node('h2', t("No connections yet.")), node('p', t("Create your first VPN connection."), 'muted'));
@@ -207,7 +224,7 @@ async function refreshProfiles() {
     target.append(empty);
   }
   for (const profile of profiles) {
-    const item = node('article',undefined,'profile'); const details = node('div');
+    const item = node('article',undefined,'profile'); item.dataset.profileId = profile.id; const details = node('div');
     details.append(node('h2',profile.name),node('span',t(statusNames[profile.state]) || t("Unknown"),'status ' + (profile.healthy ? 'connected' : '')),node('p',`WireGuard · ${profile.endpoint}:${profile.port}`),node('p',t("Public IP: {0} · VPN port: {1}", {0: profile.publicIp || t("Unverified"), 1: profile.forwardedPort || t("Unverified")})));
     const controls = node('div',undefined,'actions');
     const country = node('p', t("Country: {0}", {0: countryLabel(profile.country)}), 'country-label');
@@ -230,9 +247,57 @@ async function refreshProfiles() {
     const serverInfo = country.nextElementSibling; if (serverInfo) more.append(serverInfo);
     more.append(forwarding);
     const remove = controls.querySelector('.danger'); if (remove) more.append(remove);
-    more.ontoggle = () => { if (more.open) expandedProfiles.add(profile.id); else expandedProfiles.delete(profile.id); };
-    details.append(more); item.append(details,controls); target.append(item);
+    more.ontoggle = () => { if (!more.isConnected) return; if (more.open) expandedProfiles.add(profile.id); else expandedProfiles.delete(profile.id); };
+    details.append(more);
+    if (assignments) details.append(profileApps(profile, profiles, assignments, runtime.enabled));
+    item.append(details,controls); target.append(item);
   }
+  const reset = document.querySelector('#reset-app-assignments');
+  reset.hidden = appRole !== 'administrator' || !assignments?.apps?.some(app => app.enabled !== false || app.pending);
+  reset.onclick = () => action(reset, async () => {
+    if (!confirm(t('Remove all app VPN assignments? MediaSeed stops; Plex and Jellyfin return to their normal network. VPN profiles and domains are kept.'))) return;
+    const latest = await api('hub-apps');
+    const failures = [];
+    for (const app of latest.apps || []) {
+      if (app.enabled == null) { failures.push(app.name + ': ' + t('Status unavailable')); continue; }
+      if (app.enabled !== true && !app.pending) continue;
+      try { await api('hub-apps/' + app.id, {enabled: false, profileId: app.profileId || null}, 'PUT'); }
+      catch (error) { failures.push(app.name + ': ' + error.message); }
+    }
+    await refresh();
+    notice(failures.length ? failures.join(' · ') : t('App assignments removed. Choose apps on each connection.'), failures.length ? 'danger' : 'success');
+  });
+  restoreInteraction();
+}
+
+function profileApps(profile, profiles, assignments, runtimeEnabled) {
+  const box = node('fieldset', undefined, 'profile-apps');
+  box.append(node('legend', t('Apps on this connection')));
+  if (assignments.error) { box.append(node('p', assignments.error, 'muted')); return box; }
+  if (!assignments.apps?.length) { box.append(node('p', t('Install an app in MediaHub to assign it here.'), 'muted')); return box; }
+  for (const app of assignments.apps) {
+    const label = node('label', undefined, 'profile-app-choice');
+    const input = node('input'); input.type = 'checkbox';
+    input.checked = (app.enabled === true || app.pending) && app.profileId === profile.id;
+    input.disabled = !runtimeEnabled || app.enabled == null || (app.id === 'mediaseed' && !profile.port_forwarding);
+    const description = node('span'); description.append(node('strong', app.name));
+    const other = (app.enabled || app.pending) && app.profileId !== profile.id;
+    const status = app.enabled == null ? t('Status unavailable') : app.id === 'mediaseed' && !profile.port_forwarding ? t('Enable NAT-PMP in profile details first.') : other ? t('Uses {0}', {0: profiles.find(item => item.id === app.profileId)?.name || t('another connection')}) : input.checked ? t(app.ready ? 'Connected' : 'Waiting for verified VPN') : t('Not assigned');
+    description.append(node('small', status)); label.append(input, description); box.append(label);
+    if (app.pending && app.profileId === profile.id) {
+      description.append(node('small', t('Assignment not confirmed. Retry or remove it.')));
+      box.append(control(t('Retry assignment'), async () => { await api('hub-apps/' + app.id, {enabled: true, profileId: profile.id}, 'PUT'); await refresh(); }));
+    }
+    input.onchange = () => action(input, async () => {
+      const enabled = input.checked;
+      if (enabled && other && !confirm(t('Move {0} to {1}? Its connection will briefly restart.', {0: app.name, 1: profile.name}))) { input.checked = false; return; }
+      try {
+        await api('hub-apps/' + app.id, {enabled, profileId: profile.id}, 'PUT');
+        notice(t('App connection saved.'), 'success');
+      } finally { await refresh(); }
+    });
+  }
+  return box;
 }
 async function refreshSharedApps(profiles) {
   if (globalThis.MediaVPNGateway) return globalThis.MediaVPNGateway.refresh(profiles);
@@ -263,6 +328,10 @@ async function refreshSharedApps(profiles) {
     target.append(controls, node('p', t(data.gateway.ready ? 'Shared VPN verified' : 'Shared VPN not verified')));
     if (data.gateway.message) target.append(node('p', t(data.gateway.message), 'muted'));
     for (const app of data.apps) {
+      if (app.id === "mediaseed") {
+        target.append(node("p", t("Select MediaSeed's VPN profile in MediaSeed. It can use a different profile from Plex and this gateway."), "muted"));
+        continue;
+      }
       const label = node('label'); const toggle = node('input'); toggle.type = 'checkbox';
       toggle.checked = app.enabled === true;
       toggle.disabled = app.enabled === null || (!app.enabled && !data.gateway.ready);

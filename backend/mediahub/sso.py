@@ -140,7 +140,7 @@ async def vpn_apps(request: Request):
 
 @router.put("/sso/vpn/apps/{app_id}")
 async def vpn_app_choice(app_id: str, body: AppChoice, request: Request):
-    return result(await vpn_administrator(request).assign(app_id, body.enabled))
+    return result(await vpn_administrator(request).assign(app_id, body.enabled, body.profileId))
 
 
 @router.put("/sso/vpn/gateway")

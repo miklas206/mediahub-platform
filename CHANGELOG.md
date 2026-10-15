@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.39
+
+- Select apps on individual MediaVPN connections with persistent profile assignments and isolated relays. Bundle MediaVPN 0.2.27, temporarily hide Apps and domains, and provide an explicit app-assignment reset that retains profiles and media.
+
 ## 0.6.38
 
 - Match Overview and Settings to the Apps page 1440-pixel content width. Remove viewport-driven text enlargement while preserving responsive mobile spacing and existing navigation.

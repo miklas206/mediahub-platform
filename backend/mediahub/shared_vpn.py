@@ -23,6 +23,7 @@ class GatewayChoice(StrictModel):
 
 class AppChoice(StrictModel):
     enabled: bool
+    profileId: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
 
 
 class SharedVPN:
@@ -103,6 +104,27 @@ class SharedVPN:
                     )
         return choices
 
+    def assignment(self, identifier, profile=None, write=False, pending=False):
+        key = "vpn_profile_" + identifier
+        with self.svc.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == key))
+            if write:
+                if row:
+                    row.value = {"profileId": profile, "pending": pending}
+                else:
+                    db.add(Setting(key=key, value={"profileId": profile, "pending": pending}))
+                db.commit()
+            return row.value.get("profileId") if row else profile
+
+    def assignment_pending(self, identifier):
+        with self.svc.sessions() as db:
+            row = db.scalar(select(Setting).where(Setting.key == "vpn_profile_" + identifier))
+            return bool(row and row.value.get("pending"))
+
+    @staticmethod
+    def peer_id(binding):
+        return hashlib.sha256((binding["hostId"] + ":" + binding["id"]).encode()).hexdigest()[:40]
+
     def target(self, app):
         binding = next((item for item in self.bindings() if item["id"] == app), None)
         if not binding:
@@ -158,9 +180,13 @@ class SharedVPN:
         identifier = hashlib.sha256((host + ":" + package.rsplit(".", 1)[-1]).encode()).hexdigest()[
             :40
         ]
-        gateway = await self.vpn()
+        profile = self.assignment(identifier)
+        gateway = await self.vpn(path="/profiles/" + profile if profile else "")
         if any(peer.get("id") == identifier for peer in gateway.get("peers", [])):
-            await self.vpn("DELETE", "/peers/" + identifier)
+            await self.vpn("DELETE", ("/profiles/" + profile if profile else "") + "/peers/" + identifier)
+        if profile:
+            await self.vpn("DELETE", "/app-peers/" + identifier)
+        self.assignment(identifier, None, write=True)
 
     async def cleanup_orphan(self, identifier):
         async with self.lock:
@@ -214,6 +240,7 @@ class SharedVPN:
                     "name": "MediaSeed",
                     "hostId": "local",
                     "enabled": seed.get("enabled", False),
+                    "profileId": seed.get("profileId"),
                     "ready": seed.get("ready", False),
                     "phase": seed.get("phase") or ("ready" if seed.get("ready") else "idle"),
                 }
@@ -222,12 +249,17 @@ class SharedVPN:
             try:
                 _, client = self.target(item["id"])
                 state = await client.request("GET", "/v1/shared-vpn/" + item["id"])
+                profile = self.assignment(self.peer_id(item)) or gateway.get("profileId")
+                pending = self.assignment_pending(self.peer_id(item))
+                app_gateway = await self.vpn(path="/profiles/" + profile) if profile and profile != gateway.get("profileId") else gateway
                 apps.append(
                     {
                         **item,
                         "enabled": state["enabled"],
+                        "pending": pending,
+                        "profileId": profile if state["enabled"] or pending else None,
                         "ready": bool(
-                            gateway["ready"]
+                            not pending and app_gateway["ready"]
                             and state.get(
                                 "ready", state["handshakeVerified"] and state["phase"] == "ready"
                             )
@@ -252,18 +284,24 @@ class SharedVPN:
                 and app.state not in {"uninstalled", "removing", "installing", "failed"}
             )
 
-    async def assign(self, app, enabled):
+    async def assign(self, app, enabled, profile_id=None):
         async with self.lock:
             if app == "mediaseed":
                 if not self.seed_installed():
                     raise DomainError(
                         "vpn_app_unavailable", "Install MediaSeed before selecting its VPN", 409
                     )
-                gateway = await self.vpn()
+                if profile_id is None:
+                    gateway = await self.vpn()
+                    profile_id = gateway["profileId"]
+                elif not enabled:
+                    actual = await self.vpn(path="/status", shared=False)
+                    if actual.get("enabled") and actual.get("profileId") != profile_id:
+                        raise DomainError("vpn_assignment_changed", "The app changed VPN profile; refresh before removing its assignment", 409)
                 await self.vpn(
                     "PUT",
                     "/settings",
-                    {"enabled": enabled, "profileId": gateway["profileId"]},
+                    {"enabled": enabled, "profileId": profile_id},
                     shared=False,
                 )
                 return await self.public()
@@ -271,24 +309,39 @@ class SharedVPN:
             current = await client.request("GET", "/v1/shared-vpn/" + app)
             peer = None
             identifier = hashlib.sha256((binding["hostId"] + ":" + app).encode()).hexdigest()[:40]
+            previous = self.assignment(identifier)
+            previous_profile = previous or (await self.vpn()).get("profileId")
+            if not enabled and profile_id and current.get("enabled") and previous_profile != profile_id:
+                raise DomainError("vpn_assignment_changed", "The app changed VPN profile; refresh before removing its assignment", 409)
+            previous_path = "/profiles/" + previous if previous else ""
+            target_path = "/profiles/" + profile_id if profile_id else ""
             if enabled:
-                gateway = await self.vpn()
-                if not gateway["ready"]:
+                gateway = await self.vpn("PUT", target_path) if profile_id else await self.vpn()
+                if not profile_id and not gateway["ready"]:
                     raise DomainError(
                         "vpn_not_ready", "Wait for the shared VPN gateway to be verified first", 409
                     )
                 peer = await self.vpn(
                     "POST",
-                    "/peers",
+                    target_path + "/peers",
                     {"id": identifier, "name": binding["name"], "publicKey": current["publicKey"]},
                 )
                 peer = {
                     key: peer[key]
                     for key in ("address", "endpointIp", "endpointPort", "gatewayKey")
                 }
+                # Persist routing intent before the Agent call: a timeout can occur
+                # after the Agent has accepted it. Its phase reports actual readiness.
+                self.assignment(identifier, profile_id or gateway["profileId"], write=True, pending=True)
             await client.request("PUT", "/v1/shared-vpn/" + app, {"enabled": enabled, "peer": peer})
+            if enabled:
+                self.assignment(identifier, profile_id or gateway["profileId"], write=True)
+            if not enabled or previous_profile != (profile_id or gateway["profileId"]):
+                await self.vpn("DELETE", previous_path + "/peers/" + identifier)
             if not enabled:
-                await self.vpn("DELETE", "/peers/" + identifier)
+                if previous:
+                    await self.vpn("DELETE", "/app-peers/" + identifier)
+                self.assignment(identifier, None, write=True)
             self.svc.events.record(
                 "vpn.app_changed", app, "Shared VPN application selection updated"
             )
@@ -327,7 +380,7 @@ async def gateway(body: GatewayChoice, request: Request):
 
 @router.put("/apps/{app}")
 async def application(app: str, body: AppChoice, request: Request):
-    return result(await secure(request).assign(app, body.enabled))
+    return result(await secure(request).assign(app, body.enabled, body.profileId))
 
 
 @router.post("/orphans/{identifier}/cleanup")

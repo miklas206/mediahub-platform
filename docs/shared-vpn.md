@@ -1,9 +1,12 @@
 # Shared application VPN
 
-MediaVPN can share one selected full-tunnel WireGuard profile with MediaSeed,
-owned Plex and Jellyfin installations. Enabling sharing stops other MediaVPN
-profiles and prevents starting another provider profile until sharing is off.
-Existing dedicated Plex VPN must be disabled before selecting the shared gateway.
+MediaVPN supports multiple active full-tunnel WireGuard profiles. Choose installed
+apps on each Connection card; one app uses one profile, and several apps may share
+a profile. Independent relays retain their own identities and private LAN ports.
+Existing dedicated Plex VPN must be disabled before selecting an app relay.
+The Apps and domains tab is temporarily hidden; existing domain configuration is
+retained. Explicit assignment reset restores ordinary Plex/Jellyfin networking
+and stops MediaSeed, without deleting profiles, app data or media.
 
 MediaSeed's download motor stays in the provider namespace and follows its
 NAT-PMP port. Plex and Jellyfin use separate private WireGuard relays, so their
