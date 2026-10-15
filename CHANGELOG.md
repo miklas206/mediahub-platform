@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.31
+
+- Route independent MediaSeed/MediaVPN version checks through the same bounded GitHub metadata cache and provider cooldown as Core and Agent. Repeated checks reuse main metadata for five minutes and immutable project metadata for one hour; a rate limit on one component pauses other uncached checks sharing the credential identity. Installed versions and separate app repositories remain independent. No deployment or credential migration is required.
+
 ## 0.6.30
 
 - Give MediaSeed and MediaVPN their own repository checks and selected-app source updates, with persisted operations and restart recovery. Core preparation preserves existing app images and versions while applying required configuration repairs. Fresh installs bootstrap MediaSeed 0.1.9 and MediaVPN 0.2.14; existing installations update apps individually.

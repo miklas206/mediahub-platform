@@ -100,7 +100,11 @@ class AppUpdates:
         valid_installed = installed if installed and installed != "managed" else None
         try:
             result = await GitHubSourceProvider(
-                valid_installed or "0.0.0", labels.get("org.mediahub.app.commit")
+                valid_installed or "0.0.0",
+                labels.get("org.mediahub.app.commit"),
+                metadata_cache=getattr(
+                    getattr(self.manager.svc, "updates", None), "github_metadata", None
+                ),
             ).check(REPOSITORIES[kind], self.manager.svc.release_credentials.token())
         except DomainError as error:
             return {

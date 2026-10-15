@@ -1,7 +1,7 @@
 # Shared GitHub update metadata
 
-Core discovery, independent Agent discovery and MainBranchWatch share one
-GitHubMetadata cache per Core service. Concurrent reads serialize through the
+Core discovery, independent Agent discovery, MediaSeed/MediaVPN discovery and
+MainBranchWatch share one GitHubMetadata cache per Core service. Concurrent reads serialize through the
 cache so GET /updates/platform, POST /updates/check and scheduled checks do not
 repeat the same GitHub calls. Main metadata is reused for five minutes, pinned
 pyproject metadata for one hour, and complete checks for 60 seconds. Installed
@@ -11,9 +11,11 @@ software installations are introduced.
 A 403 with rate-limit headers or 429 pauses metadata reads for that credential
 identity across repository paths. The deadline respects Retry-After (seconds
 or HTTP date) and x-ratelimit-reset, with one hour fallback if neither is usable.
-Changing credentials selects a separate identity. Cache/cooldown state is in
-memory and resets when Core restarts. HTTP error bodies and credentials are not
-written to the update summary. Existing deployment-key Git metadata is unchanged.
+Changing credentials selects a separate identity. Successful metadata is cached
+in memory and resets when Core restarts. Provider cooldown deadlines are persisted
+in the existing data directory and survive restarts; credentials and response
+bodies are not stored there. HTTP error bodies and credentials are not written to
+the update summary. Existing deployment-key Git metadata is unchanged.
 
 Core throttling is reported as deferred, including retryAt and the prior verified
 version marked stale when available. Other failed sources still remain failures.
