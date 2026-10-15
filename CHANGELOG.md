@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.40
+
+- Bundle MediaSeed 0.1.26 and MediaVPN 0.2.28: progressive torrent/RSS/VPN dialogs in MediaHub themes, extension dialog/RSS handoff, pooled internal requests, batched background torrent observations, and retained stale tracker/torrent displays.
+- Load secondary settings/runtime pages on demand, retain app-page observations across navigation, and request independent app VPN statuses concurrently.
+- Existing profiles, app assignments, credentials, storage and seeding policies are preserved; new RSS cleanup fields are optional for older feeds. User installs this source release; no live migration or restart was performed.
+
 ## 0.6.39
 
 - Select apps on individual MediaVPN connections with persistent profile assignments and isolated relays. Bundle MediaVPN 0.2.27, temporarily hide Apps and domains, and provide an explicit app-assignment reset that retains profiles and media.

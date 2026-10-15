@@ -2,6 +2,28 @@ const {t, setLanguage, locale} = globalThis.MediaAppI18n;
 let csrf = '';
 let needsSetup = false;
 let torrents = [];
+let torrentPage = 1;
+const listPreferenceKey = 'mediaseed.torrent-list.v1';
+function saveListPreferences() {
+  try { globalThis.localStorage?.setItem(listPreferenceKey, JSON.stringify({sort: document.querySelector('#sort').value, direction: document.querySelector('#sort-direction').value, pageSize: document.querySelector('#page-size').value})); } catch {}
+}
+try {
+  const saved = JSON.parse(globalThis.localStorage?.getItem(listPreferenceKey) || '{}');
+  if (['name','progress','ratio','size','added_on','completion_on','dlspeed','upspeed','eta','seeding_time','uploaded','num_seeds','state'].includes(saved.sort)) document.querySelector('#sort').value = saved.sort;
+  if (['asc','desc'].includes(saved.direction)) document.querySelector('#sort-direction').value = saved.direction;
+  if (['10','25','50','100'].includes(saved.pageSize)) document.querySelector('#page-size').value = saved.pageSize;
+} catch {}
+function sortTorrentRows(rows, key, direction) {
+  const text = key === 'name' || key === 'state';
+  const value = row => key === 'ratio' ? (row.credited_ratio ?? row.ratio) : row[key];
+  return rows.sort((a, b) => {
+    const first = value(a), second = value(b);
+    const valid = v => text ? typeof v === 'string' : typeof v === 'number' && Number.isFinite(v) && v >= 0 && (key !== 'eta' || v < 8640000);
+    if (valid(first) !== valid(second)) return valid(first) ? -1 : 1;
+    const order = !valid(first) ? 0 : text ? first.localeCompare(second, locale(), {numeric: true, sensitivity: 'base'}) : first - second;
+    return order ? (direction === 'desc' ? -order : order) : String(a.hash || '').localeCompare(String(b.hash || ''));
+  });
+}
 let selectedHash = '';
 let downloadsEnabled = false;
 let refreshing = false;
@@ -36,6 +58,7 @@ async function api(path, body, method) {
   const response = await fetch('/api/' + path, {method: method || (body ? 'POST' : 'GET'), headers: {'Content-Type': 'application/json', 'X-MediaSeed-CSRF': csrf}, ...(body ? {body: JSON.stringify(body)} : {})});
   const result = await response.json();
   if (!response.ok) throw Object.assign(new Error(typeof result.detail === 'string' ? result.detail : t("Check the fields and try again.")), {status: response.status});
+  if((method || (body ? 'POST' : 'GET'))!=='GET' && typeof seedDetailCache!=='undefined')seedDetailCache.clear();
   return result;
 }
 globalThis.MediaAppTheme.setOverrideHandler(themeOverride => api('auth/preferences', {themeOverride}, 'PUT'));
@@ -102,6 +125,27 @@ document.querySelector('#cancel-early').onclick = () => finishEarlyAction(false)
 earlyDialog.addEventListener('cancel', event => { event.preventDefault(); finishEarlyAction(false); });
 earlyDialog.addEventListener('close', () => { if (earlyConfirmation) finishEarlyAction(false); });
 let removalRow;
+let recheckRow;
+const recheckDialog = document.querySelector('#recheck-torrent');
+function chooseRecheck(row) {
+  recheckRow = row;
+  document.querySelector('#recheck-name').textContent = row.name;
+  recheckDialog.showModal();
+}
+document.querySelector('#cancel-recheck').onclick = () => {recheckDialog.close(); recheckRow = null;};
+document.querySelector('#confirm-recheck').onclick = async () => {
+  const button = document.querySelector('#confirm-recheck');
+  if (button.disabled || !recheckRow) return;
+  button.disabled = true;
+  try {
+    await api('torrents/recheck', {torrent_hash: recheckRow.hash});
+    recheckDialog.close(); recheckRow = null;
+    showNotification(t('File check requested. Watch the torrent status; it remains paused after checking. Start it manually to fetch missing pieces.'), 'info');
+    if (dialog.open) dialog.close();
+    await refreshTorrents();
+  } catch (error) { notify(error); }
+  finally { button.disabled = false; }
+};
 const removalDialog = document.querySelector('#remove-torrent');
 function chooseRemoval(row) {
   removalRow = row;
@@ -125,6 +169,23 @@ document.querySelector('#remove-form').onsubmit = async event => {
   } catch (error) { notify(error); }
   finally { button.disabled = false; }
 };
+// Keep keyboard position and disclosures when a refreshed list replaces its rows.
+function preserveListInteraction(target, key) {
+  const controls = 'button, summary, a, input, select';
+  const active = document.activeElement;
+  const rows = [...target.children];
+  const focusedRow = rows.find(row => row.contains(active));
+  const focusedKey = focusedRow?.dataset[key];
+  const focusIndex = focusedRow ? [...focusedRow.querySelectorAll(controls)].indexOf(active) : -1;
+  const opened = new Set(rows.filter(row => row.querySelector('details[open]')).map(row => row.dataset[key]));
+  return () => {
+    for (const row of target.children) {
+      if (opened.has(row.dataset[key])) { const details = row.querySelector('details'); if (details) details.open = true; }
+      if (focusIndex >= 0 && row.dataset[key] === focusedKey) row.querySelectorAll(controls)[focusIndex]?.focus({preventScroll: true});
+    }
+  };
+}
+
 function renderTorrents() {
   const measured = torrentSnapshotValid ? torrentTraffic() : null;
   for (const [id, value] of [['seed-download-speed', measured ? `${bytes(measured.dl_info_speed)}/s` : '\u2014'], ['seed-upload-speed', measured ? `${bytes(measured.up_info_speed)}/s` : '\u2014'], ['seed-torrent-count', torrentSnapshotValid ? String(torrents.length) : '\u2014']]) {
@@ -132,13 +193,25 @@ function renderTorrents() {
   }
   const search = document.querySelector('#search').value.toLocaleLowerCase(); const filter = document.querySelector('#filter').value; const sort = document.querySelector('#sort').value;
   const visible = torrents.filter(row => !pendingRemovals.has(row.hash));
-  const rows = visible.filter(row => String(row.name).toLocaleLowerCase().includes(search) && (filter === 'all' || state(row) === filter));
-  const source = document.querySelector('#source-filter').value; const filtered = rows.filter(row => source === 'all' || String(row.category || '').startsWith('MediaSeed-RSS-') === (source === 'rss')); rows.splice(0, rows.length, ...filtered);
-  rows.sort((first, second) => sort === 'name' ? String(first.name).localeCompare(String(second.name)) : Number(second[sort]) - Number(first[sort]));
+  const rows = visible.filter(row => String(row.name).toLocaleLowerCase().includes(search) && (filter === 'all' || (filter === 'checking' ? String(row.state).startsWith('checking') : state(row) === filter)));
+  const source = document.querySelector('#source-filter').value; const filtered = rows.filter(row => source === 'all' || (row.category === 'MediaSeed-Ratio' ? 'ratio' : String(row.category || '').startsWith('MediaSeed-RSS-') ? 'rss' : 'manual') === source); rows.splice(0, rows.length, ...filtered);
+  sortTorrentRows(rows, sort, document.querySelector('#sort-direction').value || (sort === 'name' ? 'asc' : 'desc'));
   const pending = [...pendingRemovals.values()].filter(row => !row.confirmed).length;
   document.querySelector('#count').textContent = t("{0} of {1} torrents{2}", {0: rows.length, 1: visible.length, 2: pending ? ' · ' + pending + ' fjernes' : ''});
-  const target = document.querySelector('#torrents'); target.replaceChildren(); if (!rows.length) target.append(element('p', torrents.length ? t("No matching torrents") : torrentSnapshotValid ? t("No torrents") : t("Torrent client unavailable"), 'muted'));
-  for (const [index, row] of rows.entries()) target.append(seedTorrent(row, index));
+  const target = document.querySelector('#torrents'); const restoreInteraction = preserveListInteraction(target, 'hash'); const previousRows = new Map([...target.children].map(item=>[item.dataset.hash,item])); target.replaceChildren(); if (!rows.length) target.append(element('p', torrents.length ? t("No matching torrents") : torrentSnapshotValid ? t("No torrents") : t("Torrent client unavailable"), 'muted'));
+  const pageSize = [10,25,50,100].includes(Number(document.querySelector('#page-size').value)) ? Number(document.querySelector('#page-size').value) : 25;
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  torrentPage = Math.max(1, Math.min(torrentPage, pages));
+  const start = (torrentPage - 1) * pageSize;
+  document.querySelector('#previous-page').disabled = torrentPage <= 1;
+  document.querySelector('#next-page').disabled = torrentPage >= pages;
+  document.querySelector('#page-status').textContent = t('Showing {0}–{1} of {2} · Page {3} of {4}', {0: rows.length ? start + 1 : 0, 1: Math.min(start + pageSize, rows.length), 2: rows.length, 3: torrentPage, 4: pages});
+  for (const [index, row] of rows.slice(start, start + pageSize).entries()) {
+    const signature=JSON.stringify([row,start+index,locale(),appRole,downloadsEnabled]);
+    const previous=previousRows.get(row.hash), item=previous?.seedSignature===signature?previous:seedTorrent(row,start+index);
+    item.seedSignature=signature; target.append(item);
+  }
+  restoreInteraction();
 
 }
 function torrentTraffic() {
@@ -149,10 +222,12 @@ function renderTransferSummary() {
   const traffic = torrentTraffic();
   document.querySelector('#transfer').textContent = traffic ? `${clientLabel} · Download ${bytes(traffic.dl_info_speed)}/s · Upload ${bytes(traffic.up_info_speed)}/s · ${downloadsEnabled ? t("VPN verified") : t("Downloads blocked until VPN is verified")}${torrents.length === 500 ? t(" · Traffic for the 500 displayed torrents") : ''}` : t("{0} · waiting for traffic measurement", {0: clientLabel});
 }
+let lastTorrentSample = 0;
 function applyTorrentSnapshot(rows, request) {
   if (request !== torrentListRequest) return;
   torrentSnapshotValid = Array.isArray(rows);
   if (torrentSnapshotValid) {
+    lastTorrentSample = Date.now();
     torrents = rows;
     const sample = torrentTraffic();
     if (sample) transferHistory.push(sample);
@@ -165,10 +240,9 @@ function applyTorrentSnapshot(rows, request) {
     renderTorrents();
     renderTraffic(torrentTraffic()); renderTransferSummary();
   } else {
-    transferHistory = [];
-    for (const id of ["seed-download-chart", "seed-upload-chart"]) document.querySelector("#"+id)?.setAttribute("d", "");
-    torrents = []; renderTorrents(); document.querySelector('#count').textContent = t("Torrent client unavailable");
-    renderTraffic(); document.querySelector('#transfer').textContent = t("Torrent client unavailable · waiting for traffic measurement");
+    renderTraffic();
+    document.querySelector('#count').textContent = lastTorrentSample ? t("Last updated {0} seconds ago \u00b7 reconnecting", {0: Math.floor((Date.now() - lastTorrentSample) / 1000)}) : t("Torrent client unavailable");
+    document.querySelector('#transfer').textContent = lastTorrentSample ? t("Last updated {0} seconds ago · reconnecting", {0: Math.floor((Date.now() - lastTorrentSample) / 1000)}) : t("Torrent client unavailable · waiting for traffic measurement");
   }
 }
 async function refreshTorrents() {
@@ -190,7 +264,24 @@ async function refreshAuxiliary() {
     storageRefreshAt = Date.now() + 60000;
     tasks.push((async () => {
       const storage = document.querySelector('#storage'); storage.hidden = false;
-      try { const capacity = await api('storage'); storage.replaceChildren(...(capacity.locations || [capacity]).map(row => element('span', `${t(row.label)}: ${row.available === false ? t('Storage unavailable') : t('{0} free of {1}', {0: bytes(row.freeBytes), 1: bytes(row.totalBytes)})}${row.writable ? '' : ' \u00b7 ' + t('Read-only')}${row.lowSpace ? ' \u00b7 ' + t('Low disk space') : ''}`, 'storage-location'))); }
+      try {
+        const capacity = await api('storage');
+        const groups = new Map();
+        for (const row of capacity.locations || [capacity]) {
+          const key = row.available !== false && row.filesystemId ? row.filesystemId : row.id || 'local';
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(row);
+        }
+        storage.replaceChildren(element('h2', t('Storage')));
+        for (const rows of groups.values()) {
+          const row = rows[0], card = element('article', undefined, 'storage-capacity');
+          card.append(element('strong', rows.map(r => t(r.label)).join(' · ')), element('p', row.available === false ? t('Storage unavailable') : t('{0} used · {1} free · {2} total', {0: bytes(row.usedBytes), 1: bytes(row.freeBytes), 2: bytes(row.totalBytes)})));
+          if (rows.some(r => r.id === 'local')) card.append(element('p', t('Local downloads share the system disk. Capacity includes the operating system, Docker images and app data, not just downloaded files.'), 'muted'));
+          if (rows.length > 1) card.append(element('p', t('These folders share the same storage capacity.'), 'muted'));
+          if (row.lowSpace) card.append(element('p', t('Low disk space'), 'cleanup-warning'));
+          storage.append(card);
+        }
+      }
       catch { storage.textContent = t("Local storage unavailable"); storageRefreshAt = Date.now() + 30000; }
     })());
   }
@@ -204,9 +295,12 @@ async function refresh() {
     downloadsEnabled = snapshot.runtime.downloadsEnabled === true; renderConnection(snapshot.runtime);
     applyTorrentSnapshot(snapshot.torrents, request);
     const queue = snapshot.queue;
-    if (request === torrentListRequest) document.querySelector('#queue-status').textContent = queue ? t("Queue: {0}/{1} active · {2} waiting · RSS {3} · Manual {4}{5}", {0: queue.active, 1: queue.limit, 2: queue.waiting, 3: queue.rssActive, 4: queue.manualActive, 5: queue.boundedView ? t(" · Limited to 500 torrents") : ''}) : t("Queue status unavailable");
+    globalThis.MediaSeedQueue = queue;
+    globalThis.MediaSeedWorkspace?.render();
+    if (request === torrentListRequest) document.querySelector('#queue-status').textContent = queue ? t("Queue: {0}/{1} active · {2} waiting · RSS {3} · Manual {4}{5}", {0: queue.active, 1: queue.limit === -1 ? t('Unlimited') : queue.limit ?? t('Unknown'), 2: queue.waiting, 3: queue.rssActive, 4: queue.manualActive, 5: (queue.ratioActive ? t(" · Build ratio: {0}", {0: queue.ratioActive}) : '') + (queue.boundedView ? t(" · Limited to 500 torrents") : '')}) : t("Queue status unavailable");
   } catch {
     downloadsEnabled = false; renderConnection({unavailable: true}); applyTorrentSnapshot(null, request);
+    globalThis.MediaSeedQueue = null; globalThis.MediaSeedWorkspace?.render();
     document.querySelector('#queue-status').textContent = t("Queue status unavailable");
   } finally { updateAddStart(); refreshing = false; void refreshAuxiliary(); }
 }
@@ -275,6 +369,7 @@ function renderConnection(state) {
   document.querySelector('#connection-checked').textContent = fresh ? t("Checked {0}", {0: new Date(checked * 1000).toLocaleTimeString(locale())}) : t("Waiting for status check");
   vpnFreshUntil = active ? Date.now() + 30000 : 0;
   if (!active) renderTraffic();
+  globalThis.MediaSeedWorkspace?.render();
 }
 function renderTraffic(transfer) {
   const flow = document.querySelector('#connection-flow');
@@ -359,7 +454,8 @@ function trackerCreditView(row) {
   const panel = element('section', undefined, 'tracker-credit');
   const title = row.credit_observation_stale ? t("Waiting for traffic measurement · ratio goal protected") : row.green_pending ? t("Waiting for tracker rules · provisional 0.5× credit") : row.green_active ? t("Green period · 0.5× upload") : row.green_uploaded > 0 ? t("Green period ended · new uploads count 1×") : t("Tracker rules · uploads count 1×");
   panel.append(element('strong', title));
-  panel.append(element('p', t("Raw upload {0} · Estimated credited upload {1} · Credited ratio {2} / goal {3}", {0: trackerBytes(row.uploaded), 1: trackerBytes(row.credited_uploaded), 2: trackerNumber(row.credited_ratio), 3: trackerNumber(row.ratio_limit)})));
+  const accountUpload=row.account_credited_uploaded??row.credited_uploaded;panel.append(element('p',t('Estimated credited upload')+': '+(typeof accountUpload==='number'?'≈ '+trackerBytes(accountUpload):t('Unknown'))));
+  panel.append(element('p', t("Raw upload {0} · Conservative seeding credit {1} · Goal ratio {2} / {3}", {0: trackerBytes(row.uploaded), 1: trackerBytes(row.credited_uploaded), 2: trackerNumber(row.credited_ratio), 3: trackerNumber(row.ratio_limit)})));
   if (row.green_pending) panel.append(element('p', row.credit_observation_stale ? t("Waiting for a stable traffic measurement. An old measurement or reset counter must not trigger a ratio goal.") : t("Waiting for the tracker to confirm the creation date. Ratio and automatic cleanup provisionally use half upload credit."), 'muted'));
   if (row.green_rule_until) panel.append(element('p', t("The first 24 hours end at {0}. MediaSeed uses a 30-minute safety margin until {1}.", {0: new Date(row.green_rule_until * 1000).toLocaleString(locale()), 1: new Date(row.green_until * 1000).toLocaleTimeString(locale())}), 'muted'));
   if (row.green_uploaded > 0) panel.append(element('p', t("{0} of uploads were recorded at 0.5×. That portion retains half credit after the period ends.", {0: trackerBytes(row.green_uploaded)}), 'muted'));
@@ -401,14 +497,48 @@ function trackerBytes(value) {
   while (amount >= 1024 && index < units.length - 1) { amount /= 1024; index++; }
   return `${value < 0 ? '−' : ''}${amount.toLocaleString(locale(), {maximumFractionDigits: index ? 2 : 0})} ${units[index]}`;
 }
+function rankGoal(item) {
+  return item.unit==='bytes'?trackerBytes(item.goal):item.unit==='days'?t('{0} days',{0:trackerNumber(item.goal)}):trackerNumber(item.goal);
+}
+function rankRequirements(entry,compact=false) {
+  const section=element('section',undefined,compact?'rank-next-summary':'rank-requirements');section.append(element('strong',entry.title));
+  const labels={trueUpload:'True upload',membership:'Membership',comments:'Comments',posts:'Posts',averageSeeding:'Average seeding time',seedingSize:'Seeding size'};
+  const list=element('dl');
+  for(const item of entry.requirements){
+    const line=element('div');line.append(element('dt',t(labels[item.metric])),element('dd',rankGoal(item)));
+    if(!compact && item.missing!==null){const missing={...item,goal:item.missing};line.append(element('small',item.missing===0?t('Requirement met'):t('Missing: {0}',{0:rankGoal(missing)}),'muted'));}
+    list.append(line);
+  }
+  section.append(list);return section;
+}
+function showRankDialog(row) {
+  let dialog=document.querySelector('#rank-requirements-dialog');
+  if(!dialog){dialog=element('dialog');dialog.id='rank-requirements-dialog';dialog.setAttribute('aria-labelledby','rank-dialog-title');document.body.append(dialog);}
+  const heading=element('div',undefined,'heading'),title=element('h2',t('Rank requirements'));title.id='rank-dialog-title';
+  const close=command(t('Close'),()=>dialog.close());close.type='button';heading.append(title,close);
+  const select=document.createElement('select');select.id='rank-choice';const label=element('label',t('Choose rank'));label.append(select);
+  const entries=row.rankProgress?.table||[];
+  for(const entry of entries){const option=element('option',entry.title);option.value=entry.title;select.append(option);}
+  select.value=row.rankProgress?.target?.title||row.rankProgress?.firstListed?.title||entries[0]?.title||'';
+  const content=element('div');
+  const note=element('p',t('Progress is only shown for values supplied by the tracker. True upload and credited upload are different.'),'muted');
+  const source=element('a',t('Open NordicBytes rank table'));source.href='https://nordicbytes.org/pages/groups';source.target='_blank';source.rel='noopener noreferrer';
+  dialog.replaceChildren(heading,element('p',t('Rank: {0}',{0:row.ranks?.automatic||t('Unknown')}),'muted'),label,content,note,source);
+  function paint(){const entry=entries.find(item=>item.title===select.value);content.replaceChildren();if(entry){content.append(rankRequirements(entry));if(entry.requirements.some(item=>item.missing===null))content.append(element('p',t('Some account values are unavailable; the remaining requirements cannot yet be calculated.'),'muted'));}}
+  select.onchange=paint;paint();
+  // This dialog lives outside the periodically replaced tracker cards.
+  // A background account refresh must not close it or reset the selected rank.
+  if(!dialog.open)dialog.showModal();
+}
 function trackerCard(row) {
   const card = element('article', undefined, 'source-row tracker-card');
   const head = element('div', undefined, 'tracker-card-heading');
   const identity = element('div');
   identity.append(element('h3', row.name), element('p', `NordicBytes${row.username ? ` · ${row.username}` : ''}`, 'muted'));
-  const available = row.status === 'ok' && row.stats && typeof row.stats === 'object';
-  head.append(identity, element('span', available ? t("Connected") : t("Account data unavailable"), `tracker-state${available ? ' ready' : ''}`));
+  const available = ['ok','stale'].includes(row.status) && row.stats && typeof row.stats === 'object';
+  head.append(identity, element('span', row.status === 'stale' ? t('Showing last known tracker statistics') : available ? t("Connected") : t("Account data unavailable"), `tracker-state${available ? ' ready' : ''}`));
   card.append(head);
+  if(row.status==='stale')card.append(element('p',t('Showing last known tracker statistics') + (row.checkedAt ? ' - ' + new Date(row.checkedAt*1000).toLocaleString(locale()) : ''),'muted'));
   if (available) {
     const stats = element('dl', undefined, 'tracker-stats');
     for (const [label, field, format] of [
@@ -423,24 +553,39 @@ function trackerCard(row) {
       stats.append(metric);
     }
     card.append(stats);
+    const ranks=element('div',undefined,'tracker-ranks');
+    for(const [key,label] of [['automatic','Rank'],['upload','Uploader rank'],['internal','Staff rank']]){
+      if(row.ranks?.[key])ranks.append(element('p',t(label)+': '+row.ranks[key]));
+    }
+    if(!row.ranks?.automatic)ranks.append(element('p',t('Rank unavailable from tracker'),'muted'));
+    const progress=row.rankProgress,goal=progress?.target||progress?.firstListed;
+    if(goal){ranks.append(element('small',t(progress?.target?'Next rank':'First rank in this table'),'muted'),rankRequirements(goal,true));}
+    const view=command(t('View rank requirements'),()=>showRankDialog(row));view.type='button';ranks.append(view);
+    card.append(ranks);
+
     const checked = new Date(row.checkedAt * 1000);
-    card.append(element('p', Number.isFinite(checked.getTime()) ? t("Retrieved {0} · Checked automatically every 5 minutes", {0: checked.toLocaleString(locale(), {dateStyle: 'short', timeStyle: 'short'})}) : t("Account statistics time is unknown"), 'tracker-updated muted'));
+    card.append(element('p', Number.isFinite(checked.getTime()) ? t("Retrieved {0} · Checked automatically every minute", {0: checked.toLocaleString(locale(), {dateStyle: 'short', timeStyle: 'short'})}) : t("Account statistics time is unknown"), 'tracker-updated muted'));
   } else {
     card.append(element('p', t("Account statistics could not be retrieved. Check the API key's access under Trackers. MediaSeed retries automatically."), 'muted'));
   }
   return card;
 }
 function renderTrackerOverview(rows) {
+  globalThis.MediaSeedTrackerRows = rows; globalThis.MediaSeedWorkspace?.render();
   richTrackerSummary(rows);
   document.querySelector('#tracker-overview').hidden = !rows.length;
-  document.querySelector('#tracker-account-list').replaceChildren(...rows.map(trackerCard));
+
 }
 let trackerOverviewLoading = false;
 async function refreshTrackerOverview() {
   if (appRole === 'viewer' || trackerOverviewLoading) return;
   trackerOverviewLoading = true;
   try { renderTrackerOverview(await api('trackers')); }
-  catch { document.querySelector('#tracker-account-list').replaceChildren(element('p', t("Tracker statistics could not be retrieved. Retrying automatically."), 'muted')); }
+  catch {
+    const previous = globalThis.MediaSeedTrackerRows || [];
+    if (previous.length) renderTrackerOverview(previous.map(row => ({...row, status: row.stats ? 'stale' : row.status})));
+    else document.querySelector('#tracker-account-list').replaceChildren(element('p', t("Tracker statistics could not be retrieved. Retrying automatically."), 'muted'));
+  }
   finally { trackerOverviewLoading = false; }
 }
 const feedForm = document.querySelector('#feed-form');
@@ -493,7 +638,9 @@ document.querySelector('#feed-folder-up').onclick = () => { void loadFeedFolders
 feedForm.addEventListener('reset', () => { if (!feedEditing) queueMicrotask(() => { void loadFeedLocations().catch(notify); }); });
 
 async function loadSources(kind) {
-  const rows = await api(kind); const target = document.querySelector(kind === 'feeds' ? '#feed-list' : '#tracker-list'); target.replaceChildren(); if (!rows.length) target.append(element('p', kind === 'feeds' ? t("No feeds") : t("No accounts"), 'muted'));
+  const requests = loadSources.requests ||= {}; const generation = requests[kind] = (requests[kind] || 0) + 1;
+  const rows = await api(kind); if (generation !== requests[kind]) return;
+  const target = document.querySelector(kind === 'feeds' ? '#feed-list' : '#tracker-list'); const restoreInteraction = preserveListInteraction(target, 'sourceId'); target.replaceChildren(); if (!rows.length) target.append(element('p', kind === 'feeds' ? t("No feeds") : t("No accounts"), 'muted'));
   if (kind === 'feeds') {
     const preview = document.querySelector('#feed-preview');
     if (preview) {
@@ -514,17 +661,24 @@ async function loadSources(kind) {
     document.querySelector('#tracker-search-submit').disabled = !rows.length;
   }
   for (const row of rows) {
-    const item = kind === 'trackers' ? trackerCard(row) : element('article', undefined, 'source-row');
+    const item = kind === 'trackers' ? trackerCard(row) : element('article', undefined, 'source-row'); item.dataset.sourceId = row.id;
     if (kind === 'feeds') item.append(element('h2', row.name), element('p', `${row.location ? t(feedLocations.find(place => place.id === row.location)?.label || (row.location === 'local' ? 'Local downloads' : row.location)) + ' /' + (row.folder || '') : row.folder || '/downloads'} · Ratio ${row.ratio} · ${row.paused ? t("Paused") : t("Active")} · ${t(row.status || '')}`, 'muted'));
     if (kind === 'feeds') item.append(element('p', row.start_at ? t('Only fetch RSS entries from: {0}', {0: new Date(row.start_at).toLocaleString()}) : t('No start date selected'), 'muted'));
     const actions = element('div', undefined, 'actions');
-    if (kind === 'feeds') { item.append(element('p', [row.include?.join(', '), row.exclude?.length ? t('Avoid') + ': ' + row.exclude.join(', ') : '', row.max_bytes ? t('Maximum size') + ': ' + trackerBytes(row.max_bytes) : '', row.badges?.join(' ? ')].filter(Boolean).join(' ? ') || t('No additional filters'), 'seed-feed-rules')); actions.append(command(t('History'), () => richFeedHistory(row.id, row.name))); }
+    if (kind === 'feeds') { item.append(element('p',t('Estimated credited upload')+': '+(typeof row.upload?.creditedUploadedBytes==='number'?'≈ '+trackerBytes(row.upload.creditedUploadedBytes):t('Unknown'))+(row.upload?.unknownDownloads?' · '+t('{0} downloads without measurements',{0:row.upload.unknownDownloads}):''),'feed-upload-total'));item.append(element('p', [row.include?.join(', '), row.exclude?.length ? t('Avoid') + ': ' + row.exclude.join(', ') : '', row.max_bytes ? t('Maximum size') + ': ' + trackerBytes(row.max_bytes) : '', row.badges?.join(' · ')].filter(Boolean).join(' · ') || t('No additional filters'), 'seed-feed-rules')); actions.append(command(t('History'), () => richFeedHistory(row.id, row.name))); }
     if (appRole === 'administrator') {
       if (kind === 'feeds') actions.append(command(row.paused ? 'Aktivér' : 'Pause', async () => { await api(`feeds/${row.id}/state`, {enabled: row.paused}, 'PUT'); await loadSources('feeds'); showNotification(row.paused ? t("Feed enabled through VPN.") : t("Feed paused. Existing torrents are preserved."), 'success'); }));
-      actions.append(command(t("Edit"), () => { const form = document.querySelector(kind === 'feeds' ? '#feed-form' : '#tracker-form'); feedEditing = kind === 'feeds'; form.reset(); feedEditing = false; for (const [key, value] of Object.entries(row)) { const input = form.elements.namedItem(key); if (input) input.value = key === 'start_at' && value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : value ?? ''; } if (kind === 'feeds') { for (const key of ['include','exclude']) form.elements.namedItem(key).value = (row[key] || []).join(', '); for (const option of form.elements.namedItem('badges').options) option.selected = (row.badges || []).includes(option.value); form.elements.namedItem('max_gib').value = row.max_bytes ? row.max_bytes / (1024 ** 3) : ''; form.elements.namedItem('url').placeholder = t('Saved feed address is kept. Fill in only to change it.'); void loadFeedLocations(row.location || 'local', row.folder || '').catch(notify); } form.querySelector('input[name="name"]').focus(); }), command(t("Remove"), async () => { if (!confirm(t("Remove {0}? Files and torrents are preserved.", {0: row.name}))) return; await api(`settings/${kind}/${row.id}`, undefined, 'DELETE'); await loadSources(kind); }));
+      actions.append(command(t("Edit"), () => { globalThis.MediaSeedWorkspace?.openEditor(kind);  const form = document.querySelector(kind === 'feeds' ? '#feed-form' : '#tracker-form'); feedEditing = kind === 'feeds'; form.reset(); feedEditing = false; for (const [key, value] of Object.entries(row)) { const input = form.elements.namedItem(key); if (input) input.value = key === 'start_at' && value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : value ?? ''; } if (kind === 'feeds') { for (const key of ['include','exclude']) form.elements.namedItem(key).value = (row[key] || []).join(', '); for (const option of form.elements.namedItem('badges').options) option.selected = (row.badges || []).includes(option.value); globalThis.MediaSeedWorkspace?.syncBadges(); globalThis.MediaSeedFeedPolicy?.load(row.cleanup); form.elements.namedItem('max_gib').value = row.max_bytes ? row.max_bytes / (1024 ** 3) : ''; form.elements.namedItem('url').placeholder = t('Saved feed address is kept. Fill in only to change it.'); void loadFeedLocations(row.location || 'local', row.folder || '').catch(notify); } form.querySelector('input[name="name"]').focus(); }), command(t("Remove"), async () => { if (!confirm(t("Remove {0}? Files and torrents are preserved.", {0: row.name}))) return; await api(`settings/${kind}/${row.id}`, undefined, 'DELETE'); await loadSources(kind); }));
     }
     item.append(actions); target.append(item);
   }
+  restoreInteraction();
+}
+async function pollSources(kind) {
+  const pending = pollSources.pending ||= new Set();
+  if (pending.has(kind)) return;
+  pending.add(kind);
+  try { await loadSources(kind); } finally { pending.delete(kind); }
 }
 let trackerSearchGeneration = 0;
 document.querySelector('#tracker-account').onchange = () => { trackerSearchGeneration++; document.querySelector('#tracker-results').replaceChildren(); document.querySelector('#tracker-search-status').textContent = ''; };
@@ -548,16 +702,18 @@ document.querySelector('#tracker-search').onsubmit = async event => {
   finally { button.disabled = document.querySelector('#tracker-account').options.length === 1; }
 };
 for (const [selector, kind] of [['#feed-form', 'feeds'], ['#tracker-form', 'trackers']]) {
-  const form = document.querySelector(selector); form.onsubmit = async event => { event.preventDefault(); const body = Object.fromEntries(new FormData(form)); const identifier = body.id; delete body.id; if (kind === 'feeds') { if (!feedStorageReady) { showNotification(t('Choose an available writable folder')); return; } body.location = feedLocation.value; body.folder = feedFolderPath; body.ratio = Number(body.ratio); for (const key of ['include','exclude']) body[key] = String(body[key] || '').split(',').map(x => x.trim()).filter(Boolean); body.badges = [...form.elements.namedItem('badges').selectedOptions].map(option => option.value); body.max_bytes = body.max_gib ? Math.round(Number(body.max_gib) * (1024 ** 3)) : null; delete body.max_gib; body.start_at = body.start_at ? new Date(body.start_at).toISOString() : null; } try { const saved = await api(kind + (identifier ? '/' + identifier : ''), body, identifier ? 'PUT' : 'POST'); if (kind === 'feeds' && (saved.start_at ? new Date(saved.start_at).getTime() : null) !== (body.start_at ? new Date(body.start_at).getTime() : null)) throw new Error(t('The saved start date could not be verified. Your form is preserved.')); form.reset(); form.elements.namedItem('id').value = ''; await loadSources(kind); showNotification(t("Saved palette"), 'success'); } catch (error) { notify(error); } };
+  const form = document.querySelector(selector); form.onsubmit = async event => { event.preventDefault(); const body = Object.fromEntries(new FormData(form)); const identifier = body.id; delete body.id; if (kind === 'feeds') { if (!feedStorageReady) { showNotification(t('Choose an available writable folder')); return; } body.location = feedLocation.value; body.folder = feedFolderPath; body.ratio = Number(body.ratio); body.cleanup = globalThis.MediaSeedFeedPolicy?.value(); for (const key of ['include','exclude']) body[key] = String(body[key] || '').split(',').map(x => x.trim()).filter(Boolean); body.badges = [...form.elements.namedItem('badges').selectedOptions].map(option => option.value); body.max_bytes = body.max_gib ? Math.round(Number(body.max_gib) * (1024 ** 3)) : null; delete body.max_gib; body.start_at = body.start_at ? new Date(body.start_at).toISOString() : null; } try { const saved = await api(kind + (identifier ? '/' + identifier : ''), body, identifier ? 'PUT' : 'POST'); if (kind === 'feeds' && (saved.start_at ? new Date(saved.start_at).getTime() : null) !== (body.start_at ? new Date(body.start_at).getTime() : null)) throw new Error(t('The saved start date could not be verified. Your form is preserved.')); form.reset(); form.elements.namedItem('id').value = ''; globalThis.MediaSeedWorkspace?.closeEditor(kind); await loadSources(kind); showNotification(t("Saved palette"), 'success'); } catch (error) { notify(error); } };
   form.addEventListener('reset', () => { form.elements.namedItem('id').setAttribute('value', ''); });
 }
 for (const button of document.querySelectorAll('[data-view]')) button.onclick = async () => { message.textContent = ''; for (const other of document.querySelectorAll('[data-view]')) other.setAttribute('aria-pressed', String(other === button)); for (const section of document.querySelectorAll('.view')) section.hidden = section.id !== button.dataset.view; document.querySelector('#connection-flow').hidden = button.dataset.view !== 'vpn'; try { if (button.dataset.view === 'feeds' || button.dataset.view === 'trackers') { await loadSources(button.dataset.view); if (button.dataset.view === 'feeds' && appRole === 'administrator') await loadFeedLocations(feedLocations.length ? feedLocation.value : undefined, feedLocations.length ? feedFolderPath : ''); } else if (button.dataset.view === 'vpn') await refreshVpn(); } catch (error) { notify(error); } };
 document.querySelector('#close-details').onclick = () => dialog.close();
 document.querySelector('#policy-form').onsubmit = async event => { event.preventDefault(); try { await api(`torrents/${selectedHash}/policy`, {ratio: Number(event.target.elements.namedItem('ratio').value)}); document.querySelector('#detail-message').textContent = t("Seeding goal saved"); } catch (error) { document.querySelector('#detail-message').textContent = t(error.message); } };
-for (const selector of ['#search', '#filter', '#sort', '#source-filter']) document.querySelector(selector).addEventListener('input', renderTorrents);
+for (const selector of ['#search', '#filter', '#sort', '#source-filter', '#sort-direction', '#page-size']) document.querySelector(selector).addEventListener('input', () => {torrentPage = 1; saveListPreferences(); renderTorrents();});
+document.querySelector('#previous-page').onclick = () => {torrentPage--; renderTorrents();};
+document.querySelector('#next-page').onclick = () => {torrentPage++; renderTorrents();};
 document.querySelector('#open-rss')?.addEventListener('click', () => document.querySelector('[data-view="feeds"]').click());
 document.querySelector('#manage-trackers').onclick = () => document.querySelector('[data-view="trackers"]').click();
-function showWorkspace() { if (appRole !== 'viewer') void loadSources('feeds').catch(() => { const preview = document.querySelector('#feed-preview'); if (preview) preview.textContent = t('Feed list unavailable'); }); const rssPanel = document.querySelector('.seed-rss'); if (rssPanel) rssPanel.hidden = appRole === 'viewer'; void refreshTrackerOverview(); document.body.classList.add('signed-in'); document.querySelector('#identity').hidden = true; document.querySelector('#workspace').hidden = false; document.querySelector('#logout').hidden = false; document.querySelector('#new-torrent').hidden = appRole === 'viewer'; document.querySelector('#policy-form').hidden = appRole === 'viewer'; for (const selector of ['#feed-form', '#tracker-form', '#vpn-form']) document.querySelector(selector).hidden = appRole !== 'administrator'; for (const selector of ['[data-view="feeds"]', '[data-view="trackers"]']) document.querySelector(selector).hidden = appRole === 'viewer'; refresh(); }
+function showWorkspace() { if (appRole !== 'viewer') void loadSources('feeds').catch(() => { const preview = document.querySelector('#feed-preview'); if (preview) preview.textContent = t('Feed list unavailable'); }); const rssPanel = document.querySelector('.seed-rss'); if (rssPanel) rssPanel.hidden = appRole === 'viewer'; void refreshTrackerOverview(); document.body.classList.add('signed-in'); document.querySelector('#session-loading').hidden = true; document.querySelector('#identity').hidden = true; document.querySelector('#workspace').hidden = false; document.querySelector('#logout').hidden = false; document.querySelector('#new-torrent').hidden = appRole === 'viewer'; document.querySelector('#policy-form').hidden = appRole === 'viewer'; for (const selector of ['#feed-form', '#tracker-form', '#vpn-form']) document.querySelector(selector).hidden = appRole !== 'administrator'; for (const selector of ['[data-view="feeds"]', '[data-view="trackers"]', '[data-view="ratio-scout"]']) document.querySelector(selector).hidden = appRole === 'viewer'; refresh(); }
 document.querySelector('#login').onsubmit = async event => { event.preventDefault(); const body = Object.fromEntries(new FormData(event.target)); try { if (needsSetup) { await api('auth/setup', body); needsSetup = false; } csrf = (await api('auth/login', body)).csrf; const identity = await api('auth/me'); setLanguage(identity.language || 'en'); globalThis.MediaAppTheme.applyIdentity(identity); event.target.reset(); showWorkspace(); } catch (error) { notify(error); } };
 document.querySelector('#refresh').onclick = refresh;
 const addDialog = document.querySelector('#add-torrent');
@@ -584,7 +740,7 @@ function renderTorrentFiles() {
   }
   document.querySelector('#file-name').textContent = torrentFiles.length === 1 ? torrentFiles[0].file.name : t('{0} files selected', {0: torrentFiles.length});
   document.querySelector('#torrent-batch-status').textContent = t('{0} of {1} files added', {0: torrentFiles.filter(item => item.state === 'added').length, 1: torrentFiles.length});
-  document.querySelector('#seed-preview-button').disabled = addingTorrent || (addForm.elements.namedItem('mode').value === 'file' && torrentFiles.length > 1);
+  document.querySelector('#seed-preview-button').disabled = addingTorrent;
   updateAddStart();
 }
 function selectTorrentFiles(files) {
@@ -623,8 +779,8 @@ function setAddMode() {
   document.querySelector('#magnet-field').hidden = fileMode; fileField.hidden = !fileMode; document.querySelector('#torrent-file-selection').hidden = !fileMode;
   document.querySelector('#add-magnet').disabled = fileMode; document.querySelector('#add-magnet').required = !fileMode;
   fileInput.disabled = !fileMode; fileInput.required = fileMode && !torrentFiles.length;
-  document.querySelector('#seed-preview-button').disabled = addingTorrent || (fileMode && torrentFiles.length > 1);
-  updateAddStart();
+  document.querySelector('#seed-preview-button').disabled = addingTorrent;
+  updateAddStart();globalThis.MediaSeedAdd?.changed();
 }
 function updateAddStart() {
   const complete = addForm.elements.namedItem('mode').value === 'file' && torrentFiles.length > 0 && torrentFiles.every(item => item.state === 'added');
@@ -674,7 +830,7 @@ addDialog.addEventListener('close', () => { document.body.append(document.queryS
 function closeAdd() { if (!addingTorrent) addDialog.close(); }
 document.querySelector('#close-add').onclick = closeAdd; document.querySelector('#cancel-add').onclick = closeAdd;
 addDialog.addEventListener('cancel', event => { if (addingTorrent) event.preventDefault(); });
-document.querySelector('#add-magnet').addEventListener('input', () => {richPreview.request++; document.querySelector('#seed-add-preview').replaceChildren();});
+document.querySelector('#add-magnet').addEventListener('input', () => {richPreview.request++; document.querySelector('#seed-add-preview').replaceChildren();globalThis.MediaSeedAdd?.changed();});
 fileInput.onchange = () => { if (!addingTorrent) selectTorrentFiles(Array.from(fileInput.files)); };
 fileField.ondragover = event => { event.preventDefault(); if (!addingTorrent) fileField.classList.add('dragging'); };
 fileField.ondragleave = () => fileField.classList.remove('dragging');
@@ -746,8 +902,8 @@ addForm.onsubmit = async event => {
   finally { addingTorrent = false; controls.forEach((control, index) => { control.disabled = disabledStates[index]; }); updateAddStart(); if (fileMode) renderTorrentFiles(); }
 };
 document.querySelector('#logout').onclick = async () => { try { await api('auth/logout', {}); location.reload(); } catch (error) { notify(error); } };
-setInterval(() => { if (!document.hidden && document.body.classList.contains('signed-in')) { if (!document.querySelector('#vpn').hidden) refreshVpn().catch(() => {}); if (!document.querySelector('#feeds').hidden) loadSources('feeds').catch(() => {}); refresh(); } }, 5000);
-setInterval(() => { if (!document.hidden && document.body.classList.contains('signed-in')) { if (!document.querySelector('#trackers').hidden) loadSources('trackers').catch(() => {}); else if (!document.querySelector('#downloads').hidden) void refreshTrackerOverview(); } }, 60000);
+setInterval(() => { if (!document.hidden && document.body.classList.contains('signed-in')) { if (!document.querySelector('#vpn').hidden) refreshVpn().catch(() => {}); if (!document.querySelector('#feeds').hidden) pollSources('feeds').catch(() => {}); refresh(); } }, 5000);
+setInterval(() => { if (!document.hidden && document.body.classList.contains('signed-in')) { if (!document.querySelector('#trackers').hidden) pollSources('trackers').catch(() => {}); else if (!document.querySelector('#downloads').hidden) void refreshTrackerOverview(); } }, 60000);
 async function initializeLogin() {
   try {
     const status = await api('auth/status'); needsSetup = status.needsSetup;
@@ -757,6 +913,7 @@ async function initializeLogin() {
       catch (error) { if (error.status === 401) location.replace(status.loginUrl); else notify(error); }
       return;
     }
+    document.querySelector('#session-loading').hidden = true; document.querySelector('#identity').hidden = false;
     document.querySelector('#identity-title').textContent = needsSetup ? t("A fresh start.") : t("Welcome back.");
     document.querySelector('#identity-subtitle').textContent = needsSetup ? t("Create your local MediaSeed administrator.") : t("Sign in to MediaSeed.");
     document.querySelector('#login-submit').textContent = needsSetup ? t("Create administrator") : t("Sign in");
@@ -777,3 +934,41 @@ async function refreshAccountPreferences() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void refreshAccountPreferences(); });
 window.addEventListener('focus', () => { void refreshAccountPreferences(); });
 setInterval(() => { void refreshAccountPreferences(); }, 60000);
+
+
+window.addEventListener('mediaseed-settings-open', async () => {
+  const form = document.querySelector('#download-settings-form'); if (!form) return;
+  const input = document.querySelector('#max-active-downloads'), button = document.querySelector('#save-download-settings'), status = document.querySelector('#download-settings-status');
+  button.disabled = true; input.disabled = true; status.textContent = t('Loading download settings…');
+  try {
+    const settings = await api('download-settings');
+    input.value = settings.maxActiveDownloads > 0 ? settings.maxActiveDownloads : '';
+    input.disabled = appRole !== 'administrator'; button.disabled = appRole !== 'administrator';
+    status.textContent = appRole !== 'administrator' ? t('Only an administrator can change the shared download limit.') : settings.maxActiveDownloads === -1 ? t('The client currently has no download limit. Choose a value to enable its queue.') : t('Current limit: {0} simultaneous downloads', {0: settings.maxActiveDownloads});
+  } catch (error) {status.textContent = errorLabels[error.message] || t(error.message);}
+  form.onsubmit = async event => {
+    event.preventDefault(); if (button.disabled) return;
+    button.disabled = true;
+    try { const saved = await api('download-settings', {maxActiveDownloads: Number(input.value)}, 'PUT'); input.value = saved.maxActiveDownloads; status.textContent = t('Current limit: {0} simultaneous downloads', {0: saved.maxActiveDownloads}); showNotification(t('Download limit saved.'), 'success'); await refresh(); }
+    catch (error) {notify(error);}
+    finally {button.disabled = appRole !== 'administrator';}
+  };
+});
+
+window.addEventListener('mediaseed-settings-open', async () => {
+  const form = document.querySelector('#rss-settings-form'); if (!form) return;
+  const input = document.querySelector('#rss-refresh-minutes'), button = document.querySelector('#save-rss-settings'), status = document.querySelector('#rss-settings-status');
+  button.disabled = true; input.disabled = true; status.textContent = t('Loading RSS settings...');
+  try {
+    const settings = await api('rss-settings'); input.value = settings.rssRefreshMinutes;
+    input.disabled = appRole !== 'administrator'; button.disabled = appRole !== 'administrator';
+    status.textContent = appRole !== 'administrator' ? t('Only an administrator can change the RSS interval.') : t('Current interval: {0} minutes', {0: settings.rssRefreshMinutes});
+  } catch (error) {status.textContent = errorLabels[error.message] || t(error.message);}
+  form.onsubmit = async event => {
+    event.preventDefault(); if (button.disabled) return;
+    button.disabled = true; input.disabled = true;
+    try { const saved = await api('rss-settings', {rssRefreshMinutes: Number(input.value)}, 'PUT'); input.value = saved.rssRefreshMinutes; status.textContent = t('Current interval: {0} minutes', {0: saved.rssRefreshMinutes}); showNotification(t('RSS interval saved.'), 'success'); }
+    catch (error) {notify(error);}
+    finally {button.disabled = appRole !== 'administrator'; input.disabled = appRole !== 'administrator';}
+  };
+});

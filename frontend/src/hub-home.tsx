@@ -1,3 +1,4 @@
+import { usePageSnapshot } from "./use-service-snapshot";
 import { StopAppButton } from "./app-controls";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,7 +14,6 @@ import {
 import { ServiceIcon } from "./service-icon";
 import { appStatusLabel } from "./seedbox-status";
 import { t } from "./i18n";
-import { useData } from "./use-data";
 import "./hub-home.css";
 import { AppAddressLinks, AppUptime } from "./app-uptime";
 import { useAppearance, type ThemeStyle, type Appearance } from "./appearance";
@@ -373,12 +373,12 @@ export function HubHome({
   const onAppRemoved = useCallback(() => {
     window.dispatchEvent(new Event("apps-changed"));
   }, []);
-  const catalog = useData<CatalogApp[]>("/catalog");
-  const deployment = useData<FjordHubInstallation | null>(
+  const catalog = usePageSnapshot<CatalogApp[]>("/catalog");
+  const deployment = usePageSnapshot<FjordHubInstallation | null>(
     "/fjordhub/deployment",
   );
-  const mediaseed = useData<MediaSeedStatus>("/mediaseed/status");
-  const mediavpn = useData<MediaSeedStatus>("/mediavpn/status");
+  const mediaseed = usePageSnapshot<MediaSeedStatus>("/mediaseed/status");
+  const mediavpn = usePageSnapshot<MediaSeedStatus>("/mediavpn/status");
   const reloadDeployment = deployment.reload;
   const reloadMediaSeed = mediaseed.reload;
   const reloadMediaVPN = mediavpn.reload;

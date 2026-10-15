@@ -56,6 +56,8 @@ export class ServiceSnapshots {
   prune(ids: string[]) {
     const allowed = new Set(ids);
     for (const [key, entry] of this.entries) {
+      // Page observations are account-scoped, not tied to an installed app ID.
+      if (key.startsWith("page:")) continue;
       if (!allowed.has(key.slice(key.indexOf(":") + 1))) {
         this.stop(entry);
         this.entries.delete(key);

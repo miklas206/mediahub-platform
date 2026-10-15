@@ -1,0 +1,75 @@
+#downloads .seed-rss, #seed-accounts, #queue-status { display: none; }
+#downloads .seed-download-grid { grid-template-columns: minmax(0,1fr); }
+.download-flow { padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-block: 20px; }
+.download-flow > strong { font-size: 1rem; color: var(--muted); }.download-flow[data-active="true"] > strong { color: var(--healthy); }
+.download-route { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+.download-route-node { display: grid; justify-items: center; gap: 8px; min-width: 80px; font-size: .8rem; }
+.route-icon { font-size: 1.5rem; border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; color: var(--accent); }
+.download-route-link { position: relative; flex: 1; height: 30px; overflow: hidden; border-block: 1px solid var(--line); }
+.download-route-link i { position: absolute; width: 40%; height: 3px; left: -40%; opacity: 0; border-radius: 3px; background: var(--accent); }
+.packet-down { top: 7px; }.packet-up { bottom: 7px; background: var(--healthy) !important; }
+@keyframes download-packet { from { transform: translateX(0); } to { transform: translateX(350%); } }
+.download-flow[data-download="true"] .packet-down { opacity: 1; animation: download-packet 2s linear infinite; }
+.download-flow[data-upload="true"] .packet-up { opacity: 1; animation: download-packet 2.7s linear infinite reverse; }
+.download-status-cards { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr) minmax(0,1fr); align-items:center; gap: 16px; margin-block: 22px; }
+.download-status-card { display: grid; align-content: start; justify-content: stretch; gap: 12px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; text-align: left; min-width: 0; }
+.download-status-card > span { color: var(--muted); font-size: .85rem; }.download-status-card > strong { font-size: 1.1rem; overflow-wrap: anywhere; }.download-status-card small { font-size: .8rem; color: var(--muted); }.download-status-card.attention { border-color: var(--danger); }
+.download-status-card .actions { flex-wrap: wrap; }.download-status-card .actions button { font-size: .75rem !important; padding: 5px 9px; }
+.seed-stats article:last-child { flex-wrap: wrap; }#torrent-activity-count { flex-basis:100%; margin: 0; }
+.automatic-activity { margin: 18px 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }.automatic-activity summary,.client-details summary{cursor:pointer;}.automation-event{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto auto;gap:12px;padding-block:14px;border-bottom:1px solid var(--line);font-size:.85rem;align-items:center;}.automation-event strong{overflow-wrap:anywhere;}
+.client-details { margin: 12px 0; font-size:.8rem; color:var(--muted); }.client-details #transfer{font-size:inherit;}
+.source-editor { width: min(calc(100vw - 24px), 760px); max-height: 90dvh; overflow-y: auto; padding: 22px; }.source-editor .workspace-card{border:0;padding:0;background:transparent;}.source-editor-close{display:flex;margin-left:auto;margin-bottom:16px;}
+.source-editor .settings-form{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px;}.source-editor .settings-form > fieldset{grid-column:1/-1;min-width:0;}.source-editor .settings-form label{align-self:start;}.source-editor .settings-form input{height:auto;align-self:start;}.source-editor .download-location p{font-size:.8rem;}.source-editor .badge-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}.badge-choices label{display:flex;align-items:center;gap:10px;}.badge-choices input{width:18px;min-height:18px;accent-color:var(--accent);}.badge-choices p{grid-column:1/-1;}
+#feeds > .workspace-columns{grid-template-columns:1fr;}#feeds > button,#trackers > button{margin-block:14px;}#trackers > .workspace-columns{display:none;}#tracker-list{display:grid;gap:16px;}.tracker-card{min-width:0;}
+:root[data-reduced-motion="true"] .download-route-link i{animation:none!important;}
+@media(prefers-reduced-motion:reduce){.download-route-link i{animation:none!important;}}
+@media(max-width:1100px){.download-status-cards{grid-template-columns:1fr;}.automation-event{grid-template-columns:minmax(0,1fr) auto;}.automation-event span{grid-column:1;}}
+@media(max-width:650px){.download-flow{padding:16px 12px;}.download-route{gap:4px;}.download-route-node{min-width:48px;font-size:.65rem;}.route-icon{padding:6px 10px;}.source-editor .settings-form{grid-template-columns:1fr;}.source-editor .badge-choices{grid-template-columns:1fr;}.source-editor{padding:16px;}}
+
+#torrents .actions > .torrent-toggle { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); color: var(--text); display: inline-flex; align-items: center; justify-content: center; }
+#torrents .actions > .torrent-toggle:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+#torrents .actions > .torrent-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Keep sparse status cards and route icons in proportion to the Apps workspace. */
+.download-flow { padding:16px 20px; margin-block:16px; }
+.download-status-cards { gap:14px; margin-block:18px; }
+.download-status-card { gap:8px; padding:16px; }
+.download-status-card > strong { font-size:1rem; }
+.download-route-node .route-icon { display:grid; place-items:center; width:44px; height:44px; padding:0; }
+.route-icon svg { display:block; width:22px; height:22px; }
+.seed-stats .stat-icon { display:inline-flex; width:24px; height:24px; flex:none; color:var(--accent); }
+.seed-stats .stat-icon svg { width:100%; height:100%; }
+@media(max-width:650px) { .download-route-node .route-icon { width:36px; height:36px; } }
+
+.download-account-totals { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; margin:0; padding-top:12px; border-top:1px solid var(--line); }
+.download-account-totals dt { font-size:.75rem; color:var(--muted); font-weight:400; }
+.download-account-totals dd { margin:4px 0 0; font-size:1rem; font-weight:650; overflow-wrap:anywhere; }
+.tracker-ranks { border-top:1px solid var(--line); margin-top:14px; padding-top:10px; font-size:.85rem; }
+.tracker-ranks p { margin:6px 0; overflow-wrap:anywhere; }
+.tracker-ranks a { display:inline-block; margin-block:6px; }
+
+/* One compact goal in the card; the full table is a stable, separate dialog. */
+.rank-next-summary { margin:8px 0 12px; padding:12px; border:1px solid var(--line); border-radius:8px; max-width:620px; }
+.rank-next-summary dl { display:flex; flex-wrap:wrap; gap:8px 24px; margin:10px 0 0; }
+.rank-next-summary dl > div { display:flex; gap:8px; align-items:baseline; }
+.rank-next-summary dt { color:var(--muted); font-size:.8rem; }
+.rank-next-summary dd { margin:0; font-weight:600; font-size:.85rem; }
+#rank-requirements-dialog { width:min(640px,calc(100vw - 24px)); max-height:85dvh; padding:24px; }
+#rank-requirements-dialog .heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:12px; }
+#rank-requirements-dialog .heading h2 { font-size:1.2rem; margin:0; }
+#rank-requirements-dialog label { display:grid; gap:8px; font-size:.85rem; }
+#rank-requirements-dialog select { width:100%; }
+#rank-requirements-dialog p,#rank-requirements-dialog a { font-size:.85rem; line-height:1.5; }
+.rank-requirements { margin:16px 0; padding:16px; border:1px solid var(--line); border-radius:8px; }
+.rank-requirements dl { margin:12px 0 0; }
+.rank-requirements dl > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 16px; padding:8px 0; border-bottom:1px solid var(--line); }
+.rank-requirements dl > div:last-child { border-bottom:0; }
+.rank-requirements dt,.rank-requirements dd { font-size:.85rem; margin:0; }
+.rank-requirements dd { font-weight:600; }
+.rank-requirements small { grid-column:1/-1; font-size:.75rem; }
+@media(max-width:480px){#rank-requirements-dialog{padding:16px;}.rank-requirements{padding:12px;}}
+
+.download-status-card:has(.download-account-totals) { gap:8px; }
+
+/* Short status cards keep their own height around the wider central tracker. */
+@media(max-width:1100px){.download-status-cards{grid-template-columns:minmax(0,1fr);align-items:start;}}

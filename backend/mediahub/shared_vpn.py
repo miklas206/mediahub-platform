@@ -245,32 +245,37 @@ class SharedVPN:
                     "phase": seed.get("phase") or ("ready" if seed.get("ready") else "idle"),
                 }
             )
-        for item in self.bindings():
+        profile_requests = {}
+        async def app_status(item):
             try:
                 _, client = self.target(item["id"])
                 state = await client.request("GET", "/v1/shared-vpn/" + item["id"])
                 profile = self.assignment(self.peer_id(item)) or gateway.get("profileId")
                 pending = self.assignment_pending(self.peer_id(item))
-                app_gateway = await self.vpn(path="/profiles/" + profile) if profile and profile != gateway.get("profileId") else gateway
-                apps.append(
-                    {
-                        **item,
-                        "enabled": state["enabled"],
-                        "pending": pending,
-                        "profileId": profile if state["enabled"] or pending else None,
-                        "ready": bool(
-                            not pending and app_gateway["ready"]
-                            and state.get(
-                                "ready", state["handshakeVerified"] and state["phase"] == "ready"
-                            )
-                        ),
-                        "phase": state["phase"],
-                        "errorCode": state.get("errorCode"),
-                        "message": state.get("message"),
-                    }
-                )
+                if profile and profile != gateway.get("profileId"):
+                    if profile not in profile_requests:
+                        profile_requests[profile] = asyncio.create_task(self.vpn(path="/profiles/" + profile))
+                    app_gateway = await profile_requests[profile]
+                else:
+                    app_gateway = gateway
+                return {
+                    **item,
+                    "enabled": state["enabled"],
+                    "pending": pending,
+                    "profileId": profile if state["enabled"] or pending else None,
+                    "ready": bool(
+                        not pending and app_gateway["ready"]
+                        and state.get(
+                            "ready", state["handshakeVerified"] and state["phase"] == "ready"
+                        )
+                    ),
+                    "phase": state["phase"],
+                    "errorCode": state.get("errorCode"),
+                    "message": state.get("message"),
+                }
             except DomainError:
-                apps.append({**item, "enabled": None, "ready": False, "phase": "unavailable"})
+                return {**item, "enabled": None, "ready": False, "phase": "unavailable"}
+        apps.extend(await asyncio.gather(*(app_status(item) for item in self.bindings())))
         return {"gateway": gateway, "apps": apps, "orphans": self.orphan_bindings(gateway)}
 
     def seed_installed(self):

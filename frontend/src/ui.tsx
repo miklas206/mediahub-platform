@@ -1,6 +1,6 @@
 import { ShellNavigation } from "./shell-navigation";
 import { ThemeNavIcon } from "./theme-nav-icon";
-import { ReferenceOverview } from "./reference-overview";
+const ReferenceOverview = lazy(() => import("./reference-overview").then(module => ({default: module.ReferenceOverview})));
 import { serviceSnapshots } from "./service-snapshots";
 import { NotificationPopup } from "./notification-popup";
 import { fjordHubLink } from "./fjordhub-token-guide";
@@ -8,8 +8,8 @@ import { canRunMaintenance, cleanupSpaceMessage, installedAppsHealth, type Maint
 import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
-import { GPUSetupCard } from "./gpu-setup";
-import { AppearanceSettings } from "./appearance-settings";
+const GPUSetupCard = lazy(() => import("./gpu-setup").then(module => ({default: module.GPUSetupCard})));
+const AppearanceSettings = lazy(() => import("./appearance-settings").then(module => ({default: module.AppearanceSettings})));
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
   useServiceReports,
@@ -69,16 +69,14 @@ import { bytes, uptime } from "./format";
 import { PlatformVersion } from "./platform-version";
 import { SidebarClock } from "./sidebar-clock";
 import { HubHome } from "./hub-home";
-import { UsersPage } from "./users";
-import { AppSettingsPage } from "./app-settings";
-import { ManagedAppInstallPage } from "./managed-app-install";
-import { MediaVPNSetupPage } from "./mediavpn-setup";
-import {
-  AppRuntimePage,
-  DeviceDiagnostics,
-  RemoteRuntimeLogs,
-  type Runtime,
-} from "./runtime";
+const UsersPage = lazy(() => import("./users").then(module => ({default: module.UsersPage})));
+const AppSettingsPage = lazy(() => import("./app-settings").then(module => ({default: module.AppSettingsPage})));
+const ManagedAppInstallPage = lazy(() => import("./managed-app-install").then(module => ({default: module.ManagedAppInstallPage})));
+const MediaVPNSetupPage = lazy(() => import("./mediavpn-setup").then(module => ({default: module.MediaVPNSetupPage})));
+import type { Runtime } from "./runtime";
+const AppRuntimePage = lazy(() => import("./runtime").then(module => ({default: module.AppRuntimePage})));
+const DeviceDiagnostics = lazy(() => import("./runtime").then(module => ({default: module.DeviceDiagnostics})));
+const RemoteRuntimeLogs = lazy(() => import("./runtime").then(module => ({default: module.RemoteRuntimeLogs})));
 import {
   IntegrationsPage,
   FjordHubHome,

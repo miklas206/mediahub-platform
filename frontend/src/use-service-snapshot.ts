@@ -42,3 +42,12 @@ export function useServiceSnapshot<T>(
 export function useRuntimeSnapshot(appId: string) {
   return useServiceSnapshot<RuntimeSnapshot>("runtime", appId, 10000);
 }
+
+// Navigation reuses the last observation; auth transitions clear the same store.
+export function usePageSnapshot<T>(path: string, interval = 30000) {
+  const key = `page:${path}`;
+  const snapshot = useSyncExternalStore(serviceSnapshots.subscribe, () => serviceSnapshots.get<T>(key));
+  useEffect(() => serviceSnapshots.acquire(key, interval, signal => api<T>(path, "GET", undefined, signal)), [key, path, interval]);
+  const reload = useCallback(() => { void serviceSnapshots.refresh(key); }, [key]);
+  return {...snapshot, reload};
+}

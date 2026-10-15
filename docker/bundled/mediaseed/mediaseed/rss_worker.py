@@ -9,7 +9,9 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 
-from mediaseed.cleanup import source_hashes
+from mediaseed.cleanup import source_hashes, CleanupPolicy
+from mediaseed.activity import Activity
+from mediaseed import feed_uploads
 
 
 def title_matches(title, feed):
@@ -42,12 +44,19 @@ class RssWorker:
         self.lock = asyncio.Lock()
         self.reports = {}
         self.benefits_lookup = None
+        self.cleanup = None
         self.metadata_budget = 6
+        self.activity = Activity(database)
         with database() as connection:
             connection.execute("CREATE TABLE IF NOT EXISTS rss_history (token TEXT PRIMARY KEY, feed TEXT NOT NULL, status TEXT NOT NULL, created REAL NOT NULL, torrent_hash TEXT)")
             connection.execute("CREATE TABLE IF NOT EXISTS rss_observations (feed TEXT NOT NULL, token TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, created REAL NOT NULL, PRIMARY KEY(feed,token))")
 
+        with database() as connection:
+            feed_uploads.migrate(connection)
+
     def observe(self, feed, token, article, status):
+        if status in {'added', 'import_unconfirmed', 'metadata_unknown', 'badges_unverified', 'too_large', 'size_unknown'}:
+            self.activity.record('rss', token, article.get('title', ''), status, feed=feed['id'])
         with self.database() as connection:
             connection.execute("INSERT INTO rss_observations VALUES (?,?,?,?,?) ON CONFLICT(feed,token) DO UPDATE SET status=excluded.status,created=excluded.created WHERE NOT (rss_observations.status='added' AND excluded.status='already_processed')", (feed['id'], token, str(article.get('title', ''))[:300], status, time.time()))
             connection.execute("DELETE FROM rss_observations WHERE rowid NOT IN (SELECT rowid FROM rss_observations ORDER BY created DESC LIMIT 1000)")
@@ -120,6 +129,7 @@ class RssWorker:
             return
         articles = item.get("articles", [])
         if item.get("hasError") or not isinstance(articles, list):
+            self.activity.record('rss', feed['id'], feed['name'], 'feed_error', feed=feed['id'])
             self.reports[feed["id"]] = "Feed kunne ikke hentes"
             return
         for article in articles[:500]:
@@ -149,6 +159,16 @@ class RssWorker:
             self.metadata_budget -= 1
             response = await self.qbit("/api/v2/rss/torrent", payload={"url": link})
             content = response.content
+            file_token = hashlib.sha256(content).hexdigest()
+            with self.database() as connection:
+                previous = connection.execute("SELECT status,torrent_hash FROM rss_history WHERE token=?", (file_token,)).fetchone()
+                if previous:
+                    # Remember this article too, so another feed's duplicate cannot
+                    # consume the metadata budget on every future cycle.
+                    connection.execute("INSERT OR IGNORE INTO rss_history VALUES (?,?,?,?,?)", (token, feed["id"], "duplicate", time.time(), previous[1]))
+            if previous:
+                self.observe(feed, observation, article, 'already_processed')
+                continue
             if feed.get('max_bytes') or feed.get('badges'):
                 try:
                     metadata = source_hashes(content=content, include_metadata=True)
@@ -174,15 +194,25 @@ class RssWorker:
             if next((row for row in self.rows("feeds") if row["id"] == feed["id"]), None) != feed:
                 self.reports[feed["id"]] = "Feed changed; waiting for the next refresh"
                 return
-            file_token = hashlib.sha256(content).hexdigest()
             with self.database() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 if connection.execute("SELECT 1 FROM rss_history WHERE token IN (?,?)", (token, file_token)).fetchone():
                     continue
                 connection.execute("INSERT INTO rss_history VALUES (?,?,?,strftime('%s','now'),NULL)", (token, feed["id"], "intent"))
                 connection.execute("INSERT INTO rss_history VALUES (?,?,?,strftime('%s','now'),NULL)", (file_token, feed["id"], "intent"))
-            response = await self.qbit("/api/v2/torrents/add", "POST", {"stopped": "true", "paused": "true", "savepath": destination, "autoTMM": "false", "ratioLimit": str(feed["ratio"]), "seedingTimeLimit": "2940", "category": item_path}, files={"torrents": ("rss.torrent", content, "application/x-bittorrent")})
-            outcome = response.json()
+            policy = CleanupPolicy(**(feed.get('cleanup') or {}))
+            async def import_stopped(qbit, ratio, **args):
+                payload = {"stopped": "true", "paused": "true", "savepath": destination, "autoTMM": "false", "ratioLimit": str(ratio), "seedingTimeLimit": "2940", "category": item_path}
+                if args.get('tag'):
+                    payload['tags'] = args['tag']
+                response = await qbit("/api/v2/torrents/add", "POST", payload, files={"torrents": ("rss.torrent", content, "application/x-bittorrent")})
+                return response.json()
+            if policy.mode != 'never':
+                if not self.cleanup:
+                    raise HTTPException(409, "Automatic cleanup unavailable; import blocked")
+                outcome = await self.cleanup.add(import_stopped, policy, feed['ratio'], content=content, start=False)
+            else:
+                outcome = await import_stopped(self.qbit, feed['ratio'])
             identifiers = outcome.get("added_torrent_ids", []) if isinstance(outcome, dict) else []
             if outcome.get("success_count") != 1 or outcome.get("failure_count") != 0 or len(identifiers) != 1 or not re.fullmatch(r"[a-fA-F0-9]{40}|[a-fA-F0-9]{64}", str(identifiers[0])):
                 self.observe(feed, observation, article, 'import_unconfirmed')
@@ -191,8 +221,12 @@ class RssWorker:
             identifier = identifiers[0].lower()
             self.observe(feed, observation, article, 'added')
             with self.database() as connection:
+                feed_uploads.record(connection, feed["id"], identifier, article.get("title", ""), time.time())
                 connection.execute("UPDATE rss_history SET status='added',torrent_hash=? WHERE token IN (?,?)", (identifier, token, file_token))
             current = next((row for row in self.rows("feeds") if row["id"] == feed["id"]), None)
+            if outcome.get('cleanupPending'):
+                self.reports[feed['id']] = 'Cleanup preparation pending; torrent added paused'
+                continue
             if current == feed and (await self.vpn_status()).get("downloadsEnabled"):
                 self.destination(feed)
                 await self.qbit("/api/v2/torrents/topPrio", "POST", {"hashes": identifier})
@@ -200,5 +234,7 @@ class RssWorker:
                 self.reports[feed["id"]] = "Torrent tilføjet til VPN-downloadkø"
             else:
                 self.reports[feed["id"]] = "Torrent tilføjet stoppet; feed eller VPN ændret"
-            return
+                return
+            # Continue through the received batch, still bounded by metadata_budget.
+            # Existing client queue limits decide how many actually download.
         self.reports[feed["id"]] = "Afventer nye poster efter startdato"

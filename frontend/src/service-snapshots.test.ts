@@ -27,6 +27,16 @@ afterEach(() => {
 });
 
 describe("session service snapshots", () => {
+  it("retains page observations during app pruning but clears them on logout", async () => {
+    serviceSnapshots.acquire("page:catalog", 30000, async () => "catalog data");
+    serviceSnapshots.acquire("runtime:deleted", 10000, async () => "old app");
+    await vi.advanceTimersByTimeAsync(0);
+    serviceSnapshots.prune([]);
+    expect(serviceSnapshots.get("page:catalog").data).toBe("catalog data");
+    expect(serviceSnapshots.get("runtime:deleted").data).toBeUndefined();
+    setCsrf("");
+    expect(serviceSnapshots.get("page:catalog").data).toBeUndefined();
+  });
   it("publishes the fast card immediately, independent of a two-second slow service", async () => {
     const slow = deferred<string>();
     const observed: number[] = [];
