@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.43
+
+- Refresh Plex remote-access publication after a verified public IP or port changes. Send Plex client identity headers, retry a failed refresh on the next reconciliation, and backfill publication for older receipts without rewriting user preferences.
+
 ## 0.6.42
 
 - Bundle MediaVPN 0.2.30: verify Plex forwarding against its own lease helper so Plex-only remote access is advertised without requiring a torrent helper. Preserve fail-closed checks for stopped, stale or mismatched helpers.

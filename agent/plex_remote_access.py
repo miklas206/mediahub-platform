@@ -106,6 +106,11 @@ async def configure(runtime, shared, body):
             saved.pop("pending", None)
             save_json(receipt, saved)
             await runtime.checkpoint(policy)
+            endpoint = {"publicIp": body.publicIp, "publicPort": body.publicPort}
+            if saved.get("published") != endpoint:
+                await control.plex_get(policy, "/myplex/refreshReachability", "PUT")
+                saved["published"] = endpoint
+                save_json(receipt, saved)
         elif saved:
             # Restore only our last settings; preserve later user edits.
             if current in [saved.get("applied"), saved.get("pending")]:

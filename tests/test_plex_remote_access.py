@@ -29,6 +29,8 @@ def runtime(tmp_path):
     async def plex_get(policy, path, method="GET", params=None):
         if path == "/identity":
             return ET.Element("MediaContainer", machineIdentifier="owned-plex")
+        if path == "/myplex/refreshReachability":
+            return ET.Element("Empty")
         if method == "PUT":
             values.update(params)
         root = ET.Element("MediaContainer")
@@ -61,6 +63,31 @@ async def test_port_changes_keep_original_and_restore_on_disable(runtime):
     await configure(app, shared, RemoteAccessChoice(enabled=False))
     assert values == original
     assert not (app.state_dir / "plex-shared-remote.json").exists()
+
+
+@run_async
+async def test_publication_refreshes_for_new_endpoint_and_retries_failed_refresh(runtime):
+    app, _, _ = runtime
+    shared = SimpleNamespace(status=AsyncMock(return_value={"enabled": True, "ready": True}))
+    original = app.control.plex_get.side_effect
+    attempts = []
+
+    async def plex_get(policy, path, method="GET", params=None):
+        if path == "/myplex/refreshReachability":
+            attempts.append(path)
+            if len(attempts) == 1:
+                raise DomainError("plex_api_unavailable", "Synthetic unavailable", 503)
+        return await original(policy, path, method, params)
+
+    app.control.plex_get.side_effect = plex_get
+    body = RemoteAccessChoice(enabled=True, publicPort=50001, publicIp="8.8.8.8")
+    with pytest.raises(DomainError):
+        await configure(app, shared, body)
+    await configure(app, shared, body)
+    await configure(app, shared, body)
+    assert len(attempts) == 2
+    await configure(app, shared, body.model_copy(update={"publicIp": "1.1.1.1"}))
+    assert len(attempts) == 3
 
 
 @run_async

@@ -275,7 +275,11 @@ class PlexControl:
                 async with client.stream(
                     method,
                     api_url + endpoint,
-                    headers={"X-Plex-Token": token} if token else {},
+                    headers={
+                        "X-Plex-Product": "MediaHub",
+                        "X-Plex-Client-Identifier": "mediahub-managed-plex",
+                        **({"X-Plex-Token": token} if token else {}),
+                    },
                     params=params,
                 ) as response:
                     response.raise_for_status()
