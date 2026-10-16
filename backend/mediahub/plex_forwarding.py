@@ -56,7 +56,7 @@ class PlexForwarding:
         }
         result.setdefault("ready", False)
         if (
-            not state.get("enabled")
+            not state.get("plexPortEnabled")
             or not self.gateway.gateway.get("providerReady")
             or time.time() - (state.get("checkedAt") or 0) > 90
         ):
@@ -69,7 +69,7 @@ class PlexForwarding:
         return result
 
     async def apply(self, state, reply):
-        enabled = bool(state.get("plexPortEnabled") and state.get("enabled"))
+        enabled = bool(state.get("plexPortEnabled"))
         if not enabled:
             if state.get("plexPortApplied") and self.installed():
                 _, client = self.svc.shared_vpn.target("plex")

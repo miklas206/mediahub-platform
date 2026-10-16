@@ -144,6 +144,9 @@ async def test_hub_requires_distinct_port_and_public_identity():
     gateway.gateway["providerReady"] = False
     assert not forwarding.public(state)["ready"]
     state["enabled"] = False
+    await forwarding.apply(state, reply)
+    assert state["plexPortStatus"]["ready"]
+    state["plexPortEnabled"] = False
     await forwarding.apply(state, {})
     client.request.assert_awaited_with("PUT", "/v1/plex/shared-remote-access", {"enabled": False})
 

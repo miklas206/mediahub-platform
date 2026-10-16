@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.41
+
+- Manage Plex remote access independently of public app domains. Use the existing shared VPN profile and a dedicated renewed Proton TCP lease; verify the public Plex server identity before reporting success.
+- Bundle MediaVPN 0.2.29 with support for a Plex-only gateway without Cloudflare credentials or an HTTP listener. Existing disabled domain choices stay disabled; fresh installs and upgrades require no manual configuration migration.
+
 ## 0.6.40
 
 - Bundle MediaSeed 0.1.26 and MediaVPN 0.2.28: progressive torrent/RSS/VPN dialogs in MediaHub themes, extension dialog/RSS handoff, pooled internal requests, batched background torrent observations, and retained stale tracker/torrent displays.

@@ -630,10 +630,16 @@ class VPNGateway:
         async with self.lock:
             state = self.state()
             if enabled:
-                if not state["enabled"]:
-                    raise DomainError("gateway_required", "Enable the shared gateway before adding Plex remote access", 409)
                 await self.plex_forwarding.target()
-            state.update(plexPortEnabled=enabled, plexPortManaged=True, plexPortStatus={"ready": False}, revision=state.get("revision", 0) + 1)
+                shared = await self.svc.shared_vpn.vpn()
+                profile = shared.get("profileId")
+                if not shared.get("enabled") or not re.fullmatch(r"[a-f0-9]{24}", str(profile or "")):
+                    raise DomainError("plex_shared_vpn_required", "Connect Plex to the shared VPN before enabling its separate port", 409)
+                if state["enabled"] and state.get("profileId") != profile:
+                    raise DomainError("vpn_conflict", "Select the same VPN profile for Plex and app domains", 409)
+                await self.check_legacy_provider()
+                state["profileId"] = profile
+            state.update(plexPortEnabled=enabled, plexPortManaged=True, plexPortStatus={"ready": False}, revision=state.get("revision", 0) + 1, ownerId=state.get("ownerId") or uuid4().hex)
             self.save(state)
         self.schedule()
         return self.snapshot()
@@ -985,14 +991,14 @@ class VPNGateway:
                 # An app restart is not a request to remove its hostname. If
                 # every selected app is unavailable, preserve the last machine
                 # configuration and all owned DNS until inspection can recover.
-                if (state["enabled"] and not active
+                if (state["enabled"] and not state.get("plexPortEnabled") and not active
                         and not removed_ids and not state.get("retired")
                         and any(row["id"] not in removed_ids for row in state["routes"])):
                     self.gateway = self.sanitized_gateway(await self.vpn())
                     self.save(state)
                     return self.snapshot()
                 payload = {
-                    "enabled": bool(state["enabled"] and active),
+                    "enabled": bool((state["enabled"] and active) or state.get("plexPortEnabled")),
                     "profileId": state["profileId"],
                     "routes": machine_routes,
                 }
@@ -1019,7 +1025,8 @@ class VPNGateway:
                 ):
                     if payload["enabled"]:
                         await self.check_legacy_provider()
-                        payload["cloudflareToken"] = self.store.get("api_token").decode()
+                        if machine_routes:
+                            payload["cloudflareToken"] = self.store.get("api_token").decode()
                     await self.vpn("PUT", payload)
                     # The write acknowledgement intentionally reports applying,
                     # without a verified provider endpoint. Read the accepted
@@ -1065,7 +1072,7 @@ class VPNGateway:
                 if not active:
                     if state.get("plexPortManaged"):
                         try:
-                            await self.plex_forwarding.apply(state, {"plexPort": {"ready": False}})
+                            await self.plex_forwarding.apply(state, reply)
                         except DomainError as error:
                             state["plexPortStatus"] = {"ready": False, "message": error.message}
                     for row in state["routes"]:

@@ -175,6 +175,51 @@ def mutations(remote):
     return [call for call in remote["calls"] if call[0] != "GET"]
 
 
+@pytest.mark.parametrize("older", [False, True])
+def test_plex_port_works_without_domains_or_cloudflare_and_survives_reload(logged_in, gateway, monkeypatch, older):
+    service, remote = gateway
+    state = service.state()
+    if older:
+        state.update(enabled=False, profileId=PROFILE, revision=12,
+                     routes=[{"id": "old-route", "packageId": "mediahub", "hostname": "hub.example.com", "zoneId": ZONE, "label": "hub"}],
+                     plexPortEnabled=False, plexPortManaged=True, plexPortApplied=False)
+        service.save(state)
+    service.store.delete("api_token")
+    target = {"address": "192.168.1.20", "port": 32400}
+    monkeypatch.setattr(service.plex_forwarding, "target", AsyncMock(return_value=target))
+    monkeypatch.setattr(service, "check_legacy_provider", AsyncMock())
+    monkeypatch.setattr(service.svc.shared_vpn, "vpn", AsyncMock(return_value={"enabled": True, "profileId": PROFILE}))
+    apply = AsyncMock()
+    monkeypatch.setattr(service.plex_forwarding, "apply", apply)
+    original = service.vpn
+
+    async def vpn(method="GET", body=None):
+        reply = await original(method, body)
+        machine = remote["machine"] or {}
+        return {**reply, "plex": machine.get("plex"), "plexPort": {"ready": True, "publicIp": "8.8.8.8", "publicPort": 50003}}
+
+    monkeypatch.setattr(service, "vpn", vpn)
+    response = logged_in.put(BASE + "/plex-port", json={"enabled": True})
+    assert response.status_code == 202, response.text
+    assert not service.state()["enabled"]
+    assert service.state()["ownerId"]
+    for _ in range(2):
+        logged_in.portal.call(service.reconcile, True)
+        assert not service.state()["issues"]
+        assert remote["machine"]["enabled"] is True
+        assert remote["machine"]["routes"] == []
+        assert remote["machine"]["plex"] == target
+        assert "cloudflareToken" not in remote["machine"]
+        assert apply.call_args.args[1]["plexPort"]["ready"]
+        assert remote["calls"] == []
+    restored = VPNGateway(service.svc).state()
+    assert restored["plexPortEnabled"] and not restored["enabled"]
+    assert len(restored["routes"]) == int(older)
+    assert logged_in.put(BASE + "/plex-port", json={"enabled": False}).status_code == 202
+    logged_in.portal.call(service.reconcile, True)
+    assert not remote["machine"]["enabled"]
+
+
 def test_apply_acknowledgement_is_not_used_as_provider_observation(logged_in, gateway, monkeypatch):
     service, remote = gateway
     original = service.vpn
