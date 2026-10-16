@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.42
+
+- Bundle MediaVPN 0.2.30: verify Plex forwarding against its own lease helper so Plex-only remote access is advertised without requiring a torrent helper. Preserve fail-closed checks for stopped, stale or mismatched helpers.
+
 ## 0.6.41
 
 - Manage Plex remote access independently of public app domains. Use the existing shared VPN profile and a dedicated renewed Proton TCP lease; verify the public Plex server identity before reporting success.
