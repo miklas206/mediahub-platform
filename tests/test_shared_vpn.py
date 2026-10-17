@@ -372,3 +372,32 @@ def test_relay_health_respects_wireguard_session_window(monkeypatch, age, expect
     monkeypatch.setattr(relay.time, "time", lambda: 1000)
     monkeypatch.setattr(relay, "command", lambda *args: "synthetic-key " + str(1000 - age) if args[0] == "wg" else "")
     assert relay.health() is expected
+
+
+def test_reapplying_vpn_preserves_new_mounts_environment_and_migration_labels(tmp_path):
+    control, _, _, path = controller(tmp_path)
+    original = read_json(path)["container"]
+    save_json(control.path("jellyfin"), {"enabled": True, "original": original})
+    control.relay = AsyncMock(return_value={"Id": "relay", "State": {"StartedAt": "new"}})
+    updated = copy.deepcopy(original)
+    updated["HostConfig"]["NetworkMode"] = "container:previous-relay"
+    updated["HostConfig"]["PortBindings"] = {}
+    updated["HostConfig"]["Mounts"].append(
+        {"Source": "/appdata/Temp/work", "Target": "/transcode", "ReadOnly": False}
+    )
+    updated["Env"] = ["TMPDIR=/transcode"]
+    updated["Labels"].update(
+        {
+            "org.mediahub.vpn.namespace": "previous-relay",
+            "org.mediahub.vpn.generation": "old",
+            "org.mediahub.plex.temp-migration": "nonce",
+        }
+    )
+    result = asyncio.run(control.prepare("jellyfin", updated))
+    assert result["HostConfig"]["Mounts"] == updated["HostConfig"]["Mounts"]
+    assert result["Env"] == ["TMPDIR=/transcode"]
+    assert result["Labels"]["org.mediahub.plex.temp-migration"] == "nonce"
+    saved = control.state("jellyfin")["original"]
+    assert saved["HostConfig"]["NetworkMode"] == original["HostConfig"]["NetworkMode"]
+    assert saved["HostConfig"]["PortBindings"] == original["HostConfig"]["PortBindings"]
+    assert "org.mediahub.vpn.namespace" not in saved["Labels"]

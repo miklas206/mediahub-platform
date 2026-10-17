@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.47
+
+- Preserve current application mounts, environment, resource settings and migration labels when reapplying a shared VPN namespace. Restore only the original networking fields instead of replacing the latest app specification with a stale copy.
+- Verify Plex's actual transcode bind mount and TMPDIR before reporting temporary storage ready. Automatically repair an incomplete 0.6.46 mapping when playback is idle, even if its saved migration receipt says complete; roll back if container creation drops the required mapping.
+- On unprivileged Linux hosts, prepare execute-only directory ACLs for the namespace's Docker root so it can attach the private Temp bind. Preserve file permissions and existing ACL grants; reject an incompatible existing mask instead of broadening other users' access.
+- Prepare a bounded LAN-only source-NAT rule for Plex behind the shared VPN relay, so clients on the host's verified local subnet are classified locally without changing Plex authentication or requiring a new LAN address. Keep external/VPN ingress outside the rule, reconcile it on fresh installs and upgrades, and remove only the owned rule on VPN disconnect/removal.
+- Report local-access preparation separately from temporary storage. A full underlying app-data disk still requires storage repair; aggregate free pool space alone is not proof that existing cache/metadata directories are writable.
+
 ## 0.6.46
 
 - Select approved temporary transcoding storage separately from Plex movie, TV and other libraries. Default to a dedicated `Temp/<installation>/work` directory on the selected app-data storage, prepare it as the app user and configure Plex automatically.

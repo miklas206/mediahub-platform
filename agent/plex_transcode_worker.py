@@ -1,13 +1,61 @@
 """Bounded filesystem work for the isolated, app-UID transcode helper."""
 
+import errno
 import json
 import os
 import re
 import shutil
+import struct
 import tempfile
 from pathlib import Path
 
 MARKER = ".mediahub-plex-transcode.json"
+
+
+def traversal_acl(raw, mode):
+    """Add execute-only access for the namespace root; preserve other grants."""
+    if raw:
+        if len(raw) < 4 or (len(raw) - 4) % 8 or struct.unpack("<I", raw[:4])[0] != 2:
+            raise ValueError("Invalid temporary storage ACL")
+        entries = [list(struct.unpack("<HHI", raw[i : i + 8])) for i in range(4, len(raw), 8)]
+    else:
+        entries = [
+            [1, (mode >> 6) & 7, 0xFFFFFFFF],
+            [4, (mode >> 3) & 7, 0xFFFFFFFF],
+            [32, mode & 7, 0xFFFFFFFF],
+        ]
+    masks = [e for e in entries if e[0] == 16]
+    mask = masks[0][1] if masks else ((mode >> 3) & 7) | 1
+    if not mask & 1:
+        raise PermissionError("Temporary storage ACL mask must allow directory traversal")
+    root = next((e for e in entries if e[0] == 2 and e[2] == 0), None)
+    if root is None:
+        entries.append([2, 1, 0])
+    else:
+        root[1] |= 1
+    if not masks:
+        entries.append([16, mask, 0xFFFFFFFF])
+    entries.sort(key=lambda e: (e[0], e[2]))
+    return struct.pack("<I", 2) + b"".join(struct.pack("<HHI", *e) for e in entries)
+
+
+def grant_daemon_traversal(paths):
+    mapping = Path("/proc/self/uid_map")
+    if not mapping.exists():
+        return
+    rows = [list(map(int, line.split())) for line in mapping.read_text().splitlines()]
+    if not any(inside == 0 and outside != 0 for inside, outside, _ in rows):
+        return  # Native root can traverse; an unprivileged LXC root cannot.
+    for path in paths:
+        try:
+            raw = os.getxattr(path, "system.posix_acl_access")
+        except OSError as error:
+            if error.errno != errno.ENODATA:
+                raise
+            raw = None
+        updated = traversal_acl(raw, path.stat().st_mode)
+        if updated != raw:
+            os.setxattr(path, "system.posix_acl_access", updated)
 
 
 def prepare(parent, relative, identity, *, minimum_free=1024**3, clean=False):
@@ -50,6 +98,12 @@ def prepare(parent, relative, identity, *, minimum_free=1024**3, clean=False):
     work.mkdir(mode=0o700, exist_ok=True)
     if not work.is_dir():
         raise ValueError("Temporary work path is not a directory")
+    # Docker's root in an unprivileged LXC needs to stat the bind source.
+    # Grant only traversal, retaining private markers/files and other ACLs.
+    parents = [parent]
+    for part in parts:
+        parents.append(parents[-1] / part)
+    grant_daemon_traversal([*parents, work])
     removed = 0
     # The caller must verify Plex is stopped. Runtime session cleanup belongs
     # to Plex itself; never race its active or paused streams with an age timer.

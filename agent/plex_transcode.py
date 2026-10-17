@@ -130,7 +130,20 @@ async def reconcile(runtime, policy):
             }
             runtime.temp_checked_at = time.monotonic()
             return
-    if any(m.get("Target") == "/transcode" for m in plan["container"]["HostConfig"]["Mounts"]):
+    planned = any(
+        m.get("Target") == "/transcode" for m in plan["container"]["HostConfig"]["Mounts"]
+    )
+    expected = transcode_mount(
+        runtime.policy(), PlexInstallation.model_validate(plan["installation"])
+    )
+    mounted = any(
+        m.get("Destination") == "/transcode"
+        and m.get("Source") == expected["Source"]
+        and m.get("RW") is True
+        for m in current.get("Mounts", [])
+    )
+    configured = "TMPDIR=/transcode" in current.get("Config", {}).get("Env", [])
+    if planned and mounted and configured:
         await prepare(runtime, plan)
         runtime.temp_checked_at = time.monotonic()
         return
@@ -160,6 +173,9 @@ async def migrate(runtime, policy, plan):
             )
     before = await runtime.control.inspect(policy)
     new_plan = copy.deepcopy(plan)
+    new_plan["container"]["HostConfig"]["Mounts"] = [
+        m for m in new_plan["container"]["HostConfig"]["Mounts"] if m.get("Target") != "/transcode"
+    ]
     new_plan["container"]["HostConfig"]["Mounts"].append(
         transcode_mount(runtime.policy(), PlexInstallation.model_validate(plan["installation"]))
     )
@@ -210,6 +226,20 @@ async def migrate(runtime, policy, plan):
             "POST", "/containers/create?name=" + policy.container, body=new_plan["container"]
         )
         inspected = await runtime.request("GET", f"/containers/{policy.container}/json")
+        expected = next(
+            m for m in new_plan["container"]["HostConfig"]["Mounts"] if m["Target"] == "/transcode"
+        )
+        if not any(
+            m.get("Destination") == "/transcode"
+            and m.get("Source") == expected["Source"]
+            and m.get("RW") is True
+            for m in inspected.get("Mounts", [])
+        ) or "TMPDIR=/transcode" not in inspected.get("Config", {}).get("Env", []):
+            raise DomainError(
+                "plex_temp_mapping_changed",
+                "Plex temporary mapping was not applied; original runtime will be restored",
+                409,
+            )
         policy.mounts = [
             PlexMount(source=m["Source"], target=m["Destination"], readOnly=not m["RW"])
             for m in inspected["Mounts"]

@@ -76,6 +76,19 @@ stopped installation remains stopped and is reconciled after its next start.
 An existing custom Plex transcoding path is preserved and is not cleaned by
 MediaHub. Repeated reconciliation leaves an already migrated plan unchanged.
 
+From 0.6.47 readiness requires the actual inspected container to have the approved
+writable `/transcode` bind and `TMPDIR=/transcode`. A saved plan or completed
+receipt alone is insufficient. This repairs the 0.6.46 shared-VPN regression where
+an old pre-VPN specification could discard the newly added mount. Reapplying VPN
+networking now preserves the current non-network application configuration.
+On an unprivileged LXC the Docker daemon's mapped root also needs directory
+traversal to stat a private bind source. The app-UID helper adds execute-only ACL
+entries for namespace root on the approved parent and its marked temporary
+directories. It preserves private files, other ACL entries and masks; native
+root needs no extra ACL. Unsupported ACLs or a restrictive existing extended mask
+produce an explicit storage/permissions prerequisite rather than world-readable
+temporary data.
+
 ## Updates
 
 The Updates card checks the same fixed `lscr.io/linuxserver/plex:latest`
@@ -102,6 +115,26 @@ to date" before stopping Plex, changing intent, or creating a rollback snapshot.
 Concurrent requests cannot admit multiple background update transactions.
 
 ## Network
+
+For the shared VPN relay, 0.6.47 prepares a source-NAT rule restricted to the
+verified host LAN subnet, the owned relay's current Docker address, TCP 32400 and
+the original published private destination/port. The host's actual interface
+prefix and Docker gateway are checked by a bounded helper using the reviewed
+relay image. The helper has host networking and NET_ADMIN to manage this rule,
+a read-only root, no data/key mounts, no other added capabilities and no daemon.
+Only recognized rules carrying this installation's exact ownership comment can
+be replaced or removed. Reconciliation restores a missing rule after a reboot;
+VPN disconnect/removal cleans the owned rule without flushing any firewall chain.
+
+This makes genuine LAN clients appear on Plex's local Docker subnet. Those
+clients consequently share the Docker gateway address in Plex's server-side
+client-IP reports; Plex login remains required. External public/VPN traffic does
+not match the source subnet and published private destination. Established
+connections retain their old NAT state: reconnect clients to refresh their
+classification. Verify a new session with `local=1`, `location=lan`, `relayed=0`,
+and independently verify remote access. Unsupported host addressing or firewall
+permissions produce a concrete local-access error rather than silently disabling
+Plex authentication, its VPN assignment, or remote access.
 
 Only the configured private LAN address publishes TCP 32400. No router rule,
 Cloudflare Tunnel or public service is created. A Plex claim token is optional,

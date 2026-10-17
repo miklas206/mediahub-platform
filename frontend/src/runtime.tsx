@@ -34,6 +34,7 @@ import {
 } from "./plex-install-progress";
 
 export type Runtime = {
+  lanAccess?: { state: string; message: string };
   transcode?: { state: string; path?: string; message: string };
   operation?: PlexInstallOperation;
   plex?: {
@@ -1069,6 +1070,12 @@ export function AppRuntimePage() {
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
       {data?.view === "plex" && <AppSettingsPage packageId="org.mediahub.plex" embedded/>}
       {data?.view === "plex" && <PlexAccountSetup />}
+      {data?.view === "plex" && data.report.lanAccess && (
+        <section className="panel">
+          <h2>{t("Local Plex connections")}</h2>
+          <p role="status">{translateText(data.report.lanAccess.message)}</p>
+        </section>
+      )}
       {data?.view === "plex" && data.report.transcode && (
         <section className="panel">
           <h2>{t("Temporary transcoding storage")}</h2>

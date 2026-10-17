@@ -240,14 +240,35 @@ class SharedVPN:
             "vpn_relay_unverified", "VPN relay handshake not verified; app stays stopped", 409
         )
 
+    @staticmethod
+    def original_spec(state, spec):
+        """Remove only relay networking; retain the latest application settings."""
+        result = copy.deepcopy(spec)
+        if not spec.get("Labels", {}).get("org.mediahub.vpn.namespace"):
+            return result
+        previous = state["original"]
+        for target, original, fields in (
+            (result, previous, ("Hostname", "Domainname", "NetworkingConfig", "ExposedPorts")),
+            (
+                result["HostConfig"],
+                previous["HostConfig"],
+                ("NetworkMode", "PortBindings", "Dns", "DnsSearch", "DnsOptions"),
+            ),
+        ):
+            for field in fields:
+                if field in original:
+                    target[field] = copy.deepcopy(original[field])
+                else:
+                    target.pop(field, None)
+        for label in ("org.mediahub.vpn.namespace", "org.mediahub.vpn.generation"):
+            result["Labels"].pop(label, None)
+        return result
+
     async def prepare(self, app, spec):
         if app not in SUPPORTED or not self.state(app)["enabled"]:
             return spec
         state = self.state(app)
-        if spec.get("Labels", {}).get("org.mediahub.vpn.namespace"):
-            image = spec["Image"]
-            spec = copy.deepcopy(state["original"])
-            spec["Image"] = image
+        spec = self.original_spec(state, spec)
         original = copy.deepcopy(spec)
         state["original"] = original
         save_json(self.path(app), state)
@@ -393,6 +414,10 @@ class SharedVPN:
                     save_json(path, record)
                 if fence_only:
                     return {"state": "ready", "installationId": identity}
+                if app == "plex" and record and (self.directory / "plex-lan-nat.json").exists():
+                    from agent.plex_lan_nat import configure as configure_lan
+
+                    await configure_lan(self, self.original_spec(state, record["container"]), enabled=False)
                 if current:
                     await self.request(
                         "DELETE", "/containers/" + current["Id"] + "?force=false&v=false"
@@ -455,7 +480,11 @@ class SharedVPN:
                     state["desiredRunning"] = self.plex.control.intent(policy)
                 elif current and state.get("phase") not in {"changing", "starting", "blocked"}:
                     state["desiredRunning"] = bool(current["State"].get("Running"))
-                original = state.get("original", copy.deepcopy(record["container"]))
+                original = self.original_spec(state, record["container"])
+                if app == "plex" and not enabled and (self.directory / "plex-lan-nat.json").exists():
+                    from agent.plex_lan_nat import configure as configure_lan
+
+                    await configure_lan(self, original, enabled=False)
                 # Preserve the latest installed image across VPN off/on, rather
                 # than resurrecting an old version stored before an update.
                 original["Image"] = record["container"]["Image"]

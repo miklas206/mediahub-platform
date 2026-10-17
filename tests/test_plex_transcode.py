@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import json
+import struct
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -13,7 +14,7 @@ from agent.install_files import read_json, save_json
 from agent.plex_control import PlexPolicy
 from agent.plex_install import PlexInstallPolicy, installation_plan, temp_choices, transcode_mount
 from agent.plex_transcode import migrate, preferences, reconcile, recover
-from agent.plex_transcode_worker import MARKER, prepare
+from agent.plex_transcode_worker import MARKER, prepare, traversal_acl
 
 
 def test_owned_temp_cleanup_is_scoped_and_never_runs_for_active_mode(tmp_path):
@@ -71,6 +72,28 @@ def test_old_default_preferences_migrate_but_custom_path_is_preserved():
     assert b'MachineIdentifier="same"' in updated and b'PlexOnlineToken="secret"' in updated
     custom = preferences(b'<Preferences TranscoderTempDirectory="/custom"/>', True)
     assert b'TranscoderTempDirectory="/custom"' in custom
+
+
+def test_unprivileged_daemon_acl_grants_traversal_without_reading_private_files():
+    raw = traversal_acl(None, 0o700)
+    entries = [struct.unpack("<HHI", raw[i : i + 8]) for i in range(4, len(raw), 8)]
+    assert (2, 1, 0) in entries  # Namespace root gets execute, no read/write.
+    assert (1, 7, 0xFFFFFFFF) in entries
+    assert (4, 0, 0xFFFFFFFF) in entries and (32, 0, 0xFFFFFFFF) in entries
+    assert traversal_acl(raw, 0o710) == raw
+
+
+def test_existing_acl_mask_is_not_widened_for_other_named_users():
+    entries = [
+        (1, 7, 0xFFFFFFFF),
+        (2, 5, 42),
+        (4, 0, 0xFFFFFFFF),
+        (16, 0, 0xFFFFFFFF),
+        (32, 0, 0xFFFFFFFF),
+    ]
+    raw = struct.pack("<I", 2) + b"".join(struct.pack("<HHI", *e) for e in entries)
+    with pytest.raises(PermissionError):
+        traversal_acl(raw, 0o700)
 
 
 @pytest.fixture
@@ -224,6 +247,40 @@ def test_active_playback_defers_migration(runtime):
     asyncio.run(reconcile(runtime, runtime.guard))
     runtime.stop.assert_not_awaited()
     assert runtime.transcode_status["state"] == "pending"
+
+
+def test_completed_receipt_with_missing_actual_mount_is_repaired(runtime):
+    asyncio.run(migrate(runtime, runtime.guard, runtime.plan))
+    # Reproduce 0.6.46: the saved plan says complete but VPN recreation lost
+    # the actual mount and TMPDIR. Retain the old container identity in the mock.
+    current = runtime.containers.pop("new-id")
+    current["Id"] = "original-id"
+    current["Mounts"] = [m for m in current["Mounts"] if m["Destination"] != "/transcode"]
+    current["Config"]["Env"] = ["TMPDIR=/run/plex-temp"]
+    runtime.containers["original-id"] = current
+    asyncio.run(reconcile(runtime, runtime.control.policy()))
+    assert any(m["Destination"] == "/transcode" for m in runtime.containers["new-id"]["Mounts"])
+    assert "TMPDIR=/transcode" in runtime.containers["new-id"]["Config"]["Env"]
+    plan = read_json(runtime.state_dir / "plex-plan.json")
+    assert sum(m["Target"] == "/transcode" for m in plan["container"]["HostConfig"]["Mounts"]) == 1
+
+
+def test_silently_dropped_temp_mount_restores_original_and_does_not_report_success(runtime):
+    request = runtime.request.side_effect
+
+    async def dropping_mount(method, path, body=None):
+        if path.startswith("/containers/create?"):
+            body = copy.deepcopy(body)
+            body["HostConfig"]["Mounts"] = [
+                m for m in body["HostConfig"]["Mounts"] if m["Target"] != "/transcode"
+            ]
+        return await request(method, path, body)
+
+    runtime.request.side_effect = dropping_mount
+    with pytest.raises(DomainError, match="temporary mapping was not applied"):
+        asyncio.run(migrate(runtime, runtime.guard, runtime.plan))
+    assert list(runtime.containers) == ["original-id"]
+    assert read_json(runtime.state_dir / "plex-transcode-migration.json")["originalRestored"]
 
 
 def test_playback_started_during_preparation_defers_replacement(runtime):

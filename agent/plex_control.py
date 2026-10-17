@@ -142,6 +142,14 @@ class PlexControl:
                         if mounted:
                             await self.runtime.ensure_libraries(policy)
                             await self.runtime.ensure_lan(policy)
+                            from agent.plex_lan_nat import reconcile as reconcile_lan
+
+                            try:
+                                prepared = await reconcile_lan(self.runtime)
+                                self.runtime.lan_status = {"state": "ready", "message": "Local Plex access prepared; reconnect existing clients to refresh their network classification."} if prepared else None
+                            except (DomainError, OSError, ValueError) as error:
+                                self.runtime.lan_status = {"state": "blocked", "message": error.message if isinstance(error, DomainError) else "Local Plex network preparation is unavailable"}
+                                self.diagnose("local_access.blocked", **error_fields(error))
                             from agent.plex_transcode import reconcile
 
                             try:
@@ -369,6 +377,7 @@ class PlexControl:
         }
         if self.runtime:
             report["transcode"] = self.runtime.transcode_status
+            report["lanAccess"] = getattr(self.runtime, "lan_status", None)
         if self.runtime and policy.vpnEnabled:
             vpn_status = await self.runtime.vpn.status(policy)
             report["vpn"] = vpn_status["vpn"]
