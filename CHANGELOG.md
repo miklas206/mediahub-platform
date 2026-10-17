@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.45
+
+- Publish the verified Plex public HTTPS endpoint independently of the server's detected outbound VPN IP. Follow verified public IP/port changes, preserve the LAN endpoint and other custom URLs, and remove only the managed public URL when forwarding is disabled.
+
 ## 0.6.44
 
 - Automatically advertise the approved Plex LAN HTTPS endpoint using its own certificate identity, including existing installations and later address changes. Preserve other custom URLs and encrypted preference recovery.

@@ -106,12 +106,19 @@ async def configure(runtime, shared, body):
             saved.pop("pending", None)
             save_json(receipt, saved)
             await runtime.checkpoint(policy)
+            from agent.plex_lan import configure as advertise_endpoint
+
+            await advertise_endpoint(runtime, policy, public_endpoint=(body.publicIp, body.publicPort), refresh=False)
             endpoint = {"publicIp": body.publicIp, "publicPort": body.publicPort}
             if saved.get("published") != endpoint:
                 await control.plex_get(policy, "/myplex/refreshReachability", "PUT")
                 saved["published"] = endpoint
                 save_json(receipt, saved)
-        elif saved:
+        else:
+            from agent.plex_lan import remove_public
+
+            await remove_public(runtime, policy)
+        if not body.enabled and saved:
             # Restore only our last settings; preserve later user edits.
             if current in [saved.get("applied"), saved.get("pending")]:
                 await control.plex_get(policy, "/:/prefs", "PUT", params=saved["original"])

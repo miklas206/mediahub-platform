@@ -87,3 +87,27 @@ def test_receipt_cannot_be_reused_for_another_installation(runtime):
     asyncio.run(configure(runtime, SimpleNamespace(installationId="plex-main")))
     with pytest.raises(DomainError):
         asyncio.run(configure(runtime, SimpleNamespace(installationId="replacement")))
+
+
+def test_verified_public_url_rotates_without_removing_lan_or_user_urls(runtime):
+    from agent.plex_lan import remove_public
+
+    policy = SimpleNamespace(installationId="plex-main")
+    asyncio.run(configure(runtime, policy))
+    local = runtime.values["customConnections"]
+    asyncio.run(configure(runtime, policy, public_endpoint=("8.8.8.8", 50001)))
+    assert f"https://8-8-8-8.{CERTIFICATE}.plex.direct:50001" in runtime.values["customConnections"]
+    asyncio.run(configure(runtime, policy, public_endpoint=("1.1.1.1", 50002)))
+    assert "8-8-8-8" not in runtime.values["customConnections"]
+    assert runtime.values["customConnections"].startswith(local + ",")
+    asyncio.run(remove_public(runtime, policy))
+    assert runtime.values["customConnections"] == local
+
+
+def test_publication_waits_for_the_servers_certificate(runtime):
+    runtime.preferences.return_value = b"<Preferences/>"
+    with pytest.raises(DomainError) as error:
+        asyncio.run(configure(runtime, SimpleNamespace(installationId="plex-main"),
+                              public_endpoint=("8.8.8.8", 50001)))
+    assert error.value.code == "plex_certificate_pending"
+    runtime.control.plex_get.assert_not_awaited()

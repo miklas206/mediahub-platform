@@ -183,7 +183,7 @@ class PlexRuntime:
         self.libraries_ready = False
         self.account_operation = {"state": "idle", "message": "Plex account setup has not started"}
         self.lan_checked_at = 0
-        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json", "plex-lan.json"):
+        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json", "plex-lan.json", "plex-public-url.json"):
             (self.state_dir / name).unlink(missing_ok=True)
 
     async def remove_failed_install(self, installation_id, policy):

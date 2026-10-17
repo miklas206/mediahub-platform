@@ -16,7 +16,11 @@ the optional LAN Networks setting requires Plex Pass and is not exposed by every
 account. DNS rebinding protection can also block private `plex.direct` names.
 Check the actual session's address, `local` and `relayed` values before declaring
 local playback verified. Remote reachability uses the independent verified
-Proton port lease; the LAN URL does not replace it.
+Proton port lease; the LAN URL does not replace it. Since 0.6.45 the verified
+public endpoint is also published as an explicit HTTPS discovery URL, because
+Plex's detected outbound IP can differ from the public forwarding namespace.
+IP/port rotations replace only the previous managed public URL. Disabling
+forwarding removes that URL while preserving LAN and user-configured addresses.
 
 Jellyfin now exposes the same managed domain editor as Plex. The administrator
 first configures Cloudflare and enables the shared MediaVPN web gateway, then

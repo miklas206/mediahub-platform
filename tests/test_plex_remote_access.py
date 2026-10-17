@@ -24,6 +24,7 @@ def run_async(function):
 @pytest.fixture
 def runtime(tmp_path):
     values = dict(zip(KEYS, ("0", "32400", "0")))
+    values["customConnections"] = "https://local.example:32400"
     original = dict(values)
 
     async def plex_get(policy, path, method="GET", params=None):
@@ -44,7 +45,8 @@ def runtime(tmp_path):
         plex_get=AsyncMock(side_effect=plex_get),
     )
     return (
-        SimpleNamespace(control=control, state_dir=tmp_path, checkpoint=AsyncMock()),
+        SimpleNamespace(control=control, state_dir=tmp_path, checkpoint=AsyncMock(),
+                        preferences=AsyncMock(return_value=('<Preferences CertificateUUID="' + 'a'*32 + '"/>').encode())),
         values,
         original,
     )
