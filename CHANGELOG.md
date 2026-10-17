@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.44
+
+- Automatically advertise the approved Plex LAN HTTPS endpoint using its own certificate identity, including existing installations and later address changes. Preserve other custom URLs and encrypted preference recovery.
+- Add managed Jellyfin domains through the existing MediaVPN DNS/HTTPS gateway, alongside Plex, without enabling previously disabled routes or changing other apps.
+- Document the distinction between discovery, Plex LAN classification, remote routing and client codec support. These changes do not certify Xbox 4K/Atmos playback or automatically override Jellyfin's saved transcoding preferences.
+
 ## 0.6.43
 
 - Refresh Plex remote-access publication after a verified public IP or port changes. Send Plex client identity headers, retry a failed refresh on the next reconciliation, and backfill publication for older receipts without rewriting user preferences.

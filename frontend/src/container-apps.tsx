@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { AppUninstall } from "./app-uninstall";
+import { AppVPNDomainPanel } from "./app-vpn-domain";
 import type { InstalledAppInfo } from "./contracts";
 import { t, translateText } from "./i18n";
 import { ErrorBox, useLoad } from "./phase2";
@@ -228,6 +229,9 @@ export function ContainerAppSetup({ app }: { app: string }) {
           {containerAppNames[app]}
         </h1>
       </header>
+      {app === "jellyfin" && registered && (
+        <AppVPNDomainPanel appId={registered.id} app="jellyfin" />
+      )}
       <ErrorBox
         error={
           error ||

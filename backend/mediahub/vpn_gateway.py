@@ -1268,8 +1268,8 @@ async def reconcile(request: Request):
 async def app_domain(app_id: str, body: AppDomainChoice, request: Request):
     svc = services(request)
     app = svc.apps.get(app_id)
-    if app["packageId"] != "org.mediahub.plex" or app["isMock"] or app["state"] in {"removing", "uninstalled"}:
-        raise DomainError("app_unavailable", "Choose an installed Plex server", 409)
+    if app["packageId"] not in {"org.mediahub.plex", "org.mediahub.jellyfin"} or app["isMock"] or app["state"] in {"removing", "uninstalled"}:
+        raise DomainError("app_unavailable", "Choose an installed Plex or Jellyfin server", 409)
     service = svc.vpn_gateway
     state = service.state()
     if not state["enabled"] or not state.get("profileId"):

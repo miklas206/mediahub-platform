@@ -943,11 +943,12 @@ def test_dedicated_legacy_plex_vpn_blocks_second_managed_provider(logged_in, gat
     client.request.assert_awaited_once_with("GET", "/v1/plex/status")
 
 
-def test_plex_domain_edit_preserves_other_app_routes(logged_in, gateway, monkeypatch):
+@pytest.mark.parametrize("package", ["org.mediahub.plex", "org.mediahub.jellyfin"])
+def test_media_domain_edit_preserves_other_app_routes(logged_in, gateway, monkeypatch, package):
     service, remote = gateway
     configure(logged_in, service)
     before = copy.deepcopy(service.state()["routes"][0])
-    monkeypatch.setattr(service.svc.apps, "get", Mock(return_value={"packageId":"org.mediahub.plex","isMock":False,"state":"running"}))
+    monkeypatch.setattr(service.svc.apps, "get", Mock(return_value={"packageId":package,"isMock":False,"state":"running"}))
     monkeypatch.setattr(service,"upstream",AsyncMock(return_value={"upstream":"http://192.168.1.50:32400"}))
     response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"plex"})
     assert response.status_code == 200, response.text
@@ -955,7 +956,7 @@ def test_plex_domain_edit_preserves_other_app_routes(logged_in, gateway, monkeyp
     assert routes[0]["id"] == before["id"]
     assert routes[0]["hostname"] == before["hostname"]
     assert routes[1]["hostname"] == "plex.example.com"
-    assert routes[1]["packageId"] == "org.mediahub.plex"
+    assert routes[1]["packageId"] == package
     response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"movies"})
     assert response.status_code == 200
     assert service.state()["routes"][0]["id"] == before["id"]

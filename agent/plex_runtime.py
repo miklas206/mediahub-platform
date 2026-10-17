@@ -182,7 +182,8 @@ class PlexRuntime:
         self.last_saved = None
         self.libraries_ready = False
         self.account_operation = {"state": "idle", "message": "Plex account setup has not started"}
-        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json"):
+        self.lan_checked_at = 0
+        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json", "plex-lan.json"):
             (self.state_dir / name).unlink(missing_ok=True)
 
     async def remove_failed_install(self, installation_id, policy):
@@ -351,6 +352,16 @@ class PlexRuntime:
             await self.control.plex_get(policy, "/library/sections", "POST", params=params)
         self.libraries_ready = True
         self.control.record("libraries_ready")
+
+    async def ensure_lan(self, policy):
+        # Fresh installs and existing installations share the same migration.
+        # Poll slowly once successful, while leaving failed publication retryable.
+        if time.monotonic() - getattr(self, "lan_checked_at", 0) < 60:
+            return
+        from agent.plex_lan import configure
+
+        await configure(self, policy)
+        self.lan_checked_at = time.monotonic()
 
     async def plan(self, spec):
         policy = self.policy()

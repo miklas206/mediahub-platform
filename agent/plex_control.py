@@ -137,6 +137,7 @@ class PlexControl:
                         await self.runtime.checkpoint(policy)
                         if mounted:
                             await self.runtime.ensure_libraries(policy)
+                            await self.runtime.ensure_lan(policy)
             except (DomainError, OSError, ValueError, KeyError, TypeError) as error:
                 self.diagnose("monitor.error", origin="supervisor", reason="monitor_step_failed", **error_fields(error))
                 # Never act on an unowned runtime or print raw responses/configuration.

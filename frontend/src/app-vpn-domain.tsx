@@ -18,7 +18,7 @@ type Gateway = {
     message?: string;
   }[];
 };
-export function AppVPNDomainPanel({ appId }: { appId: string }) {
+export function AppVPNDomainPanel({ appId, app = "plex" }: { appId: string; app?: "plex" | "jellyfin" }) {
   const { data, error, reload } = useData<Gateway>("/vpn-gateway");
   const [draft, setDraft] = useState<{ zoneId: string; label: string } | null>(
     null,
@@ -33,11 +33,11 @@ export function AppVPNDomainPanel({ appId }: { appId: string }) {
     return () => clearInterval(timer);
   }, [reload]);
   const route = data?.routes.find(
-    (row) => row.packageId === "org.mediahub.plex",
+    (row) => row.packageId === "org.mediahub." + app,
   );
   const value = draft ?? {
     zoneId: route?.zoneId || data?.zones[0]?.id || "",
-    label: route?.label || "plex",
+    label: route?.label || app,
   };
   const ready = data?.configured && data.enabled && data.zones.length > 0;
   async function save(event: FormEvent) {
@@ -54,7 +54,7 @@ export function AppVPNDomainPanel({ appId }: { appId: string }) {
       setDraft(null);
       reload();
       setNotice(
-        t("Plex domain saved. MediaVPN manages DNS and HTTPS automatically."),
+        t(app === "plex" ? "Plex domain saved. MediaVPN manages DNS and HTTPS automatically." : "Jellyfin domain saved. MediaVPN manages DNS and HTTPS automatically."),
       );
       window.dispatchEvent(new Event("apps-changed"));
     } catch (error) {
@@ -66,7 +66,7 @@ export function AppVPNDomainPanel({ appId }: { appId: string }) {
   return (
     <section className="panel app-vpn-domain">
       <div className="panel-heading">
-        <h2>{t("Plex domain through MediaVPN")}</h2>
+        <h2>{t(app === "plex" ? "Plex domain through MediaVPN" : "Jellyfin domain through MediaVPN")}</h2>
       </div>
       <div className="phase-content">
         {(error || failure) && (
@@ -145,7 +145,7 @@ export function AppVPNDomainPanel({ appId }: { appId: string }) {
                   busy || !ready || !value.zoneId || !value.label.trim()
                 }
               >
-                {t("Save Plex domain")}
+                {t(app === "plex" ? "Save Plex domain" : "Save Jellyfin domain")}
               </button>
               <Link className="button-link" to="/store/mediavpn">
                 {t("Open MediaVPN")}
