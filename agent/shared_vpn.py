@@ -8,6 +8,7 @@ import asyncio
 import base64
 import copy
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -580,6 +581,9 @@ class SharedVPN:
             and current.get("State", {}).get("Running")
             and await self.ready(app, current)
         )
+        relay_address = None
+        if ready and value.get("peer", {}).get("address"):
+            relay_address = str(ipaddress.ip_interface(value["peer"]["address"]).ip)
         return {
             "enabled": value["enabled"],
             "phase": value.get("phase", "idle"),
@@ -590,6 +594,7 @@ class SharedVPN:
             ),
             "publicKey": self.identity(app)["publicKey"],
             "ready": ready,
+            "relayAddress": relay_address,
             "errorCode": value.get("errorCode"),
             "message": value.get("message")
             or (

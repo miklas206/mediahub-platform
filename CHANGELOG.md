@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.48
+
+- Route the dedicated public Plex TCP proxy to the verified app WireGuard address, keeping external traffic separate from the local published listener and its LAN recognition rule. Preserve Plex authentication and the existing public lease/publication verification.
+- Expose the private relay address only for a ready, owned app namespace. Older Agents without that evidence show an update prerequisite instead of silently using the LAN endpoint for public forwarding.
+
 ## 0.6.47
 
 - Preserve current application mounts, environment, resource settings and migration labels when reapplying a shared VPN namespace. Restore only the original networking fields instead of replacing the latest app specification with a stale copy.

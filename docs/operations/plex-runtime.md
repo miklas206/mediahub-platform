@@ -136,6 +136,14 @@ and independently verify remote access. Unsupported host addressing or firewall
 permissions produce a concrete local-access error rather than silently disabling
 Plex authentication, its VPN assignment, or remote access.
 
+From 0.6.48 the dedicated public TCP proxy targets the ready app's private
+WireGuard address rather than the published LAN listener. This distinction is
+required because a TCP proxy connecting back through the host LAN would otherwise
+be mistaken for a local client. Verify public requests as WAN independently of
+successful public HTTPS/identity checks; reachability alone does not prove the
+classification. Older Agents must provide the verified relay address before this
+route can be reconfigured.
+
 Only the configured private LAN address publishes TCP 32400. No router rule,
 Cloudflare Tunnel or public service is created. A Plex claim token is optional,
 short-lived, submitted over HTTPS and never persisted in container configuration.

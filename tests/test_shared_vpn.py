@@ -401,3 +401,16 @@ def test_reapplying_vpn_preserves_new_mounts_environment_and_migration_labels(tm
     assert saved["HostConfig"]["NetworkMode"] == original["HostConfig"]["NetworkMode"]
     assert saved["HostConfig"]["PortBindings"] == original["HostConfig"]["PortBindings"]
     assert "org.mediahub.vpn.namespace" not in saved["Labels"]
+
+
+def test_relay_address_requires_a_ready_owned_running_namespace(tmp_path):
+    control, peer, _, _ = controller(tmp_path)
+    save_json(control.path("jellyfin"), {"enabled": True, "phase": "ready", "peer": peer})
+    control.owned_relay = AsyncMock(return_value={"State": {"Running": True, "Health": {"Status": "healthy"}}})
+    control.request = AsyncMock(return_value={"State": {"Running": True}})
+    control.ready = AsyncMock(return_value=True)
+    status = asyncio.run(control.status("jellyfin"))
+    assert status["relayAddress"] == "10.250.87.2"
+    assert "privateKey" not in status
+    control.ready.return_value = False
+    assert asyncio.run(control.status("jellyfin"))["relayAddress"] is None

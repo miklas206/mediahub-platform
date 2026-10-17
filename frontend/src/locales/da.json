@@ -4090,6 +4090,7 @@
   "Save Plex domain": "Gem Plex-domæne",
   "Temporary transcoding storage": "Midlertidigt lager til konvertering",
   "Local Plex connections": "Lokale Plex-forbindelser",
+  "Update the Plex Agent and wait for its verified private VPN address before configuring remote forwarding": "Opdatér Plex-agenten, og vent på dens verificerede private VPN-adresse, før fjernadgang klargøres",
   "Local Plex access prepared; reconnect existing clients to refresh their network classification.": "Lokal Plex-adgang er klargjort. Genforbind eksisterende klienter for at opdatere deres lokal/fjern-status.",
   "Local Plex recognition could not be prepared. Check host LAN addressing and permission to manage the owned Docker NAT rule.": "Lokal Plex-adgang kunne ikke klargøres. Kontrollér serverens LAN-adresse og adgang til at administrere den tilhørende Docker-netværksregel.",
   "Local Plex network preparation is unavailable": "Klargøring af Plex’ lokale netværk er utilgængelig",
