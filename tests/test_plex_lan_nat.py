@@ -17,6 +17,7 @@ CONFIG = {
     "binding": "192.168.1.185",
     "target": "172.17.0.2",
     "gateway": "172.17.0.1",
+    "gatewayHost": "192.168.1.185",
     "bridge": "docker0",
 }
 INTERFACES = [
@@ -61,8 +62,16 @@ def test_lan_rule_is_bounded_and_idempotent_and_never_matches_internet_clients()
     host = Host()
     reconcile(CONFIG, host.run)
     reconcile(CONFIG, host.run)
-    assert host.writes == ["-I"]
-    rule = shape(host.rules[0])
+    assert host.writes == ["-I", "-I"]
+    rule = next(
+        shape(r) for r in host.rules if shape(r)["--comment"].startswith("mediahub-plex-lan:")
+    )
+    assert rule["!--ctorigsrc"] == CONFIG["gatewayHost"]
+    remote = next(
+        shape(r) for r in host.rules if shape(r)["--comment"].startswith("mediahub-plex-wan:")
+    )
+    assert remote["-s"] == "172.17.0.0/16"
+    assert remote["--to-source"] == CONFIG["binding"]
     assert rule["-s"] == "192.168.1.0/24"
     assert rule["-d"] == "172.17.0.2/32"
     assert rule["--ctorigdst"] == "192.168.1.185"
@@ -77,7 +86,7 @@ def test_bridge_endpoint_change_and_disable_remove_only_owned_rules():
     unrelated = ["-s", "10.0.0.0/24", "-j", "MASQUERADE"]
     host.rules.append(unrelated)
     reconcile({**CONFIG, "target": "172.17.0.3"}, host.run)
-    assert len(host.rules) == 2 and unrelated in host.rules
+    assert len(host.rules) == 3 and unrelated in host.rules
     reconcile({"installationId": "plex-main", "enabled": False}, host.run)
     assert host.rules == [unrelated]
 
@@ -86,7 +95,7 @@ def test_iptables_listing_option_order_and_modules_do_not_remove_matching_rule()
     host = Host()
     args = desired(CONFIG, INTERFACES)
     # iptables -S adds a module and may reorder conntrack arguments.
-    host.rules = [args + ["-m", "tcp"]]
+    host.rules = [args[0] + ["-m", "tcp"], args[1]]
     reconcile(CONFIG, host.run)
     assert host.writes == []
 
@@ -110,7 +119,7 @@ def test_unverified_host_addresses_and_interfaces_are_rejected_before_mutation(k
 
 def test_unknown_owned_rule_is_preserved_and_blocks_reconfiguration():
     host = Host()
-    host.rules = [desired(CONFIG, INTERFACES) + ["--random", "yes"]]
+    host.rules = [desired(CONFIG, INTERFACES)[0] + ["--random", "yes"]]
     with pytest.raises(ValueError):
         reconcile(CONFIG, host.run)
     assert host.writes == []
@@ -140,7 +149,11 @@ def test_helper_has_only_host_network_admin_and_no_secrets_or_mounts(tmp_path, e
             return {"StatusCode": exit_code}
         return {}
 
-    shared = SimpleNamespace(directory=tmp_path, request=AsyncMock(side_effect=request))
+    shared = SimpleNamespace(
+        directory=tmp_path,
+        request=AsyncMock(side_effect=request),
+        state=lambda app: {"peer": {"endpointIp": "192.168.1.185"}},
+    )
     if exit_code:
         with pytest.raises(DomainError):
             asyncio.run(configure(shared, spec, relay))
@@ -159,3 +172,32 @@ def test_helper_has_only_host_network_admin_and_no_secrets_or_mounts(tmp_path, e
     assert host["CapDrop"] == ["ALL"] and host["ReadonlyRootfs"]
     assert not host["Privileged"] and "Mounts" not in host and "Binds" not in host
     shared.request.assert_any_await("DELETE", "/containers/helper?v=false")
+
+
+def test_upgrade_old_lan_rule_and_preserve_public_proxy_classification():
+    import ipaddress
+
+    host = Host()
+    old = desired(CONFIG, INTERFACES)[0].copy()
+    index = old.index("!")
+    del old[index : index + 3]
+    host.rules = [old]
+    reconcile(CONFIG, host.run)
+    reconcile(CONFIG, host.run)
+    assert len(host.rules) == 2
+    assert host.writes == ["-I", "-I", "-D"]
+
+    def translated(source):
+        for args in host.rules:
+            rule = shape(args)
+            if ipaddress.ip_address(source) in ipaddress.ip_network(
+                rule["-s"]
+            ) and source != rule.get("!--ctorigsrc"):
+                return rule["--to-source"]
+        return source
+
+    assert translated("192.168.1.144") == "172.17.0.1"
+    assert translated("172.17.0.3") == "192.168.1.185"
+    assert translated("172.17.0.1") == "192.168.1.185"
+    assert translated("192.168.1.185") == "192.168.1.185"
+    assert translated("8.8.8.8") == "8.8.8.8"

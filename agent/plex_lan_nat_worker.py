@@ -1,4 +1,4 @@
-"""Translate only approved LAN traffic to the owned Plex Docker endpoint."""
+"""Classify LAN clients and the public proxy at the owned Plex endpoint."""
 
 import ipaddress
 import json
@@ -26,7 +26,9 @@ def command(*args):
 
 
 def desired(value, interfaces):
-    binding, target, gateway = (private(value[k]) for k in ("binding", "target", "gateway"))
+    binding, target, gateway, gateway_host = (
+        private(value[k]) for k in ("binding", "target", "gateway", "gatewayHost")
+    )
     bridge = value["bridge"]
     if not re.fullmatch(r"[a-zA-Z0-9_.:-]{1,15}", bridge):
         raise ValueError("Invalid Docker bridge")
@@ -55,11 +57,11 @@ def desired(value, interfaces):
         or target not in docker
         or target == gateway
         or network.overlaps(docker)
+        or docker.prefixlen < 16
+        or not docker.is_private
     ):
         raise ValueError("LAN and Docker networks must be separate and bounded")
-    return [
-        "-s",
-        str(network),
+    common = [
         "-d",
         str(target) + "/32",
         "-o",
@@ -76,15 +78,37 @@ def desired(value, interfaces):
         str(binding),
         "--ctorigdstport",
         "32400",
-        "-m",
-        "comment",
-        "--comment",
+    ]
+    suffix = ["-m", "comment", "--comment"]
+    local = [
+        "-s",
+        str(network),
+        *common,
+        "!",
+        "--ctorigsrc",
+        str(gateway_host),
+        *suffix,
         "mediahub-plex-lan:" + value["installationId"],
         "-j",
         "SNAT",
         "--to-source",
         str(gateway),
     ]
+    # A same-host public TCP proxy arrives from Docker, not from the LAN.
+    # Use the private host address as its WAN-side stand-in. This also works
+    # when the proxy and Plex use different provider profiles/namespaces.
+    remote = [
+        "-s",
+        str(docker),
+        *common,
+        *suffix,
+        "mediahub-plex-wan:" + value["installationId"],
+        "-j",
+        "SNAT",
+        "--to-source",
+        str(binding),
+    ]
+    return [local, remote]
 
 
 def owned(rule, identity):
@@ -95,7 +119,7 @@ def owned(rule, identity):
             raise ValueError("Owned LAN rule changed")
         return rule[rule.index(flag) + 1]
 
-    if item("--comment") != "mediahub-plex-lan:" + identity:
+    if item("--comment") not in {"mediahub-plex-lan:" + identity, "mediahub-plex-wan:" + identity}:
         return False
     network = ipaddress.ip_network(item("-s"))
     target = ipaddress.ip_network(item("-d"))
@@ -130,19 +154,31 @@ def shape(args):
         "--dport",
         "--ctdir",
         "--ctorigdst",
+        "--ctorigsrc",
         "--ctorigdstport",
         "--comment",
         "-j",
         "--to-source",
     }
-    if len(args) % 2:
-        raise ValueError("Owned LAN rule syntax changed")
-    for flag, value in zip(args[::2], args[1::2]):
+    position = 0
+    while position < len(args):
+        flag = args[position]
+        negative = flag == "!"
+        if negative:
+            position += 1
+            if position >= len(args):
+                raise ValueError("Owned LAN rule syntax changed")
+            flag = args[position]
+        if position + 1 >= len(args):
+            raise ValueError("Owned LAN rule syntax changed")
+        value = args[position + 1]
+        position += 2
         if flag == "-m" and value in {"tcp", "conntrack", "comment"}:
             continue
-        if flag not in allowed or flag in result:
+        key = "!" + flag if negative else flag
+        if flag not in allowed or key in result or (negative and flag != "--ctorigsrc"):
             raise ValueError("Owned LAN rule has unknown options")
-        result[flag] = value.removesuffix("/32") if flag == "--ctorigdst" else value
+        result[key] = value.removesuffix("/32") if flag in {"--ctorigdst", "--ctorigsrc"} else value
     return result
 
 
@@ -153,20 +189,20 @@ def reconcile(value, run=command):
     rules = []
     for line in run("iptables", "-w", "5", "-t", "nat", "-S", "POSTROUTING").splitlines():
         rule = shlex.split(line)
-        if (
-            "--comment" in rule
-            and rule[rule.index("--comment") + 1] == "mediahub-plex-lan:" + identity
-        ):
+        if "--comment" in rule and rule[rule.index("--comment") + 1] in {
+            "mediahub-plex-lan:" + identity,
+            "mediahub-plex-wan:" + identity,
+        }:
             if not owned(rule, identity):
                 raise ValueError("LAN rule ownership changed")
             shape(rule[2:])
             rules.append(rule[2:])
-    args = (
-        desired(value, json.loads(run("ip", "-j", "address", "show"))) if value["enabled"] else None
+    wanted = (
+        desired(value, json.loads(run("ip", "-j", "address", "show"))) if value["enabled"] else []
     )
     # iptables -C normalizes omitted masks/modules; don't compare its text output.
-    exists = False
-    if args:
+    for args in wanted:
+        exists = False
         try:
             run("iptables", "-w", "5", "-t", "nat", "-C", "POSTROUTING", *args)
             exists = True
@@ -175,13 +211,14 @@ def reconcile(value, run=command):
         if not exists:
             run("iptables", "-w", "5", "-t", "nat", "-I", "POSTROUTING", "1", *args)
     # Retain one matching rule and remove only other narrowly owned rules.
-    retained = False
+    retained = set()
     for rule in rules:
-        if args and shape(rule) == shape(args) and not retained:
-            retained = True
+        matching = next((i for i, args in enumerate(wanted) if shape(rule) == shape(args)), None)
+        if matching is not None and matching not in retained:
+            retained.add(matching)
             continue
         run("iptables", "-w", "5", "-t", "nat", "-D", "POSTROUTING", *rule)
-    if args:
+    for args in wanted:
         run("iptables", "-w", "5", "-t", "nat", "-C", "POSTROUTING", *args)
 
 

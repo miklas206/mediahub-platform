@@ -1,4 +1,4 @@
-"""Reconcile one bounded LAN-only NAT rule without changing Plex authentication."""
+"""Reconcile bounded LAN and public-proxy NAT rules without changing Plex authentication."""
 
 import contextlib
 import hashlib
@@ -35,6 +35,7 @@ async def configure(shared, spec, relay=None, *, enabled=True):
             )
         config.update(
             binding=bindings[0]["HostIp"],
+            gatewayHost=shared.state("plex")["peer"]["endpointIp"],
             target=endpoint["IPAddress"],
             gateway=endpoint["Gateway"],
             bridge=network.get("Options", {}).get("com.docker.network.bridge.name", "docker0"),

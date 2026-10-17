@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.49
+
+- Preserve independently selected Plex and public-gateway VPN profiles. Keep public forwarding on the approved private listener and reconcile separate bounded LAN/client and Docker/public-proxy translation rules, preserving remote classification without requiring a shared WireGuard namespace. Migrate the previous LAN rule automatically and preserve unrelated NAT rules.
+
 ## 0.6.48
 
 - Route the dedicated public Plex TCP proxy to the verified app WireGuard address, keeping external traffic separate from the local published listener and its LAN recognition rule. Preserve Plex authentication and the existing public lease/publication verification.

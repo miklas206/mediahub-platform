@@ -45,14 +45,8 @@ def runtime(tmp_path):
         plex_get=AsyncMock(side_effect=plex_get),
     )
     return (
-        SimpleNamespace(
-            control=control,
-            state_dir=tmp_path,
-            checkpoint=AsyncMock(),
-            preferences=AsyncMock(
-                return_value=('<Preferences CertificateUUID="' + "a" * 32 + '"/>').encode()
-            ),
-        ),
+        SimpleNamespace(control=control, state_dir=tmp_path, checkpoint=AsyncMock(),
+                        preferences=AsyncMock(return_value=('<Preferences CertificateUUID="' + 'a'*32 + '"/>').encode())),
         values,
         original,
     )
@@ -148,7 +142,7 @@ async def test_hub_requires_distinct_port_and_public_identity():
                 "ready": True,
                 "publicPort": 50003,
                 "identityHash": "verified-hash",
-                "relayAddress": "10.250.87.2",
+                "relayAddress": "10.250.87.2", # May belong to a different VPN profile.
             }
         )
     )
@@ -161,7 +155,7 @@ async def test_hub_requires_distinct_port_and_public_identity():
     )
     gateway = SimpleNamespace(svc=service, gateway={"providerReady": True})
     forwarding = PlexForwarding(gateway)
-    assert await forwarding.target() == {"address": "10.250.87.2", "port": 32400}
+    assert await forwarding.target() == {"address": "192.168.1.20", "port": 32400}
     state = {"enabled": True, "plexPortEnabled": True}
     reply = {
         "publicPort": 50001,
@@ -198,20 +192,3 @@ async def test_hub_rejects_unapproved_plex_origin():
     )
     with pytest.raises(DomainError):
         await PlexForwarding(SimpleNamespace(svc=svc)).target()
-
-
-@pytest.mark.parametrize("relay", [None, "8.8.8.8", "127.0.0.1", "192.168.1.20"])
-@run_async
-async def test_public_forwarding_never_falls_back_to_the_lan_listener(relay):
-    client = SimpleNamespace(
-        request=AsyncMock(return_value={"enabled": True, "ready": True, "relayAddress": relay})
-    )
-    svc = SimpleNamespace(
-        shared_vpn=SimpleNamespace(target=lambda _: (None, client)),
-        cloudflare_management=SimpleNamespace(
-            origin=AsyncMock(return_value="http://192.168.1.20:32400")
-        ),
-    )
-    with pytest.raises(DomainError) as error:
-        await PlexForwarding(SimpleNamespace(svc=svc)).target()
-    assert error.value.code == "plex_relay_address_unavailable"

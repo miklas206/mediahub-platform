@@ -46,26 +46,7 @@ class PlexForwarding:
                 "Plex needs its approved private address and TCP port 32400",
                 409,
             )
-        try:
-            peer = ipaddress.IPv4Address(state.get("relayAddress"))
-        except (ValueError, TypeError):
-            peer = None
-        if (
-            peer is None
-            or peer == ip
-            or not any(
-                peer in ipaddress.ip_network(n)
-                for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
-            )
-        ):
-            raise DomainError(
-                "plex_relay_address_unavailable",
-                "Update the Plex Agent and wait for its verified private VPN address before configuring remote forwarding",
-                409,
-            )
-        # Public ingress must enter over WireGuard. Sending its TCP proxy back
-        # through the LAN listener would make remote viewers look local.
-        return {"address": str(peer), "port": 32400}
+        return {"address": str(ip), "port": 32400}
 
     def public(self, state):
         result = {
