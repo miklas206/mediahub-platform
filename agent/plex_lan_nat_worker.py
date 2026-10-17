@@ -119,7 +119,11 @@ def owned(rule, identity):
             raise ValueError("Owned LAN rule changed")
         return rule[rule.index(flag) + 1]
 
-    if item("--comment") not in {"mediahub-plex-lan:" + identity, "mediahub-plex-wan:" + identity}:
+    if item("--comment") not in {
+        "mediahub-plex-lan:" + identity,
+        "mediahub-plex-wan:" + identity,
+        "mediahub-plex-proxy:" + identity,
+    }:
         return False
     network = ipaddress.ip_network(item("-s"))
     target = ipaddress.ip_network(item("-d"))
@@ -132,13 +136,20 @@ def owned(rule, identity):
     ):
         raise ValueError("Owned LAN rule no longer has bounded addresses")
     private(item("--ctorigdst").split("/")[0])
-    private(item("--to-source"))
+    proxy = item("--comment").startswith("mediahub-plex-proxy:")
+    if proxy:
+        destination, port = item("--to-destination").rsplit(":", 1)
+        private(destination)
+        if port != "32400":
+            raise ValueError("Owned proxy destination port changed")
+    else:
+        private(item("--to-source"))
     if (
         item("-p") != "tcp"
         or item("--dport") != "32400"
         or item("--ctorigdstport") != "32400"
         or item("--ctdir") != "ORIGINAL"
-        or item("-j") != "SNAT"
+        or item("-j") != ("DNAT" if proxy else "SNAT")
     ):
         raise ValueError("Owned LAN rule scope changed")
     return True
@@ -150,6 +161,8 @@ def shape(args):
         "-s",
         "-d",
         "-o",
+        "-i",
+        "--to-destination",
         "-p",
         "--dport",
         "--ctdir",
@@ -182,44 +195,82 @@ def shape(args):
     return result
 
 
+def ingress(value, interfaces):
+    # Validate against real host addresses before installing any rule.
+    desired(value, interfaces)
+    return [
+        "-s",
+        shape(desired(value, interfaces)[1])["-s"],
+        "-d",
+        value["binding"] + "/32",
+        "-i",
+        value["bridge"],
+        "-p",
+        "tcp",
+        "--dport",
+        "32400",
+        "-m",
+        "conntrack",
+        "--ctdir",
+        "ORIGINAL",
+        "--ctorigdst",
+        value["binding"],
+        "--ctorigdstport",
+        "32400",
+        "-m",
+        "comment",
+        "--comment",
+        "mediahub-plex-proxy:" + value["installationId"],
+        "-j",
+        "DNAT",
+        "--to-destination",
+        value["target"] + ":32400",
+    ]
+
+
 def reconcile(value, run=command):
     identity = value["installationId"]
     if not re.fullmatch(r"[a-z][a-z0-9-]{2,60}", identity):
         raise ValueError("Invalid Plex installation identity")
-    rules = []
-    for line in run("iptables", "-w", "5", "-t", "nat", "-S", "POSTROUTING").splitlines():
-        rule = shlex.split(line)
-        if "--comment" in rule and rule[rule.index("--comment") + 1] in {
-            "mediahub-plex-lan:" + identity,
-            "mediahub-plex-wan:" + identity,
-        }:
-            if not owned(rule, identity):
-                raise ValueError("LAN rule ownership changed")
-            shape(rule[2:])
-            rules.append(rule[2:])
-    wanted = (
-        desired(value, json.loads(run("ip", "-j", "address", "show"))) if value["enabled"] else []
-    )
-    # iptables -C normalizes omitted masks/modules; don't compare its text output.
-    for args in wanted:
-        exists = False
-        try:
-            run("iptables", "-w", "5", "-t", "nat", "-C", "POSTROUTING", *args)
-            exists = True
-        except subprocess.CalledProcessError:
-            pass
-        if not exists:
-            run("iptables", "-w", "5", "-t", "nat", "-I", "POSTROUTING", "1", *args)
-    # Retain one matching rule and remove only other narrowly owned rules.
-    retained = set()
-    for rule in rules:
-        matching = next((i for i, args in enumerate(wanted) if shape(rule) == shape(args)), None)
-        if matching is not None and matching not in retained:
-            retained.add(matching)
-            continue
-        run("iptables", "-w", "5", "-t", "nat", "-D", "POSTROUTING", *rule)
-    for args in wanted:
-        run("iptables", "-w", "5", "-t", "nat", "-C", "POSTROUTING", *args)
+    interfaces = json.loads(run("ip", "-j", "address", "show")) if value["enabled"] else []
+    plans = {
+        "PREROUTING": [ingress(value, interfaces)] if value["enabled"] else [],
+        "POSTROUTING": desired(value, interfaces) if value["enabled"] else [],
+    }
+    observed = {}
+    for chain in plans:
+        rules = []
+        tags = (
+            {"mediahub-plex-proxy:" + identity}
+            if chain == "PREROUTING"
+            else {"mediahub-plex-lan:" + identity, "mediahub-plex-wan:" + identity}
+        )
+        for line in run("iptables", "-w", "5", "-t", "nat", "-S", chain).splitlines():
+            rule = shlex.split(line)
+            if "--comment" in rule and rule[rule.index("--comment") + 1] in tags:
+                owned(rule, identity)
+                shape(rule[2:])
+                rules.append(rule[2:])
+        observed[chain] = rules
+    # Validate all chains before mutating either. The ingress rule prevents
+    # Docker's userland proxy from erasing the public proxy's source identity.
+    for chain, wanted in plans.items():
+        for args in wanted:
+            try:
+                run("iptables", "-w", "5", "-t", "nat", "-C", chain, *args)
+            except subprocess.CalledProcessError:
+                run("iptables", "-w", "5", "-t", "nat", "-I", chain, "1", *args)
+        retained = set()
+        for rule in observed[chain]:
+            matching = next(
+                (i for i, args in enumerate(wanted) if shape(rule) == shape(args)), None
+            )
+            if matching is not None and matching not in retained:
+                retained.add(matching)
+                continue
+            run("iptables", "-w", "5", "-t", "nat", "-D", chain, *rule)
+        for args in wanted:
+            run("iptables", "-w", "5", "-t", "nat", "-C", chain, *args)
 
 
 if __name__ == "__main__":

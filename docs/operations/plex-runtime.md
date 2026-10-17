@@ -136,11 +136,12 @@ and independently verify remote access. Unsupported host addressing or firewall
 permissions produce a concrete local-access error rather than silently disabling
 Plex authentication, its VPN assignment, or remote access.
 
-From 0.6.49 the dedicated public TCP proxy retains the approved private listener,
+From 0.6.50 the dedicated public TCP proxy retains the approved private listener,
 so Plex and public ingress can keep different VPN profiles. A separate bounded
 rule translates Docker-origin proxy connections to the host LAN address, outside
 Plex's Docker subnet. The LAN rule excludes the configured gateway host, including
-when ingress runs on another LAN host. These two rules preserve local/remote
+when ingress runs on another LAN host. An owned Docker-origin ingress rule bypasses Docker userland proxying of this
+listener so the source distinction survives. These rules preserve local/remote
 classification without changing account permissions or VPN assignments.
 
 Only the configured private LAN address publishes TCP 32400. No router rule,

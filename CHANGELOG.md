@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.50
+
+- Keep the public proxy source visible when Docker uses its userland proxy for same-bridge published ports. Prepare a narrowly scoped owned ingress translation alongside the LAN/WAN rules and remove all three on disconnect.
+
 ## 0.6.49
 
 - Preserve independently selected Plex and public-gateway VPN profiles. Keep public forwarding on the approved private listener and reconcile separate bounded LAN/client and Docker/public-proxy translation rules, preserving remote classification without requiring a shared WireGuard namespace. Migrate the previous LAN rule automatically and preserve unrelated NAT rules.

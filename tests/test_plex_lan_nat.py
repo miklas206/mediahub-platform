@@ -9,7 +9,7 @@ import pytest
 from mediahub.errors import DomainError
 
 from agent.plex_lan_nat import configure
-from agent.plex_lan_nat_worker import desired, reconcile, shape
+from agent.plex_lan_nat_worker import desired, ingress, reconcile, shape
 
 CONFIG = {
     "installationId": "plex-main",
@@ -35,23 +35,25 @@ INTERFACES = [
 class Host:
     def __init__(self):
         self.rules = []
+        self.prerouting = []
         self.writes = []
 
     def run(self, *args):
         if args[0] == "ip":
             return json.dumps(INTERFACES)
         action = args[5]
+        rules = self.prerouting if args[6] == "PREROUTING" else self.rules
         if action == "-S":
-            return "\n".join(shlex.join(["-A", "POSTROUTING", *r]) for r in self.rules)
+            return "\n".join(shlex.join(["-A", "POSTROUTING", *r]) for r in rules)
         rule = list(args[8:] if action == "-I" else args[7:])
         if action == "-C":
-            if not any(shape(r) == shape(rule) for r in self.rules):
+            if not any(shape(r) == shape(rule) for r in rules):
                 raise subprocess.CalledProcessError(1, args)
         elif action == "-I":
-            self.rules.insert(0, rule)
+            rules.insert(0, rule)
             self.writes.append(action)
         elif action == "-D":
-            self.rules.remove(rule)
+            rules.remove(rule)
             self.writes.append(action)
         else:
             raise AssertionError(args)
@@ -62,7 +64,7 @@ def test_lan_rule_is_bounded_and_idempotent_and_never_matches_internet_clients()
     host = Host()
     reconcile(CONFIG, host.run)
     reconcile(CONFIG, host.run)
-    assert host.writes == ["-I", "-I"]
+    assert host.writes == ["-I", "-I", "-I"]
     rule = next(
         shape(r) for r in host.rules if shape(r)["--comment"].startswith("mediahub-plex-lan:")
     )
@@ -96,6 +98,7 @@ def test_iptables_listing_option_order_and_modules_do_not_remove_matching_rule()
     args = desired(CONFIG, INTERFACES)
     # iptables -S adds a module and may reorder conntrack arguments.
     host.rules = [args[0] + ["-m", "tcp"], args[1]]
+    host.prerouting = [ingress(CONFIG, INTERFACES)]
     reconcile(CONFIG, host.run)
     assert host.writes == []
 
@@ -185,7 +188,7 @@ def test_upgrade_old_lan_rule_and_preserve_public_proxy_classification():
     reconcile(CONFIG, host.run)
     reconcile(CONFIG, host.run)
     assert len(host.rules) == 2
-    assert host.writes == ["-I", "-I", "-D"]
+    assert host.writes == ["-I", "-I", "-I", "-D"]
 
     def translated(source):
         for args in host.rules:
@@ -201,3 +204,16 @@ def test_upgrade_old_lan_rule_and_preserve_public_proxy_classification():
     assert translated("172.17.0.1") == "192.168.1.185"
     assert translated("192.168.1.185") == "192.168.1.185"
     assert translated("8.8.8.8") == "8.8.8.8"
+
+
+def test_docker_proxy_ingress_bypasses_userland_proxy_only_for_owned_listener():
+    rule = shape(ingress(CONFIG, INTERFACES))
+    assert rule["-s"] == "172.17.0.0/16"
+    assert rule["-d"] == "192.168.1.185/32"
+    assert rule["-i"] == "docker0"
+    assert rule["--to-destination"] == "172.17.0.2:32400"
+    assert rule["-j"] == "DNAT"
+    host = Host()
+    reconcile(CONFIG, host.run)
+    reconcile({"installationId": "plex-main", "enabled": False}, host.run)
+    assert host.prerouting == host.rules == []
