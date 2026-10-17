@@ -102,6 +102,10 @@ class PlexControl:
         while True:
             try:
                 async with self.lock:
+                    if self.runtime:
+                        from agent.plex_transcode import recover
+
+                        await recover(self.runtime)
                     policy = self.policy()
                     desired = self.intent(policy)
                     data = await self.inspect(policy)
@@ -138,6 +142,15 @@ class PlexControl:
                         if mounted:
                             await self.runtime.ensure_libraries(policy)
                             await self.runtime.ensure_lan(policy)
+                            from agent.plex_transcode import reconcile
+
+                            try:
+                                await reconcile(self.runtime, policy)
+                            except (DomainError, OSError, ValueError) as error:
+                                self.runtime.transcode_status = {
+                                    "state": "blocked", "message": error.message if isinstance(error, DomainError) else "Plex temporary storage is unavailable; check writable storage and free space",
+                                }
+                                self.diagnose("temporary_storage.blocked", **error_fields(error))
             except (DomainError, OSError, ValueError, KeyError, TypeError) as error:
                 self.diagnose("monitor.error", origin="supervisor", reason="monitor_step_failed", **error_fields(error))
                 # Never act on an unowned runtime or print raw responses/configuration.
@@ -354,6 +367,8 @@ class PlexControl:
             "checks": [],
             "operation": self.runtime.operation if self.runtime else {"state": "idle"},
         }
+        if self.runtime:
+            report["transcode"] = self.runtime.transcode_status
         if self.runtime and policy.vpnEnabled:
             vpn_status = await self.runtime.vpn.status(policy)
             report["vpn"] = vpn_status["vpn"]

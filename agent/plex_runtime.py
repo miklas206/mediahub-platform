@@ -23,7 +23,7 @@ from mediahub.secret_store import SecretStore
 from agent.install_files import read_json, save_json
 from agent.install_images import publisher_reference, pull_latest
 from agent.plex_control import PlexMount, PlexPolicy
-from agent.plex_install import PMS_ROOT, PlexInstallPolicy, installation_plan
+from agent.plex_install import PMS_ROOT, PlexInstallPolicy, installation_plan, temp_choices
 from agent.plex_vpn import PlexVPN
 
 
@@ -38,6 +38,7 @@ class PlexRuntime:
             self.control.diagnostics = Diagnostics(self.state_dir, "plex")
         self.vault = SecretStore(self.state_dir / "plex-secrets")
         self.last_saved = None
+        self.transcode_status = {"state": "pending", "message": "Checking temporary storage"}
         self.operation = {"state": "idle", "message": "No operation running"}
         self.update_task = None
         self.install_task = None
@@ -183,7 +184,7 @@ class PlexRuntime:
         self.libraries_ready = False
         self.account_operation = {"state": "idle", "message": "Plex account setup has not started"}
         self.lan_checked_at = 0
-        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json", "plex-lan.json", "plex-public-url.json"):
+        for name in ("plex-plan.json", "plex-update-recovery.json", "plex-shared-remote.json", "plex-lan.json", "plex-public-url.json", "plex-transcode-migration.json"):
             (self.state_dir / name).unlink(missing_ok=True)
 
     async def remove_failed_install(self, installation_id, policy):
@@ -319,7 +320,7 @@ class PlexRuntime:
             "hostId": policy.hostId,
             "storage": [
                 {"id": key, "label": item.label, "kind": item.kind}
-                for key, item in policy.storage.items()
+                for key, item in {**policy.storage, **temp_choices(policy)}.items()
             ],
         }
 
@@ -705,6 +706,8 @@ class PlexRuntime:
                     FriendlyName=body.installation.serverName,
                     PublishServerOnPlexOnlineKey="0",
                     ManualPortMappingMode="1",
+                    TranscoderTempDirectory="/transcode",
+                    TranscoderPersistSessionDirs="0",
                 )
                 content = ET.tostring(root, encoding="utf-8", xml_declaration=True)
                 if policy.reuseEncryptedPreferences and not reinstall:
@@ -713,6 +716,10 @@ class PlexRuntime:
                         raise DomainError(
                             "plex_identity_invalid", "Encrypted Plex identity is invalid", 409
                         )
+                    from agent.plex_transcode import preferences
+
+                    content = preferences(content, True)
+                    self.vault.replace(body.installation.installationId, content)
                 else:
                     reference = body.installation.installationId
                     if self.vault.status(reference)["configured"]:
@@ -726,6 +733,9 @@ class PlexRuntime:
                     else b"",
                 }
                 await self.archive_write(helper, files, policy.uid, policy.gid)
+                from agent.plex_transcode import prepare
+
+                await prepare(self, plan)
                 self.install_progress("container", 80, "Creating app container")
                 await self.request(
                     "POST", "/containers/create?name=" + plan["name"], body=plan["container"]
@@ -767,11 +777,16 @@ class PlexRuntime:
             )
         plan = read_json(self.state_dir / "plex-plan.json")
         install_policy = self.policy()
+        from agent.plex_transcode import preferences, prepare
+
+        has_temp = any(m.get("Target") == "/transcode" for m in plan["container"]["HostConfig"]["Mounts"])
+        if has_temp:
+            await prepare(self, plan, clean=True)
         vpn_port = await self.vpn.prepare(policy) if policy.vpnEnabled else None
         helper = await self.helper(install_policy, plan)
         started = False
         try:
-            content = self.vault.get(policy.installationId)
+            content = preferences(self.vault.get(policy.installationId), has_temp)
             await self.archive_write(
                 helper,
                 {

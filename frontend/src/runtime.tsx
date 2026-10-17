@@ -34,6 +34,7 @@ import {
 } from "./plex-install-progress";
 
 export type Runtime = {
+  transcode?: { state: string; path?: string; message: string };
   operation?: PlexInstallOperation;
   plex?: {
     running: boolean;
@@ -1068,6 +1069,13 @@ export function AppRuntimePage() {
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
       {data?.view === "plex" && <AppSettingsPage packageId="org.mediahub.plex" embedded/>}
       {data?.view === "plex" && <PlexAccountSetup />}
+      {data?.view === "plex" && data.report.transcode && (
+        <section className="panel">
+          <h2>{t("Temporary transcoding storage")}</h2>
+          <p role="status">{translateText(data.report.transcode.message)}</p>
+          {data.report.transcode.path && <p style={{ overflowWrap: "anywhere" }}>{data.report.transcode.path}</p>}
+        </section>
+      )}
       {data?.view === "plex" && appId && <AppVPNDomainPanel appId={appId} />}
       {data?.view === "cloudflare" && (
         <div

@@ -50,9 +50,14 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
             assert runtime.operation["progress"] == 50
             return {"Volumes": [{**plan["runtimeVolume"], "Options": plan["runtimeVolume"]["DriverOpts"]}] if reinstall else []}
         if path.startswith("/containers/create"):
+            if body.get("Labels", {}).get("org.mediahub.plex.role") == "transcode-preparation":
+                assert body["HostConfig"]["NetworkMode"] == "none"
+                return {"Id": "transcode-helper"}
             assert runtime.operation["phase"] == "container"
             assert runtime.operation["progress"] == 80
             assert body["Image"] == publisher
+        if path == "/containers/transcode-helper/wait":
+            return {"StatusCode": 0}
         if path == "/containers/mediahub-plex-main/start":
             assert runtime.operation["phase"] == "start"
             assert runtime.operation["progress"] == 90

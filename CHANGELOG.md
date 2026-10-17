@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.46
+
+- Select approved temporary transcoding storage separately from Plex movie, TV and other libraries. Default to a dedicated `Temp/<installation>/work` directory on the selected app-data storage, prepare it as the app user and configure Plex automatically.
+- Add the missing temp mapping to older managed installations when playback is idle, using the installed Plex image and a recoverable container replacement. Preserve custom transcoding paths, account settings, libraries, stopped intent and media.
+- Verify actual file allocation as well as free space. Let Plex clean finished sessions; clear only owned orphan session directories while Plex is stopped, retaining unrelated files and rejecting symlinks.
+
 ## 0.6.45
 
 - Publish the verified Plex public HTTPS endpoint independently of the server's detected outbound VPN IP. Follow verified public IP/port changes, preserve the LAN endpoint and other custom URLs, and remove only the managed public URL when forwarding is disabled.

@@ -40,6 +40,42 @@ Plex has no Docker automatic-start policy: the Agent starts it after storage
 validation and restores encrypted preferences first. Changing that restart policy
 would bypass this ordering and is unsupported.
 
+## Temporary transcoding storage
+
+The installer selects approved movie, TV and other library mappings independently
+of temporary storage. Each approved app-data mapping automatically offers a
+`Temp` choice; operators can also provide explicit policy mappings with kind
+`temp`. Browser input selects approved IDs, never arbitrary host paths. Libraries
+remain read-only and temporary paths cannot overlap any approved media library.
+
+By default the Agent creates `<appdata>/Temp/<installation>/work`, mounts it at
+`/transcode`, sets `TMPDIR=/transcode` and configures Plex's transcoder directory.
+The bounded initialization helper uses the Plex UID/GID, verified storage,
+no network and a read-only container root. It checks actual file allocation and
+at least 1 GiB of free space. This is a minimum preflight, not a promise that a
+large 4K conversion will fit: Plex recommends roughly the source file size plus
+100 MB ([Plex documentation](https://support.plex.tv/articles/transcoder/)).
+Pooled storage may report aggregate free space while the branch containing an
+existing directory is full; allocation failure is reported explicitly. The Agent
+does not change pool policies or relocate existing metadata/media automatically.
+
+An ownership marker lives outside the work directory exposed to Plex. Plex cleans
+finished sessions with persistent session directories disabled. Before starting a
+stopped server, MediaHub also removes only recognized `plex-transcode-*` session
+directories inside its marked work tree. It never runs orphan deletion while
+Plex is running, follows symlinks or removes unrelated files.
+
+Existing managed installations receive the missing bind mapping automatically
+after the updated Agent starts and playback is idle. A second session check runs
+after storage preparation, before the container is stopped. Migration retains
+the installed image, existing mappings and settings and records a recovery
+receipt before replacing the container. Failure or interrupted migration restores
+the original container without deleting volumes. A failed migration remains
+blocked for inspection rather than restarting repeatedly. An intentionally
+stopped installation remains stopped and is reconciled after its next start.
+An existing custom Plex transcoding path is preserved and is not cleaned by
+MediaHub. Repeated reconciliation leaves an already migrated plan unchanged.
+
 ## Updates
 
 The Updates card checks the same fixed `lscr.io/linuxserver/plex:latest`

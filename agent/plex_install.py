@@ -19,7 +19,7 @@ from pydantic import Field, field_validator
 
 class PlexStorageChoice(StrictModel):
     label: str
-    kind: Literal["movies", "tv", "other", "appdata"]
+    kind: Literal["movies", "tv", "other", "appdata", "temp"]
     path: str
 
     @field_validator("path")
@@ -106,6 +106,46 @@ PERSISTENT_DIRECTORIES = (
 PMS_ROOT = "/config/Library/Application Support/Plex Media Server"
 
 
+def temp_choices(policy):
+    # Older operator policies acquire an additive choice on their already
+    # approved writable app-data storage; no host-specific mount assumptions.
+    choices = {key: value for key, value in policy.storage.items() if value.kind == "temp"}
+    for key, value in policy.storage.items():
+        if value.kind == "appdata":
+            identifier = "temp-" + hashlib.sha256(key.encode()).hexdigest()[:12]
+            choices.setdefault(
+                identifier,
+                PlexStorageChoice(
+                    label=value.label + " / Temp", kind="temp", path=str(Path(value.path) / "Temp")
+                ),
+            )
+    return choices
+
+
+def transcode_mount(policy, spec):
+    choices = temp_choices(policy)
+    identifier = spec.tempStorageId
+    if identifier is None:
+        identifier = "temp-" + hashlib.sha256(spec.appdataStorageId.encode()).hexdigest()[:12]
+    choice = choices.get(identifier)
+    if choice is None:
+        raise DomainError("plex_temp_denied", "Choose approved temporary storage", 403)
+    source = Path(choice.path) / spec.installationId / "work"
+    roots = [Path(p) for p in (*policy.requiredMounts, *policy.requiredFilesystemUuids)]
+    if not any(root in source.parents for root in roots):
+        raise DomainError(
+            "plex_unguarded_storage", "Temporary storage must be on verified storage", 409
+        )
+    for value in policy.storage.values():
+        if value.kind in {"movies", "tv", "other"}:
+            media = Path(value.path)
+            if source == media or media in source.parents or source in media.parents:
+                raise DomainError(
+                    "plex_storage_overlap", "Temporary storage must be outside libraries", 409
+                )
+    return {"Type": "bind", "Source": str(source), "Target": "/transcode", "ReadOnly": False}
+
+
 def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
     if spec.hostId != policy.hostId:
         raise DomainError("plex_host_mismatch", "Plex host does not match the approved host", 409)
@@ -181,6 +221,7 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
                 "ReadOnly": False,
             }
         )
+    mounts.append(transcode_mount(policy, spec))
     container = {
         "Image": "lscr.io/linuxserver/plex:latest",
         "User": f"{policy.uid}:{policy.gid}",
@@ -192,6 +233,7 @@ def installation_plan(policy: PlexInstallPolicy, spec: PlexInstallation):
             f"TZ={spec.timezone}",
             f"ADVERTISE_IP=http://{policy.bindAddress}:32400/",
             "FILE__PLEX_CLAIM=/config/.claim",
+            "TMPDIR=/transcode",
         ],
         "ExposedPorts": {"32400/tcp": {}},
         "HostConfig": {

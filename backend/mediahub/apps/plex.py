@@ -12,6 +12,7 @@ class PlexInstallation(StrictModel):
     tvStorageIds: list[str] = Field(default_factory=list, max_length=8)
     otherStorageIds: list[str] = Field(default_factory=list, max_length=8)
     appdataStorageId: str = Field(min_length=1, max_length=80)
+    tempStorageId: str | None = Field(default=None, min_length=1, max_length=80)
     serverName: str = Field(default="MediaHub", min_length=1, max_length=80)
     timezone: str = Field(default="UTC", min_length=1, max_length=80)
 
@@ -28,6 +29,8 @@ class PlexInstallation(StrictModel):
             raise ValueError("Select unique media mappings separate from app data")
         if any(not value or len(value) > 80 for value in media):
             raise ValueError("Invalid logical storage identifier")
+        if self.tempStorageId in media:
+            raise ValueError("Temporary storage must be separate from media")
         if any(ord(c) < 32 for c in self.serverName):
             raise ValueError("Invalid server name")
         return self

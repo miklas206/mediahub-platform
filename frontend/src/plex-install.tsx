@@ -14,7 +14,7 @@ import {
 type Choice = {
   id: string;
   label: string;
-  kind: "movies" | "tv" | "other" | "appdata";
+  kind: "movies" | "tv" | "other" | "appdata" | "temp";
 };
 export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   const { data, error } = useLoad<{ hostId: string; storage: Choice[] }>(
@@ -22,6 +22,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
   );
   const [selected, setSelected] = useState<string[]>([]);
   const [appdata, setAppdata] = useState("");
+  const [tempStorage, setTempStorage] = useState("");
   const [name, setName] = useState("MediaHub");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -64,6 +65,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
     tvStorageIds: selection("tv"),
     otherStorageIds: selection("other"),
     appdataStorageId: appdata,
+    tempStorageId: tempStorage || undefined,
     serverName: name,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
@@ -161,15 +163,18 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
             {!data && !error && (
               <p role="status">{t("Finding approved media storage…")}</p>
             )}
-            {data && !data.storage.some((s) => s.kind !== "appdata") && (
-              <p>
-                {t(
-                  "Register your existing media storage before installing Plex.",
-                )}
-              </p>
-            )}
+            {data &&
+              !data.storage.some((s) =>
+                ["movies", "tv", "other"].includes(s.kind),
+              ) && (
+                <p>
+                  {t(
+                    "Register your existing media storage before installing Plex.",
+                  )}
+                </p>
+              )}
             {data?.storage
-              .filter((s) => s.kind !== "appdata")
+              .filter((s) => ["movies", "tv", "other"].includes(s.kind))
               .map((s) => (
                 <label className="check-label" key={s.id}>
                   <input
@@ -211,6 +216,7 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
               <label>
                 {t("App data storage")}
                 <select
+                  aria-label={t("App data storage")}
                   value={appdata}
                   disabled={busy}
                   onChange={(e) => {
@@ -228,7 +234,33 @@ export function PlexInstallPage({ embedded = false }: { embedded?: boolean }) {
                     ))}
                 </select>
               </label>
+              <label>
+                {t("Temporary transcoding storage")}
+                <select
+                  aria-label={t("Temporary transcoding storage")}
+                  value={tempStorage}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setTempStorage(event.target.value);
+                    setDigest("");
+                  }}
+                >
+                  <option value="">{t("Use app data storage / Temp")}</option>
+                  {data?.storage
+                    .filter((choice) => choice.kind === "temp")
+                    .map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
             </div>
+            <p>
+              {t(
+                "Temporary files use a dedicated Plex folder outside your libraries. Finished sessions are cleaned by Plex; orphan sessions are cleared before restart. Active playback is never cleaned by MediaHub.",
+              )}
+            </p>
             <p>
               {t(
                 "Link your Plex account in the next step, after the server has finished installing.",
