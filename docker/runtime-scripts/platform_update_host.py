@@ -20,6 +20,7 @@ import tarfile
 import tempfile
 import time
 import tomllib
+import traceback
 import uuid
 from pathlib import Path, PurePosixPath
 
@@ -863,6 +864,29 @@ class HostUpdater:
             return ("data", "agent")
         return tuple("data" if role == "core" else "agent" for role in self.changed_roles)
 
+    def _record_failure(self, error):
+        # Keep detailed errors out of Core-readable status and the journal.
+        try:
+            directory = self.root / "update-diagnostics"
+            directory.mkdir(mode=0o700, exist_ok=True)
+            self._directory(directory, owner=0)
+            if directory.stat().st_mode & 0o077:
+                raise ValueError("Unsafe diagnostic directory permissions")
+            descriptor = os.open(
+                directory / "last-failure.log",
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+                0o600,
+            )
+            with os.fdopen(descriptor, "w") as stream:
+                os.fchmod(stream.fileno(), 0o600)
+                stream.write("Operation: " + str(self.operation) + "\n")
+                stream.write("".join(traceback.format_exception(error))[-65536:])
+            self._append_log(
+                "Update failure: " + type(error).__name__ + "; private diagnostics saved"
+            )
+        except (OSError, ValueError):
+            self._append_log("Update failed; private diagnostics could not be saved")
+
     def _copy_configuration(self, backup):
         temporary = self.backups / ("." + self.operation + "-preparing")
         if backup.exists() or temporary.exists():
@@ -890,7 +914,9 @@ class HostUpdater:
         # The host controller owns a live Unix socket, not persistent app data.
         excluded = ("storage-control",) if name == "data" else ()
         shutil.copytree(
-            source, destination, symlinks=False,
+            source,
+            destination,
+            symlinks=False,
             ignore=lambda directory, names: excluded if Path(directory) == source else (),
         )
         self._copy_ownership(source, destination, excluded)
@@ -952,15 +978,23 @@ class HostUpdater:
         if not isinstance(images, dict) or not isinstance(previous, list):
             raise ValueError("Invalid helper image registry")
         references = [*images.values(), *previous]
-        if any(not isinstance(item, str) or not LOADED_IMAGE.fullmatch(item) for item in references):
+        if any(
+            not isinstance(item, str) or not LOADED_IMAGE.fullmatch(item) for item in references
+        ):
             raise ValueError("Invalid helper image identity")
         return set(references)
 
     def _protected_image_ids(self):
         """Protect all containers, current recipes and retained rollback identities."""
         protected = set()
-        backups = [path for path in self.backups.iterdir() if path.is_dir()] if self.backups.exists() else []
-        if any(path.is_symlink() or path.resolve().parent != self.backups.resolve() for path in backups):
+        backups = (
+            [path for path in self.backups.iterdir() if path.is_dir()]
+            if self.backups.exists()
+            else []
+        )
+        if any(
+            path.is_symlink() or path.resolve().parent != self.backups.resolve() for path in backups
+        ):
             raise ValueError("Unsafe rollback directory")
         compose_files = [self.compose] + [path / "compose.json" for path in backups]
         for app in ("mediavpn", "mediaseed"):
@@ -977,7 +1011,10 @@ class HostUpdater:
                 if not LOADED_IMAGE.fullmatch(image):
                     raise ValueError("Rollback image could not be verified")
                 protected.add(image)
-        for path in [self.root / "local-apps/vpn-helper-images.json", *(backup / "vpn-helper-images.json" for backup in backups)]:
+        for path in [
+            self.root / "local-apps/vpn-helper-images.json",
+            *(backup / "vpn-helper-images.json" for backup in backups),
+        ]:
             if path.exists():
                 protected.update(self._helper_references(path))
         containers = self.command("docker", "ps", "-aq").splitlines()
@@ -999,13 +1036,24 @@ class HostUpdater:
         gateway = re.fullmatch(r"mediahub-web-gateway:([a-f0-9]{16})", tag)
         relay = re.fullmatch(r"mediahub-vpn-relay:(1|[a-f0-9]{16})", tag)
         component = "vpn-gateway" if gateway else "vpn-relay" if relay else None
-        source = labels.get("org.mediahub.gateway.source" if gateway else "org.mediahub.vpn.relay-source")
-        if (not component or not isinstance(source, str) or not re.fullmatch(r"[a-f0-9]{64}", source)
-                or labels.get("org.mediahub.managed-component", component) != component
-                or (gateway and gateway[1] != source[:16])
-                or (relay and relay[1] != "1" and relay[1] != source[:16])):
+        source = labels.get(
+            "org.mediahub.gateway.source" if gateway else "org.mediahub.vpn.relay-source"
+        )
+        if (
+            not component
+            or not isinstance(source, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", source)
+            or labels.get("org.mediahub.managed-component", component) != component
+            or (gateway and gateway[1] != source[:16])
+            or (relay and relay[1] != "1" and relay[1] != source[:16])
+        ):
             return None
-        return {"id": image["Id"], "tags": tags, "component": component, "sourceFingerprint": source}
+        return {
+            "id": image["Id"],
+            "tags": tags,
+            "component": component,
+            "sourceFingerprint": source,
+        }
 
     def cleanup_preview(self):
         registry = self.root / "local-apps/vpn-helper-images.json"
@@ -1015,7 +1063,11 @@ class HostUpdater:
         candidates = []
         identifiers = set()
         for prefix in ("mediahub-web-gateway:*", "mediahub-vpn-relay:*"):
-            identifiers.update(self.command("docker", "image", "ls", "-q", "--no-trunc", "--filter", "reference=" + prefix).splitlines())
+            identifiers.update(
+                self.command(
+                    "docker", "image", "ls", "-q", "--no-trunc", "--filter", "reference=" + prefix
+                ).splitlines()
+            )
         for identifier in sorted(identifiers):
             if not LOADED_IMAGE.fullmatch(identifier) or identifier in protected:
                 continue
@@ -1183,8 +1235,10 @@ class HostUpdater:
             running.unlink(missing_ok=True)
 
     def _prepare_storage(self, request):
-        if set(request) != {"action", "operationId"} or not isinstance(request.get("operationId"), str) or not ID.fullmatch(
-            request.get("operationId", "")
+        if (
+            set(request) != {"action", "operationId"}
+            or not isinstance(request.get("operationId"), str)
+            or not ID.fullmatch(request.get("operationId", ""))
         ):
             raise ValueError("Invalid storage preparation request")
         script = self.root / "storage_host.py"
@@ -1337,6 +1391,7 @@ class HostUpdater:
                 self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
                 self._cleanup_after_success(stage)
             except Exception as error:
+                self._record_failure(error)
                 if request is None:
                     raise
                 if not services_stopped:
@@ -1380,7 +1435,11 @@ class HostUpdater:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default="/opt/mediahub")
-    parser.add_argument("--cleanup-preview", action="store_true", help="List exact unused owned helper images without deleting anything")
+    parser.add_argument(
+        "--cleanup-preview",
+        action="store_true",
+        help="List exact unused owned helper images without deleting anything",
+    )
     args = parser.parse_args()
     root = Path(args.root)
     if not root.is_absolute() or root == Path("/") or ".." in root.parts:

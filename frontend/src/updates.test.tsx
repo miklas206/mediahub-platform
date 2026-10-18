@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { NotificationPopup } from "./notification-popup";
 import type { AppInfo } from "./contracts";
-import { UpdatesPage, UpdatesProgress } from "./updates";
+import { UpdatesPage, UpdatesProgress, queueOperation } from "./updates";
 import type { OperationState } from "./operation-progress";
 
 vi.mock("./notification-popup", () => ({ NotificationPopup: vi.fn(() => null) }));
@@ -110,5 +110,18 @@ describe("Updates first render", () => {
     expect(html).toContain("<h2>Seedbox</h2>");
     expect(html).not.toContain("Agent unavailable");
     expect(vi.mocked(NotificationPopup).mock.calls.some(([props]) => props.children === "Agent unavailable" && props.tone === "danger")).toBe(true);
+  });
+});
+
+
+describe("Update queue identity", () => {
+  it("labels an old queue separately from a newer Core failure", () => {
+    const job = { state: "succeeded", logs: [], items: [
+      { name: "Core", kind: "core", state: "complete", operationId: "older" },
+    ], message: "All queued updates completed" };
+    expect(queueOperation(job, "newer").title).toBe("Previous update queue");
+    expect(queueOperation(job, "newer").message).not.toContain("All queued updates completed");
+    expect(queueOperation(job, "older").title).toBe("Update all");
+    expect(queueOperation({ ...job, state: "running" }, "newer").title).toBe("Update all");
   });
 });

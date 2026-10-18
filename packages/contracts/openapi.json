@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.56"
+    "version": "0.6.57"
   },
   "paths": {
     "/api/v1/users": {

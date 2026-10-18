@@ -1,4 +1,6 @@
 {
+  "Previous update queue": "Tidligere opdateringskø",
+  "This is a previous queue result. See the newer MediaHub update separately.": "Dette er resultatet af en tidligere kø. Se den nyere MediaHub-opdatering separat.",
   "Edit NAS login": "Ret NAS-login",
   "Save and reconnect": "Gem og tilslut",
   "Connection saved. MediaHub retries automatically every 30 seconds and after a restart.": "Forbindelsen er gemt. MediaHub forsøger automatisk igen hvert 30. sekund og efter genstart.",

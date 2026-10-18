@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.57
+
+- Identify a completed update queue as previous when a different, newer Core update operation is displayed. Preserve both results and their logs without implying the newer attempt succeeded.
+- Retain bounded failure diagnostics in a root-private directory, with only the exception type in public update logs, so intermittent snapshot/update failures can be traced without exposing command output or credentials.
+
 ## 0.6.56
 
 - Replace the inverted NAS read-only checkbox with Allow changes on the NAS and plain-language explanations. Preserve the existing saved access mode.

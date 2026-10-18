@@ -228,11 +228,14 @@ type QueueStatus = {
   coreUpdated?: boolean;
   summaryUpdated?: boolean;
   logs: string[];
-  items: { name: string; state: string }[];
+  items: { name: string; state: string; kind?: string; operationId?: string }[];
 };
-function queueOperation(job: QueueStatus): OperationState {
+export function queueOperation(job: QueueStatus, coreOperationId?: string | null): OperationState {
+  const previous = job.state !== "running" && coreOperationId && job.items.some(
+    (item) => item.kind === "core" && item.operationId && item.operationId !== coreOperationId,
+  );
   return {
-    title: "Update all",
+    title: previous ? "Previous update queue" : "Update all",
     status:
       job.state === "succeeded"
         ? "success"
@@ -240,7 +243,9 @@ function queueOperation(job: QueueStatus): OperationState {
           ? "running"
           : "error",
     progress: job.progress || 0,
-    message: job.message || "Updates continue on the server",
+    message: previous
+      ? "This is a previous queue result. See the newer MediaHub update separately."
+      : job.message || "Updates continue on the server",
     console: job.logs,
     details: [
       "You can navigate away, refresh or close the browser. Return here to follow progress.",
@@ -495,7 +500,7 @@ export function UpdatesPage({
         if (queue.state !== "idle") {
           setOperations((current) => ({
             ...current,
-            batch: queueOperation(queue),
+            batch: queueOperation(queue, core.operationId),
           }));
           const signature = `${queue.operationId}:${queue.state}:${queue.summaryUpdated}`;
           if (queue.state !== "running" && signature !== lastQueue)

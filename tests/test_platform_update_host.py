@@ -1017,3 +1017,19 @@ def test_update_and_rollback_preserve_live_storage_socket(tmp_path, monkeypatch,
             connection.close()
         assert not (root / "update-backups" / OPERATION / "data/storage-control").exists()
         assert (root / "data/mediahub.db").read_text() == "configuration"
+
+
+def test_failed_snapshot_keeps_private_diagnostics_without_public_secret(tmp_path, monkeypatch):
+    updater, root, _ = fixture(tmp_path, monkeypatch)
+    def fail(backup):
+        raise OSError("synthetic-sensitive-detail")
+    monkeypatch.setattr(updater, "_copy_configuration", fail)
+    updater.process()
+    log = root / "update-diagnostics/last-failure.log"
+    assert "synthetic-sensitive-detail" in log.read_text()
+    assert stat.S_IMODE(log.stat().st_mode) == 0o600
+    assert stat.S_IMODE(log.parent.stat().st_mode) == 0o700
+    status = (root / "updates/status.json").read_text()
+    assert "synthetic-sensitive-detail" not in status
+    assert "private diagnostics saved" in status
+    assert json.loads(status)["state"] == "rolled_back"
