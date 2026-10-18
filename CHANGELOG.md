@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.54
+
+- Match Storage read-only controls to the height of adjacent inputs and align them with the input row, preserving checkbox behavior.
+
 ## 0.6.53
 
 - Exclude the live storage-control Unix socket directory from configuration snapshots and preserve its inode and connection across rollback. Keep persistent storage state, credentials and app data unchanged.

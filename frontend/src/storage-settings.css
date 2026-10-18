@@ -38,6 +38,13 @@
   align-items: center;
   gap: 0.6rem;
 }
+:root body .storage-form label.storage-check:has(> input[type="checkbox"]) {
+  align-self: end;
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+}
 .storage-check input {
   width: auto;
 }
