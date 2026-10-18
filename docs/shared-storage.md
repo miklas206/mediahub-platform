@@ -1,5 +1,9 @@
 # Shared storage across hosts
 
+MediaHub 0.6.51 adds explicit NAS mounting and Windows sharing under
+**Settings → Storage**. See [Storage and Windows network drives](windows-folder-access.md).
+The logical registry below still does not perform mounts by itself.
+
 ## Decision
 
 Prefer **NFSv4 for Linux hosts**, supplied by one explicitly managed storage owner.

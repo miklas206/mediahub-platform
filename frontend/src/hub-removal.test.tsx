@@ -32,6 +32,20 @@ vi.mock("./use-data", () => ({
   }),
 }));
 
+// Home cards now read the shared page snapshot store rather than useData.
+vi.mock("./use-service-snapshot", () => ({
+  usePageSnapshot: (path: string) => ({
+    data:
+      path === "/catalog"
+        ? [{ id: "org.mediahub.seedbox", availability: "available" }]
+        : path.endsWith("/status")
+          ? { configured: true, available: true, url: "https://app.example" }
+          : null,
+    error: "",
+    reload: vi.fn(),
+  }),
+}));
+
 const app: AppInfo = {
   id: "seed",
   packageId: "org.mediahub.mediaseed",

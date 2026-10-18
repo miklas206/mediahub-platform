@@ -2,9 +2,141 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.4.29"
+    "version": "0.6.51"
   },
   "paths": {
+    "/api/v1/users": {
+      "get": {
+        "summary": "Users",
+        "operationId": "users_api_v1_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create User",
+        "operationId": "create_user_api_v1_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "put": {
+        "summary": "Update User",
+        "operationId": "update_user_api_v1_users__user_id__put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete User",
+        "operationId": "delete_user_api_v1_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "summary": "Health",
@@ -45,7 +177,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Credentials"
+                "$ref": "#/components/schemas/mediahub__api__Credentials"
               }
             }
           },
@@ -521,6 +653,80 @@
       "get": {
         "summary": "Uninstall Status",
         "operationId": "uninstall_status_api_v1_apps__app_id__uninstall_get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/update": {
+      "post": {
+        "summary": "Update Managed App",
+        "operationId": "update_managed_app_api_v1_apps__app_id__update_post",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/update-operation": {
+      "get": {
+        "summary": "Managed App Update Operation",
+        "operationId": "managed_app_update_operation_api_v1_apps__app_id__update_operation_get",
         "parameters": [
           {
             "name": "app_id",
@@ -1033,6 +1239,1935 @@
       "get": {
         "summary": "Stream",
         "operationId": "stream_api_v1_events_stream_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources": {
+      "get": {
+        "summary": "Resource Overview",
+        "operationId": "resource_overview_api_v1_resources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{app_id}": {
+      "get": {
+        "summary": "Resource Details",
+        "operationId": "resource_details_api_v1_resources__app_id__get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Resource Limits",
+        "operationId": "resource_limits_api_v1_resources__app_id__put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{app_id}/approve": {
+      "post": {
+        "summary": "Resource Approve",
+        "operationId": "resource_approve_api_v1_resources__app_id__approve_post",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{app_id}/recommendations": {
+      "put": {
+        "summary": "Resource Preference",
+        "operationId": "resource_preference_api_v1_resources__app_id__recommendations_put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourcePreference"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resources": {
+      "get": {
+        "summary": "Resource Overview",
+        "operationId": "resource_overview_api_resources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resources/{app_id}": {
+      "get": {
+        "summary": "Resource Details",
+        "operationId": "resource_details_api_resources__app_id__get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Resource Limits",
+        "operationId": "resource_limits_api_resources__app_id__put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resources/{app_id}/approve": {
+      "post": {
+        "summary": "Resource Approve",
+        "operationId": "resource_approve_api_resources__app_id__approve_post",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/resources/{app_id}/recommendations": {
+      "put": {
+        "summary": "Resource Preference",
+        "operationId": "resource_preference_api_resources__app_id__recommendations_put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourcePreference"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/app-settings/{package_id}": {
+      "get": {
+        "summary": "Settings",
+        "operationId": "settings_api_v1_app_settings__package_id__get",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save",
+        "operationId": "save_api_v1_app_settings__package_id__put",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-install/prerequisites": {
+      "get": {
+        "summary": "Prerequisites",
+        "operationId": "prerequisites_api_v1_managed_install_prerequisites_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-install/prerequisites/retry": {
+      "post": {
+        "summary": "Retry Prerequisites",
+        "operationId": "retry_prerequisites_api_v1_managed_install_prerequisites_retry_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/managed-install/{package}": {
+      "get": {
+        "summary": "Plan",
+        "operationId": "plan_api_v1_managed_install__package__get",
+        "parameters": [
+          {
+            "name": "package",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Install",
+        "operationId": "install_api_v1_managed_install__package__post",
+        "parameters": [
+          {
+            "name": "package",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmInstall"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/origin": {
+      "get": {
+        "summary": "App Origin",
+        "operationId": "app_origin_api_v1_sso_origin_get",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Packageid"
+            }
+          },
+          {
+            "name": "appOrigin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Apporigin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/authorize": {
+      "get": {
+        "summary": "Authorize",
+        "operationId": "authorize_api_v1_sso_authorize_get",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Packageid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "State"
+            }
+          },
+          {
+            "name": "challenge",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Challenge"
+            }
+          },
+          {
+            "name": "appOrigin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Apporigin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/exchange": {
+      "post": {
+        "summary": "Exchange",
+        "operationId": "exchange_api_v1_sso_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Exchange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/session": {
+      "get": {
+        "summary": "Session Identity",
+        "operationId": "session_identity_api_v1_sso_session_get",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Packageid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn/apps": {
+      "get": {
+        "summary": "Vpn Apps",
+        "operationId": "vpn_apps_api_v1_sso_vpn_apps_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn/apps/{app_id}": {
+      "put": {
+        "summary": "Vpn App Choice",
+        "operationId": "vpn_app_choice_api_v1_sso_vpn_apps__app_id__put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppChoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn/gateway": {
+      "put": {
+        "summary": "Vpn Gateway Choice",
+        "operationId": "vpn_gateway_choice_api_v1_sso_vpn_gateway_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn-gateway": {
+      "get": {
+        "summary": "Web Gateway Status",
+        "operationId": "web_gateway_status_api_v1_sso_vpn_gateway_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn-gateway/credentials": {
+      "put": {
+        "summary": "Web Gateway Credentials",
+        "operationId": "web_gateway_credentials_api_v1_sso_vpn_gateway_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/mediahub__vpn_gateway__Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn-gateway/config": {
+      "put": {
+        "summary": "Web Gateway Config",
+        "operationId": "web_gateway_config_api_v1_sso_vpn_gateway_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn-gateway/reconcile": {
+      "post": {
+        "summary": "Web Gateway Reconcile",
+        "operationId": "web_gateway_reconcile_api_v1_sso_vpn_gateway_reconcile_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sso/vpn-gateway/plex-port": {
+      "put": {
+        "summary": "Web Gateway Plex Port",
+        "operationId": "web_gateway_plex_port_api_v1_sso_vpn_gateway_plex_port_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlexPortChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_cloudflare_manage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/discover": {
+      "post": {
+        "summary": "Discover",
+        "operationId": "discover_api_v1_cloudflare_manage_discover_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/tunnels/{tunnel_id}/adopt": {
+      "post": {
+        "summary": "Adopt",
+        "operationId": "adopt_api_v1_cloudflare_manage_tunnels__tunnel_id__adopt_post",
+        "parameters": [
+          {
+            "name": "tunnel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tunnel Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/routes/discovered": {
+      "post": {
+        "summary": "Bind Discovered",
+        "operationId": "bind_discovered_api_v1_cloudflare_manage_routes_discovered_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveredRoute"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/credentials": {
+      "put": {
+        "summary": "Credentials",
+        "operationId": "credentials_api_v1_cloudflare_manage_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/mediahub__cloudflare_management__Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Disconnect",
+        "operationId": "disconnect_api_v1_cloudflare_manage_credentials_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/tunnels": {
+      "post": {
+        "summary": "Create",
+        "operationId": "create_api_v1_cloudflare_manage_tunnels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTunnel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/publish": {
+      "post": {
+        "summary": "Publish",
+        "operationId": "publish_api_v1_cloudflare_manage_publish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishApp"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/vpn-dns": {
+      "post": {
+        "summary": "Create Vpn Dns",
+        "operationId": "create_vpn_dns_api_v1_cloudflare_manage_vpn_dns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VPNRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/vpn-dns/{record_id}": {
+      "put": {
+        "summary": "Vpn Dns Mode",
+        "operationId": "vpn_dns_mode_api_v1_cloudflare_manage_vpn_dns__record_id__put",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Record Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteMode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/dns": {
+      "post": {
+        "summary": "Create Dns",
+        "operationId": "create_dns_api_v1_cloudflare_manage_dns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DNSRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/tunnels/{tunnel_id}/install-connector": {
+      "post": {
+        "summary": "Install Connector",
+        "operationId": "install_connector_api_v1_cloudflare_manage_tunnels__tunnel_id__install_connector_post",
+        "parameters": [
+          {
+            "name": "tunnel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tunnel Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/tunnels/{tunnel_id}/token": {
+      "post": {
+        "summary": "Connector Token",
+        "operationId": "connector_token_api_v1_cloudflare_manage_tunnels__tunnel_id__token_post",
+        "parameters": [
+          {
+            "name": "tunnel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tunnel Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/routes": {
+      "post": {
+        "summary": "Bind",
+        "operationId": "bind_api_v1_cloudflare_manage_routes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/routes/{route_id}": {
+      "put": {
+        "summary": "Mode",
+        "operationId": "mode_api_v1_cloudflare_manage_routes__route_id__put",
+        "parameters": [
+          {
+            "name": "route_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Route Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteMode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cloudflare/manage/sync": {
+      "post": {
+        "summary": "Sync",
+        "operationId": "sync_api_v1_cloudflare_manage_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared-vpn": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_shared_vpn_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared-vpn/gateway": {
+      "put": {
+        "summary": "Gateway",
+        "operationId": "gateway_api_v1_shared_vpn_gateway_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared-vpn/apps/{app}": {
+      "put": {
+        "summary": "Application",
+        "operationId": "application_api_v1_shared_vpn_apps__app__put",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppChoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared-vpn/orphans/{identifier}/cleanup": {
+      "post": {
+        "summary": "Cleanup Orphan",
+        "operationId": "cleanup_orphan_api_v1_shared_vpn_orphans__identifier__cleanup_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_vpn_gateway_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway/credentials": {
+      "put": {
+        "summary": "Credentials",
+        "operationId": "credentials_api_v1_vpn_gateway_credentials_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/mediahub__vpn_gateway__Credentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Disconnect",
+        "operationId": "disconnect_api_v1_vpn_gateway_credentials_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway/config": {
+      "put": {
+        "summary": "Configure",
+        "operationId": "configure_api_v1_vpn_gateway_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GatewayConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway/plex-port": {
+      "put": {
+        "summary": "Plex Port",
+        "operationId": "plex_port_api_v1_vpn_gateway_plex_port_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlexPortChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway/reconcile": {
+      "post": {
+        "summary": "Reconcile",
+        "operationId": "reconcile_api_v1_vpn_gateway_reconcile_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vpn-gateway/apps/{app_id}/domain": {
+      "put": {
+        "summary": "App Domain",
+        "operationId": "app_domain_api_v1_vpn_gateway_apps__app_id__domain_put",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "App Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppDomainChoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/app-overview": {
+      "get": {
+        "summary": "App Overview",
+        "operationId": "app_overview_api_v1_app_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mediaseed/status": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_mediaseed_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mediavpn/status": {
+      "get": {
+        "summary": "Vpn Status",
+        "operationId": "vpn_status_api_v1_mediavpn_status_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2145,6 +4280,22 @@
         }
       }
     },
+    "/api/v1/plex/install-status": {
+      "get": {
+        "summary": "Install Status",
+        "operationId": "install_status_api_v1_plex_install_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/plex/install": {
       "post": {
         "summary": "Install",
@@ -2207,6 +4358,56 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plex/account": {
+      "get": {
+        "summary": "Account Status",
+        "operationId": "account_status_api_v1_plex_account_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Claim Account",
+        "operationId": "claim_account_api_v1_plex_account_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlexAccountClaim"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -3801,6 +6002,303 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu-setup": {
+      "get": {
+        "summary": "Status",
+        "operationId": "status_api_v1_gpu_setup_get",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "local",
+              "title": "Host"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpu-setup/test": {
+      "post": {
+        "summary": "Test",
+        "operationId": "test_api_v1_gpu_setup_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GPUTest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control": {
+      "get": {
+        "summary": "Overview",
+        "operationId": "overview_api_v1_storage_control_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/prepare": {
+      "post": {
+        "summary": "Prepare",
+        "operationId": "prepare_api_v1_storage_control_prepare_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/nas": {
+      "post": {
+        "summary": "Add Nas",
+        "operationId": "add_nas_api_v1_storage_control_nas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NasInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/nas/{identifier}/{action}": {
+      "post": {
+        "summary": "Nas Action",
+        "operationId": "nas_action_api_v1_storage_control_nas__identifier___action__post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/shares": {
+      "post": {
+        "summary": "Add Share",
+        "operationId": "add_share_api_v1_storage_control_shares_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/shares/{name}": {
+      "delete": {
+        "summary": "Remove Share",
+        "operationId": "remove_share_api_v1_storage_control_shares__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage-control/password": {
+      "post": {
+        "summary": "Password",
+        "operationId": "password_api_v1_storage_control_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordInput"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5586,6 +8084,67 @@
         ],
         "title": "AddTorrent"
       },
+      "AddressSettings": {
+        "properties": {
+          "externalUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Externalurl",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AddressSettings"
+      },
+      "AppChoice": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AppChoice"
+      },
+      "AppDomainChoice": {
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "zoneId",
+          "label"
+        ],
+        "title": "AppDomainChoice"
+      },
       "AppLaunchInput": {
         "properties": {
           "url": {
@@ -5629,6 +8188,56 @@
             "maximum": 100.0,
             "minimum": 0.0,
             "title": "Depth"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "midnight-glass",
+              "soft-orbit",
+              "precision-terminal",
+              "floating-layers",
+              "edge-signal"
+            ],
+            "title": "Style",
+            "default": "classic"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "inherit",
+              "dark",
+              "light",
+              "system"
+            ],
+            "title": "Mode",
+            "default": "inherit"
+          },
+          "density": {
+            "type": "string",
+            "enum": [
+              "comfortable",
+              "compact"
+            ],
+            "title": "Density",
+            "default": "comfortable"
+          },
+          "reducedMotion": {
+            "type": "boolean",
+            "title": "Reducedmotion",
+            "default": false
+          },
+          "navigation": {
+            "type": "string",
+            "enum": [
+              "sidebar",
+              "topbar",
+              "dock-top",
+              "dock-bottom",
+              "launcher"
+            ],
+            "title": "Navigation",
+            "default": "sidebar"
           }
         },
         "additionalProperties": false,
@@ -5702,6 +8311,15 @@
       },
       "Bootstrap": {
         "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "da"
+            ],
+            "title": "Language",
+            "default": "en"
+          },
           "username": {
             "type": "string",
             "maxLength": 80,
@@ -5785,6 +8403,21 @@
         ],
         "title": "ConfirmCode"
       },
+      "ConfirmInstall": {
+        "properties": {
+          "planDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Plandigest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "planDigest"
+        ],
+        "title": "ConfirmInstall"
+      },
       "ContainerInstallRequest": {
         "properties": {
           "installation": {
@@ -5837,6 +8470,18 @@
             "minLength": 1,
             "title": "Timezone",
             "default": "Europe/Copenhagen"
+          },
+          "gpuId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_.:-]{1,80}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpuid"
           }
         },
         "additionalProperties": false,
@@ -5847,34 +8492,49 @@
         ],
         "title": "ContainerInstallation"
       },
-      "Credentials": {
+      "DNSRecord": {
         "properties": {
-          "username": {
+          "zoneId": {
             "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Username"
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
           },
-          "password": {
+          "hostname": {
             "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Password"
+            "maxLength": 253,
+            "minLength": 3,
+            "title": "Hostname"
           },
-          "secondFactor": {
+          "type": {
             "type": "string",
-            "maxLength": 32,
-            "title": "Secondfactor",
-            "default": ""
+            "enum": [
+              "A",
+              "AAAA",
+              "CNAME"
+            ],
+            "title": "Type"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Content"
+          },
+          "proxied": {
+            "type": "boolean",
+            "title": "Proxied",
+            "default": false
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "username",
-          "password"
+          "zoneId",
+          "hostname",
+          "type",
+          "content"
         ],
-        "title": "Credentials"
+        "title": "DNSRecord"
       },
       "DeployConfig": {
         "properties": {
@@ -6061,6 +8721,45 @@
         ],
         "title": "DetectionInput"
       },
+      "DiscoveredRoute": {
+        "properties": {
+          "tunnelId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tunnelid"
+          },
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "packageId": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Packageid"
+          },
+          "recordId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recordid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tunnelId",
+          "zoneId",
+          "packageId"
+        ],
+        "title": "DiscoveredRoute"
+      },
       "Draft": {
         "properties": {
           "step": {
@@ -6110,6 +8809,34 @@
         "additionalProperties": false,
         "type": "object",
         "title": "Draft"
+      },
+      "Exchange": {
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Packageid"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 40,
+            "title": "Code"
+          },
+          "verifier": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43,128}$",
+            "title": "Verifier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "packageId",
+          "code",
+          "verifier"
+        ],
+        "title": "Exchange"
       },
       "FeedInput": {
         "properties": {
@@ -6220,6 +8947,141 @@
         "additionalProperties": false,
         "type": "object",
         "title": "FeedSettings"
+      },
+      "GPUTest": {
+        "properties": {
+          "hostId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Hostid",
+            "default": "local"
+          },
+          "gpuId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,80}$",
+            "title": "Gpuid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "gpuId"
+        ],
+        "title": "GPUTest"
+      },
+      "GatewayChoice": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "GatewayChoice"
+      },
+      "GatewayConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "expectedRevision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectedrevision"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileid"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/GatewayRoute"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "Routes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "GatewayConfig"
+      },
+      "GatewayRoute": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "packageId": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Packageid"
+          },
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "packageId",
+          "zoneId",
+          "label"
+        ],
+        "title": "GatewayRoute"
       },
       "GitHubTokenRequest": {
         "properties": {
@@ -6474,6 +9336,78 @@
         ],
         "title": "LogicalInput"
       },
+      "ManagedUser": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "title": "Password",
+            "default": ""
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "administrator",
+                  "user"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "appRoles": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "administrator",
+                    "user",
+                    "viewer",
+                    "denied"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approles"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "en",
+                  "da"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username"
+        ],
+        "title": "ManagedUser"
+      },
       "MappingInput": {
         "properties": {
           "host_id": {
@@ -6544,6 +9478,57 @@
           "password"
         ],
         "title": "MediaHubClientImport"
+      },
+      "NasInput": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "server": {
+            "type": "string",
+            "maxLength": 15,
+            "minLength": 7,
+            "title": "Server"
+          },
+          "share": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Share"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "readOnly": {
+            "type": "boolean",
+            "title": "Readonly",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "server",
+          "share",
+          "username",
+          "password"
+        ],
+        "title": "NasInput"
       },
       "NetworkSettings": {
         "properties": {
@@ -6667,6 +9652,23 @@
         ],
         "title": "NewPassword"
       },
+      "NewTunnel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 _.-]*$",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NewTunnel"
+      },
       "Pair": {
         "properties": {
           "token": {
@@ -6695,6 +9697,24 @@
           "agent_token"
         ],
         "title": "Pair"
+      },
+      "PasswordInput": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "PasswordInput"
       },
       "PathBody": {
         "properties": {
@@ -6917,6 +9937,24 @@
         "type": "object",
         "title": "PlatformSettings"
       },
+      "PlexAccountClaim": {
+        "properties": {
+          "claimToken": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "format": "password",
+            "title": "Claimtoken",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "claimToken"
+        ],
+        "title": "PlexAccountClaim"
+      },
       "PlexInstallRequest": {
         "properties": {
           "installation": {
@@ -6995,6 +10033,19 @@
             "minLength": 1,
             "title": "Appdatastorageid"
           },
+          "tempStorageId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tempstorageid"
+          },
           "serverName": {
             "type": "string",
             "maxLength": 80,
@@ -7016,6 +10067,20 @@
           "appdataStorageId"
         ],
         "title": "PlexInstallation"
+      },
+      "PlexPortChoice": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "PlexPortChoice"
       },
       "Port": {
         "properties": {
@@ -7049,6 +10114,34 @@
           "reviewedPlanDigest"
         ],
         "title": "PrepareSeedboxRequest"
+      },
+      "PublishApp": {
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "packageId": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Packageid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "zoneId",
+          "label",
+          "packageId"
+        ],
+        "title": "PublishApp"
       },
       "QBitInitialSettings": {
         "properties": {
@@ -7136,6 +10229,112 @@
         ],
         "title": "ResolveInput"
       },
+      "ResourceApproval": {
+        "properties": {
+          "memoryBytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 4398046511104.0,
+                "minimum": 268435456.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorybytes"
+          },
+          "cpuCores": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1024.0,
+                "minimum": 0.25
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpucores"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Revision"
+          },
+          "recommendationId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Recommendationid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryBytes",
+          "cpuCores",
+          "revision",
+          "recommendationId"
+        ],
+        "title": "ResourceApproval"
+      },
+      "ResourceChange": {
+        "properties": {
+          "memoryBytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 4398046511104.0,
+                "minimum": 268435456.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memorybytes"
+          },
+          "cpuCores": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1024.0,
+                "minimum": 0.25
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpucores"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memoryBytes",
+          "cpuCores",
+          "revision"
+        ],
+        "title": "ResourceChange"
+      },
+      "ResourcePreference": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "ResourcePreference"
+      },
       "RetentionRule": {
         "properties": {
           "mode": {
@@ -7192,6 +10391,66 @@
           "revision"
         ],
         "title": "Revision"
+      },
+      "RouteInput": {
+        "properties": {
+          "tunnelId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tunnelid"
+          },
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "hostname": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 3,
+            "title": "Hostname"
+          },
+          "packageId": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Packageid"
+          },
+          "autoSync": {
+            "type": "boolean",
+            "title": "Autosync",
+            "default": true
+          },
+          "caPool": {
+            "type": "string",
+            "maxLength": 300,
+            "pattern": "^/[A-Za-z0-9_/.-]+$",
+            "title": "Capool",
+            "default": "/etc/cloudflared/mediahub-ca.pem"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tunnelId",
+          "zoneId",
+          "hostname",
+          "packageId"
+        ],
+        "title": "RouteInput"
+      },
+      "RouteMode": {
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "title": "Autosync"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "autoSync"
+        ],
+        "title": "RouteMode"
       },
       "SSHAddress": {
         "properties": {
@@ -7459,6 +10718,48 @@
           "ids"
         ],
         "title": "Selection"
+      },
+      "ShareInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,39}$",
+            "title": "Name"
+          },
+          "storageId": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Storageid"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "title": "Readonly",
+            "default": true
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 12,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "storageId"
+        ],
+        "title": "ShareInput"
       },
       "StartUpdateQueue": {
         "properties": {
@@ -7767,6 +11068,35 @@
         ],
         "title": "VPNLocation"
       },
+      "VPNRecord": {
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Zoneid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$",
+            "title": "Label"
+          },
+          "profileId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$",
+            "title": "Profileid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "zoneId",
+          "label",
+          "profileId"
+        ],
+        "title": "VPNRecord"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -7932,6 +11262,83 @@
           "reviewedPlanDigest"
         ],
         "title": "WizardExecute"
+      },
+      "mediahub__api__Credentials": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "secondFactor": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Secondfactor",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Credentials"
+      },
+      "mediahub__cloudflare_management__Credentials": {
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Accountid"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 20,
+            "format": "password",
+            "title": "Token",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accountId",
+          "token"
+        ],
+        "title": "Credentials"
+      },
+      "mediahub__vpn_gateway__Credentials": {
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{32}$",
+            "title": "Accountid"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 20,
+            "format": "password",
+            "title": "Token",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accountId",
+          "token"
+        ],
+        "title": "Credentials"
       }
     }
   }

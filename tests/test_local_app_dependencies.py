@@ -16,6 +16,7 @@ spec.loader.exec_module(module)
 
 
 def fixture(tmp_path, monkeypatch, running=False):
+    monkeypatch.setattr(module, "prepare_host_metrics", lambda *args: None)
     root, source = tmp_path / "hub", tmp_path / "source"
     root.mkdir()
     (root / "compose.json").write_text(

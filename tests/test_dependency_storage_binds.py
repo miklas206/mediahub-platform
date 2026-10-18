@@ -81,7 +81,8 @@ def test_helper_inherits_only_existing_approved_core_storage(
 
 
 @pytest.mark.parametrize("failed", [False, True])
-def test_preparation_refreshes_observed_versions_after_finishing(failed):
+def test_preparation_refreshes_observed_versions_after_finishing(failed, monkeypatch):
+    monkeypatch.setattr("mediahub.storage_control.ensure_storage", AsyncMock())
     monitor = SimpleNamespace(refresh_managed_versions=AsyncMock())
     manager = SimpleNamespace(lock=asyncio.Lock())
     controller = dependencies.AppDependencies(SimpleNamespace(updates=monitor, managed_apps=manager))

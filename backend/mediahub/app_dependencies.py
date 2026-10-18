@@ -20,6 +20,10 @@ class AppDependencies:
     async def run(self):
         async with self.svc.managed_apps.lock:
             await self._run()
+            if self.message is None:
+                from mediahub.storage_control import ensure_storage
+
+                await ensure_storage(self.svc)
         monitor = getattr(self.svc, "updates", None)
         if monitor:
             # Refresh local version labels even when GitHub has imposed a

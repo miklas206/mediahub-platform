@@ -27,3 +27,5 @@ Normal upgrades keep rollback snapshots of the database, secrets, runtime polici
 Use [pyproject.toml](pyproject.toml), [requirements.lock](requirements.lock) and [frontend/package.json](frontend/package.json). Run focused Python tests, TypeScript, relevant frontend tests and builds. Keep secrets, production data, logs and media outside Git and build contexts.
 
 This release promotes the MediaHub beta implementation while retaining the MediaHub history and Apache-2.0 [license](LICENSE). FjordHub inspired the hub-oriented organization and remains an independently managed optional app.
+
+Administrators can connect SMB3 NAS storage and create LAN-only Windows shares in **Settings → Storage**. See the [storage guide](docs/windows-folder-access.md) for setup, prerequisites, Windows mapping and rollback.

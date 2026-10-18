@@ -1170,6 +1170,35 @@ class HostUpdater:
         finally:
             running.unlink(missing_ok=True)
 
+    def _prepare_storage(self, request):
+        if set(request) != {"action", "operationId"} or not isinstance(request.get("operationId"), str) or not ID.fullmatch(
+            request.get("operationId", "")
+        ):
+            raise ValueError("Invalid storage preparation request")
+        script = self.root / "storage_host.py"
+        details = script.lstat()
+        if script.is_symlink() or details.st_uid != 0 or details.st_mode & 0o022:
+            raise ValueError("Storage controller ownership changed")
+        running = self.updates / ("storage-running-" + request["operationId"] + ".json")
+        os.replace(self.updates / "request.json", running)
+        try:
+            # PID1 starts the narrow reviewed installer outside this updater's
+            # read-only filesystem sandbox. No browser-supplied command or path.
+            self.command(
+                "systemd-run",
+                "--quiet",
+                "--wait",
+                "--collect",
+                "--unit=mediahub-storage-install",
+                "/usr/bin/python3",
+                str(script),
+                "--root",
+                str(self.root),
+                "--install",
+            )
+        finally:
+            running.unlink(missing_ok=True)
+
     def process(self):
         if fcntl is None or not hasattr(os, "geteuid") or os.geteuid() != 0:
             raise ValueError("Host updater must run as root")
@@ -1184,6 +1213,9 @@ class HostUpdater:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             request_path = self.updates / "request.json"
             request_data = self._read_json(request_path, 65536) if request_path.exists() else {}
+            if request_data.get("action") == "storage_prepare":
+                self._prepare_storage(request_data)
+                return
             if request_data.get("action") == "maintenance":
                 self._maintenance(request_data)
                 return

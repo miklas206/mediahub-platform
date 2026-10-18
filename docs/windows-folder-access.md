@@ -1,83 +1,113 @@
-# Windows folder access
+# Storage and Windows network drives
 
-The optional **Windows folder access** app connects an existing SMB media share
-to Windows Explorer. Install the connection profile from the App Store, follow
-the Windows guide, and return to the app if access stops working.
+MediaHub 0.6.51 adds **Settings → Storage** (Danish: **Indstillinger → Lager**)
+for administrators. It mounts NAS shares on the Linux Docker host and creates
+SMB3 Windows shares from selected approved storage folders. It does not format,
+move or delete media, change existing filesystem permissions, or automatically
+replace running apps' storage mappings.
 
-## Guided setup
+## Connect a NAS
 
-1. On the storage server or NAS, confirm that the intended media folders are
-   already exposed through an authenticated SMB2/SMB3 share. Use a dedicated
-   account with access to those folders. Check both share permissions and the
-   underlying filesystem permissions. Keep SMB on the private network.
-2. In MediaHub's App Store, open **Windows folder access**. Enter the server's
-   private IPv4 address, the share name, an optional Windows/SMB username and a
-   preferred drive letter. Save the connection. This registers the MediaHub app;
-   it does not install Samba, create a server share or change folder permissions.
-3. On the Windows PC, open File Explorer, choose **This PC**, then **Map network
-   drive**. Select an unused drive letter and paste the UNC path shown in MediaHub.
-   Enable reconnecting at sign-in. If the share uses another account, select the
-   option to connect using different credentials. Enter the share account's
-   password in Windows, not in MediaHub.
-4. Open the mapped drive and the intended media folder. The optional downloaded
-   connection script performs the mapping with a local credential prompt. It
-   refuses to replace an occupied drive letter or disconnect unrelated shares.
+1. Open **Settings → Storage** and wait for automatic server preparation. If the
+   controller is unavailable, the page explains the prerequisite and offers
+   **Prepare server**. A supported Linux installation with the root host updater
+   and Docker is required.
+2. Enter a label, the NAS's private IPv4 address, its existing SMB share name,
+   NAS username and NAS password. Use the share name alone, not a Linux path or
+   complete UNC path. For example, the share in `\\192.168.1.60\Media` is `Media`.
+3. Leave **Read-only access** enabled for browsing. Disable it only if the
+   connection needs write access and the NAS account permits it.
+4. Choose **Connect NAS**. Confirm that its status becomes Connected. A failed
+   mount remains disconnected and can be retried using Reconnect. Remove and
+   recreate the connection if its credentials or source need changing.
+5. Saved enabled NAS connections reconnect at host startup. Disconnect preserves
+   files and the saved login. Remove disconnects and forgets the saved login.
+   Remove attached Windows shares first. Busy mounts are never force-unmounted.
 
-Microsoft's [network file sharing guide](https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows)
-documents the File Explorer mapping flow. Server administrators can use the
-official [Samba configuration reference](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html)
-for share access, protocol settings and capacity reporting.
+The first version supports SMB3.1.1 NAS mounts. It installs `cifs-utils`
+automatically on the supported Debian/Ubuntu host. The kernel must allow CIFS
+mounting. In an LXC, Proxmox may require an explicit host-side grant or an
+administrator-provisioned mount; MediaHub does not weaken the container's
+security settings. NFS and DNS-based NAS addresses are not supported by this form.
+
+NAS mounts live at fixed `<installation-root>/network-storage/<id>` targets.
+The server leaves an unmounted target inaccessible instead of writing to the
+system disk. Credentials stay in root-only files outside Core's data mount and
+are never returned to the browser, placed in command arguments, or stored in Git.
+App attachment remains a separate approved configuration step; this feature does
+not attach newly mounted NAS storage to existing running apps.
+
+## Share a folder with Windows
+
+1. Under **Share with Windows**, choose a connected storage folder.
+2. Enter a unique share name containing letters, digits, hyphens or underscores.
+3. Choose read-only or write access. Sharing cannot make a read-only NAS writable,
+   and existing filesystem permissions still apply.
+4. For the first share, create a Windows sharing password of at least 12
+   characters. All managed shares use the separate SMB account `mediahub`.
+5. Choose **Create Windows share**, then expand **Connect this folder in Windows**.
+   The guide shows this server's actual UNC path.
+6. On your Windows PC, press **Windows + E**, right-click **This PC**, and choose
+   **Map network drive**. Select a free drive letter and paste the displayed UNC
+   path. Select **Reconnect at sign-in** and **Connect using different credentials**.
+7. Enter `mediahub` and the Windows sharing password. This password is separate
+   from both your MediaHub account and your NAS login.
+
+Removing a share closes its Windows connections and preserves the files.
+Changing the sharing password affects all managed shares; reconnect mapped
+Windows drives using the new password. It does not change NAS or MediaHub login.
+
+The isolated managed Samba container publishes TCP 445 only on the configured
+private LAN address. It does not enable SMB1, guest access, router forwarding or
+an Internet domain. A running service is not proof that a Windows PC has verified
+access; follow the guide from the actual PC.
 
 ## Troubleshooting
 
-The app separates two perspectives:
-
-- **MediaHub Core check:** a bounded TCP connection to the configured private
-  server on port 445. A successful connection only establishes that this port
-  responds from Core. It does not authenticate to the share, verify that the
-  share exists, or prove that a Windows PC can reach it.
-- **Windows diagnostic tool:** run the downloaded script on the affected PC. It
-  checks that PC's connection and mapping, reports access results and suggests
-  the next step. The diagnostic run does not modify mappings or media files.
-
-Use the symptoms shown by the tool and the app:
-
-| Symptom | What to check next |
+| Symptom | Next step |
 | --- | --- |
-| Server/port unavailable, error 53 | Confirm the server is running, its IP has not changed, and this PC is on the intended LAN. Inspect the server's SMB service and network rules. |
-| Share not found, error 67 | Compare the saved share name with the name published by the NAS/Samba server. A Linux folder path is not the share name. |
-| Access denied, error 5 | Verify the dedicated share username and password, then both share and filesystem permissions. A MediaHub login is not automatically a Samba login. |
-| Multiple credentials, error 1219 | Windows may already have a connection to the same server under another identity. Close files on that server and resolve that specific connection in Windows. Do not disconnect all network drives. |
-| Drive letter occupied | Choose another drive letter. Do not overwrite a local disk or another mapped share. |
-| Disconnected after sign-in | Reconnect the expected mapping after the network is available. If the server address changed, update the saved profile and map it again. |
-| Unexpectedly little free space | Compare free space at the share root with the actual media subfolder and storage pool. A Samba share containing mounted media can accidentally report its system disk. The administrator should verify mounts and the share's `dfree command`; do not bypass missing mounts. |
+| Server preparation pending | Wait for app preparation, then use Prepare server. Other host updates take priority. |
+| NAS mount fails | Check the NAS share/login and the Linux host's CIFS mount permission. An LXC may need Proxmox administrator preparation. |
+| Storage disconnected | Reconnect its disk/NAS. MediaHub refuses to substitute a system-disk directory. |
+| Windows share will not start | Confirm that the LAN address exists and port 445 is free; another SMB service is not stopped or replaced. |
+| Windows access denied | Use the separate SMB account/password; check existing filesystem permissions. |
+| Windows error 1219 | Close this server's open files and resolve its specific old session in Credential Manager. Do not disconnect all network drives. |
+| NAS cannot disconnect | Remove its managed Windows shares and stop applications using the mount. Never force an active mount offline. |
 
-The first version accepts private IPv4 addresses on the home network. Access
-away from home requires a separately configured private VPN with a route to that
-network. The Seedbox's outgoing torrent VPN does not itself provide inbound
-Windows access. Do not publish SMB directly through an Internet router.
+## Installation, upgrade and rollback
 
-## Running downloaded helpers
+Fresh installation stages the reviewed host controller and installs its systemd
+service. Existing installations stage the same code during app preparation and
+ask the existing root updater to install or refresh the controller. The request
+cannot replace an in-flight update. Server-side authentication, administrator
+role, CSRF and local socket peer identity are checked before storage mutations.
+No new Core database migration is needed. State lives in root-only
+`storage-private/state.json`; Windows authentication uses Samba's private passdb.
+Existing independent app storage, login, media mounts and stopped intent remain
+unchanged. Failed Windows share replacement restores the previous owned service.
 
-Review the script, then run it in a normal Windows PowerShell session under the
-same Windows account that uses File Explorer. Mapping from an elevated session
-can put the drive in a different logon context. The generated files use UTF-8
-with a BOM for Windows PowerShell 5.1.
+Rolling Core back does not delete storage state or media. Before removing the
+host feature, remove its Windows shares and disconnect its NAS mounts through
+Storage. Stop only `mediahub-storage.service` and the owned
+`mediahub-storage-smb` service if manual administrator recovery is necessary;
+do not prune Docker or delete media. NAS mounts can be busy even after Core stops.
 
-If the PC's script policy blocks a helper, use the manual File Explorer guide
-and the app's troubleshooting steps, or follow the organization's approved
-script policy. The helpers do not change execution policy, disable a firewall,
-enable SMB1, enable guest access, or store a password in MediaHub.
+Validation covers synthetic fresh/older configurations, repeated preparation,
+missing mounts, authorization, secret handling, rollback, desktop/mobile browser
+flows and an isolated SMB server with test files. No real NAS credential, media
+folder, physical reboot or actual Windows drive mapping is included in those tests.
 
-## Storage and removal
+References: [Microsoft Windows drive mapping](https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows),
+[Samba configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html),
+[Samba account commands](https://www.samba.org/samba/docs/current/man-html/smbpasswd.8.html),
+[CIFS mounting](https://man7.org/linux/man-pages/man8/mount.cifs.8.html).
 
-MediaHub stores only the private server address, share name, optional username
-and preferred drive letter. The Windows share password stays in the Windows
-credential prompt/session. Downloaded scripts contain the saved connection
-details but no password. Removing this app removes MediaHub's saved connection
-and monitoring; it leaves server shares, media files and Windows drive mappings
-in place.
+## Legacy connection profiles
 
+The previous Windows folder-access API only saved connection details and
+provided local PowerShell helpers; it never created SMB servers. Existing
+profiles and their recovery tools remain compatible. The new Storage tab manages
+its own server shares and does not silently import or alter legacy credentials.
 
 ## Forgotten SMB password
 

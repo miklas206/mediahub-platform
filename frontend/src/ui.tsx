@@ -1,3 +1,12 @@
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { ShellNavigation } from "./shell-navigation";
 import { ThemeNavIcon } from "./theme-nav-icon";
 const ReferenceOverview = lazy(() => import("./reference-overview").then(module => ({default: module.ReferenceOverview})));
@@ -9,6 +18,7 @@ import { getLocale, translateText, setLanguage, t, useLanguage } from "./i18n";
 
 import { LanguageSettings } from "./language-settings";
 const GPUSetupCard = lazy(() => import("./gpu-setup").then(module => ({default: module.GPUSetupCard})));
+const StorageSettings = lazy(() => import("./storage-settings").then(module => ({default: module.StorageSettings})));
 const AppearanceSettings = lazy(() => import("./appearance-settings").then(module => ({default: module.AppearanceSettings})));
 import { setAccountAppearance, useAppearanceTheme } from "./appearance";
 import {
@@ -24,15 +34,7 @@ import {
   seedboxSection,
   runtimeLayoutSection,
 } from "./seedbox-sections";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+
 import {
   NavLink,
   Link,
@@ -47,7 +49,6 @@ import {
   Box,
   Bell,
   Download,
-  FolderOpen,
   ChevronDown,
   ChevronRight,
   Database,
@@ -86,7 +87,7 @@ import {
   IntegrationProvider,
   type Integration,
 } from "./integrations";
-import { HostsPage, LogicalStoragePanel } from "./hosts";
+import { HostsPage } from "./hosts";
 import {
   OperationProgress,
   type OperationState,
@@ -94,8 +95,6 @@ import {
 } from "./operation-progress";
 import {
   SettingsExtensions,
-  StorageWorkspace,
-  MediaFiles,
 } from "./phase2";
 import type {
   Activity,
@@ -1041,7 +1040,7 @@ function Shell({
                           Logs: <Logs />,
                           Updates: <UpdatesPage apps={navigationApps} appsError={navigationAppsError} />,
                           Integrations: <IntegrationsPage administrator={user.role === "administrator"} username={user.username} />,
-                          ...(user.role === "administrator" ? { Users: <UsersPage currentUserId={user.id} /> } : {}),
+                          ...(user.role === "administrator" ? { Users: <UsersPage currentUserId={user.id} />, Storage: <StorageSettings /> } : {}),
                         }}
                         advanced={advancedMode}
                       />
@@ -1469,7 +1468,7 @@ function Logs() {
   );
 }
 
-function SettingsPage() {
+export function SettingsPage() {
   const { data, error } = useData<Settings>("/settings");
   const [draft, setDraft] = useState<Settings>();
   const [message, setMessage] = useState("");

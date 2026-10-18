@@ -60,6 +60,7 @@ from mediahub.shared_vpn import SharedVPN
 from mediahub.shared_vpn import router as shared_vpn_router
 from mediahub.sso import router as sso_router
 from mediahub.storage import StorageManager
+from mediahub.storage_control import router as storage_control_router
 from mediahub.system import SystemService
 from mediahub.update_monitor import UpdateMonitor
 from mediahub.update_queue import UpdateQueue
@@ -126,9 +127,11 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.cloudflare_management = CloudflareManagement(svc)
         svc.shared_vpn = SharedVPN(svc)
         from mediahub.app_removal import reconcile_removed_settings
+
         reconcile_removed_settings(svc)
         svc.vpn_gateway = VPNGateway(svc)
         from mediahub.app_dependencies import AppDependencies
+
         svc.app_dependencies = AppDependencies(svc)
         svc.app_dependencies.start()
         register_windows_share_app(svc)
@@ -332,6 +335,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.include_router(phase2_router, prefix="/api/v1")
     app.include_router(container_apps_router, prefix="/api/v1")
     app.include_router(gpu_setup_router, prefix="/api/v1")
+    app.include_router(storage_control_router, prefix="/api/v1")
     app.include_router(hosts_router, prefix="/api/v1")
     app.include_router(agent_updates_router, prefix="/api/v1")
     app.include_router(fjordhub_router, prefix="/api/v1")

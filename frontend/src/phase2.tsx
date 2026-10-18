@@ -1832,7 +1832,7 @@ export function SettingsExtensions({
   const tab = parameters.get("section") || "General";
   const setTab = (value: string) => setParameters({ section: value });
   useEffect(() => {
-    if (!advanced && ["Storage", "Network", "Agent", "Advanced"].includes(tab))
+    if (!advanced && ["Network", "Agent", "Advanced"].includes(tab))
       setTab("General");
   }, [advanced, tab]);
   const network = useLoad<{ pending: NetworkConfig }>("/network");
@@ -1842,6 +1842,7 @@ export function SettingsExtensions({
     "General",
     ...(appearance ? ["Appearance"] : []),
     ...(sections.Users ? ["Users"] : []),
+    ...(sections.Storage ? ["Storage"] : []),
     "Security",
     ...["Integrations", "Updates"].filter((name) => sections[name]),
     "Healthcheck",

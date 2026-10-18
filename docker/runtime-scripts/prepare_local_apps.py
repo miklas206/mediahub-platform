@@ -78,6 +78,7 @@ def fingerprint(source=SOURCE):
             source / "scripts/prepare_local_apps.py",
             source / "scripts/prepare_managed_install.py",
             source / "scripts/platform_update_host.py",
+            source / "scripts/storage_host.py",
         )
         if p.is_file()
     ]
@@ -514,6 +515,64 @@ def prepare_host_metrics(root, compose, host=Path("/"), *, command=run):
     command("docker", "compose", "-f", path, "up", "-d", "--no-build", "--pull", "never")
 
 
+def prepare_storage_host(root, lan, source, locations):
+    """Stage root-owned reviewed code; the host updater installs its system service."""
+    reviewed = source / "scripts/storage_host.py"
+    if not reviewed.is_file():
+        return
+    target = root / "storage_host.py"
+    if reviewed.is_symlink() or target.is_symlink():
+        raise ValueError("Unsafe storage controller path")
+    content = reviewed.read_bytes()
+    compile(content, str(reviewed), "exec")
+    target.write_bytes(content)
+    target.chmod(0o700)
+    os.chown(target, 0, 0)
+    policy_path = root / "agent/container-apps.json"
+    approved = json.loads(policy_path.read_text()) if policy_path.exists() else {}
+    required = approved.get("requiredMounts", {})
+    snapshot = (
+        json.loads(Path(approved["hostMountSnapshot"]).read_text())
+        if approved.get("hostMountSnapshot")
+        else {}
+    )
+    evidence = {row["path"]: row.get("source") for row in snapshot.get("mounts", [])}
+    roots = []
+    for location in locations:
+        parents = [
+            path
+            for path in set(required) | set(approved.get("requiredFilesystemUuids", {}))
+            if Path(location["source"]).is_relative_to(path)
+        ]
+        if not parents:
+            continue
+        mount = max(parents, key=len)
+        roots.append(
+            {
+                **location,
+                "mountTarget": mount,
+                "mountSource": required.get(mount) or evidence.get(mount),
+                "markers": {p: v for p, v in approved.get("storageMarkers", {}).items()
+                            if Path(p).is_relative_to(mount)},
+            }
+        )
+    policy = root / "storage-policy.json"
+    if policy.is_symlink():
+        raise ValueError("Unsafe storage policy")
+    policy.write_text(json.dumps({"lan": lan, "locations": roots}))
+    policy.chmod(0o600)
+    os.chown(policy, 0, 0)
+    capabilities = root / "updates/host-capabilities.json"
+    if capabilities.is_symlink():
+        raise ValueError("Unsafe host capability metadata")
+    value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
+    value["storageController"] = True
+    value["storageControllerRevision"] = hashlib.sha256(content).hexdigest()
+    capabilities.write_text(json.dumps(value))
+    capabilities.chmod(0o644)
+    os.chown(capabilities, 0, 0)
+
+
 def provision(
     root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None
 ):
@@ -544,6 +603,8 @@ def provision(
         prepare_host_metrics(root, hub_compose)
     browser_origin = hub_browser_origin(hub_compose, lan)
     locations = approved_media_storage(root)
+    if not app:
+        prepare_storage_host(root, lan, source, locations)
     # Domain changes must invalidate the marker too, without changing internal API URLs.
     digest = hashlib.sha256(
         (

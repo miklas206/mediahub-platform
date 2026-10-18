@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.51
+
+- Add administrator-only Settings → Storage, with approved local-folder capacity, saved SMB3 NAS mounts, and authenticated Windows shares with a per-share connection guide.
+- Refresh the checked-in API contract, including the new storage operations.
+- Keep host operations in a private Unix-socket controller installed through the supported Linux installer and the existing root updater. Backfill the controller on upgrades without replacing app credentials, storage policy, media or disabled NAS intent.
+- Mount NAS shares at fixed private targets using root-only credentials, verify the live mount identity, and refuse system-disk fallbacks or busy forced unmounts. Windows shares default to read-only and bind only to the configured private LAN address.
+- Preserve previous SMB service configuration on failed replacement; keep Windows passdb credentials separate from NAS and MediaHub login. Existing app mappings are not implicitly changed.
+- Verify synthetic install/upgrade and authorization paths, responsive browser workflows, and isolated SMB authentication/read-only access. Real NAS mounts still depend on the host's CIFS capability, including explicit Proxmox/LXC permission where required.
+
 ## 0.6.50
 
 - Keep the public proxy source visible when Docker uses its userland proxy for same-bridge published ports. Prepare a narrowly scoped owned ingress translation alongside the LAN/WAN rules and remove all three on disconnect.
