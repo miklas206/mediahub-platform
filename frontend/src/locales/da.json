@@ -1,4 +1,12 @@
 {
+  "Edit NAS login": "Ret NAS-login",
+  "Save and reconnect": "Gem og tilslut",
+  "Connection saved. MediaHub retries automatically every 30 seconds and after a restart.": "Forbindelsen er gemt. MediaHub forsøger automatisk igen hvert 30. sekund og efter genstart.",
+  "Allow changes on the NAS": "Tillad ændringer på NAS",
+  "Off: You can only view and download files.": "Slået fra: Du kan kun se og hente filer.",
+  "On: You can also create, change and delete files.": "Slået til: Du kan også oprette, ændre og slette filer.",
+  "This container needs access to /dev/fuse for automatic NAS connections. Run the MediaHub Proxmox storage preparation on its host once; the saved NAS connection will then retry automatically.": "Serveren mangler adgang til NAS-montering. Klargør containerens lageradgang på Proxmox-værten én gang. MediaHub forsøger derefter automatisk igen.",
+  "The NAS share or login was rejected or the NAS is unreachable. Check the share name and NAS account.": "NAS-delingen eller login blev afvist, eller NAS'en kan ikke kontaktes. Kontrollér delingsnavn og NAS-bruger.",
   "Subfolders share the storage space shown above.": "Undermapperne deler den lagerplads, der er vist ovenfor.",
   "Main folder (all subfolders)": "Hovedmappe (alle undermapper)",
   "This app updates independently from MediaHub Core.": "Denne app opdateres uafhængigt af MediaHub Core.",

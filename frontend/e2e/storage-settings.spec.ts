@@ -106,6 +106,11 @@ for (const width of [1440, 390, 320]) {
     await nas.getByLabel("Share name", { exact: true }).fill("Media");
     await nas.getByLabel("NAS username").fill("nas-user");
     await nas.getByLabel("NAS password").fill("synthetic-nas-password");
+    await expect(nas.getByLabel("Allow changes on the NAS")).not.toBeChecked();
+    await nas.getByLabel("Allow changes on the NAS").check();
+    await expect(nas).toContainText("On: You can also create, change and delete files.");
+    await nas.getByLabel("Allow changes on the NAS").uncheck();
+    await expect(nas).toContainText("Off: You can only view and download files.");
     await nas.getByRole("button", { name: "Connect NAS", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Saved NAS connections" }),

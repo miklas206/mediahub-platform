@@ -137,11 +137,119 @@ class StorageHost:
 
     def nas_ready(self, row):
         info = self.mount_info(self.mounts / row["id"])
-        return (
-            info.get("target") == str(self.mounts / row["id"])
-            and info.get("fstype") == "cifs"
-            and info.get("source") == "//" + row["server"] + "/" + row["share"]
+        return info.get("target") == str(self.mounts / row["id"]) and (
+            (
+                info.get("fstype") == "cifs"
+                and info.get("source") == "//" + row["server"] + "/" + row["share"]
+            )
+            or (
+                info.get("fstype") == "fuse.rclone"
+                and info.get("source") == "mediahub-nas-" + row["id"]
+            )
         )
+
+    @staticmethod
+    def userspace_mounts():
+        """CIFS cannot be mounted in an unprivileged Linux user namespace."""
+        try:
+            first = Path("/proc/self/uid_map").read_text().splitlines()[0].split()
+            return int(first[1]) != 0
+        except (OSError, ValueError, IndexError):
+            return False
+
+    def mount_userspace(self, row, target):
+        try:
+            descriptor = os.open("/dev/fuse", os.O_RDWR)
+            os.close(descriptor)
+        except OSError:
+            raise StorageError(
+                "This container needs access to /dev/fuse for automatic NAS connections. "
+                "Run the MediaHub Proxmox storage preparation on its host once; "
+                "the saved NAS connection will then retry automatically."
+            ) from None
+        values = dict(
+            line.split("=", 1)
+            for line in (self.folder / (row["id"] + ".credentials")).read_text().splitlines()
+        )
+        obscured = self.run(["rclone", "obscure", "-"], content=values["password"]).strip()
+        config = self.folder / (row["id"] + ".rclone.conf")
+        save(
+            config,
+            "[mediahub]\ntype = smb\nhost = "
+            + row["server"]
+            + "\nuser = "
+            + values["username"]
+            + "\npass = "
+            + obscured
+            + "\n",
+        )
+        # Validate authentication before exposing a mounted filesystem. No listing
+        # or credentials are returned to the browser or written to the journal.
+        try:
+            self.run(
+                [
+                    "rclone",
+                    "lsjson",
+                    "mediahub:" + row["share"],
+                    "--config",
+                    str(config),
+                    "--stat",
+                    "--contimeout",
+                    "5s",
+                    "--timeout",
+                    "10s",
+                    "--retries",
+                    "1",
+                    "--low-level-retries",
+                    "1",
+                ],
+                timeout=20,
+            )
+        except StorageError:
+            raise StorageError(
+                "The NAS share or login was rejected or the NAS is unreachable. Check the share name and NAS account."
+            ) from None
+        unit = "mediahub-nas-" + self.installation + "-" + row["id"]
+        args = [
+            "systemd-run",
+            "--quiet",
+            "--collect",
+            "--unit=" + unit,
+            "--property=Type=notify",
+            "--property=TimeoutStartSec=30",
+            "--property=UMask=0077",
+            "--property=StandardOutput=null",
+            "--property=StandardError=null",
+            "/usr/bin/rclone",
+            "mount",
+            "mediahub:" + row["share"],
+            str(target),
+            "--config",
+            str(config),
+            "--devname",
+            "mediahub-nas-" + row["id"],
+            "--allow-other",
+            "--default-permissions",
+            "--uid",
+            "1000",
+            "--gid",
+            "1000",
+            "--file-perms",
+            "0660",
+            "--dir-perms",
+            "0770",
+            "--vfs-cache-mode",
+            "off",
+            "--contimeout",
+            "5s",
+            "--timeout",
+            "15s",
+            "--option",
+            "nosuid,nodev,noexec",
+        ]
+        if row["readOnly"]:
+            args.append("--read-only")
+        self.run(args, timeout=40)
 
     def locations(self):
         result = []
@@ -225,13 +333,20 @@ class StorageHost:
         }
 
     def packages(self):
-        if shutil.which("mount.cifs"):
+        required = {"mount.cifs": "cifs-utils"}
+        if self.userspace_mounts():
+            required.update({"rclone": "rclone", "fusermount3": "fuse3"})
+        missing = sorted(
+            {package for executable, package in required.items() if not shutil.which(executable)}
+        )
+        if not missing:
             self.package_error = None
             return
         try:
             self.run(["apt-get", "update"], timeout=120)
             self.run(
-                ["apt-get", "install", "--no-install-recommends", "-y", "cifs-utils"], timeout=180
+                ["apt-get", "install", "--no-remove", "--no-install-recommends", "-y", *missing],
+                timeout=180,
             )
             self.package_error = None
         except StorageError:
@@ -248,6 +363,11 @@ class StorageHost:
             raise StorageError("NAS target is occupied; existing files were preserved")
         target.mkdir(mode=0o000, exist_ok=True)
         target.chmod(0o000)  # Unmounted storage must never become writable system-disk storage.
+        if self.userspace_mounts():
+            self.mount_userspace(row, target)
+            if not self.nas_ready(row):
+                raise StorageError("NAS mount identity could not be verified")
+            return
         options = [
             "credentials=" + str(self.folder / (row["id"] + ".credentials")),
             "vers=3.1.1",
@@ -330,6 +450,33 @@ class StorageHost:
                 raise
         return {"saved": True}
 
+    def nas_credentials(self, identifier, body):
+        if not ID.fullmatch(identifier) or set(body) != {"username", "password"}:
+            raise StorageError("Invalid NAS login fields", 422)
+        username, password = text(body["username"], 128), text(body["password"], minimum=1)
+        with self.lock:
+            state = self.state()
+            row = next((r for r in state["nas"] if r["id"] == identifier), None)
+            if not row:
+                raise StorageError("NAS not found", 404)
+            if self.nas_ready(row):
+                raise StorageError("Disconnect this NAS before changing its login")
+            save(
+                self.folder / (identifier + ".credentials"),
+                "username=" + username + "\npassword=" + password + "\n",
+            )
+            row.update(username=username, enabled=True)
+            row.pop("error", None)
+            save(self.file, state)
+            try:
+                self.packages()
+                self.mount_nas(row)
+            except StorageError as error:
+                row["error"] = str(error)
+                save(self.file, state)
+                raise
+        return {"saved": True}
+
     def nas_action(self, identifier, action):
         if not ID.fullmatch(identifier):
             raise StorageError("Invalid NAS identifier", 422)
@@ -353,8 +500,13 @@ class StorageHost:
                 if any(r["storageId"] == identifier for r in state["shares"]):
                     raise StorageError("Remove this NAS's Windows shares before disconnecting it")
                 if self.nas_ready(row):
+                    info = self.mount_info(self.mounts / identifier)
                     self.run(
-                        ["umount", str(self.mounts / identifier)]
+                        [
+                            "fusermount3" if info.get("fstype") == "fuse.rclone" else "umount",
+                            *(["-u"] if info.get("fstype") == "fuse.rclone" else []),
+                            str(self.mounts / identifier),
+                        ]
                     )  # Never force/lazy-unmount busy data.
                 elif os.path.ismount(self.mounts / identifier):
                     raise StorageError("NAS mount ownership changed; nothing was disconnected")
@@ -362,6 +514,7 @@ class StorageHost:
                 if action == "remove":
                     state["nas"].remove(row)
                     (self.folder / (identifier + ".credentials")).unlink(missing_ok=True)
+                    (self.folder / (identifier + ".rclone.conf")).unlink(missing_ok=True)
             else:
                 raise StorageError("Unknown NAS operation", 422)
             save(self.file, state)
@@ -622,6 +775,9 @@ logging = file
             return self.add_share(body)
         if method == "POST" and path == "/password":
             return self.password(body)
+        match = re.fullmatch(r"/nas/([a-f0-9]{24})/credentials", path)
+        if method == "POST" and match:
+            return self.nas_credentials(match[1], body)
         match = re.fullmatch(r"/nas/([a-f0-9]{24})/(connect|disconnect|remove)", path)
         if method == "POST" and match:
             return self.nas_action(*match.groups())

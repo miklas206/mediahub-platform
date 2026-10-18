@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.55"
+    "version": "0.6.56"
   },
   "paths": {
     "/api/v1/users": {
@@ -6166,6 +6166,53 @@
         }
       }
     },
+    "/api/v1/storage-control/nas/{identifier}/credentials": {
+      "post": {
+        "summary": "Nas Credentials",
+        "operationId": "nas_credentials_api_v1_storage_control_nas__identifier__credentials_post",
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NasCredentialsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/storage-control/nas/{identifier}/{action}": {
       "post": {
         "summary": "Nas Action",
@@ -9478,6 +9525,31 @@
           "password"
         ],
         "title": "MediaHubClientImport"
+      },
+      "NasCredentialsInput": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "NasCredentialsInput"
       },
       "NasInput": {
         "properties": {

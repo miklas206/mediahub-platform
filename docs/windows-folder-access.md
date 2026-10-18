@@ -15,8 +15,8 @@ replace running apps' storage mappings.
 2. Enter a label, the NAS's private IPv4 address, its existing SMB share name,
    NAS username and NAS password. Use the share name alone, not a Linux path or
    complete UNC path. For example, the share in `\\192.168.1.60\Media` is `Media`.
-3. Leave **Read-only access** enabled for browsing. Disable it only if the
-   connection needs write access and the NAS account permits it.
+3. Leave **Allow changes on the NAS** off for browsing and downloading. Enable
+   it to allow creating, changing and deleting files, if the NAS account permits it.
 4. Choose **Connect NAS**. Confirm that its status becomes Connected. A failed
    mount remains disconnected and can be retried using Reconnect. Remove and
    recreate the connection if its credentials or source need changing.
@@ -24,11 +24,21 @@ replace running apps' storage mappings.
    files and the saved login. Remove disconnects and forgets the saved login.
    Remove attached Windows shares first. Busy mounts are never force-unmounted.
 
-The first version supports SMB3.1.1 NAS mounts. It installs `cifs-utils`
+Native hosts use SMB3.1.1 NAS mounts. MediaHub installs `cifs-utils`
 automatically on the supported Debian/Ubuntu host. The kernel must allow CIFS
 mounting. In an LXC, Proxmox may require an explicit host-side grant or an
 administrator-provisioned mount; MediaHub does not weaken the container's
-security settings. NFS and DNS-based NAS addresses are not supported by this form.
+security settings. From 0.6.56 unprivileged containers use rclone SMB over FUSE
+instead, with packages prepared automatically. New Proxmox installations prepare
+FUSE access. Existing containers can be prepared once on the Proxmox host with
+`python3 scripts/proxmox_storage.py --ctid <existing-mediahub-id>` from the checked-out
+release source. This adds only the FUSE device and preserves existing devices;
+on supported Proxmox versions it hotplugs without restarting the container.
+Connections retry every 30 seconds and at startup. Correct a rejected login with
+**Saved NAS connections → Edit NAS login → Save and reconnect**.
+The userspace mount avoids caching media on the system disk. It supports sequential
+writes; applications requiring random-access file writes should use native CIFS.
+NFS and DNS-based NAS addresses are not supported by this form.
 
 NAS mounts live at fixed `<installation-root>/network-storage/<id>` targets.
 The server leaves an unmounted target inaccessible instead of writing to the

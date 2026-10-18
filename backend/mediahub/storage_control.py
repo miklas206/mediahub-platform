@@ -39,6 +39,11 @@ class PasswordInput(StrictModel):
     password: SecretStr = Field(min_length=12, max_length=256, repr=False)
 
 
+class NasCredentialsInput(StrictModel):
+    username: str = Field(min_length=1, max_length=128)
+    password: SecretStr = Field(min_length=1, max_length=256, repr=False)
+
+
 async def host_request(svc, method, path, body=None):
     socket = Path(svc.config.data_dir) / "storage-control/service.sock"
     try:
@@ -148,6 +153,19 @@ async def add_nas(body: NasInput, request: Request):
     value = await host_request(svc, "POST", "/nas", body_values(body))
     svc.events.record("storage.nas_configured", "storage", "NAS connection configured")
     return result(value)
+
+
+@router.post("/nas/{identifier}/credentials")
+async def nas_credentials(identifier: str, body: NasCredentialsInput, request: Request):
+    import re
+
+    if not re.fullmatch(r"[a-f0-9]{24}", identifier):
+        raise DomainError("invalid_storage_action", "Invalid NAS identifier", 422)
+    svc = services(request)
+    svc.setup.require_complete()
+    return result(
+        await host_request(svc, "POST", f"/nas/{identifier}/credentials", body_values(body))
+    )
 
 
 @router.post("/nas/{identifier}/{action}")

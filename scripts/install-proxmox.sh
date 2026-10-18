@@ -95,7 +95,7 @@ if [[ "$PCT_CREATE_HELP" == *'--dev'* ]]; then
     TUN_ARGS=(--dev0 path=/dev/net/tun,uid=0,gid=0,mode=0600)
 fi
 pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" --hostname "$HOSTNAME" \
-    --arch "$MEDIAHUB_ARCH" --unprivileged 1 --features nesting=1,keyctl=1 --cores "$CT_CORES" --memory "$CT_MEMORY" --swap 0 \
+    --arch "$MEDIAHUB_ARCH" --unprivileged 1 --features nesting=1,keyctl=1,fuse=1 --cores "$CT_CORES" --memory "$CT_MEMORY" --swap 0 \
     --rootfs "$STORAGE:32" --mp0 "$STORAGE:32,mp=/storage,backup=1" \
     "${TUN_ARGS[@]}" \
     --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,ip6=manual,firewall=1" --onboot 1

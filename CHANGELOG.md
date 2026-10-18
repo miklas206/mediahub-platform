@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.56
+
+- Replace the inverted NAS read-only checkbox with Allow changes on the NAS and plain-language explanations. Preserve the existing saved access mode.
+- Automatically prepare userspace SMB mounts for unprivileged Linux containers, using private config and independent managed mount services. Retain native CIFS on ordinary hosts.
+- Prepare FUSE in new Proxmox installations and provide an idempotent device-only preparation helper for existing containers, preserving other devices and avoiding container restarts. Saved connections retry after prerequisites become available.
+- Allow correcting a disconnected NAS login without removing its connection, and explain automatic retries.
+
 ## 0.6.55
 
 - Group local subfolders beneath their media storage root and show shared filesystem capacity once. Keep separate NAS mounts and Windows sharing choices available.

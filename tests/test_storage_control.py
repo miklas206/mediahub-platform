@@ -33,6 +33,7 @@ def controller(tmp_path):
         },
     )
     host = StorageHost(root)
+    host.userspace_mounts = lambda: False
     host.mount_info = lambda path: {"source": "media-pool", "target": str(media), "fstype": "ext4"}
     host.smb_running = lambda: False
     yield host
@@ -245,6 +246,12 @@ def test_storage_api_requires_login_and_csrf(logged_in, monkeypatch):
     client = logged_in
     response = client.post("/api/v1/storage-control/prepare", headers={"X-MediaHub-CSRF": "wrong"})
     assert response.status_code == 403
+    response = client.post(
+        "/api/v1/storage-control/nas/" + "a" * 24 + "/credentials",
+        headers={"X-MediaHub-CSRF": "wrong"},
+        json={"username": "test", "password": "synthetic-secret"},
+    )
+    assert response.status_code == 403
     mock = AsyncMock(return_value={"available": True, "nas": [], "shares": [], "locations": []})
     monkeypatch.setattr("mediahub.storage_control.host_request", mock)
     assert client.get("/api/v1/storage-control").status_code == 200
@@ -285,7 +292,9 @@ def test_storage_preparation_is_additive_on_fresh_and_older_installs(
 
 
 @pytest.mark.parametrize("existing", [False, True])
-def test_storage_main_folder_is_prepared_once_and_checks_mount_identity(tmp_path, monkeypatch, existing):
+def test_storage_main_folder_is_prepared_once_and_checks_mount_identity(
+    tmp_path, monkeypatch, existing
+):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
     import scripts.prepare_local_apps as module
 
@@ -300,17 +309,25 @@ def test_storage_main_folder_is_prepared_once_and_checks_mount_identity(tmp_path
     marker.write_text("approved-pool")
     snapshot = tmp_path / "mounts.json"
     snapshot.write_text(json.dumps({"mounts": [{"path": str(media), "source": "pool"}]}))
-    (root / "agent/container-apps.json").write_text(json.dumps({
-        "hostMountSnapshot": str(snapshot), "requiredMounts": {str(media): "pool"},
-        "storageMarkers": {str(marker): "approved-pool"},
-    }))
-    locations = [{"id": folder, "label": folder, "source": str(media / folder)}
-                 for folder in ("movies", "downloads")]
+    (root / "agent/container-apps.json").write_text(
+        json.dumps(
+            {
+                "hostMountSnapshot": str(snapshot),
+                "requiredMounts": {str(media): "pool"},
+                "storageMarkers": {str(marker): "approved-pool"},
+            }
+        )
+    )
+    locations = [
+        {"id": folder, "label": folder, "source": str(media / folder)}
+        for folder in ("movies", "downloads")
+    ]
     if existing:
         (root / "storage-private").mkdir()
-        save(root / "storage-private/state.json", {"nas": [], "shares": [
-            {"name": "Movies", "storageId": "movies", "readOnly": True}
-        ]})
+        save(
+            root / "storage-private/state.json",
+            {"nas": [], "shares": [{"name": "Movies", "storageId": "movies", "readOnly": True}]},
+        )
     monkeypatch.setattr(module.os, "chown", lambda *args: None)
     for _ in range(2):
         module.prepare_storage_host(root, "192.168.1.15", source, locations)
@@ -405,3 +422,92 @@ def test_foreign_installations_smb_container_is_never_adopted(controller):
     )
     with pytest.raises(StorageError, match="another service"):
         controller.owned_smb()
+
+
+def test_userspace_nas_mount_uses_private_config_and_preserves_read_only(controller, monkeypatch):
+    host = controller
+    row = {"id": "a" * 24, "server": "192.168.1.60", "share": "Media", "readOnly": True}
+    save(host.folder / (row["id"] + ".credentials"), "username=test\npassword=synthetic-secret\n")
+    calls = []
+    real_open = __import__("os").open
+    monkeypatch.setattr(
+        "scripts.storage_host.os.open",
+        lambda path, flags, *args: real_open(
+            "/dev/null" if str(path) == "/dev/fuse" else path, flags, *args
+        ),
+    )
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        return "obscured-password" if args[:2] == ["rclone", "obscure"] else ""
+
+    host.run = run
+    host.mount_userspace(row, host.mounts / row["id"])
+    assert calls[0][1]["content"] == "synthetic-secret"
+    assert all("synthetic-secret" not in " ".join(args) for args, _ in calls)
+    config = host.folder / (row["id"] + ".rclone.conf")
+    assert stat.S_IMODE(config.stat().st_mode) == 0o600
+    assert "synthetic-secret" not in config.read_text()
+    mount = calls[-1][0]
+    assert "--read-only" in mount
+    assert "--property=Type=notify" in mount
+    assert "nosuid,nodev,noexec" in mount
+    host.mount_info = lambda path: {
+        "target": str(host.mounts / row["id"]),
+        "source": "mediahub-nas-" + row["id"],
+        "fstype": "fuse.rclone",
+    }
+    assert host.nas_ready(row)
+    assert not host.nas_ready({**row, "id": "b" * 24})
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_proxmox_storage_preparation_preserves_other_devices(existing):
+    from scripts.proxmox_storage import prepare
+
+    calls = []
+
+    def runner(*args):
+        calls.append(args)
+        if args[:2] == ("pct", "config"):
+            return "unprivileged: 1\ndev0: path=/dev/net/tun\ndev1: path=/dev/nvidia0\n" + (
+                "dev2: path=/dev/fuse,uid=0,gid=0,mode=0600\n" if existing else ""
+            )
+        return ""
+
+    assert prepare("107", runner)["changed"] is not existing
+    changes = [args for args in calls if args[:2] == ("pct", "set")]
+    assert len(changes) == (0 if existing else 1)
+    if changes:
+        assert changes[0][3] == "--dev2"
+        assert changes[0][4] == "path=/dev/fuse,uid=0,gid=0,mode=0600"
+    assert not any("restart" in args or "reboot" in args for args in calls)
+
+
+def test_correcting_saved_nas_login_keeps_id_and_retries(controller):
+    host = controller
+    row = {
+        "id": "c" * 24,
+        "server": "192.168.1.60",
+        "share": "Media",
+        "username": "old",
+        "readOnly": False,
+        "enabled": False,
+        "error": "Old login rejected",
+    }
+    save(host.file, {"nas": [row], "shares": [], "passwordConfigured": False})
+    host.packages = lambda: None
+    attempts = []
+    host.mount_nas = lambda value: attempts.append(value.copy())
+    result = host.dispatch(
+        "POST",
+        "/nas/" + row["id"] + "/credentials",
+        {"username": "updated", "password": "new-synthetic-secret"},
+    )
+    assert result == {"saved": True}
+    saved = host.state()["nas"][0]
+    assert saved["id"] == row["id"] and saved["enabled"] is True
+    assert saved["username"] == "updated" and saved["readOnly"] is False
+    assert "error" not in saved and len(attempts) == 1
+    assert "new-synthetic-secret" not in host.file.read_text()
+    assert "new-synthetic-secret" in (host.folder / (row["id"] + ".credentials")).read_text()

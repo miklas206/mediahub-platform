@@ -415,17 +415,28 @@ export function StorageSettings() {
                   <label className="storage-check">
                     <input
                       type="checkbox"
-                      checked={nas.readOnly}
+                      checked={!nas.readOnly}
+                      aria-describedby="nas-permission-help"
                       onChange={(e) =>
-                        setNas({ ...nas, readOnly: e.target.checked })
+                        setNas({ ...nas, readOnly: !e.target.checked })
                       }
                     />
-                    {t("Read-only access")}
+                    {t("Allow changes on the NAS")}
                   </label>
                   <button className="primary" type="submit">
                     {busy ? t("Working…") : t("Connect NAS")}
                   </button>
                 </fieldset>
+                <p
+                  id="nas-permission-help"
+                  className="muted storage-permission-help"
+                >
+                  {t(
+                    nas.readOnly
+                      ? "Off: You can only view and download files."
+                      : "On: You can also create, change and delete files.",
+                  )}
+                </p>
               </form>
             </section>
             <section className="panel">
@@ -571,6 +582,67 @@ export function StorageSettings() {
                         {t("Remove")}
                       </button>
                     </div>
+                    {!row.ready && (
+                      <>
+                        {row.enabled && (
+                          <p className="muted">
+                            {t(
+                              "Connection saved. MediaHub retries automatically every 30 seconds and after a restart.",
+                            )}
+                          </p>
+                        )}
+                        <details>
+                          <summary>{t("Edit NAS login")}</summary>
+                          <form
+                            className="storage-form"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              const form = event.currentTarget;
+                              const values = new FormData(form);
+                              void run(
+                                `/nas/${row.id}/credentials`,
+                                "POST",
+                                {
+                                  username: values.get("username"),
+                                  password: values.get("password"),
+                                },
+                                () => form.reset(),
+                              );
+                            }}
+                          >
+                            <label>
+                              {t("NAS username")}
+                              <input
+                                name="username"
+                                required
+                                maxLength={128}
+                                defaultValue={row.username}
+                                autoComplete="off"
+                                disabled={busy}
+                              />
+                            </label>
+                            <label>
+                              {t("NAS password")}
+                              <input
+                                name="password"
+                                type="password"
+                                required
+                                maxLength={256}
+                                autoComplete="new-password"
+                                disabled={busy}
+                              />
+                            </label>
+                            <button
+                              className="primary"
+                              disabled={busy}
+                              type="submit"
+                            >
+                              {t("Save and reconnect")}
+                            </button>
+                          </form>
+                        </details>
+                      </>
+                    )}
                   </article>
                 ))}
               </div>
