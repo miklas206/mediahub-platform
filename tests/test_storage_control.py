@@ -284,6 +284,50 @@ def test_storage_preparation_is_additive_on_fresh_and_older_installs(
     assert not (root / "network-storage").exists()  # No mount before the host-side controller runs.
 
 
+@pytest.mark.parametrize("existing", [False, True])
+def test_storage_main_folder_is_prepared_once_and_checks_mount_identity(tmp_path, monkeypatch, existing):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    import scripts.prepare_local_apps as module
+
+    root, source, media = tmp_path / "hub", tmp_path / "source", tmp_path / "media"
+    (root / "agent").mkdir(parents=True)
+    (root / "updates").mkdir()
+    (source / "scripts").mkdir(parents=True)
+    (source / "scripts/storage_host.py").write_text("# reviewed test helper\n")
+    (media / "movies").mkdir(parents=True)
+    (media / "downloads").mkdir()
+    marker = media / ".identity"
+    marker.write_text("approved-pool")
+    snapshot = tmp_path / "mounts.json"
+    snapshot.write_text(json.dumps({"mounts": [{"path": str(media), "source": "pool"}]}))
+    (root / "agent/container-apps.json").write_text(json.dumps({
+        "hostMountSnapshot": str(snapshot), "requiredMounts": {str(media): "pool"},
+        "storageMarkers": {str(marker): "approved-pool"},
+    }))
+    locations = [{"id": folder, "label": folder, "source": str(media / folder)}
+                 for folder in ("movies", "downloads")]
+    if existing:
+        (root / "storage-private").mkdir()
+        save(root / "storage-private/state.json", {"nas": [], "shares": [
+            {"name": "Movies", "storageId": "movies", "readOnly": True}
+        ]})
+    monkeypatch.setattr(module.os, "chown", lambda *args: None)
+    for _ in range(2):
+        module.prepare_storage_host(root, "192.168.1.15", source, locations)
+    policy = json.loads((root / "storage-policy.json").read_text())
+    assert len(policy["locations"]) == 3
+    main = policy["locations"][-1]
+    assert main["source"] == str(media)
+    host = StorageHost(root)
+    host.mount_info = lambda path: {"source": "pool", "target": str(media)}
+    assert host.location(main["id"])["ready"]
+    marker.write_text("different-pool")
+    with pytest.raises(StorageError):
+        host.location(main["id"])
+    if existing:
+        assert host.state()["shares"][0]["storageId"] == "movies"
+
+
 def test_host_storage_bootstrap_only_runs_the_reviewed_installer(tmp_path, monkeypatch):
     from scripts.platform_update_host import HostUpdater
 

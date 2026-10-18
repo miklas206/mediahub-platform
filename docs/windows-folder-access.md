@@ -39,7 +39,10 @@ not attach newly mounted NAS storage to existing running apps.
 
 ## Share a folder with Windows
 
-1. Under **Share with Windows**, choose a connected storage folder.
+1. Under **Share with Windows**, choose a connected storage folder. From 0.6.52,
+   **Main folder (all subfolders)** shares the verified media mount itself,
+   including Movies, TV, Downloads and other folders below that mount. Separate
+   folder shares remain available. This does not include separate NAS mounts.
 2. Enter a unique share name containing letters, digits, hyphens or underscores.
 3. Choose read-only or write access. Sharing cannot make a read-only NAS writable,
    and existing filesystem permissions still apply.

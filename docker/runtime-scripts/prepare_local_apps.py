@@ -556,6 +556,34 @@ def prepare_storage_host(root, lan, source, locations):
                             if Path(p).is_relative_to(mount)},
             }
         )
+    # Offer each verified media mount itself, independently of app folder mappings.
+    # Never infer a common ancestor or expose the host's root filesystem.
+    mounts = {row["mountTarget"] for row in roots}
+    for mount in sorted(mounts):
+        evidence_row = next(row for row in roots if row["mountTarget"] == mount)
+        path = Path(mount)
+        if (
+            mount == "/"
+            or not evidence_row["mountSource"]
+            or not evidence_row["markers"]
+            or not path.is_dir()
+            or path.resolve(strict=True) != path
+        ):
+            continue
+        identifier = "media-root-" + hashlib.sha256(mount.encode()).hexdigest()[:16]
+        if any(row["id"] == identifier for row in roots):
+            raise ValueError("Storage root identifier conflicts with an existing folder")
+        roots.append(
+            {
+                "id": identifier,
+                "label": "Main folder (all subfolders)",
+                "path": mount,
+                "source": mount,
+                "mountTarget": mount,
+                "mountSource": evidence_row["mountSource"],
+                "markers": evidence_row["markers"],
+            }
+        )
     policy = root / "storage-policy.json"
     if policy.is_symlink():
         raise ValueError("Unsafe storage policy")

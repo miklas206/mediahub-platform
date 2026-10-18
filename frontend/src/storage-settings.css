@@ -1,3 +1,15 @@
+.storage-settings .panel {
+  padding: clamp(1rem, 2vw, 1.5rem);
+  min-width: 0;
+}
+.storage-settings .panel > h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+.storage-settings .panel > p {
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
 .storage-settings h3 {
   display: flex;
   align-items: center;

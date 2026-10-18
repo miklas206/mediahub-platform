@@ -1,4 +1,5 @@
 {
+  "Main folder (all subfolders)": "Hovedmappe (alle undermapper)",
   "This app updates independently from MediaHub Core.": "Denne app opdateres uafhængigt af MediaHub Core.",
   "Update only {name}?": "Opdatér kun {name}?",
   "Maintenance completed. Removed {files} old update files and {images} unused MediaHub helper images. Media, app data, containers, build cache and rollback backups were preserved.": "Vedligeholdelsen er færdig. Fjernede {files} gamle opdateringsfiler og {images} ubrugte MediaHub-hjælpeimages. Medier, appdata, containere, buildcache og rollback-backups er bevaret.",

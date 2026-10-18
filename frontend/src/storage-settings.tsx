@@ -268,7 +268,7 @@ export function StorageSettings() {
             <div className="storage-locations">
               {data.locations.map((row) => (
                 <article className="storage-location" key={row.id}>
-                  <strong>{row.label}</strong>
+                  <strong>{t(row.label)}</strong>
                   <span className={row.ready ? "status-ready" : "muted"}>
                     {t(row.ready ? "Connected" : "Disconnected")}
                   </span>
@@ -414,7 +414,7 @@ export function StorageSettings() {
                           value={row.id}
                           disabled={!row.ready}
                         >
-                          {row.label}
+                          {t(row.label)}
                           {!row.ready ? ` · ${t("Disconnected")}` : ""}
                         </option>
                       ))}

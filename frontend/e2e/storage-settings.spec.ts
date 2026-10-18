@@ -11,6 +11,15 @@ for (const width of [1440, 390, 320]) {
       smbRunning: false,
       locations: [
         {
+          id: "media-root-test",
+          label: "Main folder (all subfolders)",
+          source: "/mnt/media",
+          kind: "local",
+          ready: true,
+          totalBytes: 1e12,
+          freeBytes: 5e11,
+        },
+        {
           id: "movies",
           label: "Movies",
           source: "/mnt/media/movies",
@@ -89,11 +98,9 @@ for (const width of [1440, 390, 320]) {
     await expect(
       page.getByRole("tab", { name: "Storage", exact: true }),
     ).toHaveAttribute("aria-selected", "true");
-    const nas = page
-      .locator("section")
-      .filter({
-        has: page.getByRole("heading", { name: "Connect a NAS", exact: true }),
-      });
+    const nas = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Connect a NAS", exact: true }),
+    });
     await nas.getByLabel("Name", { exact: true }).fill("My NAS");
     await nas.getByLabel("NAS LAN address").fill("192.168.1.60");
     await nas.getByLabel("Share name", { exact: true }).fill("Media");
@@ -104,15 +111,13 @@ for (const width of [1440, 390, 320]) {
       page.getByRole("heading", { name: "Saved NAS connections" }),
     ).toBeVisible();
     await expect(nas.getByLabel("NAS password")).toHaveValue("");
-    const windows = page
-      .locator("section")
-      .filter({
-        has: page.getByRole("heading", {
-          name: "Share with Windows",
-          exact: true,
-        }),
-      });
-    await windows.getByLabel("Storage folder").selectOption("movies");
+    const windows = page.locator("section").filter({
+      has: page.getByRole("heading", {
+        name: "Share with Windows",
+        exact: true,
+      }),
+    });
+    await windows.getByLabel("Storage folder").selectOption("media-root-test");
     await windows
       .getByLabel("Windows sharing password", { exact: true })
       .fill("synthetic-smb-password");
@@ -132,6 +137,14 @@ for (const width of [1440, 390, 320]) {
     expect(writes).toHaveLength(2);
     expect(writes[0].body.readOnly).toBe(true);
     expect(writes[1].body.readOnly).toBe(true);
+    expect(writes[1].body.storageId).toBe("media-root-test");
+    for (const panel of await page.locator(".storage-settings .panel").all()) {
+      expect(
+        await panel.evaluate((element) =>
+          parseFloat(getComputedStyle(element).paddingLeft),
+        ),
+      ).toBeGreaterThanOrEqual(16);
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

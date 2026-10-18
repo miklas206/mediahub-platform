@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.52
+
+- Offer the verified media mount root in Settings → Storage so a Windows share can include all subfolders, preserving existing folder shares and app mappings. Prepare the additional choice automatically on fresh installs and upgrades.
+- Add comfortable padding around storage panels and forms at desktop and mobile widths.
+
 ## 0.6.51
 
 - Add administrator-only Settings → Storage, with approved local-folder capacity, saved SMB3 NAS mounts, and authenticated Windows shares with a per-share connection guide.
