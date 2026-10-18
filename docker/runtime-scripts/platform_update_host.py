@@ -880,20 +880,31 @@ class HostUpdater:
                 self.installed_source()  # Validate before copying root-owned metadata.
                 shutil.copy2(marker, temporary / "installed-source.json")
             for name in self._state_directories():
-                shutil.copytree(self.root / name, temporary / name, symlinks=False)
-                self._copy_ownership(self.root / name, temporary / name)
+                self._copy_state(self.root / name, temporary / name, name)
             os.replace(temporary, backup)
         except Exception:
             shutil.rmtree(temporary, ignore_errors=True)
             raise
 
+    def _copy_state(self, source, destination, name):
+        # The host controller owns a live Unix socket, not persistent app data.
+        excluded = ("storage-control",) if name == "data" else ()
+        shutil.copytree(
+            source, destination, symlinks=False,
+            ignore=lambda directory, names: excluded if Path(directory) == source else (),
+        )
+        self._copy_ownership(source, destination, excluded)
+
     @staticmethod
-    def _copy_ownership(source, destination):
+    def _copy_ownership(source, destination, excluded=()):
         # copytree/copy2 preserve modes and timestamps, not uid/gid. Losing
         # ownership makes restored secrets unreadable to non-root containers.
         if not hasattr(os, "chown"):
             return
         for original in [source, *source.rglob("*")]:
+            relative = original.relative_to(source)
+            if relative.parts and relative.parts[0] in excluded:
+                continue
             details = original.lstat()
             if stat.S_ISLNK(details.st_mode):
                 raise ValueError("Configuration ownership reference contains a symbolic link")
@@ -919,8 +930,9 @@ class HostUpdater:
                 raise ValueError("Rollback destination already exists")
             os.replace(current, failed)
             try:
-                shutil.copytree(backup / name, current, symlinks=False)
-                self._copy_ownership(backup / name, current)
+                self._copy_state(backup / name, current, name)
+                if name == "data" and (failed / "storage-control").exists():
+                    os.replace(failed / "storage-control", current / "storage-control")
             except Exception:
                 if current.exists():
                     shutil.rmtree(current)

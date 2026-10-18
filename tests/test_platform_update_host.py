@@ -993,3 +993,27 @@ def test_cleanup_failure_cannot_change_verified_update_to_failed(tmp_path, monke
     assert states == ["succeeded"]
     assert "private diagnostic" not in "\n".join(updater.log_lines)
     assert any("cleanup" in line for line in updater.log_lines)
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+def test_update_and_rollback_preserve_live_storage_socket(tmp_path, monkeypatch, rollback):
+    import socket
+
+    updater, root, _ = fixture(tmp_path, monkeypatch, fail_new_core=rollback)
+    runtime = root / "data/storage-control"
+    runtime.mkdir()
+    path = runtime / "service.sock"
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(str(path))
+        listener.listen(1)
+        identity = path.stat().st_ino
+        updater.process()
+        status = json.loads((root / "updates/status.json").read_text())
+        assert status["state"] == ("rolled_back" if rollback else "succeeded")
+        assert path.stat().st_ino == identity
+        with socket.socket(socket.AF_UNIX) as client:
+            client.connect(str(path))
+            connection, _ = listener.accept()
+            connection.close()
+        assert not (root / "update-backups" / OPERATION / "data/storage-control").exists()
+        assert (root / "data/mediahub.db").read_text() == "configuration"

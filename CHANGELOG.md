@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.53
+
+- Exclude the live storage-control Unix socket directory from configuration snapshots and preserve its inode and connection across rollback. Keep persistent storage state, credentials and app data unchanged.
+- Verify both successful upgrades and forced rollback with a real listening Unix socket.
+
 ## 0.6.52
 
 - Offer the verified media mount root in Settings → Storage so a Windows share can include all subfolders, preserving existing folder shares and app mappings. Prepare the additional choice automatically on fresh installs and upgrades.
