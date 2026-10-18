@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.55
+
+- Group local subfolders beneath their media storage root and show shared filesystem capacity once. Keep separate NAS mounts and Windows sharing choices available.
+
 ## 0.6.54
 
 - Match Storage read-only controls to the height of adjacent inputs and align them with the input row, preserving checkbox behavior.

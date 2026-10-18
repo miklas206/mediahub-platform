@@ -48,6 +48,70 @@ type Inventory = {
   smbRunning?: boolean;
 };
 
+function StorageLocations({ locations }: { locations: Location[] }) {
+  const roots = locations.filter(
+    (row) => row.kind === "local" && row.id.startsWith("media-root-"),
+  );
+  const parent = (row: Location) =>
+    row.kind === "local" && !roots.includes(row)
+      ? roots
+          .filter((root) =>
+            row.source.startsWith(root.source.replace(/\/$/, "") + "/"),
+          )
+          .sort((a, b) => b.source.length - a.source.length)[0]
+      : undefined;
+  return (
+    <div className="storage-locations">
+      {locations
+        .filter((row) => !parent(row))
+        .map((row) => {
+          const children = locations.filter(
+            (child) => parent(child)?.id === row.id,
+          );
+          return (
+            <article className="storage-location" key={row.id}>
+              <strong>{t(row.label)}</strong>
+              <span className={row.ready ? "status-ready" : "muted"}>
+                {t(row.ready ? "Connected" : "Disconnected")}
+              </span>
+              <code>{row.source}</code>
+              <span>
+                {row.ready && row.freeBytes !== null && row.totalBytes !== null
+                  ? `${bytes(row.freeBytes)} / ${bytes(row.totalBytes)} ${t("free")}`
+                  : t("Capacity unavailable")}
+              </span>
+              {children.length > 0 && (
+                <div className="storage-subfolders">
+                  <p className="muted">
+                    {t("Subfolders share the storage space shown above.")}
+                  </p>
+                  <ul>
+                    {children.map((child) => (
+                      <li key={child.id}>
+                        <FolderOpen size={16} aria-hidden="true" />
+                        <div>
+                          <strong>{t(child.label)}</strong>
+                          <code>
+                            {child.source.slice(
+                              row.source.replace(/\/$/, "").length + 1,
+                            )}
+                          </code>
+                        </div>
+                        {!child.ready && (
+                          <span className="muted">{t("Disconnected")}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </article>
+          );
+        })}
+    </div>
+  );
+}
+
 export function WindowsDriveGuide({ share }: { share: StorageShare }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -265,24 +329,7 @@ export function StorageSettings() {
               <HardDrive size={19} />
               {t("Available storage")}
             </h3>
-            <div className="storage-locations">
-              {data.locations.map((row) => (
-                <article className="storage-location" key={row.id}>
-                  <strong>{t(row.label)}</strong>
-                  <span className={row.ready ? "status-ready" : "muted"}>
-                    {t(row.ready ? "Connected" : "Disconnected")}
-                  </span>
-                  <code>{row.source}</code>
-                  <span>
-                    {row.ready &&
-                    row.freeBytes !== null &&
-                    row.totalBytes !== null
-                      ? `${bytes(row.freeBytes)} / ${bytes(row.totalBytes)} ${t("free")}`
-                      : t("Capacity unavailable")}
-                  </span>
-                </article>
-              ))}
-            </div>
+            <StorageLocations locations={data.locations} />
             {!data.locations.length && (
               <p className="muted">
                 {t(
