@@ -640,3 +640,93 @@ def test_app_storage_transport_validates_admin_csrf_and_selection(logged_in, mon
     assert client.delete(path).status_code == 403
     assert client.post("/api/v1/storage-control/apps/recover").status_code == 403
     assert mock.await_count == count
+
+
+@pytest.mark.parametrize("existing_name", [None, "existing-operator-group"])
+def test_media_group_is_prepared_once_without_changing_existing_accounts(monkeypatch, existing_name):
+    import scripts.storage_host as module
+
+    groups = {1000: existing_name} if existing_name else {}
+    calls = []
+    def by_gid(gid):
+        if gid not in groups:
+            raise KeyError(gid)
+        return SimpleNamespace(gr_name=groups[gid], gr_gid=gid)
+    def by_name(name):
+        raise KeyError(name)
+    def command(args):
+        calls.append(args)
+        assert args == ["groupadd", "--gid", "1000", "mediahub-media"]
+        groups[1000] = "mediahub-media"
+    monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=by_gid, getgrnam=by_name))
+    monkeypatch.setattr(module, "command", command)
+    assert module.ensure_media_group() == (existing_name or "mediahub-media")
+    assert module.ensure_media_group() == (existing_name or "mediahub-media")
+    assert len(calls) == (0 if existing_name else 1)
+
+
+def test_media_group_name_collision_is_not_modified(monkeypatch):
+    import scripts.storage_host as module
+
+    def missing(gid):
+        raise KeyError(gid)
+    monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=missing, getgrnam=lambda _: SimpleNamespace(gr_gid=1234)))
+    from unittest.mock import Mock
+    command = Mock()
+    monkeypatch.setattr(module, "command", command)
+    with pytest.raises(StorageError, match="already in use"):
+        module.ensure_media_group()
+    command.assert_not_called()
+
+
+@pytest.mark.parametrize("upgrading", [False, True])
+def test_storage_service_install_prepares_group_before_start_on_new_and_older_hosts(tmp_path, monkeypatch, upgrading):
+    import scripts.storage_host as module
+
+    root = tmp_path / "hub"
+    root.mkdir()
+    for name in ["storage_host.py", "storage-policy.json"]:
+        (root / name).write_text("reviewed")
+    events = []
+    real_lstat = Path.lstat
+    def lstat(path):
+        details = real_lstat(path)
+        return SimpleNamespace(st_uid=0, st_mode=details.st_mode)
+    monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr(module, "ensure_media_group", lambda: events.append("group-ready"))
+    monkeypatch.setattr(module, "save", lambda path, content: events.append((path, content)))
+    monkeypatch.setattr(module, "command", lambda args: events.append(args))
+    # Redirect only the unit location, keeping actual approved root validation.
+    real_path = Path
+    unit = tmp_path / "mediahub-storage.service"
+    if upgrading:
+        unit.write_text("Description=MediaHub private storage controller\nExecStart=/usr/bin/python3 " + str(root / "storage_host.py") + " --root " + str(root) + "\nGroup=1000\n")
+    monkeypatch.setattr(module, "Path", lambda value: unit if str(value)=="/etc/systemd/system/mediahub-storage.service" else real_path(value))
+    module.install(root)
+    assert events[0] == "group-ready"
+    assert "Group=1000" in events[1][1]
+    assert events[-1] == ["systemctl", "restart", "mediahub-storage.service"]
+
+
+@pytest.mark.parametrize("concurrent_creation", [False, True])
+def test_media_group_creation_failure_is_clear_or_reuses_a_concurrent_installer(monkeypatch, concurrent_creation):
+    import scripts.storage_host as module
+
+    groups = {}
+    def by_gid(gid):
+        if gid not in groups:
+            raise KeyError(gid)
+        return SimpleNamespace(gr_name=groups[gid])
+    def by_name(name):
+        raise KeyError(name)
+    def command(args):
+        if concurrent_creation:
+            groups[1000] = "operator-media"
+        raise StorageError("groupadd failed")
+    monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=by_gid, getgrnam=by_name))
+    monkeypatch.setattr(module, "command", command)
+    if concurrent_creation:
+        assert module.ensure_media_group() == "operator-media"
+    else:
+        with pytest.raises(StorageError, match="could not be prepared"):
+            module.ensure_media_group()

@@ -25,6 +25,11 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 try:
+    import grp
+except ImportError:  # Host installation runs on Linux; keep source tooling portable.
+    grp = None
+
+try:
     from .app_storage_host import AppStorage
 except ImportError:
     from app_storage_host import AppStorage
@@ -985,6 +990,41 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
 
 
+def ensure_media_group():
+    """Numeric systemd groups still need NSS entries, even if media already uses the GID."""
+    if grp is None:
+        raise StorageError("Storage controller installation requires a Linux host")
+    try:
+        return grp.getgrgid(1000).gr_name
+    except KeyError:
+        pass
+    name = "mediahub-media"
+    try:
+        grp.getgrnam(name)
+    except KeyError:
+        pass
+    else:
+        raise StorageError(
+            "The mediahub-media group name is already in use with another GID. "
+            "Prepare a host group with GID 1000 before retrying storage setup."
+        )
+    try:
+        command(["groupadd", "--gid", "1000", name])
+    except StorageError:
+        # Another independent installer may have created this GID meanwhile.
+        try:
+            return grp.getgrgid(1000).gr_name
+        except KeyError:
+            raise StorageError(
+                "The host media group with GID 1000 could not be prepared. "
+                "Check host account-management tools and retry storage setup."
+            ) from None
+    try:
+        return grp.getgrgid(1000).gr_name
+    except KeyError:
+        raise StorageError("Host group GID 1000 is still unavailable after preparation") from None
+
+
 def install(root):
     """Executed by PID1 outside the updater's read-only filesystem sandbox."""
     root = Path(root)
@@ -1008,6 +1048,7 @@ def install(root):
         not in unit.read_text()
     ):
         raise StorageError("Storage service name is already owned by another installation")
+    ensure_media_group()
     save(unit, content)
     command(["systemctl", "daemon-reload"])
     command(["systemctl", "enable", unit.name])

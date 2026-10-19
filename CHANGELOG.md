@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.61
+
+- Prepare the host media group before installing or starting the storage controller. Numeric systemd Group=1000 requires a host group entry even when media files already use that GID; without it the controller failed with 216/GROUP and app settings stayed on Preparing storage.
+- Backfill the missing group automatically on fresh installs and upgrades, reuse existing GID 1000 without changing accounts or media ownership, and reject conflicting group names with a concrete prerequisite.
+
 ## 0.6.60
 
 - Fix intermittent update rollback caused by changing SQLite WAL/SHM files; snapshot committed database state through SQLite and preserve configuration ownership.

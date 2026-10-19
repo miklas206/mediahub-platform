@@ -79,3 +79,25 @@ De isolerede tests ændrer ikke brugerens Plex-biblioteker, torrents eller NAS-f
 Driverdetaljer: [rclone VFS-skrivecache](https://rclone.org/commands/rclone_mount/#vfs-file-caching) og [cache-status](https://rclone.org/rc/#vfs-stats-stats-for-a-vfs).
 
 Udgivelsestjek: ingen kendte blokeringer for kildeudgivelsen. Frisk klargøring og opgradering er automatisk testet; en fysisk nyinstallation og fuld værtsgenstart er ikke udført. Installer Core 0.6.59 og MediaVPN 0.2.31, kontrollér NAS-forbindelsen, og tilknyt derefter lageret med appsene stoppet. Gendannelse af en afbrudt tilknytning bevarer data og appindstillinger; brug den indbyggede gendan-knap før appsene startes igen.
+
+
+## Værtsgruppe ved klargøring (0.6.61)
+
+Lagertjenesten og dens NAS-drivere bruger GID 1000 for at kunne tilgå
+medielageret med de eksisterende rettigheder. systemd kræver en gruppepost på
+værten, selv når et numerisk GID angives. Mangler posten, fejler tjenesten med
+`216/GROUP`, før Python overhovedet starter; appsiden kan derfor blive ved med
+at vise klargøring.
+
+Værtsinstallationen eftermonterer nu gruppen `mediahub-media` med GID 1000,
+inden tjenesten startes. En eksisterende gruppe med GID 1000 genbruges, også
+når den har et andet navn. Eksisterende konti, gruppemedlemmer og mediefilers
+ejerskab ændres ikke. Et optaget gruppenavn med et andet GID giver en konkret
+fejl frem for at omdøbe eller ændre en fremmed gruppe. Frisk installation og
+opgradering bruger samme idempotente klargøringsvej.
+
+Verificeret med automatiske tests for både ny og eksisterende tjeneste,
+manglende/eksisterende GID og navnekollision. På den aktuelle server blev den
+manglende gruppe eftermonteret med samme reviewede funktion, hvorefter den
+allerede genforsøgende tjeneste startede. Ingen Core- eller Plex-genstart var
+nødvendig. Den permanente installationstilpasning udgives som kilde i 0.6.61.
