@@ -19,7 +19,7 @@ type Gateway = {
   }[];
 };
 export function AppVPNDomainPanel({ appId, app = "plex" }: { appId: string; app?: "plex" | "jellyfin" }) {
-  const { data, error, reload } = useData<Gateway>("/vpn-gateway");
+  const { data, error, reload, poll } = useData<Gateway>("/vpn-gateway");
   const [draft, setDraft] = useState<{ zoneId: string; label: string } | null>(
     null,
   );
@@ -28,10 +28,10 @@ export function AppVPNDomainPanel({ appId, app = "plex" }: { appId: string; app?
   const [notice, setNotice] = useState("");
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!document.hidden) reload();
+      if (!document.hidden) poll();
     }, 10000);
     return () => clearInterval(timer);
-  }, [reload]);
+  }, [poll]);
   const route = data?.routes.find(
     (row) => row.packageId === "org.mediahub." + app,
   );

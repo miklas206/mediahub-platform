@@ -72,4 +72,33 @@ describe("runtime issues", () => {
       "Cannot reach the Agent. Current app health cannot be verified. Check the host connection.",
     ]);
   });
+  it.each(["plex", "seedbox", "cloudflare"] as const)(
+    "does not invent %s failures when a healthy observation expires",
+    (kind) => {
+      const stale = {
+        ...base,
+        health: "unknown",
+        observationHealth: "healthy",
+        cached: true,
+      };
+      expect(runtimeIssues(stale, kind)).toEqual([]);
+    },
+  );
+  it("retains actual failed checks while refreshing an expired observation", () => {
+    const stale = {
+      ...base,
+      health: "unknown",
+      observationHealth: "critical",
+      cached: true,
+      checks: [
+        { name: "storage", status: "critical", message: "Storage unavailable" },
+      ],
+    };
+    expect(runtimeIssues(stale, "plex")).toContain("Storage unavailable");
+  });
+  it("does not describe missing Plex state or unknown health as a failed check", () => {
+    expect(
+      runtimeIssues({ ...base, health: "unknown", checks: [] }, "plex"),
+    ).toEqual([]);
+  });
 });

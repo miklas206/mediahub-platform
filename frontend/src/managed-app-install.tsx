@@ -29,8 +29,8 @@ export function ManagedAppInstallPage({
   const name = kind === "mediaseed" ? "MediaSeed" : "MediaVPN";
   const packageId = `org.mediahub.${kind}`;
   const path = `/managed-install/${packageId}`;
-  const { data, error, reload } = useData<Plan>(path);
-  const { data: prerequisite, reload: reloadPrerequisite } = useData<{
+  const { data, error, reload, poll } = useData<Plan>(path);
+  const { data: prerequisite, reload: reloadPrerequisite, poll: pollPrerequisite } = useData<{
     state: string;
     message: string | null;
   }>("/managed-install/prerequisites");
@@ -51,11 +51,11 @@ export function ManagedAppInstallPage({
   useEffect(() => {
     if (!preparing) return;
     const timer = window.setInterval(() => {
-      reloadPrerequisite();
-      reload();
+      pollPrerequisite();
+      poll();
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [preparing, reloadPrerequisite, reload]);
+  }, [preparing, pollPrerequisite, poll]);
   const succeeded = !busy && job?.state === "succeeded" && data?.alreadyRunning;
   const phases = ["preparing", "containers", "health", "registering"];
   const phase = Math.max(0, phases.indexOf(job?.phase || "preparing"));
@@ -95,9 +95,9 @@ export function ManagedAppInstallPage({
   };
   useEffect(() => {
     if (!running) return;
-    const timer = window.setInterval(reload, 3500);
+    const timer = window.setInterval(poll, 3500);
     return () => window.clearInterval(timer);
-  }, [running, reload]);
+  }, [running, poll]);
   useEffect(() => {
     if (succeeded) window.dispatchEvent(new Event("apps-changed"));
   }, [succeeded]);

@@ -85,3 +85,37 @@ along with the production frontend build and Ruff checks. Chromium at 390 and
 1280 pixels verified shared VPN/port status, hidden completed installation cards,
 visible active/error cards, and no horizontal overflow or JavaScript errors.
 A physical fresh installation and full host reboot were not performed.
+
+## Stable polling observations and notifications
+
+Runtime freshness, in-flight refresh and failed health checks are separate states.
+When a previously healthy observation expires, the runtime view retains its health
+as `observationHealth`, marks the current report unknown/cached, and labels the
+badge as the last observation. Expiration alone does not manufacture a failed
+storage/runtime check or a Cloudflare warning. Actual degraded/critical checks
+remain visible through refresh; transport failures keep their own error and
+stale/unavailable status. Action authorization and fresh validation remain on the
+server; no readiness TTL or action bypass is introduced by this display change.
+
+The common `useData` loader retains an unresolved error during a background
+refresh. Repeated failures with the same text keep the same notification mounted
+instead of clearing/remounting it on every poll. A successful response clears the
+error. Requests to another path do not inherit the old data/error, and repeated
+automatic polls of the same pending path share that read rather than continuously
+aborting a slow response. Explicit reloads after user actions still cancel an
+older read and start a new one, so pre-mutation data cannot replace the new state. Existing cancellation and two bounded read retries are
+preserved; mutations are not retried by this loader.
+
+This common path covers app settings/resources/storage, shared VPN and Plex
+account/domain setup, including corresponding Jellyfin and container app views.
+The other polling paths were checked: service/page snapshots and `useLoad`
+already retain errors; Cloudflare and port checks clear errors only on successful
+responses; MediaSeed/MediaVPN automatic status loops do not emit operation-error
+popups on each refresh. No unrelated app data, media, credentials, polling
+intervals or installations change. Fresh installations and upgrades use the same
+frontend bundle without a schema/configuration migration.
+
+Regression coverage includes a held Plex status response over repeated polling
+cycles, genuine storage failures after recovery, persistent API errors across
+multiple read attempts, clearing after real recovery, and repeated clicks during
+a slow read. These browser fixtures are synthetic and do not operate live apps.

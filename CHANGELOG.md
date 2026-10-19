@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.67
+
+- Keep expired healthy Plex, Seedbox and Cloudflare observations explicitly cached instead of manufacturing failing runtime checks during normal polling. Genuine failures and connection errors remain visible.
+- Stop repeated identical error popups across app settings, resources, storage, shared VPN, Plex/Jellyfin account/domain setup: retain unresolved errors until recovery and share slow in-flight reads. Preserve path isolation, cancellation, bounded retries and server-side action validation.
+- Apply the same frontend behavior on fresh installations and upgrades; no managed-app restart, media migration, credential or database schema change is required by this fix.
+
 ## 0.6.65
 
 - Identify Plex explicitly when it must be stopped for a shared NAS write-cache change. Stopped MediaSeed/MediaVPN apps no longer receive a misleading instruction to stop themselves when Plex is the blocker. Preserve running-app and storage ownership checks.

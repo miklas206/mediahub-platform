@@ -10,7 +10,7 @@ type Account = {
   operation: { state: string; message: string };
 };
 export function PlexAccountSetup() {
-  const { data, error, reload } = useData<Account>("/plex/account");
+  const { data, error, reload, poll } = useData<Account>("/plex/account");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -26,10 +26,10 @@ export function PlexAccountSetup() {
   useEffect(() => {
     if (data?.claimed === true && !running) return;
     const timer = setInterval(() => {
-      if (!document.hidden) reload();
+      if (!document.hidden) poll();
     }, 5000);
     return () => clearInterval(timer);
-  }, [reload, data?.claimed, running]);
+  }, [poll, data?.claimed, running]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);

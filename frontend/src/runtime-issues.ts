@@ -4,7 +4,10 @@ export function runtimeIssues(
   r: Runtime,
   kind: "cloudflare" | "plex" | "seedbox",
 ): string[] {
-  if (r.health === "healthy") return [];
+  // Expiring a successful observation does not establish a failed runtime
+  // check. The page separately marks it cached; actions are validated server-side.
+  const observedHealth = r.observationHealth || r.health;
+  if (observedHealth === "healthy") return [];
   if (kind === "cloudflare") {
     const c = r.cloudflare;
     if (!c?.configured)
@@ -47,7 +50,7 @@ export function runtimeIssues(
         device.message || `Storage device ${device.id}: ${device.status}.`,
       );
   if (r.portForwarding?.lastError) issues.push(r.portForwarding.lastError);
-  if (kind === "plex" && !r.plex?.running)
+  if (kind === "plex" && r.plex?.running === false)
     issues.push(
       "Plex is stopped or unavailable. Check its runtime controls and storage.",
     );
@@ -55,9 +58,11 @@ export function runtimeIssues(
     ...new Set(
       issues.length
         ? issues
-        : [
-            "Some runtime checks have not passed. Review the connection and storage checks below.",
-          ],
+        : observedHealth === "unknown"
+          ? []
+          : [
+              "Some runtime checks have not passed. Review the connection and storage checks below.",
+            ],
     ),
   ];
 }

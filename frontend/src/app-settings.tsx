@@ -37,7 +37,7 @@ export function AppSettingsPage({
 }: { packageId?: string; embedded?: boolean } = {}) {
   const params = useParams();
   const packageId = explicitPackage || params.packageId || "";
-  const { data, error, reload } = useData<AppSettings>(
+  const { data, error, reload, poll } = useData<AppSettings>(
     `/app-settings/${encodeURIComponent(packageId)}`,
   );
   const [draft, setDraft] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function AppSettingsPage({
   const [failure, setFailure] = useState("");
   useEffect(() => {
     const refresh = () => {
-      if (!document.hidden) reload();
+      if (!document.hidden) poll();
     };
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
@@ -54,7 +54,7 @@ export function AppSettingsPage({
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
-  }, [reload]);
+  }, [poll]);
   async function save(event?: FormEvent, reset = false) {
     event?.preventDefault();
     setBusy(true);

@@ -29,24 +29,53 @@ export function loadData<T>(
 }
 
 export function useData<T>(path: string) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState("");
+  const [result, setResult] = useState<{
+    path: string;
+    data?: T;
+    error: string;
+  }>({ path, error: "" });
   const request = useRef<(() => void) | undefined>(undefined);
-  const reload = useCallback(() => {
-    request.current?.();
-    setError("");
-    request.current = loadData<T>(
-      path,
-      (value) => {
-        setData(value);
-        setError("");
-      },
-      setError,
-    );
-  }, [path]);
+  const pending = useRef(false);
+  const activePath = useRef(path);
+  const start = useCallback(
+    (force: boolean) => {
+      // Polling must neither cancel a slow read nor clear an unresolved error.
+      // Clearing it would remount the same notification on every failed poll.
+      if (!force && pending.current && activePath.current === path) return;
+      request.current?.();
+      pending.current = true;
+      activePath.current = path;
+      request.current = loadData<T>(
+        path,
+        (value) => {
+          pending.current = false;
+          setResult({ path, data: value, error: "" });
+        },
+        (error) => {
+          pending.current = false;
+          setResult((current) => ({
+            path,
+            data: current.path === path ? current.data : undefined,
+            error,
+          }));
+        },
+      );
+    },
+    [path],
+  );
+  const reload = useCallback(() => start(true), [start]);
+  const poll = useCallback(() => start(false), [start]);
   useEffect(() => {
     reload();
-    return () => request.current?.();
+    return () => {
+      request.current?.();
+      pending.current = false;
+    };
   }, [reload]);
-  return { data, error, reload };
+  return {
+    data: result.path === path ? result.data : undefined,
+    error: result.path === path ? result.error : "",
+    reload,
+    poll,
+  };
 }

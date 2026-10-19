@@ -501,8 +501,9 @@ function Shell({
     data: navigationApps,
     error: navigationAppsError,
     reload: reloadNavigationApps,
+    poll: pollNavigationApps,
   } = useData<AppInfo[]>("/apps");
-  const { data: updateSummary, reload: reloadUpdateSummary } = useData<{
+  const { data: updateSummary, reload: reloadUpdateSummary, poll: pollUpdateSummary } = useData<{
     count: number;
   }>("/updates/summary");
   const location = useLocation();
@@ -568,21 +569,22 @@ function Shell({
   useEffect(() => {
     const refresh = () => {
       if (!document.hidden) {
-        reloadNavigationApps();
-        reloadUpdateSummary();
+        pollNavigationApps();
+        pollUpdateSummary();
       }
     };
+    const changed = () => {reloadNavigationApps(); reloadUpdateSummary();};
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener("focus", refresh);
-    window.addEventListener("apps-changed", refresh);
+    window.addEventListener("apps-changed", changed);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
-      window.removeEventListener("apps-changed", refresh);
+      window.removeEventListener("apps-changed", changed);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [reloadNavigationApps, reloadUpdateSummary]);
+  }, [pollNavigationApps, pollUpdateSummary, reloadNavigationApps, reloadUpdateSummary]);
   const windowsSharePage = [
     "/apps/windows-share",
     "/store/windows-share",
@@ -1814,9 +1816,9 @@ function MaintenancePage() {
     reclaimedBytes?: number | null;
   }>("/maintenance");
   useEffect(() => {
-    const timer = window.setInterval(cleanup.reload, 5000);
+    const timer = window.setInterval(cleanup.poll, 5000);
     return () => window.clearInterval(timer);
-  }, [cleanup.reload]);
+  }, [cleanup.poll]);
   const core = useData<{ status: string; version: string }>("/health");
   const runtime = useData<AgentStatus>("/runtime");
   const storage = useData<Storage[]>("/storage/locations");

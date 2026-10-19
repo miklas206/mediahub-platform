@@ -1,4 +1,4 @@
-import {AppSettingsPage} from "./app-settings";
+import { AppSettingsPage } from "./app-settings";
 import { useConfirm } from "./confirmation-dialog";
 import { translateText, getLocale, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
@@ -51,6 +51,7 @@ export type Runtime = {
   };
   checks?: { name: string; status: string; message?: string }[];
   health: string;
+  observationHealth?: string;
   available: boolean;
   observedAt?: number;
   cached: boolean;
@@ -603,7 +604,9 @@ function PlexPanel({
           <p>{t("Managed by the local MediaHub Agent · read-only media")}</p>
         </div>
         <div className={`runtime-health ${r.health}`}>
-          {translateText(r.health)}
+          {r.observationHealth
+            ? t("Last observation: ") + translateText(r.observationHealth)
+            : translateText(r.health)}
         </div>
       </header>
       <RuntimeIssues report={r} kind="plex" />
@@ -682,7 +685,11 @@ function PlexPanel({
             </div>
             <Row
               label={t("External IP")}
-              value={r.portForwarding?.publicIp || r.vpn?.externalIp || t("Not verified")}
+              value={
+                r.portForwarding?.publicIp ||
+                r.vpn?.externalIp ||
+                t("Not verified")
+              }
             />
             <Row
               label={t("Public Plex port")}
@@ -690,10 +697,16 @@ function PlexPanel({
             />
             <Row
               label={t("Port lease")}
-              value={translateText(r.portForwarding?.status === "not_checked" ? "Not checked" : r.portForwarding?.status || "Not checked")}
+              value={translateText(
+                r.portForwarding?.status === "not_checked"
+                  ? "Not checked"
+                  : r.portForwarding?.status || "Not checked",
+              )}
             />
             <Row
-              label={t(r.vpn?.mode === "shared" ? "Last verified" : "Last renewed")}
+              label={t(
+                r.vpn?.mode === "shared" ? "Last verified" : "Last renewed",
+              )}
               value={stamp(r.portForwarding?.lastRenewed)}
             />
             <div className="runtime-row">
@@ -765,7 +778,9 @@ function CloudflaredPanel({
         </div>
         <div className={`runtime-health ${r.health}`}>
           <Cloud size={22} />
-          {translateText(r.health)}
+          {r.observationHealth
+            ? t("Last observation: ") + translateText(r.observationHealth)
+            : translateText(r.health)}
         </div>
       </header>
       <div className="runtime-observed">
@@ -1072,7 +1087,9 @@ export function AppRuntimePage() {
   };
   const extraCards = (
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
-      {data?.view === "plex" && <AppSettingsPage packageId="org.mediahub.plex" embedded/>}
+      {data?.view === "plex" && (
+        <AppSettingsPage packageId="org.mediahub.plex" embedded />
+      )}
       {data?.view === "plex" && <PlexAccountSetup />}
       {data?.view === "plex" && data.report.lanAccess && (
         <section className="panel">
@@ -1084,7 +1101,11 @@ export function AppRuntimePage() {
         <section className="panel">
           <h2>{t("Temporary transcoding storage")}</h2>
           <p role="status">{translateText(data.report.transcode.message)}</p>
-          {data.report.transcode.path && <p style={{ overflowWrap: "anywhere" }}>{data.report.transcode.path}</p>}
+          {data.report.transcode.path && (
+            <p style={{ overflowWrap: "anywhere" }}>
+              {data.report.transcode.path}
+            </p>
+          )}
         </section>
       )}
       {data?.view === "plex" && appId && <AppVPNDomainPanel appId={appId} />}
@@ -1327,7 +1348,12 @@ export function AppRuntimePage() {
           section={section}
           report={
             stale
-              ? { ...data.report, health: "unknown", cached: true }
+              ? {
+                  ...data.report,
+                  health: "unknown",
+                  observationHealth: data.report.health,
+                  cached: true,
+                }
               : data.report
           }
         />
@@ -1337,7 +1363,12 @@ export function AppRuntimePage() {
           appId={appId}
           report={
             stale
-              ? { ...data.report, health: "unknown", cached: true }
+              ? {
+                  ...data.report,
+                  health: "unknown",
+                  observationHealth: data.report.health,
+                  cached: true,
+                }
               : data.report
           }
         />

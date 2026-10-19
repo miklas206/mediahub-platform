@@ -39,7 +39,7 @@ export function ReferenceOverview({
     ),
   );
   const events = useData<Activity[]>("/events/history");
-  const reload = events.reload;
+  const reload = events.poll;
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!document.hidden) reload();

@@ -30,7 +30,7 @@ type Shared = {
 
 export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
   const confirm = useConfirm();
-  const { data, error, reload } = useData<Shared>("/shared-vpn");
+  const { data, error, reload, poll } = useData<Shared>("/shared-vpn");
   const [profile, setProfile] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -49,9 +49,9 @@ export function SharedVPNPanel({ appsOnly = false }: { appsOnly?: boolean }) {
       setPending(null);
   }, [data, pending]);
   useEffect(() => {
-    const timer = setInterval(reload, 10000);
+    const timer = setInterval(poll, 10000);
     return () => clearInterval(timer);
-  }, [reload]);
+  }, [poll]);
   async function change(path: string, body: object) {
     setBusy(true);
     setFailure("");

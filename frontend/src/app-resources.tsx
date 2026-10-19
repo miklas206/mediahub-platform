@@ -393,6 +393,7 @@ export function AppResourceOverview() {
     }[];
   }>("/resources");
   const reload = data.reload;
+  const poll = data.poll;
   const seen = useRef(new Set<string>());
   const [popup, setPopup] = useState<{
     row: AppResource;
@@ -425,10 +426,10 @@ export function AppResourceOverview() {
   }
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!document.hidden) reload();
+      if (!document.hidden) poll();
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [reload]);
+  }, [poll]);
   useEffect(() => {
     for (const row of data.data?.items || [])
       for (const advice of row.recommendations || [])
