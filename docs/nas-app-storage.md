@@ -101,3 +101,22 @@ manglende/eksisterende GID og navnekollision. På den aktuelle server blev den
 manglende gruppe eftermonteret med samme reviewede funktion, hvorefter den
 allerede genforsøgende tjeneste startede. Ingen Core- eller Plex-genstart var
 nødvendig. Den permanente installationstilpasning udgives som kilde i 0.6.61.
+
+
+## VPN-netværk ved tilknytning (0.6.62)
+
+Ved tilknytning og fjernelse bevares appens eksisterende VPN-netværk. Docker
+returnerer også et nedarvet værtsnavn og billedets portmetadata ved inspektion,
+men afviser disse felter ved genoprettelse i en anden containers netværk.
+Lagercontrolleren udelader derfor de to felter for delte containernetværk.
+Øvrige netværk, indstillinger, mounts og det verificerede image bevares.
+Rettelsen gælder både eksisterende og nyinstallerede apps efter Core-opdatering.
+
+Verificeret til 0.6.62: 88 fokuserede Python-tests (herunder frisk klargøring,
+opgradering og Plex-tilknytning/fjernelse), 21 frontendtests samt produktionsbuild.
+Knapfarver og fokus er kontrolleret i Chromium ved 390 og 1280 pixels.
+På produktionsværten accepterede Docker en midlertidig, aldrig startet kopi med
+Plex' eksisterende image, indstillinger, VPN-netværk og NAS-mount med læseadgang.
+Prøvecontaineren blev slettet uden volumes; den oprindelige Plex-container blev
+bevaret stoppet. Core-opdateringen og den efterfølgende brugerhandling er ikke
+udført som en del af denne kildeudgivelse.

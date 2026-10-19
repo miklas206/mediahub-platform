@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.62
+
+- Show Start app in green, including its icon, hover and keyboard focus states; retain the stop action styling.
+- Fix NAS attachment to Plex and other apps sharing a VPN network namespace. Remove inherited inspect-only hostname and image port declarations from recreation requests while preserving the actual network, image, mounts and settings. Applies to existing containers and fresh installations without moving media.
+
 ## 0.6.61
 
 - Prepare the host media group before installing or starting the storage controller. Numeric systemd Group=1000 requires a host group entry even when media files already use that GID; without it the controller failed with 216/GROUP and app settings stayed on Preparing storage.

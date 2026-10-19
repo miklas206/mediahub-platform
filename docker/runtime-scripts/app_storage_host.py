@@ -353,6 +353,12 @@ class AppStorage:
         result = copy.deepcopy(row["Config"])
         result["Image"] = row["Image"]
         result["HostConfig"] = copy.deepcopy(row["HostConfig"])
+        if result["HostConfig"].get("NetworkMode", "").startswith("container:"):
+            # Inspect includes an inherited hostname and image EXPOSE metadata.
+            # Docker rejects both on create when another container owns networking.
+            # Keep the shared namespace and all actual settings/port ownership intact.
+            result.pop("Hostname", None)
+            result.pop("ExposedPorts", None)
         result["NetworkingConfig"] = {
             "EndpointsConfig": {
                 name: {

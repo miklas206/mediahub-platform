@@ -162,6 +162,89 @@ def installation(tmp_path, monkeypatch):
     return host, containers, calls, fail
 
 
+@pytest.mark.parametrize("network", ["container:verified-vpn", "bridge"])
+def test_recreation_normalizes_only_shared_network_metadata(installation, network):
+    host, containers, _, _ = installation
+    row = copy.deepcopy(containers["mediahub-mediaseed-app"])
+    row["HostConfig"]["NetworkMode"] = network
+    row["Config"].update(Hostname="daemon-inherited", ExposedPorts={"32400/tcp": {}})
+    before = copy.deepcopy(row)
+    spec = host.apps.specification(row)
+    assert row == before
+    assert spec["Image"] == row["Image"]
+    assert spec["HostConfig"] == row["HostConfig"]
+    assert spec["Env"] == row["Config"]["Env"]
+    if network.startswith("container:"):
+        assert "Hostname" not in spec
+        assert "ExposedPorts" not in spec
+    else:
+        assert spec["Hostname"] == "daemon-inherited"
+        assert spec["ExposedPorts"] == {"32400/tcp": {}}
+
+
+def test_existing_plex_vpn_container_can_attach_and_remove_nas(installation):
+    host, containers, calls, _ = installation
+    row = copy.deepcopy(containers["mediahub-mediaseed-app"])
+    row.update(Id="plex", Name="/plex")
+    row["Config"].update(
+        Hostname="inherited-vpn-hostname",
+        ExposedPorts={"32400/tcp": {}},
+        Labels={
+            "org.mediahub.package": "org.mediahub.plex",
+            "org.mediahub.installation": "synthetic",
+        },
+    )
+    containers["plex"] = row
+    policy = {
+        "container": "plex",
+        "installationId": "synthetic",
+        "imageId": row["Image"],
+        "controlStatePath": "/state/plex-intent.json",
+        "mounts": [{"source": "/approved/local", "target": "/downloads/local", "readOnly": False}],
+    }
+    save(host.root / "agent/plex-managed.json", policy)
+    save(host.root / "agent/plex-intent.json", {"desiredRunning": False})
+    save(
+        host.root / "agent/plex-plan.json",
+        {
+            "installation": {"installationId": "synthetic"},
+            "container": {"HostConfig": copy.deepcopy(row["HostConfig"])},
+        },
+    )
+    original_docker = host.apps.docker
+
+    def docker(method, path, body=None):
+        if method == "POST" and path.startswith("/containers/create"):
+            # Match the real Engine's validation, absent from the older fake.
+            assert "Hostname" not in body
+            assert "ExposedPorts" not in body
+            assert body["HostConfig"]["NetworkMode"] == "container:verified-vpn"
+        result = original_docker(method, path, body)
+        if method == "POST" and path.startswith("/containers/create"):
+            containers[result["Id"]]["Mounts"] = [
+                {"Source": m["Source"], "Destination": m["Target"], "RW": not m["ReadOnly"]}
+                for m in body["HostConfig"]["Mounts"]
+            ]
+        return result
+
+    host.apps.docker = docker
+    for attach in (True, False):
+        assert host.apps.change("plex", NAS, attach)["saved"]
+        current = next(r for r in containers.values() if r["Name"] == "/plex")
+        assert not current["State"]["Running"]
+        assert current["Image"] == row["Image"]
+        assert current["Config"]["Env"] == row["Config"]["Env"]
+        mounts = current["HostConfig"]["Mounts"]
+        assert mounts[0] == row["HostConfig"]["Mounts"][0]
+        if attach:
+            assert mounts[1]["ReadOnly"] is True
+            assert mounts[1]["Target"].endswith(NAS)
+        else:
+            assert len(mounts) == 1
+    assert host.state()["appBindings"] == []
+    assert not any(path.endswith("/start") for _, path, _ in calls)
+
+
 def test_media_seed_attachment_is_additive_persistent_and_vpn_bound(installation):
     host, containers, calls, _ = installation
     assert host.apps.change("mediaseed", NAS, True)["saved"]

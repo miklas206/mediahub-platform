@@ -65,7 +65,7 @@ export function StopAppButton({
     <>
       {error && <NotificationPopup tone="danger">{error}</NotificationPopup>}
       <button
-        className="hub-card-stop"
+        className={starting ? "hub-card-stop hub-card-start" : "hub-card-stop"}
         type="button"
         disabled={busy || running == null}
         aria-busy={busy}

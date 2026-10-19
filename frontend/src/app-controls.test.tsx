@@ -13,12 +13,14 @@ it("offers start for stopped apps, stop for running apps and disables unknown st
   );
   expect(stopped).toContain('aria-label="Start Plex"');
   expect(stopped).toContain("Start app");
+  expect(stopped).toContain("hub-card-start");
   expect(stopped).not.toContain('disabled=""');
   const running = renderToStaticMarkup(
     <StopAppButton {...props} running={true} />,
   );
   expect(running).toContain('aria-label="Stop Plex"');
   expect(running).toContain("Stop app");
+  expect(running).not.toContain("hub-card-start");
   expect(
     renderToStaticMarkup(<StopAppButton {...props} running={null} />),
   ).toContain('disabled=""');
