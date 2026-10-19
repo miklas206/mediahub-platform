@@ -119,3 +119,10 @@ Regression coverage includes a held Plex status response over repeated polling
 cycles, genuine storage failures after recovery, persistent API errors across
 multiple read attempts, clearing after real recovery, and repeated clicks during
 a slow read. These browser fixtures are synthetic and do not operate live apps.
+
+
+## Shared upstream checks and local app links (0.6.69)
+
+Jellyfin, Sonarr, Radarr, Prowlarr and Autobrr share a read-only HEAD request to the fixed repository's public GitHub `/releases/latest` URL. Only its same-repository HTTPS release-tag Location is accepted; redirects are never followed. GitHub chooses the published stable release, avoiding numeric development tags such as Sonarr's preview versions. Prerelease/development version strings, cross-repository locations and unknown installed versions cannot claim an update. The response is shared for five minutes across cards and background checks. Public-provider cooldown is persisted independently of GitHub REST cooldown and never transmits stored GitHub credentials. No REST fallback, token setup, new package or configuration migration is required on fresh installation or upgrade. This verifies upstream availability only, and preserves the existing managed-installer/automatic-update policy. Core, MediaSeed and MediaVPN keep Git source checks; Plex retains its existing provider.
+
+App cards and settings use a validated domain if configured, otherwise the registered LAN address. Plex root and `/web/` addresses normalize to `/web/index.html`, while an already complete web path is preserved. No address is fabricated when both are missing or invalid. This fixes the previous card link to the internal status page when only a local IP was registered. Existing data, media mounts and app credentials are unchanged.

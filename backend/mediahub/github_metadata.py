@@ -96,3 +96,69 @@ class GitHubMetadata:
                 while len(self.cache) > 128:
                     self.cache.pop(next(iter(self.cache)))
             return response
+
+    async def latest_public_release(self, client, repository):
+        """GitHub's stable-release redirect, independent of REST quotas/tokens.
+
+        HEAD returns only the published latest release location. Do not follow it
+        or use tags/feed ordering: some projects give prereleases numeric tags.
+        """
+        from mediahub.platform_source import REPOSITORY
+
+        if not REPOSITORY.fullmatch(repository or ""):
+            raise DomainError("invalid_repository", "Invalid GitHub repository", 422)
+        identity = hashlib.sha256(b"github-public-release-redirect").digest()
+        path = "/" + repository + "/releases/latest"
+        key = (identity, path)
+        async with self.lock:
+            now = self.clock()
+            cached = self.cache.get(key)
+            if cached and now < cached[0]:
+                return cached[1]
+            retry_at = self.cooldowns.get(identity, 0)
+            if now < retry_at:
+                error = DomainError(
+                    "github_rate_limited",
+                    "Public release checks are temporarily limited; retry later.",
+                    429,
+                )
+                error.retry_at = retry_at
+                raise error
+            request = client.build_request("HEAD", "https://github.com" + path)
+            # Public release metadata never needs or forwards account credentials.
+            request.headers.pop("Authorization", None)
+            request.headers.pop("Cookie", None)
+            response = await client.send(request, auth=None, follow_redirects=False)
+            if response.status_code in {403, 429, 503}:
+                retry = response.headers.get("Retry-After", "")
+                retry_at = now + 60
+                try:
+                    seconds = float(retry)
+                    if math.isfinite(seconds):
+                        retry_at = max(retry_at, now + min(86400, max(0, seconds)))
+                except ValueError:
+                    try:
+                        retry_at = max(
+                            retry_at, min(now + 86400, parsedate_to_datetime(retry).timestamp())
+                        )
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+                self.cooldowns[identity] = retry_at
+                self.persist_cooldowns()
+                error = DomainError(
+                    "github_rate_limited",
+                    "Public release checks are temporarily limited; retry later.",
+                    429,
+                )
+                error.retry_at = retry_at
+                raise error
+            if response.status_code not in {301, 302, 303, 307, 308}:
+                raise DomainError(
+                    "app_release_unavailable",
+                    "The app's latest published release could not be verified",
+                    503,
+                )
+            self.cache[key] = (now + 300, response)
+            while len(self.cache) > 128:
+                self.cache.pop(next(iter(self.cache)))
+            return response

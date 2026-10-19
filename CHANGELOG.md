@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.69
+
+- Check Jellyfin, Sonarr, Radarr, Prowlarr and Autobrr through a shared cached public latest-release redirect, independently of GitHub REST quotas and credentials. Preserve stable-release selection, provider backoff and verified installed-version comparisons. Core and first-party source checks retain their Git transport; Plex keeps its own provider.
+- Open installed apps through a valid configured domain or their registered local IP when no domain is available. Normalize Plex web paths and preserve local MediaVPN access if its separate status is unavailable. The same fallback applies to app settings, fresh installs and existing registrations.
+
 ## 0.6.68
 
 - Preserve the polling notification fixes from 0.6.67 and give explicit app-address/resource action failures priority over an older background-read error, so new failures remain visible during an outage.

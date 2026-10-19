@@ -5,14 +5,24 @@ import type { CatalogApp } from "./phase2-types";
 import type { Integration } from "./integrations";
 
 it("passes only the selected theme to independent MediaHub apps without losing their URL", () => {
-  const url = new URL(themedAppUrl("https://seed.example/app?view=rss#feeds", "org.mediahub.seedbox", "edge-signal"));
+  const url = new URL(
+    themedAppUrl(
+      "https://seed.example/app?view=rss#feeds",
+      "org.mediahub.seedbox",
+      "edge-signal",
+    ),
+  );
   expect(url.origin).toBe("https://seed.example");
   expect(url.pathname).toBe("/app");
   expect(url.searchParams.get("view")).toBe("rss");
   expect(url.searchParams.get("mediahub_theme")).toBe("edge-signal");
   expect(url.hash).toBe("#feeds");
-  expect(themedAppUrl("https://plex.example/", "org.mediahub.plex", "soft-orbit")).toBe("https://plex.example/");
-  expect(themedAppUrl("javascript:alert(1)", "org.mediahub.seedbox", "soft-orbit")).toBe("javascript:alert(1)");
+  expect(
+    themedAppUrl("https://plex.example/", "org.mediahub.plex", "soft-orbit"),
+  ).toBe("https://plex.example/");
+  expect(
+    themedAppUrl("javascript:alert(1)", "org.mediahub.seedbox", "soft-orbit"),
+  ).toBe("javascript:alert(1)");
 });
 
 const catalog = [
@@ -63,38 +73,137 @@ const input = {
 };
 
 it("recognizes managed MediaSeed as the installed Seedbox without an external address", () => {
-  const managed = { ...seedbox, id: "managed-seed", packageId: "org.mediahub.mediaseed", name: "MediaSeed", removable: true };
-  const entry = buildHubEntries({ ...input, apps: [managed] }).find(row => row.id === "org.mediahub.seedbox");
-  expect(entry).toMatchObject({name:"MediaSeed",configured:true,path:managed.detailPath,settingsPath:"/app-settings/org.mediahub.mediaseed",removableApp:managed});
+  const managed = {
+    ...seedbox,
+    id: "managed-seed",
+    packageId: "org.mediahub.mediaseed",
+    name: "MediaSeed",
+    removable: true,
+  };
+  const entry = buildHubEntries({ ...input, apps: [managed] }).find(
+    (row) => row.id === "org.mediahub.seedbox",
+  );
+  expect(entry).toMatchObject({
+    name: "MediaSeed",
+    configured: true,
+    path: managed.detailPath,
+    settingsPath: "/app-settings/org.mediahub.mediaseed",
+    removableApp: managed,
+  });
   expect(entry?.statusLabel).not.toBe("Not set up");
 });
 
 describe("primary MediaHub app hub", () => {
   it("opens a saved external address and keeps app settings accessible", () => {
-    const entries = buildHubEntries({ ...input, apps: [{ ...seedbox, externalUrl: "https://seed.example.com" }] });
-    expect(entries.find(entry => entry.id === seedbox.packageId)).toMatchObject({ path: "https://seed.example.com", external: true, settingsPath: "/app-settings/org.mediahub.seedbox" });
+    const entries = buildHubEntries({
+      ...input,
+      apps: [{ ...seedbox, externalUrl: "https://seed.example.com" }],
+    });
+    expect(
+      entries.find((entry) => entry.id === seedbox.packageId),
+    ).toMatchObject({
+      path: "https://seed.example.com/",
+      external: true,
+      settingsPath: "/app-settings/org.mediahub.seedbox",
+    });
   });
   it("adds the separate MediaVPN app without claiming tunnel health", () => {
-    const entries = buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" } });
-    expect(entries.find((entry) => entry.id === "org.mediahub.mediavpn")).toMatchObject({ name: "MediaVPN", path: "http://192.168.1.111:18802/", external: true, configured: true, statusLabel: "App available" });
-    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "http://192.168.1.111:18802" }, mediavpnError: "Offline" }).find((entry) => entry.name === "MediaVPN")?.status).toBe("unknown");
-    expect(buildHubEntries({ ...input, mediavpn: { configured: true, available: true, url: "javascript:alert(1)" } }).find((entry) => entry.name === "MediaVPN")).toMatchObject({ configured: false, path: "/store/mediavpn" });
+    const entries = buildHubEntries({
+      ...input,
+      mediavpn: {
+        configured: true,
+        available: true,
+        url: "http://192.168.1.111:18802",
+      },
+    });
+    expect(
+      entries.find((entry) => entry.id === "org.mediahub.mediavpn"),
+    ).toMatchObject({
+      name: "MediaVPN",
+      path: "http://192.168.1.111:18802/",
+      external: true,
+      configured: true,
+      statusLabel: "App available",
+    });
+    expect(
+      buildHubEntries({
+        ...input,
+        mediavpn: {
+          configured: true,
+          available: true,
+          url: "http://192.168.1.111:18802",
+        },
+        mediavpnError: "Offline",
+      }).find((entry) => entry.name === "MediaVPN")?.status,
+    ).toBe("unknown");
+    expect(
+      buildHubEntries({
+        ...input,
+        mediavpn: {
+          configured: true,
+          available: true,
+          url: "javascript:alert(1)",
+        },
+      }).find((entry) => entry.name === "MediaVPN"),
+    ).toMatchObject({ configured: false, path: "/store/mediavpn" });
   });
   it("opens the separate MediaSeed instead of the old Seedbox wizard", () => {
-    const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" } });
-    expect(entries.find((entry) => entry.id === "org.mediahub.seedbox")).toMatchObject({
-      name: "MediaSeed", path: "http://192.168.1.111:18800/", configured: true, external: true, action: "Open app", statusLabel: "App available",
+    const entries = buildHubEntries({
+      ...input,
+      mediaseed: {
+        configured: true,
+        available: true,
+        url: "http://192.168.1.111:18800",
+      },
+    });
+    expect(
+      entries.find((entry) => entry.id === "org.mediahub.seedbox"),
+    ).toMatchObject({
+      name: "MediaSeed",
+      path: "http://192.168.1.111:18800/",
+      configured: true,
+      external: true,
+      action: "Open app",
+      statusLabel: "App available",
     });
   });
   it("keeps the configured app link without inventing healthy status on failed refresh", () => {
-    const entries = buildHubEntries({ ...input, mediaseed: { configured: true, available: true, url: "http://192.168.1.111:18800" }, mediaseedError: "Offline" });
-    expect(entries.find((entry) => entry.id === "org.mediahub.seedbox")).toMatchObject({ external: true, status: "unknown", statusLabel: "Status unavailable", action: "Open app" });
-    expect(buildHubEntries({ ...input, mediaseed: { configured: true, available: false, url: "javascript:alert(1)" } }).find((entry) => entry.id === "org.mediahub.seedbox")?.external).toBeUndefined();
+    const entries = buildHubEntries({
+      ...input,
+      mediaseed: {
+        configured: true,
+        available: true,
+        url: "http://192.168.1.111:18800",
+      },
+      mediaseedError: "Offline",
+    });
+    expect(
+      entries.find((entry) => entry.id === "org.mediahub.seedbox"),
+    ).toMatchObject({
+      external: true,
+      status: "unknown",
+      statusLabel: "Status unavailable",
+      action: "Open app",
+    });
+    expect(
+      buildHubEntries({
+        ...input,
+        mediaseed: {
+          configured: true,
+          available: false,
+          url: "javascript:alert(1)",
+        },
+      }).find((entry) => entry.id === "org.mediahub.seedbox")?.external,
+    ).toBeUndefined();
   });
   it("exposes the supported MediaHub apps with real setup paths before installation", () => {
     const entries = buildHubEntries(input);
     expect(entries).toHaveLength(5);
-    expect(entries.find(entry => entry.name === "MediaVPN")).toMatchObject({ configured: false, path: "/store/mediavpn", action: "Set up" });
+    expect(entries.find((entry) => entry.name === "MediaVPN")).toMatchObject({
+      configured: false,
+      path: "/store/mediavpn",
+      action: "Set up",
+    });
     expect(
       entries.every(
         (entry) => !entry.configured && entry.statusLabel === "Not set up",
@@ -106,7 +215,9 @@ describe("primary MediaHub app hub", () => {
     expect(entries.find((entry) => entry.name === "Jellyfin")?.path).toBe(
       "/apps/install/jellyfin",
     );
-    expect(entries.find((entry) => entry.name === "Cloudflare")).toBeUndefined();
+    expect(
+      entries.find((entry) => entry.name === "Cloudflare"),
+    ).toBeUndefined();
   });
   it("uses live registry paths and health and does not treat mock apps as installed", () => {
     const entries = buildHubEntries({
@@ -202,25 +313,64 @@ describe("primary MediaHub app hub", () => {
   });
 });
 
-
 describe("home card removal capability", () => {
   it("offers removal only for an actual supported installation", () => {
     const statuses = {
-      mediaseed: { configured: true, available: true, url: "https://seed.example" },
-      mediavpn: { configured: true, available: true, url: "https://vpn.example" },
+      mediaseed: {
+        configured: true,
+        available: true,
+        url: "https://seed.example",
+      },
+      mediavpn: {
+        configured: true,
+        available: true,
+        url: "https://vpn.example",
+      },
     };
-    const managed = ["mediaseed", "mediavpn"].map(id => ({ ...seedbox, id: `managed-${id}`, name: id, packageId: `org.mediahub.${id}`, removable: true }));
+    const managed = ["mediaseed", "mediavpn"].map((id) => ({
+      ...seedbox,
+      id: `managed-${id}`,
+      name: id,
+      packageId: `org.mediahub.${id}`,
+      removable: true,
+    }));
     const entries = buildHubEntries({ ...input, ...statuses, apps: managed });
-    expect(entries.filter(entry => entry.removableApp).map(entry => entry.removableApp?.id).sort()).toEqual(["managed-mediaseed", "managed-mediavpn"]);
-    expect(buildHubEntries({ ...input, ...statuses }).every(entry => !entry.removableApp)).toBe(true);
-    expect(buildHubEntries({ ...input, ...statuses, apps: managed.map(app => ({ ...app, isMock: true })) }).every(entry => !entry.removableApp)).toBe(true);
-    expect(buildHubEntries({ ...input, apps: [{ ...seedbox, removable: true }] }).find(entry => entry.id === seedbox.packageId)?.removableApp?.id).toBe(seedbox.id);
+    expect(
+      entries
+        .filter((entry) => entry.removableApp)
+        .map((entry) => entry.removableApp?.id)
+        .sort(),
+    ).toEqual(["managed-mediaseed", "managed-mediavpn"]);
+    expect(
+      buildHubEntries({ ...input, ...statuses }).every(
+        (entry) => !entry.removableApp,
+      ),
+    ).toBe(true);
+    expect(
+      buildHubEntries({
+        ...input,
+        ...statuses,
+        apps: managed.map((app) => ({ ...app, isMock: true })),
+      }).every((entry) => !entry.removableApp),
+    ).toBe(true);
+    expect(
+      buildHubEntries({
+        ...input,
+        apps: [{ ...seedbox, removable: true }],
+      }).find((entry) => entry.id === seedbox.packageId)?.removableApp?.id,
+    ).toBe(seedbox.id);
   });
 });
 
-
 it("passes the explicit Light choice only to a first-party app", () => {
-  const url = new URL(themedAppUrl("https://example.test/open?a=1", "org.mediahub.mediaseed", "midnight-glass", "light"));
+  const url = new URL(
+    themedAppUrl(
+      "https://example.test/open?a=1",
+      "org.mediahub.mediaseed",
+      "midnight-glass",
+      "light",
+    ),
+  );
   expect(url.searchParams.get("mediahub_mode")).toBe("light");
   expect(url.searchParams.get("a")).toBe("1");
 });
@@ -281,13 +431,104 @@ it("includes other installed catalog apps with status settings and both addresse
 });
 
 it("shows a recently observed stopped app as not running instead of critical", () => {
-  const app = { ...seedbox, running: false, observedAt: Date.now() / 1000,
+  const app = {
+    ...seedbox,
+    running: false,
+    observedAt: Date.now() / 1000,
     health: { ...seedbox.health, status: "unhealthy" as const },
-    controls: { actions: ["start", "stop"], logs: true, updateCheck: true } };
-  expect(buildHubEntries({ ...input, apps: [app] }).find(row => row.id === seedbox.packageId))
-    .toMatchObject({ status: "stopped", statusLabel: "Not running", canStart: true });
-  expect(buildHubEntries({ ...input, apps: [{ ...app, running: true }] }).find(row => row.id === seedbox.packageId)?.statusLabel)
-    .not.toBe("Not running");
-  expect(buildHubEntries({ ...input, apps: [{ ...app, observedAt: 1 }] }).find(row => row.id === seedbox.packageId)?.statusLabel)
-    .not.toBe("Not running");
+    controls: { actions: ["start", "stop"], logs: true, updateCheck: true },
+  };
+  expect(
+    buildHubEntries({ ...input, apps: [app] }).find(
+      (row) => row.id === seedbox.packageId,
+    ),
+  ).toMatchObject({
+    status: "stopped",
+    statusLabel: "Not running",
+    canStart: true,
+  });
+  expect(
+    buildHubEntries({ ...input, apps: [{ ...app, running: true }] }).find(
+      (row) => row.id === seedbox.packageId,
+    )?.statusLabel,
+  ).not.toBe("Not running");
+  expect(
+    buildHubEntries({ ...input, apps: [{ ...app, observedAt: 1 }] }).find(
+      (row) => row.id === seedbox.packageId,
+    )?.statusLabel,
+  ).not.toBe("Not running");
+});
+
+describe("installed app address fallback", () => {
+  it.each(["plex", "jellyfin", "mediaseed", "mediavpn"])(
+    "opens %s directly on its local IP without a domain or separate status",
+    (id) => {
+      const app = {
+        ...seedbox,
+        packageId: `org.mediahub.${id}`,
+        localUrl: "http://192.168.1.20:8096",
+        externalUrl: undefined,
+      };
+      const entry = buildHubEntries({ ...input, apps: [app] }).find(
+        (row) =>
+          row.id ===
+          (id === "mediaseed" ? "org.mediahub.seedbox" : app.packageId),
+      );
+      expect(entry).toMatchObject({
+        configured: true,
+        external: true,
+        action: "Open app",
+        path: app.localUrl + (id === "plex" ? "/web/index.html" : "/"),
+      });
+    },
+  );
+
+  it.each([
+    undefined,
+    "",
+    "javascript:alert(1)",
+    "https://user:password@example.com",
+  ])(
+    "falls back to the local IP when the external address is %s",
+    (externalUrl) => {
+      const app = {
+        ...seedbox,
+        packageId: "org.mediahub.jellyfin",
+        localUrl: "http://192.168.1.20:8096/",
+        externalUrl,
+      };
+      expect(
+        buildHubEntries({ ...input, apps: [app] }).find(
+          (row) => row.id === app.packageId,
+        ),
+      ).toMatchObject({ path: app.localUrl, external: true });
+    },
+  );
+
+  it("prefers the configured domain and preserves Plex's existing web path", () => {
+    const app = {
+      ...seedbox,
+      packageId: "org.mediahub.plex",
+      localUrl: "http://192.168.1.20:32400",
+      externalUrl: "https://plex.example/web/index.html?view=home",
+    };
+    expect(
+      buildHubEntries({ ...input, apps: [app] }).find(
+        (row) => row.id === app.packageId,
+      ),
+    ).toMatchObject({ path: app.externalUrl, external: true });
+  });
+
+  it("keeps setup available when neither address is valid", () => {
+    const app = {
+      ...seedbox,
+      localUrl: "javascript:alert(1)",
+      externalUrl: "invalid",
+    };
+    expect(
+      buildHubEntries({ ...input, apps: [app] }).find(
+        (row) => row.id === app.packageId,
+      ),
+    ).toMatchObject({ path: app.detailPath, external: undefined });
+  });
 });

@@ -28,3 +28,9 @@ it("opens both addresses and the correct Plex web path", () => {
   ])
     expect(safeAppUrl(value)).toBeNull();
 });
+
+it("normalizes Plex web directory URLs without duplicating its web path", () => {
+  expect(
+    safeAppUrl("http://192.168.1.20:32400/web/", "org.mediahub.plex"),
+  ).toBe("http://192.168.1.20:32400/web/index.html");
+});

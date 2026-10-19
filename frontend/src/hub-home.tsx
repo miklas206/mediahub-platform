@@ -15,7 +15,7 @@ import { ServiceIcon } from "./service-icon";
 import { appStatusLabel } from "./seedbox-status";
 import { t } from "./i18n";
 import "./hub-home.css";
-import { AppAddressLinks, AppUptime } from "./app-uptime";
+import { AppAddressLinks, AppUptime, safeAppUrl } from "./app-uptime";
 import { useAppearance, type ThemeStyle, type Appearance } from "./appearance";
 
 export function themedAppUrl(
@@ -198,6 +198,9 @@ export function buildHubEntries({
               app.packageId === "org.mediahub.mediaseed")) &&
           !app.isMock,
       );
+      const appAddress =
+        safeAppUrl(installed?.externalUrl, installed?.packageId) ||
+        safeAppUrl(installed?.localUrl, installed?.packageId);
       const fjordHub = entry.id === "org.mediahub.fjordhub";
       const integration = fjordHub
         ? integrations.find((item) => item.enabled)
@@ -240,11 +243,9 @@ export function buildHubEntries({
             ? installed.detailPath || `/apps/${installed.id}`
             : `/app-settings/${installed.packageId}`
           : undefined,
-        external: installed?.externalUrl ? true : undefined,
+        external: appAddress ? true : undefined,
         path:
-          (installed?.externalUrl && installed.packageId === "org.mediahub.plex"
-            ? installed.externalUrl.replace(/\/$/, "") + "/web/index.html"
-            : installed?.externalUrl) ||
+          appAddress ||
           installed?.detailPath ||
           (integration
             ? `/integrations/${encodeURIComponent(integration.id)}`
@@ -263,7 +264,7 @@ export function buildHubEntries({
                 : "Complete setup",
         statusDetail: statusUnavailable ? undefined : installed?.health.summary,
         action:
-          installed?.detailPath || integration
+          appAddress || installed?.detailPath || integration
             ? "Open app"
             : deployed
               ? "Complete setup"
@@ -306,16 +307,32 @@ export function buildHubEntries({
     }
   }
   if (!entries.some((entry) => entry.id === "org.mediahub.mediavpn")) {
+    const installed = apps?.find(
+      (app) => app.packageId === "org.mediahub.mediavpn" && !app.isMock,
+    );
+    const appAddress =
+      safeAppUrl(installed?.externalUrl, installed?.packageId) ||
+      safeAppUrl(installed?.localUrl, installed?.packageId);
     entries.push({
       id: "org.mediahub.mediavpn",
       name: "MediaVPN",
       description: "WireGuard connections",
       category: "Network",
-      path: "/store/mediavpn",
-      configured: false,
-      status: "unknown",
-      statusLabel: mediavpnError ? "Status unavailable" : "Not set up",
-      action: "Set up",
+      path: appAddress || installed?.detailPath || "/store/mediavpn",
+      configured: !!installed,
+      external: appAddress ? true : undefined,
+      removableApp: installed?.removable ? installed : undefined,
+      status:
+        appsError || mediavpnError
+          ? "unknown"
+          : installed?.health.status || "unknown",
+      statusLabel:
+        appsError || mediavpnError
+          ? "Status unavailable"
+          : installed
+            ? appStatusLabel(installed.health.status)
+            : "Not set up",
+      action: installed ? "Open app" : "Set up",
     });
   }
   return entries

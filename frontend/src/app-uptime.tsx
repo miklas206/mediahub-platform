@@ -12,7 +12,7 @@ export function safeAppUrl(value?: string | null, packageId?: string) {
       return null;
     if (
       packageId === "org.mediahub.plex" &&
-      (url.pathname === "/" || url.pathname === "/web")
+      ["/", "/web", "/web/"].includes(url.pathname)
     )
       url.pathname = "/web/index.html";
     return url.href;

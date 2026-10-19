@@ -8,7 +8,7 @@ import { ArrowLeft, ExternalLink, Save, RotateCcw } from "lucide-react";
 import { api } from "./api";
 import { useData } from "./use-data";
 import { NotificationPopup } from "./notification-popup";
-import { AppAddressLinks, AppUptime } from "./app-uptime";
+import { AppAddressLinks, AppUptime, safeAppUrl } from "./app-uptime";
 import type { Health } from "./contracts";
 
 type AppSettings = {
@@ -235,7 +235,10 @@ export function AppSettingsPage({
               name={data.name}
               packageId={packageId}
               controls={data.controls}
-              openUrl={data.externalUrl || data.localUrl}
+              openUrl={
+                safeAppUrl(data.externalUrl, packageId) ||
+                safeAppUrl(data.localUrl, packageId)
+              }
               onChanged={reload}
             />
           )}
