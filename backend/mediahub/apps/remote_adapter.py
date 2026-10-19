@@ -18,17 +18,19 @@ class RemoteAppDefinition:
 
 
 class RemoteAppAdapter:
-    def __init__(self, definition, host_id, client_factory, status_cache, events, app_id, metadata_cache=None):
+    def __init__(self, definition, host_id, client_factory, status_cache, events, app_id, metadata_cache=None, status_enricher=None):
         self.definition, self.host_id = definition, host_id
         self.client_factory, self.status_cache = client_factory, status_cache
         self.events, self.app_id = events, app_id
         self.metadata_cache = metadata_cache or GitHubMetadata()
+        self.status_enricher = status_enricher
 
     async def status(self):
         return await self.status_cache.get(
             self.host_id,
             self.client_factory(self.host_id),
             self.definition.agent_prefix + "/status",
+            enrich=self.status_enricher,
         )
 
     async def health(self):

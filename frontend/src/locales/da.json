@@ -4360,5 +4360,6 @@
   "Start app": "Start app",
   "Starting...": "Starter...",
   "Not running": "Kører ikke",
-  "Start the app to use it.": "Start appen for at bruge den."
+  "Start the app to use it.": "Start appen for at bruge den.",
+  "Internet traffic is protected by the shared VPN. Local access remains available through the configured LAN address on port 32400.": "Internettrafikken beskyttes af den fælles VPN. Lokal adgang er tilgængelig via den konfigurerede LAN-adresse på port 32400."
 }

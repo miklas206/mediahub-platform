@@ -17,7 +17,7 @@ export function PlexInstallProgress({
   job?: PlexInstallOperation;
   connectionLost?: boolean;
 }) {
-  if (job?.action !== "install") return null;
+  if (job?.action !== "install" || job.state === "succeeded") return null;
   const complete = job.state === "succeeded";
   const failed = job.state === "failed";
   const phases = ["preparing", "download", "storage", "container", "start"];

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
+import { ContainerInstallProgress } from "./container-apps";
 import { PlexInstallProgress } from "./plex-install-progress";
 import {
   FjordHubInstallProgress,
@@ -54,12 +55,12 @@ describe("App installation progress", () => {
     expect(failure).not.toContain("100%");
     expect(failure).toContain("Image download failed");
   });
-  it("shows confirmed Plex completion and ignores unrelated operations", () => {
+  it("hides completed Plex installation and ignores unrelated operations", () => {
     expect(
       renderToStaticMarkup(
         <PlexInstallProgress job={{ action: "install", state: "succeeded" }} />,
       ),
-    ).toContain('aria-valuenow="100"');
+    ).toBe("");
     expect(
       renderToStaticMarkup(
         <PlexInstallProgress
@@ -67,6 +68,19 @@ describe("App installation progress", () => {
         />,
       ),
     ).toBe("");
+  });
+  it("hides completed container installs while keeping failures and work visible", () => {
+    for (const state of ["installed", "installing", "failed"]) {
+      const html = renderToStaticMarkup(
+        <ContainerInstallProgress app="jellyfin" status={{
+          state: state === "installed" ? "running" : "installing",
+          installation: { app: "jellyfin", hostId: "local", storageIds: {}, timezone: "UTC" },
+          operation: {state, progress: 100},
+        }} />,
+      );
+      if (state === "installed") expect(html).toBe("");
+      else expect(html).toContain('role="progressbar"');
+    }
   });
   it("translates Plex installation progress into Danish", () => {
     setLanguage("da");
@@ -93,7 +107,7 @@ describe("App installation progress", () => {
       renderToStaticMarkup(
         <FjordHubInstallProgress state="succeeded" message="Completed" />,
       ),
-    ).toContain('aria-valuenow="100"');
+    ).toBe("");
     expect(
       renderToStaticMarkup(
         <FjordHubInstallProgress state="interrupted" message="Interrupted" />,
@@ -130,6 +144,6 @@ describe("App installation progress", () => {
           transaction={{ ...transaction, state: "Healthy" }}
         />,
       ),
-    ).toContain('aria-valuenow="100"');
+    ).toBe("");
   });
 });

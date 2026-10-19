@@ -1,5 +1,6 @@
 """Separate Proton TCP forwarding for the installed, VPN-attached Plex server."""
 
+import asyncio
 import hashlib
 import ipaddress
 import time
@@ -58,7 +59,7 @@ class PlexForwarding:
         if (
             not state.get("plexPortEnabled")
             or not self.gateway.gateway.get("providerReady")
-            or time.time() - (state.get("checkedAt") or 0) > 90
+            or not -5 <= time.time() - (result.get("verifiedAt") or 0) <= 90
         ):
             result.update(ready=False)
         if not result["available"]:
@@ -67,6 +68,83 @@ class PlexForwarding:
                 message="Install Plex through MediaHub before enabling its separate port",
             )
         return result
+
+    async def runtime_status(self, host_id, client, report):
+        """Describe the selected shared VPN, retaining the legacy dedicated path."""
+        try:
+            shared = await asyncio.wait_for(client.request("GET", "/v1/shared-vpn/plex"), 3)
+        except (DomainError, TimeoutError):
+            # Older Agents lack this route; keep a verified dedicated VPN intact.
+            if report.get("vpn", {}).get("verified"):
+                return report
+            return {**report, "portForwarding": {"status": "unavailable"}}
+        if not shared.get("enabled"):
+            return report
+        report = {
+            **report,
+            "vpn": {"mode": "shared", "verified": False},
+            "portForwarding": {"status": "unavailable", "plexVerified": False},
+        }
+        try:
+            binding, _ = self.svc.shared_vpn.target("plex")
+            if binding["hostId"] != host_id:
+                return report
+            peer = self.svc.shared_vpn.peer_id(binding)
+            if self.svc.shared_vpn.assignment_pending(peer):
+                return report
+            profile = self.svc.shared_vpn.assignment(peer)
+            provider, gateway = await asyncio.wait_for(
+                asyncio.gather(
+                    self.svc.shared_vpn.vpn(path="/profiles/" + profile if profile else ""),
+                    self.gateway.vpn(),
+                ),
+                4,
+            )
+            verified = bool(shared.get("ready") and provider.get("ready"))
+            report["vpn"].update(
+                verified=verified,
+                externalIp=provider.get("publicIp") if verified else None,
+                lastVerified=time.time() if verified else None,
+            )
+            state = self.gateway.state()
+            lease = gateway.get("plexPort") or {}
+            endpoint = state.get("plexPortStatus") or {}
+            age = time.time() - (endpoint.get("verifiedAt") or 0)
+            # The inbound gateway may intentionally use a different profile from
+            # Plex's outbound VPN. Validate its own saved profile and Plex identity.
+            same_profile = bool(
+                state.get("profileId") and state["profileId"] == gateway.get("profileId")
+            )
+            leased = bool(
+                verified
+                and same_profile
+                and gateway.get("providerReady")
+                and lease.get("ready")
+                and state.get("plexPortEnabled")
+            )
+            if leased:
+                report["vpn"]["provider"] = "Proton"
+            public_ready = bool(
+                leased
+                and endpoint.get("ready")
+                and -5 <= age <= 90
+                and endpoint.get("publicIp") == lease.get("publicIp")
+                and endpoint.get("publicPort") == lease.get("publicPort")
+            )
+            report["portForwarding"] = {
+                "status": "healthy" if public_ready else "pending" if leased else "unavailable",
+                "currentPort": lease.get("publicPort") if leased else None,
+                "publicIp": lease.get("publicIp") if leased else None,
+                "lastRenewed": endpoint.get("verifiedAt") if public_ready else None,
+                "plexVerified": public_ready,
+            }
+        except (DomainError, TimeoutError, ValueError, TypeError, KeyError):
+            # Status failures must not reuse an earlier public reachability result.
+            report.update(
+                vpn={"mode": "shared", "verified": False},
+                portForwarding={"status": "unavailable", "plexVerified": False},
+            )
+        return report
 
     async def apply(self, state, reply):
         enabled = bool(state.get("plexPortEnabled"))
@@ -111,6 +189,7 @@ class PlexForwarding:
         verified = await self.probe(address, port, response.get("identityHash"))
         state["plexPortStatus"] = {
             "ready": verified,
+            "verifiedAt": time.time() if verified else None,
             "publicPort": port,
             "publicIp": address,
             "message": "Plex remote access verified through Proton"

@@ -65,7 +65,7 @@ export type ContainerAppStatus = {
 
 export function ContainerInstallProgress({app, status, connectionLost = false}: {app: string; status?: ContainerAppStatus; connectionLost?: boolean}) {
   const job = status?.operation;
-  if (!status || (status.state !== "installing" && !["installing", "installed", "failed"].includes(job?.state || ""))) return null;
+  if (job?.state === "installed" || !status || (status.state !== "installing" && !["installing", "installed", "failed"].includes(job?.state || ""))) return null;
   const phases = ["preparing", "download", "storage", "container", "start"];
   const labels = ["Preparing installation", "Downloading app image", "Checking storage and preparing container", "Creating app container", "Starting app container"];
   const failed = job?.state === "failed";

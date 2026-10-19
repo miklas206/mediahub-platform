@@ -115,7 +115,6 @@ def create_app(config: Config | None = None) -> FastAPI:
         svc.seedbox_reachability = SeedboxReachability(svc)
         svc.rss_feeds = RSSFeeds(svc)
         svc.fjordhub_deploy = FjordHubDeploy(sessions, svc.integrations)
-        register_remote_apps(svc)
         from mediahub.managed_apps import ManagedApps
 
         svc.managed_apps = ManagedApps(svc)
@@ -130,6 +129,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
         reconcile_removed_settings(svc)
         svc.vpn_gateway = VPNGateway(svc)
+        register_remote_apps(svc)
         from mediahub.app_dependencies import AppDependencies
 
         svc.app_dependencies = AppDependencies(svc)

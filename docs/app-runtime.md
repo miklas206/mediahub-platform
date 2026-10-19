@@ -47,3 +47,41 @@ Existing installations first need Core 0.6.30 to obtain this update mechanism. A
 The selected app update downloads a commit-pinned source archive, verifies the app name/version and safe build inputs, then uses the owned host helper to build only that app's Compose project. A stopped app remains stopped. Existing configuration and data are retained; a build or startup failure restores the preceding Compose configuration. The operation journal survives Core restarts and reconnects to the same helper without repeating an uncertain installation. Recovery verifies helper completion and the installed source/version labels.
 
 Private app repositories require the encrypted GitHub token configured in MediaHub to have read access to each app repository (`Contents: read` for a fine-grained token). The Core repository's scoped deploy key does not grant access to app repositories. Missing access produces a failed version check; it never falls back to a bundled version presented as a verified upstream release.
+
+
+## Plex shared VPN status (0.6.63)
+
+The Plex runtime adapter enriches the paired Agent report with the selected
+shared VPN and the separately approved public Plex port. A shared VPN must have
+a running Plex container, verified relay/namespace, a ready assigned provider and
+no pending profile change. The inbound gateway can intentionally use a different
+profile from Plex's outbound VPN. Its saved gateway profile, public address/port
+and fresh Plex identity probe must match before remote access is shown as ready.
+The remote access card shows the inbound public address when it differs from the
+outbound VPN. Countries without current evidence remain unverified.
+
+Port probes now save their own verifiedAt timestamp. A later gateway sync attempt
+cannot make an old probe appear fresh. Existing saved ports are rechecked by the
+regular reconciler after upgrade; no manual reset, replacement credentials or
+media migration is needed. The existing dedicated VPN path remains supported.
+Public status is filtered and cached for five seconds, with bounded calls and
+unavailable remote status on errors/timeouts.
+
+Both shared VPN Agent routes enter the HTTPS/app-storage dependency through
+FastAPI Depends. The earlier manual await failed once that dependency acquired a
+yielding storage lock; status/configuration and port reconciliation could fail.
+Fresh installations and restored existing Core databases register the enriched
+Plex adapter after gateway services are ready.
+
+Live read-only verification confirmed the current Plex identity through its
+public TCP port. Reviewed Agent/status code also passed against the real saved
+profiles in an isolated process; a fresh identity probe was applied in memory
+only. Production files, running services, media and saved preferences were not
+changed. Installing the released Core activates the UI/API fixes and automatic
+port re-verification.
+
+Release verification: 162 focused Python tests and 28 frontend tests passed,
+along with the production frontend build and Ruff checks. Chromium at 390 and
+1280 pixels verified shared VPN/port status, hidden completed installation cards,
+visible active/error cards, and no horizontal overflow or JavaScript errors.
+A physical fresh installation and full host reboot were not performed.

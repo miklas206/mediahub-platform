@@ -10,6 +10,7 @@ export function FjordHubInstallProgress({
   message: string;
   connectionLost?: boolean;
 }) {
+  if (state === "succeeded") return null;
   const complete = state === "succeeded";
   const failed = ["failed", "interrupted"].includes(state);
   return (
@@ -41,7 +42,7 @@ export function SeedboxInstallProgress({
   transaction: SeedboxTransaction;
   connectionLost?: boolean;
 }) {
-  if (!transaction.steps.length) return null;
+  if (!transaction.steps.length || transaction.state === "Healthy") return null;
   const complete = transaction.state === "Healthy";
   const failed =
     !complete && !["Installing", "Verifying"].includes(transaction.state);

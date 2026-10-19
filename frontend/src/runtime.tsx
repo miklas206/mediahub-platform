@@ -57,6 +57,7 @@ export type Runtime = {
   agentOnline: boolean;
   dockerHealthy?: boolean;
   portForwarding?: {
+    publicIp?: string | null;
     status: string;
     currentPort: number | null;
     lastRenewed: number | null;
@@ -79,6 +80,7 @@ export type Runtime = {
     }[];
   };
   vpn?: {
+    mode?: string | null;
     verified: boolean;
     externalIp: string | null;
     provider: string;
@@ -680,7 +682,7 @@ function PlexPanel({
             </div>
             <Row
               label={t("External IP")}
-              value={r.vpn?.externalIp || t("Not verified")}
+              value={r.portForwarding?.publicIp || r.vpn?.externalIp || t("Not verified")}
             />
             <Row
               label={t("Public Plex port")}
@@ -688,10 +690,10 @@ function PlexPanel({
             />
             <Row
               label={t("Port lease")}
-              value={r.portForwarding?.status || t("Not checked")}
+              value={translateText(r.portForwarding?.status === "not_checked" ? "Not checked" : r.portForwarding?.status || "Not checked")}
             />
             <Row
-              label={t("Last renewed")}
+              label={t(r.vpn?.mode === "shared" ? "Last verified" : "Last renewed")}
               value={stamp(r.portForwarding?.lastRenewed)}
             />
             <div className="runtime-row">
@@ -703,7 +705,9 @@ function PlexPanel({
           </dl>
           <p className="muted">
             {t(
-              "Internet traffic is fail-closed through the dedicated Plex VPN. Local access remains available through the configured LAN address on port 32400.",
+              r.vpn?.mode === "shared"
+                ? "Internet traffic is protected by the shared VPN. Local access remains available through the configured LAN address on port 32400."
+                : "Internet traffic is fail-closed through the dedicated Plex VPN. Local access remains available through the configured LAN address on port 32400.",
             )}
           </p>
         </Panel>

@@ -54,3 +54,13 @@ digest of the Agent's current installation/container snapshot. Running app
 containers, changed snapshots, foreign ownership and other namespace consumers
 block cleanup. Only verified stopped remnants and app relays are removed;
 profiles, keys, volumes, media and app data stay in place.
+
+
+## Completed installations (0.6.63)
+
+Confirmed completion removes the installation progress card automatically in
+Plex, container apps, managed MediaSeed/MediaVPN and legacy installers. Durable
+server records remain intact. Returning to an already installed app therefore
+does not restore an old 100% card. An active operation remains visible even if
+its percentage reaches 100; failed/interrupted operations retain their details.
+Completion of installation does not hide separate account/library setup guidance.

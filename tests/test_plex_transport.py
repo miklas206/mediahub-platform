@@ -87,3 +87,47 @@ def test_embedded_install_plan_passes_real_agent_https_guard(tmp_path):
     assert result["mediaReadOnly"] is True
     assert len(result["planDigest"]) == 64
     assert asyncio.run(client.request("GET", "/v1/plex/install-status"))["operation"]["state"] == "idle"
+
+
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+def test_shared_vpn_routes_enter_real_https_and_storage_guard(tmp_path, monkeypatch, method):
+    from contextlib import contextmanager
+
+    from fastapi.testclient import TestClient
+
+    from agent.main import AgentConfig, create_agent
+    from agent.shared_vpn import SharedVPN
+
+    token = "x" * 48
+    token_file = tmp_path / "token"
+    token_file.write_text(token)
+    entered = []
+
+    @contextmanager
+    def guard(folder):
+        entered.append("enter")
+        try:
+            yield
+        finally:
+            entered.append("exit")
+
+    async def observed(*args):
+        assert entered == ["enter"]
+        return {"enabled": False, "ready": False}
+
+    monkeypatch.setattr("agent.nas_storage.app_storage_guard", guard)
+    monkeypatch.setattr(SharedVPN, "status", observed)
+    monkeypatch.setattr(SharedVPN, "configuration", observed)
+    app = create_agent(AgentConfig(state_dir=tmp_path, token_file=token_file,
+                                   dev_mode=True, _env_file=None))
+    # Avoid background monitors; this test exercises the actual route dependency.
+    client = TestClient(app, base_url="https://agent")
+    body = {"enabled": False} if method == "PUT" else None
+    url = "/v1/shared-vpn/plex"
+    assert client.request(method, url, json=body).status_code == 401
+    headers = {"Authorization": "Bearer " + token}
+    assert client.request(method, "http://agent" + url, json=body, headers=headers).status_code == 403
+    assert entered == []
+    response = client.request(method, url, json=body, headers=headers)
+    assert response.status_code == 200, response.text
+    assert entered == ["enter", "exit"]

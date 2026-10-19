@@ -46,5 +46,9 @@ def register_remote_apps(svc):
                     svc.runtime_status_cache,
                     svc.events,
                     app.id,
+                    status_enricher=(
+                        svc.vpn_gateway.plex_forwarding.runtime_status
+                        if definition.package_id == "org.mediahub.plex" else None
+                    ),
                     metadata_cache=getattr(getattr(svc, "updates", None), "github_metadata", None),
                 )

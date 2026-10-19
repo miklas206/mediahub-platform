@@ -97,3 +97,24 @@ def test_core_status_forwards_paired_host_only(logged_in):
     assert response.json()["data"]["health"] == "healthy"
     assert calls == ["test"]
     assert "secret" not in response.text
+
+
+@pytest.mark.anyio
+async def test_status_enrichment_is_cached_and_filters_private_fields():
+    from unittest.mock import AsyncMock
+
+    cache, client = RemoteStatusCache(), Client()
+
+    async def enrich(host_id, agent, report):
+        assert host_id == "test" and agent is client
+        return {**report, "vpn": {"mode": "shared", "verified": True, "privateKey": "secret"},
+                "portForwarding": {"status": "healthy", "currentPort": 48522,
+                                   "plexVerified": True, "token": "secret"}}
+
+    hook = AsyncMock(side_effect=enrich)
+    first = await cache.get("test", client, enrich=hook)
+    second = await cache.get("test", client, enrich=hook)
+    assert first["vpn"]["mode"] == "shared"
+    assert first["portForwarding"]["plexVerified"] is True
+    assert second["cached"] and hook.await_count == 1 and client.calls == 1
+    assert "secret" not in str(first)

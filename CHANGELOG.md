@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.63
+
+- Report Plex remote access from its active shared VPN and separate public port instead of the unused dedicated VPN. Require matching profile, endpoint and fresh public identity verification before showing the port as ready.
+- Fix shared VPN Agent routes after the app-storage lock was added: enter the HTTPS/storage dependency correctly so status, configuration and Plex port reconciliation work again.
+- Automatically hide completed installation progress for Plex, container apps, MediaSeed/MediaVPN and legacy installers; retain active progress and failure details.
+
 ## 0.6.62
 
 - Show Start app in green, including its icon, hover and keyboard focus states; retain the stop action styling.

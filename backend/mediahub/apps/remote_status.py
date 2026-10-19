@@ -11,6 +11,7 @@ class PublicModel(BaseModel):
 
 
 class VPNStatus(PublicModel):
+    mode: str | None = None
     verified: bool = False
     externalIp: str | None = None
     provider: str | None = None
@@ -37,6 +38,7 @@ class TorrentStatus(PublicModel):
 
 
 class PortForwardStatus(PublicModel):
+    publicIp: str | None = None
     status: str = "not_checked"
     currentPort: int | None = Field(default=None, ge=1024, le=65535)
     lastRenewed: float | None = None
@@ -172,7 +174,7 @@ class RemoteStatusCache:
         self.ttl, self.timeout = ttl, timeout
         self.entries, self.locks = {}, {}
 
-    async def get(self, host_id, client, path="/v1/seedbox/status"):
+    async def get(self, host_id, client, path="/v1/seedbox/status", enrich=None):
         key = (host_id, path)
         async with self.locks.setdefault(key, asyncio.Lock()):
             saved = self.entries.get(key)
@@ -183,6 +185,9 @@ class RemoteStatusCache:
                 data = RuntimeStatus.model_validate(raw).model_dump()
                 if data["hostId"] != host_id or not -5 <= time.time() - data["observedAt"] <= 30:
                     raise ValueError("Stale or mismatched Agent status")
+                if enrich is not None:
+                    data = await asyncio.wait_for(enrich(host_id, client, data), self.timeout)
+                    data = RuntimeStatus.model_validate(data).model_dump()
                 data.update(cached=False, available=True)
             except Exception:
                 # No exception bodies, tokens, raw responses or stale Healthy on failure.

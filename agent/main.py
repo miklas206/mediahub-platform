@@ -350,14 +350,23 @@ def create_agent(config: AgentConfig | None = None):
     async def health():
         return {"status": "healthy"}
 
-    @app.get("/v1/shared-vpn/{app_name}")
-    async def shared_vpn_status(app_name: str, request: Request):
-        await secure_workflow(request)
+    async def secure_workflow(request: Request):
+        if request.url.scheme != "https":
+            raise DomainError(
+                "https_required", "Installation and credentials require verified HTTPS", 403
+            )
+
+        from agent.nas_storage import app_storage_guard
+
+        with app_storage_guard(config.state_dir):
+            yield
+
+    @app.get("/v1/shared-vpn/{app_name}", dependencies=[Depends(secure_workflow)])
+    async def shared_vpn_status(app_name: str):
         return await shared_vpn.status(app_name)
 
-    @app.put("/v1/shared-vpn/{app_name}")
-    async def shared_vpn_choice(app_name: str, body: SharedVPNChoice, request: Request):
-        await secure_workflow(request)
+    @app.put("/v1/shared-vpn/{app_name}", dependencies=[Depends(secure_workflow)])
+    async def shared_vpn_choice(app_name: str, body: SharedVPNChoice):
         return await shared_vpn.configuration(app_name, body.peer.model_dump() if body.peer else {}, body.enabled)
 
     @app.get("/v1/version")
@@ -441,17 +450,6 @@ def create_agent(config: AgentConfig | None = None):
         if inventory["health"] != "healthy":
             plan["blockers"].append("Required devices are not verified healthy")
         return plan
-
-    async def secure_workflow(request: Request):
-        if request.url.scheme != "https":
-            raise DomainError(
-                "https_required", "Installation and credentials require verified HTTPS", 403
-            )
-
-        from agent.nas_storage import app_storage_guard
-
-        with app_storage_guard(config.state_dir):
-            yield
 
     @app.get("/v1/apps/{package}/resources", dependencies=[Depends(secure_workflow)])
     async def app_resource_status(package: str):

@@ -186,7 +186,7 @@ export function ManagedAppInstallPage({
             )}
           </NotificationPopup>
         )}
-        {!preparing && (running || succeeded || job?.state === "failed") && (
+        {!preparing && (running || job?.state === "failed") && (
           <OperationProgress operation={operation} />
         )}
         <div className="button-row">
