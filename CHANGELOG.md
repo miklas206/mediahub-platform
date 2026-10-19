@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.58
+
+- Correct NAS capacity reporting with a verified, pinned SMB client. Older distribution rclone versions can report half the real capacity on NAS filesystems with larger sectors. Query existing FUSE mounts through the corrected SMB client without interrupting open connections.
+- Prepare the architecture-specific, checksum-verified client automatically for fresh installs and upgrades, preserving NAS credentials and mounts. A failed capacity query shows capacity unavailable without falsely marking the NAS disconnected.
+
 ## 0.6.57
 
 - Identify a completed update queue as previous when a different, newer Core update operation is displayed. Preserve both results and their logs without implying the newer attempt succeeded.

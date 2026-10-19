@@ -439,7 +439,7 @@ def test_userspace_nas_mount_uses_private_config_and_preserves_read_only(control
 
     def run(args, **kwargs):
         calls.append((args, kwargs))
-        return "obscured-password" if args[:2] == ["rclone", "obscure"] else ""
+        return "obscured-password" if args[1] == "obscure" else ""
 
     host.run = run
     host.mount_userspace(row, host.mounts / row["id"])
@@ -511,3 +511,96 @@ def test_correcting_saved_nas_login_keeps_id_and_retries(controller):
     assert "error" not in saved and len(attempts) == 1
     assert "new-synthetic-secret" not in host.file.read_text()
     assert "new-synthetic-secret" in (host.folder / (row["id"] + ".credentials")).read_text()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_verified_smb_client_prepares_on_install_and_upgrade(controller, monkeypatch, existing):
+    import hashlib
+    import io
+    import zipfile
+
+    import scripts.storage_host as module
+
+    host = controller
+    if existing:
+        save(host.folder / "existing.credentials", "private synthetic credential")
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("rclone-v1.75.2-linux-amd64/rclone", b"synthetic executable")
+    content = archive.getvalue()
+    monkeypatch.setattr(module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setitem(
+        module.RCLONE_ARCHIVES, "x86_64", ("amd64", hashlib.sha256(content).hexdigest())
+    )
+    monkeypatch.setattr(
+        module.urllib.request, "urlopen", lambda *args, **kwargs: io.BytesIO(content)
+    )
+    host.prepare_rclone()
+    assert host.rclone_binary().read_bytes() == b"synthetic executable"
+    assert stat.S_IMODE(host.rclone_binary().stat().st_mode) == 0o700
+    monkeypatch.setattr(
+        module.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: pytest.fail("Downloaded a prepared client again"),
+    )
+    host.prepare_rclone()
+    if existing:
+        assert (host.folder / "existing.credentials").read_text() == "private synthetic credential"
+
+
+def test_smb_client_rejects_wrong_checksum(controller, monkeypatch):
+    import io
+
+    import scripts.storage_host as module
+
+    monkeypatch.setattr(module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(
+        module.urllib.request, "urlopen", lambda *args, **kwargs: io.BytesIO(b"untrusted archive")
+    )
+    with pytest.raises(StorageError, match="preparation failed"):
+        controller.prepare_rclone()
+    assert not controller.rclone_binary().exists()
+
+
+@pytest.mark.parametrize(
+    "usage", [{"total": 1100226719744, "free": 1054719385600}, {"total": -1, "free": 42}, {}]
+)
+def test_nas_capacity_uses_corrected_smb_query_and_keeps_connection(controller, usage):
+    host = controller
+    identifier = "d" * 24
+    save(
+        host.file,
+        {
+            "nas": [
+                {
+                    "id": identifier,
+                    "server": "192.168.1.60",
+                    "share": "Media",
+                    "label": "NAS",
+                    "readOnly": False,
+                    "enabled": True,
+                }
+            ],
+            "shares": [],
+            "passwordConfigured": False,
+        },
+    )
+    host.mount_info = lambda path: {
+        "target": str(host.mounts / identifier),
+        "source": "mediahub-nas-" + identifier,
+        "fstype": "fuse.rclone",
+    }
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[1] == "about":
+            return json.dumps(usage)
+        raise StorageError("The obsolete filesystem report must not be used")
+
+    host.run = run
+    row = next(row for row in host.inventory()["locations"] if row["id"] == identifier)
+    assert row["ready"] is True
+    assert row["totalBytes"] == (usage.get("total") if usage.get("total", -1) >= 0 else None)
+    assert row["freeBytes"] == (usage.get("free") if usage.get("total", -1) >= 0 else None)
+    assert any(args[1] == "about" for args in calls)

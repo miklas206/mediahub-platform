@@ -7,9 +7,11 @@ and verifies SO_PEERCRED. No caller supplies commands, host paths or Docker spec
 
 import argparse
 import hashlib
+import io
 import ipaddress
 import json
 import os
+import platform
 import re
 import shutil
 import socket
@@ -17,6 +19,8 @@ import socketserver
 import struct
 import subprocess
 import threading
+import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -25,6 +29,11 @@ NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,39}\Z")
 PRIVATE = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 OWNER = "org.mediahub.storage"
 CONTAINER = "mediahub-storage-smb"
+RCLONE_VERSION = "1.75.2"
+RCLONE_ARCHIVES = {
+    "x86_64": ("amd64", "349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702"),
+    "aarch64": ("arm64", "7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10"),
+}
 
 
 class StorageError(Exception):
@@ -157,6 +166,67 @@ class StorageHost:
         except (OSError, ValueError, IndexError):
             return False
 
+    def rclone_binary(self):
+        return self.folder / "tools" / ("rclone-v" + RCLONE_VERSION)
+
+    def prepare_rclone(self):
+        """Pin and verify the SMB client; old distro versions misreport block sizes."""
+        target = self.rclone_binary()
+        directory = target.parent
+        directory.mkdir(mode=0o700, exist_ok=True)
+        if (
+            directory.is_symlink()
+            or directory.stat().st_mode & 0o077
+            or directory.stat().st_uid != os.geteuid()
+        ):
+            raise StorageError("Unsafe private storage tools directory")
+        if target.exists():
+            if (
+                target.is_symlink()
+                or not target.is_file()
+                or target.stat().st_uid != os.geteuid()
+                or target.stat().st_nlink != 1
+                or target.stat().st_mode & 0o022
+                or not os.access(target, os.X_OK)
+            ):
+                raise StorageError("Storage tool ownership or permissions changed")
+            return
+        try:
+            arch, expected = RCLONE_ARCHIVES[platform.machine()]
+            name = "rclone-v" + RCLONE_VERSION + "-linux-" + arch
+            url = (
+                "https://github.com/rclone/rclone/releases/download/v"
+                + RCLONE_VERSION
+                + "/"
+                + name
+                + ".zip"
+            )
+            with urllib.request.urlopen(url, timeout=45) as response:
+                content = response.read(128 * 1024 * 1024 + 1)
+            if len(content) > 128 * 1024 * 1024 or hashlib.sha256(content).hexdigest() != expected:
+                raise ValueError("Storage tool checksum mismatch")
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                member = archive.getinfo(name + "/rclone")
+                if member.file_size > 256 * 1024 * 1024:
+                    raise ValueError("Storage tool size exceeded")
+                binary = archive.read(member)
+            temporary = target.with_suffix(".preparing")
+            descriptor = os.open(
+                temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o700
+            )
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(binary)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
+        except (KeyError, OSError, ValueError, zipfile.BadZipFile):
+            raise StorageError(
+                "Automatic SMB client preparation failed. Check the host's access to GitHub release downloads and retry server setup."
+            ) from None
+
     def mount_userspace(self, row, target):
         try:
             descriptor = os.open("/dev/fuse", os.O_RDWR)
@@ -171,7 +241,9 @@ class StorageHost:
             line.split("=", 1)
             for line in (self.folder / (row["id"] + ".credentials")).read_text().splitlines()
         )
-        obscured = self.run(["rclone", "obscure", "-"], content=values["password"]).strip()
+        obscured = self.run(
+            [str(self.rclone_binary()), "obscure", "-"], content=values["password"]
+        ).strip()
         config = self.folder / (row["id"] + ".rclone.conf")
         save(
             config,
@@ -188,7 +260,7 @@ class StorageHost:
         try:
             self.run(
                 [
-                    "rclone",
+                    str(self.rclone_binary()),
                     "lsjson",
                     "mediahub:" + row["share"],
                     "--config",
@@ -220,7 +292,7 @@ class StorageHost:
             "--property=UMask=0077",
             "--property=StandardOutput=null",
             "--property=StandardError=null",
-            "/usr/bin/rclone",
+            str(self.rclone_binary()),
             "mount",
             "mediahub:" + row["share"],
             str(target),
@@ -296,17 +368,52 @@ class StorageHost:
             free = total = None
             if row["ready"]:
                 try:
-                    blocks, available, size = map(
-                        int,
-                        self.run(
-                            ["stat", "--file-system", "--format=%b:%a:%S", row["source"]], timeout=3
+                    if (
+                        row["kind"] == "nas"
+                        and self.mount_info(Path(row["source"])).get("fstype") == "fuse.rclone"
+                    ):
+                        connection = next(r for r in state["nas"] if r["id"] == row["id"])
+                        usage = json.loads(
+                            self.run(
+                                [
+                                    str(self.rclone_binary()),
+                                    "about",
+                                    "mediahub:" + connection["share"],
+                                    "--config",
+                                    str(self.folder / (row["id"] + ".rclone.conf")),
+                                    "--json",
+                                    "--contimeout",
+                                    "1s",
+                                    "--timeout",
+                                    "2s",
+                                    "--retries",
+                                    "1",
+                                    "--low-level-retries",
+                                    "1",
+                                ],
+                                timeout=3,
+                            )
                         )
-                        .strip()
-                        .split(":"),
-                    )
-                    free, total = available * size, blocks * size
-                except (StorageError, OSError, ValueError):
-                    row["ready"] = False
+                        total, free = usage["total"], usage["free"]
+                        if (
+                            type(total) is not int
+                            or type(free) is not int
+                            or not 0 <= free <= total
+                        ):
+                            raise ValueError("Invalid NAS capacity")
+                    else:
+                        blocks, available, size = map(
+                            int,
+                            self.run(
+                                ["stat", "--file-system", "--format=%b:%a:%S", row["source"]],
+                                timeout=3,
+                            )
+                            .strip()
+                            .split(":"),
+                        )
+                        free, total = available * size, blocks * size
+                except (StorageError, OSError, ValueError, KeyError, StopIteration):
+                    free = total = None  # Capacity failure does not disconnect a mounted NAS.
             locations.append(
                 {
                     k: v
@@ -335,7 +442,8 @@ class StorageHost:
     def packages(self):
         required = {"mount.cifs": "cifs-utils"}
         if self.userspace_mounts():
-            required.update({"rclone": "rclone", "fusermount3": "fuse3"})
+            self.prepare_rclone()
+            required.update({"fusermount3": "fuse3"})
         missing = sorted(
             {package for executable, package in required.items() if not shutil.which(executable)}
         )
