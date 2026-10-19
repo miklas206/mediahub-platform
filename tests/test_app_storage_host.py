@@ -245,6 +245,39 @@ def test_existing_plex_vpn_container_can_attach_and_remove_nas(installation):
     assert not any(path.endswith("/start") for _, path, _ in calls)
 
 
+def test_shared_nas_cache_upgrade_identifies_running_plex(installation):
+    host, containers, calls, _ = installation
+    row = copy.deepcopy(containers["mediahub-mediaseed-app"])
+    row.update(Id="plex", Name="/plex")
+    row["State"]["Running"] = True
+    row["Config"]["Labels"] = {
+        "org.mediahub.package": "org.mediahub.plex",
+        "org.mediahub.installation": "synthetic",
+    }
+    containers["plex"] = row
+    save(
+        host.root / "agent/plex-managed.json",
+        {
+            "container": "plex",
+            "installationId": "synthetic",
+            "imageId": row["Image"],
+            "mounts": [
+                {"source": "/approved/local", "target": "/downloads/local", "readOnly": False}
+            ],
+        },
+    )
+    state = host.state()
+    state["appBindings"] = [{"app": "plex", "storageId": NAS}]
+    save(host.file, state)
+    host.userspace_mounts = lambda: True
+    before = host.file.read_bytes()
+    host.run = lambda *args, **kwargs: pytest.fail("Mount changed before stopping Plex")
+    with pytest.raises(StorageError, match="Stop Plex from MediaHub"):
+        host.apps.change("mediaseed", NAS, True)
+    assert host.file.read_bytes() == before
+    assert not [call for call in calls if call[0] != "GET"]
+
+
 def test_media_seed_attachment_is_additive_persistent_and_vpn_bound(installation):
     host, containers, calls, _ = installation
     assert host.apps.change("mediaseed", NAS, True)["saved"]

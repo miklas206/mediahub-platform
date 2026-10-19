@@ -347,10 +347,11 @@ class AppStorage:
             for r in self.docker("GET", "/containers/json?all=1&filters=" + quote(filters))
         ]
 
-    def stopped(self, rows):
+    def stopped(self, rows, message=None):
         if not rows or any(r["State"].get("Running") or r["State"].get("Restarting") for r in rows):
             raise self.error(
-                "Stop the app first. For MediaSeed, also stop MediaVPN before changing storage"
+                message
+                or "Stop the app first. For MediaSeed, also stop MediaVPN before changing storage"
             )
 
     @staticmethod
@@ -480,7 +481,7 @@ class AppStorage:
                 or actual != expected
             ):
                 raise self.error("Plex runtime does not match its approved host policy")
-            self.stopped([row])
+            self.stopped([row], "Stop Plex from MediaHub before changing storage")
             intent = policy.get("controlStatePath")
             if (
                 intent != "/state/plex-intent.json"

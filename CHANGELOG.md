@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.65
+
+- Identify Plex explicitly when it must be stopped for a shared NAS write-cache change. Stopped MediaSeed/MediaVPN apps no longer receive a misleading instruction to stop themselves when Plex is the blocker. Preserve running-app and storage ownership checks.
+
 ## 0.6.64
 
 - Enable MediaSeed's NAS write cache without removing existing app bindings or Windows shares. Validate stopped apps, preserve shared mount parents, and restore NAS views and authenticated Windows shares after the cache transition. Existing local download mounts remain available.
