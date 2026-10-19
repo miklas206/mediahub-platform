@@ -224,6 +224,10 @@ class PlexControl:
         return data
 
     def storage_ready(self, policy):
+        from agent.nas_storage import plex_nas_ready
+
+        if not plex_nas_ready(policy, Path(self.policy_file or ".").parent):
+            return False
         try:
             snapshot = json.loads(Path(policy.hostMountSnapshot).read_text())
             if (

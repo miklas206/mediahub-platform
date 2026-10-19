@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { HardDrive, Network, FolderOpen, RefreshCw, Copy } from "lucide-react";
+import { AppStorageSettings } from "./app-storage";
 import { api } from "./api";
 import { bytes } from "./format";
 import { t } from "./i18n";
@@ -28,6 +29,7 @@ type Nas = {
   enabled: boolean;
   error?: string;
   path: string;
+  writeCachePath?: string | null;
 };
 export type StorageShare = {
   name: string;
@@ -338,6 +340,7 @@ export function StorageSettings() {
               </p>
             )}
           </section>
+          <AppStorageSettings />
           <div className="storage-columns">
             <section className="panel">
               <h3>
@@ -541,6 +544,19 @@ export function StorageSettings() {
                         ? t("Read-only access")
                         : t("Read and write access")}
                     </p>
+                    {row.writeCachePath && (
+                      <div className="storage-cache-info">
+                        <strong>
+                          {t("NAS write cache on the media drive")}
+                        </strong>
+                        <code>{row.writeCachePath}</code>
+                        <p className="muted">
+                          {t(
+                            "Keep space for active torrent files. Pending uploads are preserved when the server restarts.",
+                          )}
+                        </p>
+                      </div>
+                    )}
                     <div className="actions">
                       <button
                         disabled={busy}
@@ -735,7 +751,7 @@ export function StorageSettings() {
           )}
           <p className="muted">
             {t(
-              "NAS connections are mounted on this server. App folder mappings are managed separately in each app's installation settings.",
+              "NAS storage can be attached to apps here or in each app's settings. Existing files are kept.",
             )}
           </p>
         </>

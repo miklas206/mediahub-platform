@@ -210,3 +210,36 @@ async def password(body: PasswordInput, request: Request):
     svc = services(request)
     svc.setup.require_complete()
     return result(await host_request(svc, "POST", "/password", body_values(body)))
+
+
+@router.post("/apps/{app}/{identifier}")
+@router.delete("/apps/{app}/{identifier}")
+async def app_storage(app: str, identifier: str, request: Request):
+    import re
+
+    if app not in {"mediaseed", "plex"} or not re.fullmatch(r"[a-f0-9]{24}", identifier):
+        raise DomainError("invalid_app_storage", "Invalid app storage selection", 422)
+    svc = services(request)
+    svc.setup.require_complete()
+    async with svc.managed_apps.lock:
+        value = await host_request(svc, request.method, f"/apps/{app}/{identifier}")
+    svc.events.record(
+        "storage.app_configured",
+        "org.mediahub." + app,
+        "App NAS storage configured; media preserved",
+    )
+    return result(value)
+
+
+@router.post("/apps/recover")
+async def recover_app_storage(request: Request):
+    svc = services(request)
+    svc.setup.require_complete()
+    async with svc.managed_apps.lock:
+        value = await host_request(svc, "POST", "/apps/recover")
+    svc.events.record(
+        "storage.app_recovered",
+        "storage",
+        "Previous app storage configuration restored; media preserved",
+    )
+    return result(value)

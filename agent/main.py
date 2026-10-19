@@ -448,6 +448,11 @@ def create_agent(config: AgentConfig | None = None):
                 "https_required", "Installation and credentials require verified HTTPS", 403
             )
 
+        from agent.nas_storage import app_storage_guard
+
+        with app_storage_guard(config.state_dir):
+            yield
+
     @app.get("/v1/apps/{package}/resources", dependencies=[Depends(secure_workflow)])
     async def app_resource_status(package: str):
         return await resources.observe(package)

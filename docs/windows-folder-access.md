@@ -36,16 +36,19 @@ release source. This adds only the FUSE device and preserves existing devices;
 on supported Proxmox versions it hotplugs without restarting the container.
 Connections retry every 30 seconds and at startup. Correct a rejected login with
 **Saved NAS connections → Edit NAS login → Save and reconnect**.
-The userspace mount avoids caching media on the system disk. It supports sequential
-writes; applications requiring random-access file writes should use native CIFS.
+The default userspace mount supports sequential writes without a disk cache.
+From 0.6.59, attaching it to MediaSeed automatically prepares a random-access
+write cache on verified local media storage; the system filesystem is refused.
+See [NAS storage for apps](nas-app-storage.md) for setup, cache space and Plex access.
 NFS and DNS-based NAS addresses are not supported by this form.
 
 NAS mounts live at fixed `<installation-root>/network-storage/<id>` targets.
 The server leaves an unmounted target inaccessible instead of writing to the
 system disk. Credentials stay in root-only files outside Core's data mount and
 are never returned to the browser, placed in command arguments, or stored in Git.
-App attachment remains a separate approved configuration step; this feature does
-not attach newly mounted NAS storage to existing running apps.
+App attachment is an explicit choice under **Storage → NAS storage for apps**
+or the app settings. Stop the affected apps before changing their extra mounts;
+existing media and app configuration remain in place.
 
 ## Share a folder with Windows
 

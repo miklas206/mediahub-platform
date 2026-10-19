@@ -79,6 +79,7 @@ def fingerprint(source=SOURCE):
             source / "scripts/prepare_managed_install.py",
             source / "scripts/platform_update_host.py",
             source / "scripts/storage_host.py",
+            source / "scripts/app_storage_host.py",
         )
         if p.is_file()
     ]
@@ -365,9 +366,18 @@ def approved_media_storage(root):
     legacy_path = root / "agent/plex-install.json"
     if not any(v.get("kind") == "other" for v in approved.values()) and legacy_path.is_file():
         legacy = json.loads(legacy_path.read_text())
-        other = {k: v for k, v in legacy.get("storage", {}).items() if v.get("kind") == "other" and k not in approved}
+        other = {
+            k: v
+            for k, v in legacy.get("storage", {}).items()
+            if v.get("kind") == "other" and k not in approved
+        }
         if other:
-            for field in ("hostMountSnapshot", "requiredMounts", "requiredFilesystemUuids", "storageMarkers"):
+            for field in (
+                "hostMountSnapshot",
+                "requiredMounts",
+                "requiredFilesystemUuids",
+                "storageMarkers",
+            ):
                 if legacy.get(field, {}) != policy.get(field, {}):
                     raise ValueError("Other media requires matching approved storage identity")
             approved.update(other)
@@ -401,7 +411,11 @@ def approved_media_storage(root):
 
 
 def configure_media_storage(cfg, locations):
+    previous = json.loads(
+        cfg["services"]["app"].get("environment", {}).get("MEDIASEED_STORAGE_ROOTS", "[]")
+    )
     public = [{k: row[k] for k in ("id", "label", "path")} for row in locations]
+    public += [row for row in previous if row["id"].startswith("nas-")]
     cfg["services"]["app"].setdefault("environment", {})["MEDIASEED_STORAGE_ROOTS"] = json.dumps(
         public
     )
@@ -524,10 +538,31 @@ def prepare_storage_host(root, lan, source, locations):
     if reviewed.is_symlink() or target.is_symlink():
         raise ValueError("Unsafe storage controller path")
     content = reviewed.read_bytes()
+    module = reviewed.with_name("app_storage_host.py")
+    module_content = module.read_bytes()
+    module_target = target.with_name("app_storage_host.py")
+    if module.is_symlink() or module_target.is_symlink():
+        raise ValueError("Unsafe app storage controller path")
+    compile(module_content, str(module), "exec")
+    module_target.write_bytes(module_content)
+    module_target.chmod(0o700)
+    os.chown(module_target, 0, 0)
     compile(content, str(reviewed), "exec")
     target.write_bytes(content)
     target.chmod(0o700)
     os.chown(target, 0, 0)
+    agent_folder = root / "agent"
+    if agent_folder.is_dir():
+        lock_path = agent_folder / "app-storage.lock"
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(descriptor, "a+") as lock:
+            if (
+                os.fstat(lock.fileno()).st_uid != os.geteuid()
+                or os.fstat(lock.fileno()).st_nlink != 1
+            ):
+                raise ValueError("App storage lock ownership changed")
+            os.fchmod(lock.fileno(), 0o640)
+            os.chown(lock_path, 0, 10001)
     policy_path = root / "agent/container-apps.json"
     approved = json.loads(policy_path.read_text()) if policy_path.exists() else {}
     required = approved.get("requiredMounts", {})
@@ -552,8 +587,11 @@ def prepare_storage_host(root, lan, source, locations):
                 **location,
                 "mountTarget": mount,
                 "mountSource": required.get(mount) or evidence.get(mount),
-                "markers": {p: v for p, v in approved.get("storageMarkers", {}).items()
-                            if Path(p).is_relative_to(mount)},
+                "markers": {
+                    p: v
+                    for p, v in approved.get("storageMarkers", {}).items()
+                    if Path(p).is_relative_to(mount)
+                },
             }
         )
     # Offer each verified media mount itself, independently of app folder mappings.
@@ -595,7 +633,7 @@ def prepare_storage_host(root, lan, source, locations):
         raise ValueError("Unsafe host capability metadata")
     value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
     value["storageController"] = True
-    value["storageControllerRevision"] = hashlib.sha256(content).hexdigest()
+    value["storageControllerRevision"] = hashlib.sha256(content + module_content).hexdigest()
     capabilities.write_text(json.dumps(value))
     capabilities.chmod(0o644)
     os.chown(capabilities, 0, 0)
@@ -783,8 +821,11 @@ def provision(
             cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_PROJECT"] = (
                 "mediahub-mediaseed"
             )
+            previous_storage = json.loads(
+                cfg["services"]["app"]["environment"].get("MEDIAVPN_MEDIASEED_STORAGE", "[]")
+            )
             cfg["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_STORAGE"] = json.dumps(
-                locations
+                locations + [row for row in previous_storage if row["id"].startswith("nas-")]
             )
         previous_compose = compose_path.read_text() if compose_path.exists() else None
         private(

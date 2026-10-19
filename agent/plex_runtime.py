@@ -22,6 +22,7 @@ from mediahub.secret_store import SecretStore
 
 from agent.install_files import read_json, save_json
 from agent.install_images import publisher_reference, pull_latest
+from agent.nas_storage import storage_operation
 from agent.plex_control import PlexMount, PlexPolicy
 from agent.plex_install import PMS_ROOT, PlexInstallPolicy, installation_plan, temp_choices
 from agent.plex_vpn import PlexVPN
@@ -108,6 +109,7 @@ class PlexRuntime:
         policy = self.control.policy()
         return policy.installationId, policy
 
+    @storage_operation
     async def uninstall(self, installation_id):
         identity, policy = self.removal_identity()
         if installation_id != identity:
@@ -624,6 +626,7 @@ class PlexRuntime:
                         save_json(self.install_operation_path, self.operation)
         return {"operation": self.operation}
 
+    @storage_operation
     async def _run_install(self, body):
         try:
             await self.install(body)
@@ -1135,6 +1138,7 @@ class PlexRuntime:
         finally:
             await self.remove_helper(name)
 
+    @storage_operation
     async def _update(self):
         async with self.control.lock:
             stopped = False
@@ -1254,6 +1258,7 @@ class PlexRuntime:
                 }
                 self.control.record("update_failed")
 
+    @storage_operation
     async def rollback(self):
         async with self.control.lock:
             policy = self.control.policy()

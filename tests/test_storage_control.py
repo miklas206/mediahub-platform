@@ -272,6 +272,9 @@ def test_storage_preparation_is_additive_on_fresh_and_older_installs(
     (source / "scripts").mkdir(parents=True)
     script = Path(__file__).resolve().parents[1] / "scripts/storage_host.py"
     (source / "scripts/storage_host.py").write_bytes(script.read_bytes())
+    (source / "scripts/app_storage_host.py").write_bytes(
+        script.with_name("app_storage_host.py").read_bytes()
+    )
     old = root / "storage-private/state.json"
     old.parent.mkdir()
     if existing:
@@ -303,6 +306,7 @@ def test_storage_main_folder_is_prepared_once_and_checks_mount_identity(
     (root / "updates").mkdir()
     (source / "scripts").mkdir(parents=True)
     (source / "scripts/storage_host.py").write_text("# reviewed test helper\n")
+    (source / "scripts/app_storage_host.py").write_text("# reviewed app storage helper\n")
     (media / "movies").mkdir(parents=True)
     (media / "downloads").mkdir()
     marker = media / ".identity"
@@ -604,3 +608,35 @@ def test_nas_capacity_uses_corrected_smb_query_and_keeps_connection(controller, 
     assert row["totalBytes"] == (usage.get("total") if usage.get("total", -1) >= 0 else None)
     assert row["freeBytes"] == (usage.get("free") if usage.get("total", -1) >= 0 else None)
     assert any(args[1] == "about" for args in calls)
+
+
+def test_app_storage_transport_validates_admin_csrf_and_selection(logged_in, monkeypatch):
+    client = logged_in
+    mock = AsyncMock(return_value={"saved": True})
+    monkeypatch.setattr("mediahub.storage_control.host_request", mock)
+    monkeypatch.setattr(client.app.state.services.setup, "require_complete", lambda: None)
+    path = "/api/v1/storage-control/apps/plex/" + "a" * 24
+    assert client.post(path, headers={"X-MediaHub-CSRF": "wrong"}).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/storage-control/apps/recover", headers={"X-MediaHub-CSRF": "wrong"}
+        ).status_code
+        == 403
+    )
+    assert mock.await_count == 0
+    assert client.post(path).status_code == 200
+    assert mock.call_args.args[1:] == ("POST", "/apps/plex/" + "a" * 24)
+    assert client.delete(path).status_code == 200
+    assert mock.call_args.args[1:] == ("DELETE", "/apps/plex/" + "a" * 24)
+    assert client.post("/api/v1/storage-control/apps/unsupported/" + "a" * 24).status_code == 422
+    assert client.post("/api/v1/storage-control/apps/recover").status_code == 200
+    from mediahub.db import User
+    from sqlalchemy import select
+
+    with client.app.state.services.sessions.begin() as db:
+        db.scalar(select(User).where(User.username == "tester")).role = "user"
+    count = mock.await_count
+    assert client.post(path).status_code == 403
+    assert client.delete(path).status_code == 403
+    assert client.post("/api/v1/storage-control/apps/recover").status_code == 403
+    assert mock.await_count == count

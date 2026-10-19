@@ -128,3 +128,42 @@
     flex-direction: column;
   }
 }
+
+.app-storage-settings {
+  padding: clamp(1rem, 2vw, 1.5rem);
+  min-width: 0;
+}
+.app-storage-settings h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.app-storage-settings p {
+  line-height: 1.6;
+}
+.app-storage-form {
+  align-content: start;
+}
+.app-storage-form h3 {
+  margin: 0;
+}
+.app-storage-form p {
+  margin: 0.25rem 0;
+}
+.app-storage-form label,
+.app-storage-binding {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.app-storage-form button {
+  justify-self: start;
+}
+.app-storage-binding {
+  border-top: 1px solid var(--border);
+  padding-block: 0.75rem;
+}
+.app-storage-form code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

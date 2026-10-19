@@ -1,3 +1,4 @@
+import { AppStorageSettings } from "./app-storage";
 import { AppResourceSettings } from "./app-resources";
 import { AppControlPanel, type AppControls } from "./app-controls";
 import { t } from "./i18n";
@@ -158,7 +159,9 @@ export function AppSettingsPage({
               </div>
             </section>
           )}
-          {data.installationId && <AppResourceSettings appId={data.installationId} />}
+          {data.installationId && (
+            <AppResourceSettings appId={data.installationId} />
+          )}
           <section className="panel">
             <div className="panel-heading">
               <h2>{t("App addresses")}</h2>
@@ -225,6 +228,7 @@ export function AppSettingsPage({
               )}
             </div>
           </section>
+          <AppStorageSettings packageId={packageId} />
           {!embedded && (
             <AppControlPanel
               appId={data.installationId}

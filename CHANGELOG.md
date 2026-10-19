@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.59
+
+- Add explicit NAS attachments for MediaSeed and Plex under Storage and app settings, with a Danish Plex library guide and preserved existing media/settings.
+- Keep MediaSeed, qBittorrent and the VPN client mappings aligned across app/Core updates; give Plex a separate read-only view and guard startup with fresh host NAS evidence.
+- Prepare torrent-compatible FUSE write caching on verified separate media storage, preserve pending uploads, and propagate NAS reconnections into existing app containers.
+- Require stopped apps for mount changes; preserve runtime settings, install recipes and private recovery data, with a guided restore action after interrupted changes.
+
 ## 0.6.58
 
 - Correct NAS capacity reporting with a verified, pinned SMB client. Older distribution rclone versions can report half the real capacity on NAS filesystems with larger sectors. Query existing FUSE mounts through the corrected SMB client without interrupting open connections.

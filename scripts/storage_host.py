@@ -24,6 +24,11 @@ import zipfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+try:
+    from .app_storage_host import AppStorage
+except ImportError:
+    from app_storage_host import AppStorage
+
 ID = re.compile(r"[a-f0-9]{24}\Z")
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,39}\Z")
 PRIVATE = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
@@ -121,7 +126,11 @@ class StorageHost:
         self.file = self.folder / "state.json"
         self.lock = threading.RLock()
         self.package_error = None
-        self.revision = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        self.apps = AppStorage(self, StorageError, save)
+        self.revision = hashlib.sha256(
+            Path(__file__).read_bytes()
+            + Path(__file__).with_name("app_storage_host.py").read_bytes()
+        ).hexdigest()
 
     def policy(self):
         return json.loads((self.root / "storage-policy.json").read_text())
@@ -290,6 +299,7 @@ class StorageHost:
             "--property=Type=notify",
             "--property=TimeoutStartSec=30",
             "--property=UMask=0077",
+            "--property=Group=1000",
             "--property=StandardOutput=null",
             "--property=StandardError=null",
             str(self.rclone_binary()),
@@ -311,7 +321,7 @@ class StorageHost:
             "--dir-perms",
             "0770",
             "--vfs-cache-mode",
-            "off",
+            ("writes" if row.get("cacheLocationId") else "off"),
             "--contimeout",
             "5s",
             "--timeout",
@@ -319,6 +329,22 @@ class StorageHost:
             "--option",
             "nosuid,nodev,noexec",
         ]
+        if row.get("cacheLocationId"):
+            args += [
+                "--rc",
+                "--rc-addr",
+                "unix://" + str(self.folder / (row["id"] + ".rc.sock")),
+                "--cache-dir",
+                str(self.apps.cache_directory(row)),
+                "--vfs-cache-max-size",
+                "100Gi",
+                "--vfs-cache-min-free-space",
+                "10Gi",
+                "--vfs-cache-max-age",
+                "1h",
+                "--vfs-write-back",
+                "5s",
+            ]
         if row["readOnly"]:
             args.append("--read-only")
         self.run(args, timeout=40)
@@ -427,7 +453,14 @@ class StorageHost:
             "server": policy["lan"],
             "locations": locations,
             "nas": [
-                {**r, "ready": self.nas_ready(r), "path": str(self.mounts / r["id"])}
+                {
+                    **r,
+                    "ready": self.nas_ready(r),
+                    "path": str(self.mounts / r["id"]),
+                    "writeCachePath": str(self.apps.cache_path(r))
+                    if self.apps.cache_path(r)
+                    else None,
+                }
                 for r in state["nas"]
             ],
             "shares": [
@@ -437,6 +470,7 @@ class StorageHost:
             "passwordConfigured": state["passwordConfigured"],
             "prerequisite": self.package_error,
             "smbRunning": self.smb_running(),
+            "apps": self.apps.public(),
         }
 
     def packages(self):
@@ -605,8 +639,12 @@ class StorageHost:
                     raise
                 row.pop("error", None)
             elif action in {"disconnect", "remove"}:
+                if any(r["storageId"] == identifier for r in state.get("appBindings", [])):
+                    raise StorageError("Remove this NAS from its apps before disconnecting it")
                 if any(r["storageId"] == identifier for r in state["shares"]):
                     raise StorageError("Remove this NAS's Windows shares before disconnecting it")
+                self.apps.require_flushed(row)
+                self.apps.release_view(identifier)
                 if self.nas_ready(row):
                     info = self.mount_info(self.mounts / identifier)
                     self.run(
@@ -618,6 +656,7 @@ class StorageHost:
                     )  # Never force/lazy-unmount busy data.
                 elif os.path.ismount(self.mounts / identifier):
                     raise StorageError("NAS mount ownership changed; nothing was disconnected")
+                self.apps.release_cache(row)
                 row["enabled"] = False
                 if action == "remove":
                     state["nas"].remove(row)
@@ -871,12 +910,22 @@ logging = file
                         row["error"] = str(error)
             if json.dumps(state, sort_keys=True) != previous:
                 save(self.file, state)
+            self.apps.reconcile()
             if state["shares"] and not self.smb_running():
                 self.configure_smb(state["shares"])
 
     def dispatch(self, method, path, body):
         if method == "GET" and path == "/status":
             return self.inventory()
+        if method == "POST" and path == "/apps/recover":
+            if body:
+                raise StorageError("Unexpected recovery fields", 422)
+            return self.apps.recover()
+        match = re.fullmatch(r"/apps/(mediaseed|plex)/([a-f0-9]{24})", path)
+        if match and method in {"POST", "DELETE"}:
+            if body:
+                raise StorageError("Unexpected app storage fields", 422)
+            return self.apps.change(*match.groups(), attach=method == "POST")
         if method == "POST" and path == "/nas":
             return self.add_nas(body)
         if method == "POST" and path == "/shares":
@@ -946,8 +995,8 @@ def install(root):
             raise StorageError("Storage installation ownership changed")
     unit = Path("/etc/systemd/system/mediahub-storage.service")
     content = (
-        "[Unit]\nDescription=MediaHub private storage controller\nAfter=network-online.target docker.service\nWants=network-online.target docker.service\n"
-        "[Service]\nType=simple\nUser=root\nUMask=0077\nExecStart=/usr/bin/python3 "
+        "[Unit]\nDescription=MediaHub private storage controller\nAfter=network-online.target\nBefore=docker.service\nWants=network-online.target\n"
+        "[Service]\nType=notify\nNotifyAccess=main\nTimeoutStartSec=60\nUser=root\nGroup=1000\nUMask=0077\nExecStart=/usr/bin/python3 "
         + str(script)
         + " --root "
         + str(root)
@@ -967,6 +1016,7 @@ def install(root):
 
 def serve(root):
     controller = StorageHost(root)
+    controller.apps.prepare_views()
     directory = Path(root) / "data/storage-control"
     if directory.is_symlink() or directory.resolve() != directory:
         raise StorageError("Unsafe storage socket directory")
@@ -993,6 +1043,12 @@ def serve(root):
                 threading.Event().wait(30)
 
         threading.Thread(target=reconcile, daemon=True).start()
+        notify = os.environ.get("NOTIFY_SOCKET")
+        if notify:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as ready:
+                ready.sendto(
+                    b"READY=1", notify.replace("@", "\0", 1) if notify.startswith("@") else notify
+                )
         server.serve_forever()
 
 

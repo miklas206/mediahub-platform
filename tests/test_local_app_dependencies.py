@@ -130,9 +130,22 @@ def test_other_storage_is_inherited_only_from_verified_policy(tmp_path, monkeypa
     marker = media / ".identity"
     marker.write_text("volume")
     evidence = tmp_path / "snapshot.json"
-    evidence.write_text(json.dumps({"scope": "host-mount-namespace", "available": True, "observedAt": time.time(), "mounts": [{"path": str(media), "source": "disk", "options": ["rw"]}]}))
+    evidence.write_text(
+        json.dumps(
+            {
+                "scope": "host-mount-namespace",
+                "available": True,
+                "observedAt": time.time(),
+                "mounts": [{"path": str(media), "source": "disk", "options": ["rw"]}],
+            }
+        )
+    )
     (root / "agent").mkdir(exist_ok=True)
-    shared = {"hostMountSnapshot": str(evidence), "requiredMounts": {str(media): "disk"}, "storageMarkers": {str(marker): "volume"}}
+    shared = {
+        "hostMountSnapshot": str(evidence),
+        "requiredMounts": {str(media): "disk"},
+        "storageMarkers": {str(marker): "volume"},
+    }
     entry = {"other": {"kind": "other", "label": "Other Media", "path": str(other)}}
     policy = root / "agent/container-apps.json"
     policy.write_text(json.dumps({**shared, "storage": {} if legacy else entry}))
@@ -469,3 +482,48 @@ def test_fresh_install_builds_and_labels_both_bootstrap_apps(tmp_path, monkeypat
         assert cfg["services"]["app"]["labels"]["org.mediahub.app.version"] == "1.2.3"
         assert cfg["services"]["app"]["image"].startswith("mediahub-" + kind + ":bundled-")
         assert any("build" in call and "mediahub-" + kind in call for call in calls)
+
+
+def test_core_and_app_preparation_preserves_explicit_nas_roots_and_vpn_mappings(
+    tmp_path, monkeypatch
+):
+    root, source, _, _ = fixture(tmp_path, monkeypatch)
+    nas = {
+        "id": "nas-" + "a" * 24,
+        "label": "User NAS",
+        "source": "/opt/hub/app-storage/" + "a" * 24,
+        "path": "/downloads/media/nas-" + "a" * 24,
+    }
+    path = root / "local-apps/mediaseed/compose.json"
+    cfg = json.loads(path.read_text())
+    volume = {
+        "type": "bind",
+        "source": nas["source"],
+        "target": nas["path"],
+        "read_only": False,
+        "bind": {"propagation": "rslave", "create_host_path": False},
+    }
+    cfg["services"]["app"]["environment"]["MEDIASEED_STORAGE_ROOTS"] = json.dumps(
+        [{"id": nas["id"], "label": nas["label"], "path": nas["path"] + "/files"}]
+    )
+    cfg["services"]["app"]["volumes"] = [volume]
+    cfg["services"]["qbittorrent"] = {"volumes": [volume]}
+    path.write_text(json.dumps(cfg))
+    vpn_path = root / "local-apps/mediavpn/compose.json"
+    vpn = json.loads(vpn_path.read_text())
+    vpn["services"]["app"]["environment"]["MEDIAVPN_MEDIASEED_STORAGE"] = json.dumps([nas])
+    vpn_path.write_text(json.dumps(vpn))
+    module.provision(root, "192.168.1.50", source)
+    module.provision(root, "192.168.1.50", source)  # Idempotent upgrade.
+    actual = json.loads(path.read_text())
+    assert actual["services"]["app"]["volumes"] == [volume]
+    assert actual["services"]["qbittorrent"]["volumes"] == [volume]
+    assert (
+        json.loads(actual["services"]["app"]["environment"]["MEDIASEED_STORAGE_ROOTS"])[0]["path"]
+        == nas["path"] + "/files"
+    )
+    assert json.loads(
+        json.loads(vpn_path.read_text())["services"]["app"]["environment"][
+            "MEDIAVPN_MEDIASEED_STORAGE"
+        ]
+    ) == [nas]
