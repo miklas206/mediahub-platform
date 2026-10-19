@@ -89,7 +89,7 @@ export function AppSettingsPage({
         </>
       )}
       {(error || failure) && (
-        <NotificationPopup tone="danger">{error || failure}</NotificationPopup>
+        <NotificationPopup tone="danger">{failure || error}</NotificationPopup>
       )}
       {notice && <NotificationPopup tone="success">{notice}</NotificationPopup>}
       {data && (

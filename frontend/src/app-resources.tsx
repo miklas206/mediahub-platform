@@ -456,7 +456,7 @@ export function AppResourceOverview() {
       <p className="muted">{t("The total also includes MediaHub, local support services and the operating system. App measurements refresh less often, so the figures need not add up exactly.")}</p>
       {(data.error || failure) && (
         <NotificationPopup tone="danger">
-          {data.error || failure}
+          {failure || data.error}
         </NotificationPopup>
       )}
       {popup && (

@@ -243,3 +243,91 @@ test("repeated polling retains one error incident, allows slow reads and clears 
   await expect(page.locator("#probe-data")).toHaveText("healthy");
   await expect(error).toBeEmpty();
 });
+
+test("an explicit app setting failure remains visible over an unresolved background error", async ({
+  page,
+}) => {
+  let failReads = false;
+  await page.addInitScript(() => {
+    window.EventSource = class extends EventTarget {
+      close() {}
+    } as unknown as typeof EventSource;
+  });
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname.replace(
+      /^\/api(?:\/v1)?/,
+      "",
+    );
+    let data: unknown = [];
+    if (path === "/app-settings/org.mediahub.plex") {
+      if (route.request().method() === "PUT")
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: { message: "Synthetic save failure must remain visible" },
+          },
+        });
+      if (failReads)
+        return route.fulfill({
+          status: 503,
+          json: { error: { message: "Synthetic old background error" } },
+        });
+      data = {
+        name: "Plex",
+        packageId: "org.mediahub.plex",
+        externalUrl: "https://old.example.test",
+        localUrl: null,
+        ssoManaged: false,
+        configurationPath: null,
+        running: true,
+        controls: { actions: [], logs: false, updateCheck: false },
+      };
+    } else if (path === "/auth/status") data = { needsSetup: false };
+    else if (path === "/auth/me")
+      data = {
+        id: "test",
+        username: "tester",
+        role: "administrator",
+        csrf: "test",
+        language: "en",
+      };
+    else if (path === "/setup/status") data = { setup_required: false };
+    else if (path === "/settings")
+      data = {
+        display_name: "MediaHub",
+        theme: "dark",
+        visible_navigation: ["/", "/settings"],
+        dashboard_sections: [],
+      };
+    else if (path === "/updates/summary")
+      data = { count: 0, items: [], notifications: [] };
+    else if (path === "/events/stream")
+      return route.fulfill({
+        contentType: "text/event-stream",
+        body: ": connected\n\n",
+      });
+    await route.fulfill({ json: { data } });
+  });
+  await page.goto("/app-settings/org.mediahub.plex");
+  await expect(
+    page.getByLabel("External app address", { exact: true }),
+  ).toBeVisible();
+  failReads = true;
+  await page
+    .getByRole("button", { name: "Refresh status", exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".notification-message")
+      .filter({ hasText: "Synthetic old background error" }),
+  ).toBeVisible({ timeout: 8000 });
+  await page
+    .getByLabel("External app address", { exact: true })
+    .fill("https://new.example.test");
+  await page.getByRole("button", { name: "Save address", exact: true }).click();
+  await expect(
+    page
+      .locator(".notification-message")
+      .filter({ hasText: "Synthetic save failure must remain visible" }),
+  ).toBeVisible();
+});

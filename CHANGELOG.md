@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.68
+
+- Preserve the polling notification fixes from 0.6.67 and give explicit app-address/resource action failures priority over an older background-read error, so new failures remain visible during an outage.
+
 ## 0.6.67
 
 - Keep expired healthy Plex, Seedbox and Cloudflare observations explicitly cached instead of manufacturing failing runtime checks during normal polling. Genuine failures and connection errors remain visible.
