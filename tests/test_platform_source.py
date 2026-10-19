@@ -34,7 +34,7 @@ def test_github_access_errors_distinguish_throttling(provider, status, headers, 
     assert "private provider details" not in error.value.message
 
 
-@pytest.mark.parametrize("installed,available", [("b" * 40, True), (COMMIT, False), (None, True)])
+@pytest.mark.parametrize("installed,available", [("b" * 40, True), (COMMIT, False), (None, False)])
 def test_main_updates_do_not_require_version_change_or_release(installed, available):
     calls = []
 
@@ -143,3 +143,15 @@ def test_unsafe_archive_entries_rejected(tmp_path, path):
     make_archive(tmp_path / "raw", path)
     with pytest.raises(ValueError):
         normalize_source(tmp_path / "raw", tmp_path / "out")
+
+
+@pytest.mark.parametrize("current,commit,latest,available", [
+    ("0.6.60", "b" * 40, "0.6.59", False),
+    ("0.6.60", "b" * 40, "0.6.60", True),
+    ("0.6.60", COMMIT, "0.6.60", False),
+    ("0.6.60", None, "0.6.60", False),
+    ("0.6.59", None, "0.6.60", True),
+])
+def test_source_identity_never_downgrades_or_reinstalls_unknown_same_version(current, commit, latest, available):
+    provider = GitHubSourceProvider(current, commit)
+    assert provider._checked({}, "owner/repo", COMMIT, latest)["updateAvailable"] is available

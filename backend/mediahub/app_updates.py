@@ -9,7 +9,7 @@ from pathlib import PurePosixPath
 from uuid import uuid4
 
 import httpx
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 
 from agent.install_files import save_json
 from mediahub.errors import DomainError
@@ -123,12 +123,20 @@ class AppUpdates:
         local = await adapter.installed_version()
         installed = local["installedVersion"]
         valid_installed = installed if installed and installed != "managed" else None
+        try:
+            Version(valid_installed or "")
+        except InvalidVersion:
+            return {
+                **result, **local, "supported": True, "checkStatus": "failed",
+                "updateAvailable": False, "installReady": False,
+                "errorCode": "app_installed_version_unknown",
+                "message": "Installed app version could not be verified; no automatic update was selected.",
+            }
         latest = result.get("latestVersion")
         available = bool(
             latest
             and (
-                not valid_installed
-                or Version(latest) > Version(valid_installed)
+                Version(latest) > Version(valid_installed)
                 or (
                     Version(latest) == Version(valid_installed)
                     and labels.get("org.mediahub.app.commit")

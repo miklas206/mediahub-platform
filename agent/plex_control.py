@@ -363,7 +363,7 @@ class PlexControl:
             "state": "running" if running else "stopped",
             "observedAt": time.time(),
             "hostId": policy.hostId,
-            "health": "critical",
+            "health": "critical" if running else "unknown",
             "agentOnline": True,
             "dockerHealthy": True,
             "plex": {
@@ -386,7 +386,7 @@ class PlexControl:
             vpn_status = await self.runtime.vpn.status(policy)
             report["vpn"] = vpn_status["vpn"]
             report["portForwarding"] = vpn_status["portForwarding"]
-            if not vpn_status["vpn"]["verified"]:
+            if running and not vpn_status["vpn"]["verified"]:
                 report["health"] = "critical"
         if running and mounted:
             try:

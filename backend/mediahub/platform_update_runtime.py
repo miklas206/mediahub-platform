@@ -282,6 +282,8 @@ class PlatformUpdateRuntime:
                 "operationId": str(value.get("operationId") or "")[:64] or None,
                 "steps": list(value.get("steps") or [])[:10],
                 "updatedAt": value.get("updatedAt"),
+                "attempt": max(1, min(3, int(value.get("attempt") or 1))),
+                "maxAttempts": max(1, min(3, int(value.get("maxAttempts") or 1))),
                 "updateMode": value.get("updateMode")
                 if value.get("updateMode") in ("fast", "full")
                 else None,

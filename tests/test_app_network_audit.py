@@ -80,3 +80,14 @@ def test_vpn_app_delegation_requires_hub_admin_and_live_parent_session(logged_in
         db.scalar(select(User).where(User.username == "tester")).role = "user"
     assert logged_in.get("/api/v1/sso/vpn/apps", headers=headers).status_code == 403
     assert logged_in.get("/api/v1/sso/vpn-gateway", headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize("installed,expected", [("10.10.0", True), ("10.11.1", False), ("11.0.0", False), ("unknown", False)])
+def test_manual_upstream_updates_are_visible_only_for_verified_newer_versions(installed, expected):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"tag_name": "v10.11.1"}))
+    result = asyncio.run(latest_release("org.mediahub.jellyfin", installed, transport=transport))
+    assert result["updateAvailable"] is expected
+    assert result["automaticUpdate"] is False
+    from mediahub.update_monitor import UpdateMonitor
+    summary = UpdateMonitor._app_result({"id": "jellyfin", "name": "Jellyfin"}, result)
+    assert summary["updateAvailable"] is expected

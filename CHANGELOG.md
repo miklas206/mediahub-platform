@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.60
+
+- Fix intermittent update rollback caused by changing SQLite WAL/SHM files; snapshot committed database state through SQLite and preserve configuration ownership.
+- Retry transient Core update failures up to three attempts with backoff, one operation identity and verified recovery before retrying. Permanent validation/disk/permission failures and failed rollback stop immediately.
+- Exclude stale/deferred and already-current checks from Update all, retain readable versions alongside commit identities, and report verified manual upstream releases separately.
+- Fix Plex startup after restart with installation storage policies, and recover verified publisher identity after storage changes for read-only image update checks.
+- Switch stopped app cards to Start app and show Not running instead of a critical status.
+
 ## 0.6.59
 
 - Add explicit NAS attachments for MediaSeed and Plex under Storage and app settings, with a Danish Plex library guide and preserved existing media/settings.

@@ -10,9 +10,11 @@ from mediahub.errors import DomainError
 
 
 def plex_nas_ready(policy, folder):
+    # The pre-install/transcode policy approves storage roots but has no app
+    # mounts yet. The runtime start path also checks its concrete PlexPolicy.
     identifiers = [
         m.target.removeprefix("/media/nas/")
-        for m in policy.mounts
+        for m in getattr(policy, "mounts", ())
         if m.target.startswith("/media/nas/")
     ]
     if not identifiers:

@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -122,6 +123,7 @@ class ContainerApps:
     async def request(self, method, path, body=None, missing=False):
         if method == "POST" and path.startswith("/containers/create") and body:
             from urllib.parse import parse_qs, urlsplit
+
             from agent.resource_control import apply_saved_resources
             package = body.get("Labels", {}).get("org.mediahub.package", "")
             kind = package.removeprefix("org.mediahub.")
@@ -480,6 +482,19 @@ class ContainerApps:
         ):
             raise DomainError("ownership_mismatch", "Container no longer matches installation", 409)
 
+    @staticmethod
+    def image_version(labels):
+        for key in ("org.opencontainers.image.version", "build_version"):
+            value = labels.get(key)
+            if not isinstance(value, str):
+                continue
+            match = re.fullmatch(r"v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?", value.strip())
+            if not match and key == "build_version":
+                match = re.match(r"Linuxserver\.io version:- v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?(?:\s|$)", value)
+            if match:
+                return match[1]
+        return None
+
     async def status(self, app):
         self.app(app)
         record = self.record(app)
@@ -505,7 +520,7 @@ class ContainerApps:
                 checks = [{"name": "container", "status": health,
                            "message": "Docker healthcheck: " + (observed or state)}]
                 labels = inspected.get("Config", {}).get("Labels", {}) or {}
-                version = labels.get("org.opencontainers.image.version") or labels.get("build_version")
+                version = self.image_version(labels)
             else:
                 state = "removed"
         return {

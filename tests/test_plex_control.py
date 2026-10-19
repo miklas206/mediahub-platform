@@ -205,3 +205,24 @@ def test_managed_update_check_delegates_to_image_provider():
     assert asyncio.run(control.update_check()) == result
     control.runtime.update_check.assert_awaited_once()
     control.plex_get.assert_not_called()
+
+
+def test_installation_storage_policy_has_no_runtime_mounts_and_still_verifies(policy):
+    from types import SimpleNamespace
+
+    install_policy = SimpleNamespace(**policy.model_dump(exclude={"mounts"}))
+    assert PlexControl(None, None).storage_ready(install_policy)
+
+
+def test_runtime_nas_still_requires_fresh_host_evidence(policy, tmp_path):
+    from agent.nas_storage import plex_nas_ready
+    from agent.plex_control import PlexMount
+
+    identifier = "a" * 24
+    policy.mounts = [PlexMount(source="/approved", target="/media/nas/" + identifier, readOnly=True)]
+    assert not plex_nas_ready(policy, tmp_path)
+    evidence = tmp_path / "nas-storage-status.json"
+    evidence.write_text(json.dumps({"observedAt": time.time(), "nas": {identifier: True}}))
+    assert plex_nas_ready(policy, tmp_path)
+    evidence.write_text(json.dumps({"observedAt": time.time() - 100, "nas": {identifier: True}}))
+    assert not plex_nas_ready(policy, tmp_path)

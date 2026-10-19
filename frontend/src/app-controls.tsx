@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LoaderCircle, Square } from "lucide-react";
+import { LoaderCircle, Play, Square } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
 import { useConfirm } from "./confirmation-dialog";
@@ -31,7 +31,8 @@ export function StopAppButton({
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function stop() {
+  const starting = running === false;
+  async function toggle() {
     const message =
       packageId === "org.mediahub.mediavpn"
         ? t(
@@ -40,12 +41,18 @@ export function StopAppButton({
         : t("Stop {app}? Active tasks and connections will be interrupted.", {
             app: name,
           });
-    if (!(await confirm(message, { title: t("Stop {app}", { app: name }) })))
+    if (
+      !starting &&
+      !(await confirm(message, { title: t("Stop {app}", { app: name }) }))
+    )
       return;
     setBusy(true);
     setError("");
     try {
-      await api(`/apps/${encodeURIComponent(appId)}/actions/stop`, "POST");
+      await api(
+        `/apps/${encodeURIComponent(appId)}/actions/${starting ? "start" : "stop"}`,
+        "POST",
+      );
       onChanged();
       window.dispatchEvent(new Event("apps-changed"));
     } catch (error) {
@@ -60,17 +67,29 @@ export function StopAppButton({
       <button
         className="hub-card-stop"
         type="button"
-        disabled={busy || running !== true}
+        disabled={busy || running == null}
         aria-busy={busy}
-        aria-label={t("Stop {app}", { app: name })}
-        onClick={() => void stop()}
+        aria-label={t(starting ? "Start {app}" : "Stop {app}", { app: name })}
+        onClick={() => void toggle()}
       >
         {busy ? (
           <LoaderCircle size={14} className="spin" aria-hidden="true" />
+        ) : starting ? (
+          <Play size={12} fill="currentColor" aria-hidden="true" />
         ) : (
           <Square size={12} fill="currentColor" aria-hidden="true" />
         )}
-        <span>{t(busy ? "Stopping..." : "Stop app")}</span>
+        <span>
+          {t(
+            busy
+              ? starting
+                ? "Starting..."
+                : "Stopping..."
+              : starting
+                ? "Start app"
+                : "Stop app",
+          )}
+        </span>
       </button>
     </>
   );

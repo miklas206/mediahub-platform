@@ -4356,5 +4356,9 @@
   "NAS write cache requires persistent local media storage": "NAS-skrivecache kræver et lokalt mediedrev med permanent lager.",
   "Wait for the current app operation to finish": "Vent på, at den igangværende apphandling bliver færdig.",
   "Wait for the app storage change to finish": "Vent på, at ændringen af appens lager bliver færdig.",
-  "Update MediaVPN to 0.2.31 or newer before attaching NAS storage to MediaSeed": "Opdatér MediaVPN til 0.2.31 eller nyere, før du tilknytter NAS-lager til MediaSeed."
+  "Update MediaVPN to 0.2.31 or newer before attaching NAS storage to MediaSeed": "Opdatér MediaVPN til 0.2.31 eller nyere, før du tilknytter NAS-lager til MediaSeed.",
+  "Start app": "Start app",
+  "Starting...": "Starter...",
+  "Not running": "Kører ikke",
+  "Start the app to use it.": "Start appen for at bruge den."
 }

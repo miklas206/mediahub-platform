@@ -971,16 +971,30 @@ class PlexRuntime:
                 "installedVersion": None,
                 "latestVersion": None,
             }
-            if (
-                not isinstance(installed, str)
-                or not installed.startswith(prefix)
-                or not re.fullmatch(r"sha256:[a-f0-9]{64}", installed[len(prefix) :])
-            ):
+            pinned_reference = isinstance(installed, str) and installed.startswith(prefix) and re.fullmatch(
+                r"sha256:[a-f0-9]{64}", installed[len(prefix) :]
+            )
+            # Host storage edits preserve the immutable image ID in Docker's
+            # create request. Recover publisher identity from that exact image,
+            # never from an arbitrary tag or another container's metadata.
+            owned_image_id = installed == policy.imageId and bool(
+                re.fullmatch(r"sha256:[a-f0-9]{64}", installed or "")
+            )
+            if not pinned_reference and not owned_image_id:
                 return {
                     **result,
                     "reason": "Installed Plex image is not pinned to the managed LinuxServer publisher",
                 }
             local = await self.request("GET", f"/images/{policy.imageId}/json")
+            if not pinned_reference:
+                candidates = [
+                    reference for reference in local.get("RepoDigests", [])
+                    if isinstance(reference, str) and reference.startswith(prefix)
+                    and re.fullmatch(r"sha256:[a-f0-9]{64}", reference[len(prefix):])
+                ]
+                if local.get("Id") != policy.imageId or len(candidates) != 1:
+                    return {**result, "reason": "Installed Plex publisher digest could not be verified"}
+                installed = candidates[0]
             if installed not in local.get("RepoDigests", []):
                 return {
                     **result,

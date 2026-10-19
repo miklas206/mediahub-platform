@@ -85,7 +85,9 @@ def test_maintenance_reports_measured_space_and_signed_change(tmp_path, monkeypa
     free=[before]
     monkeypatch.setattr("scripts.platform_update_host.shutil.disk_usage",lambda _:SimpleNamespace(free=free[0]))
     monkeypatch.setattr(updater,"_atomic_json",lambda path,value,**kwargs:path.write_text(json.dumps(value)))
-    def clean(): free[0] += delta; return 3
+    def clean():
+        free[0] += delta
+        return 3
     monkeypatch.setattr(updater,"_cleanup_staging",clean)
     monkeypatch.setattr(updater,"_cleanup_update_images",lambda:None)
     monkeypatch.setattr(updater,"_cleanup_helper_images",lambda progress:None)
@@ -233,6 +235,8 @@ def fixture(tmp_path, monkeypatch, fail_new_core=False, image_repository=CORE_RE
         return ""
 
     updater = TestUpdater(root, runner=runner, sleeper=lambda _: None)
+    # Older image-transaction fixtures use a text sentinel, not a real database.
+    monkeypatch.setattr(updater, "_snapshot_database", host_module.shutil.copy2)
     updater.test_request = {
         "schemaVersion": 1,
         "operationId": OPERATION,
@@ -1033,3 +1037,84 @@ def test_failed_snapshot_keeps_private_diagnostics_without_public_secret(tmp_pat
     assert "synthetic-sensitive-detail" not in status
     assert "private diagnostics saved" in status
     assert json.loads(status)["state"] == "rolled_back"
+
+
+def test_sqlite_snapshot_keeps_committed_wal_and_ignores_new_sidecars(tmp_path, monkeypatch):
+    import sqlite3
+
+    source, target = tmp_path / "data", tmp_path / "backup"
+    source.mkdir()
+    database = source / "mediahub.db"
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("CREATE TABLE saved (value TEXT)")
+        connection.execute("INSERT INTO saved VALUES ('preserved')")
+        connection.commit()
+        original = HostUpdater._copy_ownership
+
+        def concurrent_sidecar(source, destination, excluded):
+            # Reproduce the actual failure: a source SHM appears after copytree.
+            (source / "new-file-shm").write_text("not part of the snapshot")
+            original(source, destination, excluded)
+
+        monkeypatch.setattr(HostUpdater, "_copy_ownership", staticmethod(concurrent_sidecar))
+        HostUpdater(tmp_path)._copy_state(source, target, "data")
+        with sqlite3.connect(target / "mediahub.db") as restored:
+            assert restored.execute("SELECT value FROM saved").fetchall() == [("preserved",)]
+            assert restored.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+    assert not (target / "mediahub.db-shm").exists()
+    assert not (target / "mediahub.db-wal").exists()
+
+
+@pytest.mark.parametrize("failures,expected,attempts", [(1, "succeeded", 2), (9, "rolled_back", 3)])
+def test_snapshot_transient_failure_retries_with_same_operation(tmp_path, monkeypatch, failures, expected, attempts):
+    updater, root, commands = fixture(tmp_path, monkeypatch)
+    original = updater._copy_configuration
+    calls = []
+    def snapshot(backup):
+        calls.append(backup)
+        if len(calls) <= failures:
+            raise FileNotFoundError(2, "temporary SQLite sidecar")
+        original(backup)
+    monkeypatch.setattr(updater, "_copy_configuration", snapshot)
+    updater.process()
+    status = json.loads((root / "updates/status.json").read_text())
+    assert status["state"] == expected
+    assert status["operationId"] == OPERATION
+    assert status["attempt"] == attempts
+    assert len(calls) == attempts
+    assert any("Retrying automatically" in line for line in status["logs"])
+    assert (root / "data/mediahub.db").read_text() == "configuration"
+
+
+def test_failed_health_retries_only_after_successful_rollback(tmp_path, monkeypatch):
+    updater, root, _ = fixture(tmp_path, monkeypatch)
+    original = updater._wait
+    count = [0]
+    def wait(service, health=False, **kwargs):
+        compose = json.loads(updater.compose.read_text())
+        if service == "core" and health and ":release-" in compose["services"]["core"]["image"]:
+            count[0] += 1
+            if count[0] < 3:
+                raise host_module.HealthVerificationError("temporary probe failure")
+        return original(service, health=health, **kwargs)
+    monkeypatch.setattr(updater, "_wait", wait)
+    updater.process()
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
+    assert count[0] == 3
+    assert (root / f"data.failed-{OPERATION}").is_dir()
+    assert (root / f"data.failed-{OPERATION}-attempt-2").is_dir()
+
+
+def test_failed_rollback_never_retries(tmp_path, monkeypatch):
+    updater, root, _ = fixture(tmp_path, monkeypatch)
+    snapshot = []
+    def fail(backup):
+        snapshot.append(backup)
+        raise FileNotFoundError(2, "temporary")
+    monkeypatch.setattr(updater, "_copy_configuration", fail)
+    monkeypatch.setattr(updater, "_wait", lambda *args, **kwargs: (_ for _ in ()).throw(host_module.HealthVerificationError()))
+    with pytest.raises(host_module.HealthVerificationError):
+        updater.process()
+    assert len(snapshot) == 1
+    assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"

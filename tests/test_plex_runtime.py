@@ -534,3 +534,25 @@ def test_failed_start_recovery_requires_owned_running_runtime_and_storage(tmp_pa
     assert (result['state'] == 'succeeded') is (running and mounted and matching)
     if not matching:
         control.inspect.assert_not_called()
+
+
+@pytest.mark.parametrize("owned", [True, False])
+def test_image_id_after_storage_change_recovers_only_exact_owned_publisher(tmp_path, owned):
+    from unittest.mock import AsyncMock
+
+    image_id = "sha256:" + "c" * 64
+    digest = "sha256:" + "a" * 64
+    control = SimpleNamespace(
+        policy=lambda: SimpleNamespace(imageId=image_id), lock=asyncio.Lock(),
+        inspect=AsyncMock(return_value={"Config": {"Image": image_id}}),
+    )
+    runtime = PlexRuntime(control, None, tmp_path)
+    runtime.request = AsyncMock(side_effect=[
+        {"Id": image_id if owned else "sha256:" + "d" * 64,
+         "RepoDigests": ["lscr.io/linuxserver/plex@" + digest], "Os": "linux", "Architecture": "amd64"},
+        {"Descriptor": {"digest": digest}, "Platforms": [{"os": "linux", "architecture": "amd64"}]},
+    ])
+    result = asyncio.run(runtime.update_check())
+    assert result["supported"] is owned
+    assert result["updateAvailable"] is False
+    assert all(call.args[0] == "GET" for call in runtime.request.call_args_list)

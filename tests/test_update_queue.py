@@ -229,3 +229,27 @@ def test_queue_selected_first_party_app_does_not_launch_core_or_other_app(
     assert launched == [kind]
     assert queue.status()["state"] == "succeeded"
     assert queue.status()["coreUpdated"] is False
+
+
+@pytest.mark.parametrize("metadata", [{"stale": True}, {"checkStatus": "deferred"}, {"checkStatus": "failed"}])
+def test_stale_positive_selection_is_never_installed(logged_in, monkeypatch, metadata):
+    queue = queue_fixture(logged_in, monkeypatch)
+    monkeypatch.setattr(queue.svc.updates, "summary", lambda: {"items": [
+        {"id": "mediahub-core", "name": "Core", "updateAvailable": True, **metadata},
+    ]})
+    with pytest.raises(DomainError):
+        asyncio.run(queue.start(["mediahub-core"], uuid4()))
+    assert queue.task is None
+
+
+def test_fresh_recheck_rejects_deferred_positive_before_launch(logged_in, monkeypatch):
+    queue = queue_fixture(logged_in, monkeypatch)
+    monkeypatch.setattr(queue, "check", AsyncMock(return_value={"updateAvailable": True, "checkStatus": "deferred"}))
+    launch = AsyncMock()
+    monkeypatch.setattr(queue, "launch", launch)
+    async def scenario():
+        await queue.start(["mediahub-core"], uuid4())
+        await queue.task
+    asyncio.run(scenario())
+    launch.assert_not_called()
+    assert queue.status()["state"] == "failed"

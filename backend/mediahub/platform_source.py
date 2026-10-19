@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 from urllib.parse import urlsplit
 
 import httpx
+from packaging.version import InvalidVersion, Version
 
 from mediahub.errors import DomainError
 
@@ -176,7 +177,16 @@ class GitHubSourceProvider:
             raise ValueError("Invalid version")
         if not isinstance(commit, str) or not SHA.fullmatch(commit):
             raise ValueError("Invalid commit")
-        available = commit != self.commit
+        try:
+            latest_version, current_version = Version(version), Version(self.version)
+        except InvalidVersion:
+            # Legacy Agent reports may lack a semantic version; a verified
+            # installed commit still provides exact source identity.
+            available = bool(self.commit and commit != self.commit)
+        else:
+            available = latest_version > current_version or (
+                latest_version == current_version and self.commit is not None and commit != self.commit
+            )
         return {
             **result,
             "latestVersion": version,
@@ -186,6 +196,8 @@ class GitHubSourceProvider:
             "message": (
                 "New code on main is available; no release is required."
                 if available
+                else "Installed version is current; installed commit identity is unavailable."
+                if self.commit is None
                 else "MediaHub matches the latest commit on main."
             ),
         }

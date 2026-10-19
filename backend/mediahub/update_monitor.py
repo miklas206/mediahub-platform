@@ -108,7 +108,7 @@ class UpdateMonitor:
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
             **{
                 key: result[key]
-                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode", "bundledVersion", "preparationState")
+                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode", "bundledVersion", "preparationState", "latestCommit", "installedCommit", "automaticUpdate")
                 if key in result
             },
         }
@@ -135,7 +135,7 @@ class UpdateMonitor:
         if failed:
             error = "Could not check: " + ", ".join(item["name"] for item in failed)
         available = sorted(
-            f"{item['id']}:{item.get('latestVersion') or 'available'}"
+            f"{item['id']}:{item.get('latestCommit') or item.get('latestVersion') or 'available'}"
             for item in items
             if item.get("updateAvailable")
         )
@@ -249,11 +249,12 @@ class UpdateMonitor:
                 "id": "mediahub-core",
                 "name": "MediaHub Core",
                 "checkStatus": "checked"
-                if result.get("latestCommit") or result.get("latestVersion")
+                if result.get("latestVersion")
                 else "unchecked",
                 "installedVersion": result.get("installedVersion"),
                 "checkedAt": time.time(),
-                "latestVersion": result.get("latestCommit") or result.get("latestVersion"),
+                "latestCommit": result.get("latestCommit"),
+                "latestVersion": result.get("latestVersion"),
                 "updateAvailable": bool(result.get("updateAvailable")),
                 "message": str(result.get("message") or "Checked")[:200],
             },
@@ -301,8 +302,8 @@ class UpdateMonitor:
                         else "unchecked",
                         "installedVersion": platform.get("installedVersion"),
                         "checkedAt": time.time(),
-                        "latestVersion": platform.get("latestCommit")
-                        or platform.get("latestVersion"),
+                        "latestCommit": platform.get("latestCommit"),
+                        "latestVersion": platform.get("latestVersion"),
                         "updateAvailable": bool(platform.get("updateAvailable")),
                         "message": str(platform.get("message") or "Checked")[:200],
                     }
@@ -321,6 +322,7 @@ class UpdateMonitor:
                             for key in (
                                 "installedVersion",
                                 "latestVersion",
+                                "latestCommit",
                                 "updateAvailable",
                                 "checkedAt",
                             )
@@ -333,7 +335,7 @@ class UpdateMonitor:
                 items.append(
                     self._app_result(
                         {"id": "seedbox-agent", "name": "Seedbox Agent"},
-                        {**agent, "latestVersion": agent.get("latestCommit")},
+                        agent,
                     )
                 )
             except DomainError as error:
@@ -373,7 +375,7 @@ class UpdateMonitor:
         core = next(
             (item for item in self._load()["items"] if item.get("id") == "mediahub-core"), None
         )
-        if core is None or core.get("latestVersion") != commit:
+        if core is None or core.get("latestCommit") != commit:
             self.source_checks.clear()
             self.check_finished_at = 0
             await self.check_all()

@@ -8,12 +8,19 @@ export type AvailableUpdate = {
   id: string;
   name: string;
   updateAvailable: boolean;
+  checkStatus?: string;
+  stale?: boolean;
 };
 type Task = AvailableUpdate & { kind: "plex" | "core" | "agent" | "managed" };
 export function updateAllPlan(items: AvailableUpdate[], apps: AppInfo[]) {
   const tasks: Task[] = [];
   const manual: AvailableUpdate[] = [];
-  for (const item of items.filter((item) => item.updateAvailable)) {
+  for (const item of items.filter(
+    (item) =>
+      item.updateAvailable === true &&
+      !item.stale &&
+      (!item.checkStatus || item.checkStatus === "checked"),
+  )) {
     if (item.id === "mediahub-core") tasks.push({ ...item, kind: "core" });
     else if (item.id === "seedbox-agent")
       tasks.push({ ...item, kind: "agent" });
@@ -132,7 +139,8 @@ export async function runUpdateAll(
         "POST",
       );
       let current = started;
-      const deadline = Date.now() + 75 * 60 * 1000;
+      const deadline =
+        Date.now() + (task.kind === "core" ? 225 : 75) * 60 * 1000;
       const seen = new Set<string>();
       while (true) {
         for (const line of current.logs || []) {

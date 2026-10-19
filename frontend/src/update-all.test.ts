@@ -226,3 +226,11 @@ describe("Independent first-party updates", () => {
     ]);
   });
 });
+
+it("excludes cached positive checks which are stale or deferred", () => {
+  const plan = updateAllPlan([
+    { id: "mediahub-core", name: "Core", updateAvailable: true, checkStatus: "deferred" },
+    { id: "seedbox-agent", name: "Agent", updateAvailable: true, stale: true },
+  ], []);
+  expect(plan.tasks).toEqual([]);
+});

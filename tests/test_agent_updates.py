@@ -175,7 +175,7 @@ def test_check_uses_remote_commit_not_core_version(logged_in, monkeypatch):
 
     monkeypatch.setattr("mediahub.agent_updates.GitHubSourceProvider.check", check)
     result = asyncio.run(updater.check())
-    assert result["installedVersion"] == "b" * 40
+    assert result["installedVersion"] == "0.4.3"
     assert result["host"] == "192.168.1.20"
     assert not result["installReady"]
 
@@ -448,7 +448,8 @@ def test_check_all_includes_agent_update(logged_in, monkeypatch):
         "check",
         AsyncMock(
             return_value={
-                "installedVersion": "old",
+                "installedVersion": "0.4.3",
+                "latestVersion": "0.6.60",
                 "latestCommit": "a" * 40,
                 "updateAvailable": True,
             }
@@ -456,7 +457,8 @@ def test_check_all_includes_agent_update(logged_in, monkeypatch):
     )
     summary = asyncio.run(svc.updates.check_all())
     item = next(row for row in summary["items"] if row["id"] == "seedbox-agent")
-    assert item["latestVersion"] == "a" * 40
+    assert item["latestVersion"] == "0.6.60"
+    assert item["latestCommit"] == "a" * 40
     assert item["updateAvailable"]
     assert summary["count"] >= 1
 

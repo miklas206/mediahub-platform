@@ -49,7 +49,9 @@ class UpdateQueue:
             available = {
                 item["id"]: item
                 for item in self.svc.updates.summary()["items"]
-                if item.get("updateAvailable")
+                if item.get("updateAvailable") is True
+                and item.get("checkStatus", "checked") == "checked"
+                and not item.get("stale")
             }
             items = []
             for identifier in dict.fromkeys(identifiers):
@@ -158,8 +160,10 @@ class UpdateQueue:
                     self.save(job, "Reconnected to the existing server update")
                 if item["state"] == "pending":
                     checked = await self.check(item)
-                    available = checked.get("updateAvailable", bool(checked.get("releaseVersions")))
-                    if checked.get("supported") is False:
+                    available = checked.get("updateAvailable") is True
+                    if (checked.get("supported") is False
+                        or checked.get("checkStatus", "checked") != "checked"
+                        or checked.get("stale")):
                         raise DomainError(
                             "update_unverified", "This update could not be verified", 409
                         )
@@ -175,7 +179,7 @@ class UpdateQueue:
                     item.update(
                         state="starting",
                         previousOperationId=current.get("operationId"),
-                        deadline=time.time() + 4500,
+                        deadline=time.time() + (13500 if item["kind"] == "core" else 4500),
                     )
                     self.save(job, item["name"] + ": starting update")
                     started = await self.launch(item, checked)

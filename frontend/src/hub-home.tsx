@@ -93,6 +93,7 @@ export type HubEntry = {
   removableApp?: InstalledAppInfo;
   runtimeAppId?: string;
   canStop?: boolean;
+  canStart?: boolean;
   localUrl?: string | null;
   externalUrl?: string | null;
   startedAt?: string | null;
@@ -347,6 +348,16 @@ export function buildHubEntries({
         externalUrl: app?.externalUrl,
         runtimeAppId: app?.id,
         canStop: app?.controls?.actions.includes("stop"),
+        canStart: app?.controls?.actions.includes("start"),
+        ...(!appsError &&
+        app?.running === false &&
+        (app.observedAt == null || Date.now() / 1000 - app.observedAt <= 30)
+          ? {
+              status: "stopped",
+              statusLabel: "Not running",
+              statusDetail: "Start the app to use it.",
+            }
+          : {}),
         running: app?.running,
         startedAt: app?.startedAt,
         observedAt: app?.observedAt,
@@ -594,19 +605,20 @@ export function HubHome({
                       {t(entry.action)}
                     </Link>
                   )}
-                  {entry.canStop && entry.runtimeAppId && (
-                    <StopAppButton
-                      appId={entry.runtimeAppId}
-                      name={entry.name}
-                      packageId={
-                        entry.id === "org.mediahub.seedbox"
-                          ? "org.mediahub.mediaseed"
-                          : entry.id
-                      }
-                      running={entry.running}
-                      onChanged={onAppRemoved}
-                    />
-                  )}
+                  {(entry.running === false ? entry.canStart : entry.canStop) &&
+                    entry.runtimeAppId && (
+                      <StopAppButton
+                        appId={entry.runtimeAppId}
+                        name={entry.name}
+                        packageId={
+                          entry.id === "org.mediahub.seedbox"
+                            ? "org.mediahub.mediaseed"
+                            : entry.id
+                        }
+                        running={entry.running}
+                        onChanged={onAppRemoved}
+                      />
+                    )}
                   {entry.settingsPath && (
                     <Link
                       className="hub-card-settings"

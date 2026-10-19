@@ -40,7 +40,7 @@ def test_stopped_source_and_completed_initializer_do_not_hide_healthy_vpn_client
     "version,preparation,status",
     [
         (BUNDLED_VERSION, "ready", "checked"),
-        (None, "failed", "checked"),
+        (None, "failed", "failed"),
         ("0.1.1", "ready", "checked"),
         ("0.1.0", "ready", "checked"),
     ],
@@ -71,8 +71,8 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     assert checked["latestVersion"] == BUNDLED_VERSION
     assert checked["installedVersion"] == version
     assert checked["checkStatus"] == status
-    assert checked["updateAvailable"] is (version != BUNDLED_VERSION)
-    assert checked["installReady"] is (version != BUNDLED_VERSION and preparation == "ready")
+    assert checked["updateAvailable"] is (version is not None and version != BUNDLED_VERSION)
+    assert checked["installReady"] is (version is not None and version != BUNDLED_VERSION and preparation == "ready")
     result = UpdateMonitor._app_result(
         {"id": "seed", "name": "MediaSeed", "version": "managed"}, checked
     )

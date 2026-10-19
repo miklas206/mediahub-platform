@@ -444,3 +444,14 @@ def test_container_status_passes_shared_adapter_schema_without_claiming_health(t
     assert forwarded["available"] is True
     assert forwarded["health"] == "unknown"
     assert forwarded["installationId"] == "mediahub-radarr"
+
+
+@pytest.mark.parametrize("labels,expected", [
+    ({"org.opencontainers.image.version": "10.11.1"}, "10.11.1"),
+    ({"build_version": "Linuxserver.io version:- 4.0.15.2941-ls284 Build-date:- 2026-01-01"}, "4.0.15.2941"),
+    ({"org.opencontainers.image.version": "v2.4.0-ls12"}, "2.4.0"),
+    ({"build_version": "unknown"}, None),
+    ({"org.opencontainers.image.version": "1.2.3-rc1"}, None),
+])
+def test_publisher_version_labels_are_normalized(labels, expected):
+    assert ContainerApps.image_version(labels) == expected

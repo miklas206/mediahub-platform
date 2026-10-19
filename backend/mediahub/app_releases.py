@@ -34,7 +34,8 @@ async def latest_release(package, installed, cache=None, transport=None):
     except InvalidVersion:
         newer = None
     return {
-        "supported": False, "updateAvailable": False, "checkStatus": "checked",
+        "supported": True, "automaticUpdate": False, "updateAvailable": newer is True,
+        "checkStatus": "checked" if newer is not None else "unchecked",
         "installedVersion": installed, "latestVersion": latest,
         "upstreamUpdateAvailable": newer, "repository": repository,
         "message": "New upstream release available; update using the app's managed installer" if newer else

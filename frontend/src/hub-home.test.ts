@@ -279,3 +279,15 @@ it("includes other installed catalog apps with status settings and both addresse
     running: true,
   });
 });
+
+it("shows a recently observed stopped app as not running instead of critical", () => {
+  const app = { ...seedbox, running: false, observedAt: Date.now() / 1000,
+    health: { ...seedbox.health, status: "unhealthy" as const },
+    controls: { actions: ["start", "stop"], logs: true, updateCheck: true } };
+  expect(buildHubEntries({ ...input, apps: [app] }).find(row => row.id === seedbox.packageId))
+    .toMatchObject({ status: "stopped", statusLabel: "Not running", canStart: true });
+  expect(buildHubEntries({ ...input, apps: [{ ...app, running: true }] }).find(row => row.id === seedbox.packageId)?.statusLabel)
+    .not.toBe("Not running");
+  expect(buildHubEntries({ ...input, apps: [{ ...app, observedAt: 1 }] }).find(row => row.id === seedbox.packageId)?.statusLabel)
+    .not.toBe("Not running");
+});

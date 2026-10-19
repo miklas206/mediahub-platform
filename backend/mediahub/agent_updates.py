@@ -264,7 +264,7 @@ class AgentUpdates:
             "hostId": identifier,
             "installReady": self.ready(identifier) or stored,
             "credentialsStored": stored,
-            "installedVersion": version.get("sourceCommit") or version.get("version"),
+            "installedVersion": version.get("version"),
             "message": checked.get("message")
             if checked.get("configured") is False
             else "Agent code on GitHub main; prepare SSH below to install"

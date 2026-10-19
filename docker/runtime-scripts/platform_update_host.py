@@ -7,12 +7,15 @@ Docker/BuildKit need outbound access to fetch base images and dependencies.
 """
 
 import argparse
+import contextlib
+import errno
 import hashlib
 import json
 import os
 import re
 import shlex
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -45,6 +48,10 @@ class BuildSpaceError(ValueError):
             "at least 8 GiB required. Free unused Docker build cache or expand the system disk. "
             "Running services were not changed."
         )
+
+
+class HealthVerificationError(ValueError):
+    """A bounded health probe failed; retry only after verified rollback."""
 
 
 class InstalledVersionError(ValueError):
@@ -93,6 +100,8 @@ class HostUpdater:
         self.private_log_block = False
         self.update_mode = None
         self.update_reason = None
+        self.attempt = 1
+        self.max_attempts = 3
 
     def _embedded(self):
         compose = self._read_json(self.compose, 2 * 1024 * 1024)
@@ -337,6 +346,8 @@ class HostUpdater:
                 "updateMode": self.update_mode,
                 "updateReason": self.update_reason,
                 "changedServices": list(self.changed_roles) if self.update_mode else [],
+                "attempt": self.attempt,
+                "maxAttempts": self.max_attempts,
                 "updatedAt": time.time(),
             },
         )
@@ -348,7 +359,12 @@ class HostUpdater:
             current = Path(root)
             for name in directories + files:
                 candidate = current / name
-                details = candidate.lstat()
+                try:
+                    details = candidate.lstat()
+                except FileNotFoundError:
+                    if candidate.name in {"mediahub.db-wal", "mediahub.db-shm", "mediahub.db-journal"}:
+                        continue
+                    raise
                 if stat.S_ISLNK(details.st_mode):
                     raise ValueError("Configuration backup contains a symbolic link")
                 if stat.S_ISREG(details.st_mode):
@@ -794,7 +810,7 @@ class HostUpdater:
                 if state == ("healthy" if health else "true"):
                     return
             self.sleep(2)
-        raise ValueError(f"{service} did not become healthy")
+        raise HealthVerificationError(f"{service} did not become healthy")
 
     def installed_source(self):
         path = self.updates / "installed-source.json"
@@ -911,8 +927,13 @@ class HostUpdater:
             raise
 
     def _copy_state(self, source, destination, name):
-        # The host controller owns a live Unix socket, not persistent app data.
+        # SQLite's WAL/SHM files can appear/disappear even between two directory
+        # scans. Use its online backup API for one coherent database, including
+        # committed WAL rows, rather than copying transient sidecars separately.
         excluded = ("storage-control",) if name == "data" else ()
+        database = source / "mediahub.db"
+        if name == "data" and database.exists():
+            excluded += ("mediahub.db", "mediahub.db-wal", "mediahub.db-shm", "mediahub.db-journal")
         shutil.copytree(
             source,
             destination,
@@ -920,6 +941,27 @@ class HostUpdater:
             ignore=lambda directory, names: excluded if Path(directory) == source else (),
         )
         self._copy_ownership(source, destination, excluded)
+        if "mediahub.db" in excluded:
+            details = database.lstat()
+            if not stat.S_ISREG(details.st_mode):
+                raise ValueError("Configuration database is not a regular file")
+            target = destination / "mediahub.db"
+            self._snapshot_database(database, target)
+            shutil.copystat(database, target)
+            os.chown(target, details.st_uid, details.st_gid, follow_symlinks=False)
+
+    @staticmethod
+    def _snapshot_database(database, target):
+        deadline = time.monotonic() + 30
+
+        def progress(*_):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Database snapshot timed out")
+
+        with contextlib.closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as incoming:
+            with contextlib.closing(sqlite3.connect(target)) as outgoing:
+                incoming.backup(outgoing, pages=256, progress=progress, sleep=0.1)
+                outgoing.execute("PRAGMA journal_mode=DELETE")
 
     @staticmethod
     def _copy_ownership(source, destination, excluded=()):
@@ -927,14 +969,14 @@ class HostUpdater:
         # ownership makes restored secrets unreadable to non-root containers.
         if not hasattr(os, "chown"):
             return
-        for original in [source, *source.rglob("*")]:
-            relative = original.relative_to(source)
+        for target in [destination, *destination.rglob("*")]:
+            relative = target.relative_to(destination)
+            original = source / relative
             if relative.parts and relative.parts[0] in excluded:
                 continue
             details = original.lstat()
             if stat.S_ISLNK(details.st_mode):
                 raise ValueError("Configuration ownership reference contains a symbolic link")
-            target = destination / original.relative_to(source)
             if target.is_symlink():
                 raise ValueError("Configuration ownership destination contains a symbolic link")
             os.chown(target, details.st_uid, details.st_gid, follow_symlinks=False)
@@ -951,7 +993,8 @@ class HostUpdater:
             marker.unlink(missing_ok=True)
         for name in self._state_directories():
             current = self.root / name
-            failed = self.root / f"{name}.failed-{self.operation}"
+            suffix = "" if self.attempt == 1 else f"-attempt-{self.attempt}"
+            failed = self.root / f"{name}.failed-{self.operation}{suffix}"
             if failed.exists():
                 raise ValueError("Rollback destination already exists")
             os.replace(current, failed)
@@ -1285,151 +1328,183 @@ class HostUpdater:
             if request_data.get("action") == "maintenance":
                 self._maintenance(request_data)
                 return
-            request = manifest = stage = backup = None
-            services_stopped = False
-            try:
-                request, manifest, stage = self._validate_request()
-                self.request = request
-                self.operation = request["operationId"]
-                self.target = request["toVersion"]
-                source_mode = manifest.get("schemaVersion") in (2, 3)
-                if self._embedded() and not source_mode:
-                    raise ValueError("The single-hub profile requires a source update")
-                self.steps = [
-                    {"id": "download", "label": "Download verified release", "state": "complete"},
-                    {"id": "backup", "label": "Back up configuration", "state": "running"},
-                    {"id": "replace", "label": "Replace Core and Agent", "state": "pending"},
-                    {"id": "verify", "label": "Verify health or roll back", "state": "pending"},
-                ]
-                installed = self._trusted_file(self.installed_version, 128).strip()
-                if request["fromVersion"] != installed:
-                    if not self._legacy_version_request(request, installed):
-                        raise InstalledVersionError()
-                    self._append_log(
-                        "Verified legacy Core version mismatch against the installed commit and running image"
-                    )
-                if manifest.get("schemaVersion") == 3:
-                    previous_source = self.installed_source()
-                    previous_commit = (
-                        previous_source.get("commit")
-                        if previous_source.get("repository") == self._trusted_source()
-                        else None
-                    )
-                    if request.get("fromCommit") != previous_commit:
-                        raise ValueError("Installed commit does not match the update request")
-                    if manifest["source"]["commit"] == previous_commit:
-                        raise ValueError("Source commit is already installed")
-                    if version_key(self.target) < version_key(installed):
-                        raise ValueError("Source version must not downgrade")
-                elif version_key(self.target) <= version_key(installed):
-                    raise ValueError("Update must move to a newer stable version")
-                built_images = None
-                if source_mode:
-                    self._validate_source_manifest(manifest, request, stage)
-                    self.steps[0]["label"] = "Download verified source"
-                    self.steps.insert(
-                        1, {"id": "build", "label": "Build on this server", "state": "running"}
-                    )
-                    self.steps[2]["state"] = "pending"
+            request, manifest, stage = self._validate_request()
+            built_images = None
+            for self.attempt in range(1, self.max_attempts + 1):
+                retry, built_images = self._process_attempt(request, manifest, stage, built_images)
+                if not retry:
+                    break
+
+    @staticmethod
+    def _retryable(error):
+        if isinstance(error, (HealthVerificationError, subprocess.SubprocessError, TimeoutError)):
+            return True
+        if isinstance(error, sqlite3.OperationalError):
+            return getattr(error, "sqlite_errorcode", None) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+        return isinstance(error, OSError) and error.errno in {
+            errno.ENOENT, errno.EBUSY, errno.EAGAIN, errno.ETIMEDOUT, errno.ECONNRESET,
+        }
+
+    def _retry_notice(self):
+        self.status(
+            "building", 60,
+            f"Attempt {self.attempt}/{self.max_attempts} failed. "
+            f"Retrying automatically ({self.attempt + 1}/{self.max_attempts}) in {10 * self.attempt} seconds",
+        )
+        self.sleep(10 * self.attempt)
+
+    def _process_attempt(self, request, manifest, stage, built_images):
+        backup = None
+        services_stopped = False
+        try:
+            self.request = request
+            self.operation = request["operationId"]
+            self.target = request["toVersion"]
+            source_mode = manifest.get("schemaVersion") in (2, 3)
+            if self._embedded() and not source_mode:
+                raise ValueError("The single-hub profile requires a source update")
+            self.steps = [
+                {"id": "download", "label": "Download verified release", "state": "complete"},
+                {"id": "backup", "label": "Back up configuration", "state": "running"},
+                {"id": "replace", "label": "Replace Core and Agent", "state": "pending"},
+                {"id": "verify", "label": "Verify health or roll back", "state": "pending"},
+            ]
+            installed = self._trusted_file(self.installed_version, 128).strip()
+            if request["fromVersion"] != installed:
+                if not self._legacy_version_request(request, installed):
+                    raise InstalledVersionError()
+                self._append_log(
+                    "Verified legacy Core version mismatch against the installed commit and running image"
+                )
+            if manifest.get("schemaVersion") == 3:
+                previous_source = self.installed_source()
+                previous_commit = (
+                    previous_source.get("commit")
+                    if previous_source.get("repository") == self._trusted_source()
+                    else None
+                )
+                if request.get("fromCommit") != previous_commit:
+                    raise ValueError("Installed commit does not match the update request")
+                if manifest["source"]["commit"] == previous_commit:
+                    raise ValueError("Source commit is already installed")
+                if version_key(self.target) < version_key(installed):
+                    raise ValueError("Source version must not downgrade")
+            elif version_key(self.target) <= version_key(installed):
+                raise ValueError("Update must move to a newer stable version")
+            if source_mode:
+                self._validate_source_manifest(manifest, request, stage)
+                self.steps[0]["label"] = "Download verified source"
+                self.steps.insert(
+                    1, {"id": "build", "label": "Build on this server", "state": "running"}
+                )
+                self.steps[2]["state"] = "pending"
+                if built_images is None:
                     built_images = self._build_source_images(stage, manifest)
-                    if self.changed_roles == ("core",):
-                        self.steps[3]["label"] = "Replace Core; keep unchanged Agent"
-                    self.steps[1]["state"] = "complete"
-                    self.steps[2]["state"] = "running"
-                else:
-                    trusted_repositories = self._trusted_policy()
-                    for role in ("core", "agent"):
-                        repository = manifest["images"][role].partition("@")[0]
-                        if repository != trusted_repositories[role]:
-                            raise ValueError("Release image is outside the trusted repository")
-                offset = 1 if source_mode else 0
-                self.status("installing", 70, "Stopping changed services for a safe snapshot")
-                compose = self._read_json(self.compose, 2 * 1024 * 1024)
-                required = {"core", "proxy"} if self._embedded() else {"core", "agent"}
-                if compose.get("name") != "mediahub-platform" or not required.issubset(
-                    compose.get("services", {})
-                ):
-                    raise ValueError("Compose ownership validation failed")
-                self._backup_preflight()
-                services_stopped = True
-                self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
-                backup_destination = self.backups / self.operation
-                self._copy_configuration(backup_destination)
-                backup = backup_destination
-                self.steps[1 + offset]["state"] = "complete"
-                self.steps[2 + offset]["state"] = "running"
-                self.status("installing", 72, "Applying images for changed services")
-                for role in self.changed_roles:
-                    compose["services"][role]["image"] = (
-                        built_images[role]
-                        if built_images
-                        else self._load_release_image(role, stage, manifest)
-                    )
-                    compose["services"][role].pop("build", None)
-                    compose["services"][role]["pull_policy"] = "never"
-                self._atomic_json(self.compose, compose, uid=0, gid=0)
-                if "agent" in self.changed_roles:
-                    self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
-                if not self._embedded():
-                    self._wait("agent")
-                self._compose_command("up", "-d", "--no-deps", "core", capture=False)
-                self.steps[2 + offset]["state"] = "complete"
+                if self.changed_roles == ("core",):
+                    self.steps[3]["label"] = "Replace Core; keep unchanged Agent"
+                self.steps[1]["state"] = "complete"
+                self.steps[2]["state"] = "running"
+            else:
+                trusted_repositories = self._trusted_policy()
+                for role in ("core", "agent"):
+                    repository = manifest["images"][role].partition("@")[0]
+                    if repository != trusted_repositories[role]:
+                        raise ValueError("Release image is outside the trusted repository")
+            offset = 1 if source_mode else 0
+            self.status("installing", 70, "Stopping changed services for a safe snapshot")
+            compose = self._read_json(self.compose, 2 * 1024 * 1024)
+            required = {"core", "proxy"} if self._embedded() else {"core", "agent"}
+            if compose.get("name") != "mediahub-platform" or not required.issubset(
+                compose.get("services", {})
+            ):
+                raise ValueError("Compose ownership validation failed")
+            self._backup_preflight()
+            services_stopped = True
+            self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
+            backup_destination = self.backups / (self.operation if self.attempt == 1 else f"{self.operation}-attempt-{self.attempt}")
+            self._copy_configuration(backup_destination)
+            backup = backup_destination
+            self.steps[1 + offset]["state"] = "complete"
+            self.steps[2 + offset]["state"] = "running"
+            self.status("installing", 72, "Applying images for changed services")
+            for role in self.changed_roles:
+                compose["services"][role]["image"] = (
+                    built_images[role]
+                    if built_images
+                    else self._load_release_image(role, stage, manifest)
+                )
+                compose["services"][role].pop("build", None)
+                compose["services"][role]["pull_policy"] = "never"
+            self._atomic_json(self.compose, compose, uid=0, gid=0)
+            if "agent" in self.changed_roles:
+                self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
+            if not self._embedded():
+                self._wait("agent")
+            self._compose_command("up", "-d", "--no-deps", "core", capture=False)
+            self.steps[2 + offset]["state"] = "complete"
+            self.steps[-1]["state"] = "running"
+            self.status("verifying", 90, "Verifying the updated MediaHub services")
+            self._wait("core", health=True)
+            if self.pending_build_cache is not None:
+                self._atomic_json(
+                    self.root / "agent-build-cache.json",
+                    self.pending_build_cache,
+                    uid=0,
+                    gid=0,
+                )
+            self._atomic_text(self.installed_version, self.target)
+            if source_mode:
+                self.write_installed_source(manifest["source"])
+            self.steps[-1]["state"] = "complete"
+            self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
+            self._cleanup_after_success(stage)
+            return False, built_images
+        except Exception as error:
+            self._record_failure(error)
+            retry = self.attempt < self.max_attempts and self._retryable(error)
+            if not services_stopped:
+                if retry:
+                    self._retry_notice()
+                    return True, built_images
+                for step in self.steps:
+                    if step["state"] == "running":
+                        step["state"] = "error"
+                self.status(
+                    "failed",
+                    100,
+                    str(error)
+                    if isinstance(error, (BuildSpaceError, InstalledVersionError))
+                    else "Update was rejected before any running service was changed",
+                )
+                return False, built_images
+            try:
                 self.steps[-1]["state"] = "running"
-                self.status("verifying", 90, "Verifying the updated MediaHub services")
-                self._wait("core", health=True)
-                if self.pending_build_cache is not None:
-                    self._atomic_json(
-                        self.root / "agent-build-cache.json",
-                        self.pending_build_cache,
-                        uid=0,
-                        gid=0,
-                    )
-                self._atomic_text(self.installed_version, self.target)
-                if source_mode:
-                    self.write_installed_source(manifest["source"])
+                self.status("rolling_back", 95, "Update failed; restoring the previous version")
+                if backup and backup.is_dir():
+                    self._restore_configuration(backup)
+                elif services_stopped:
+                    if "agent" in self.changed_roles:
+                        self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
+                    if not self._embedded():
+                        self._wait("agent")
+                    self._compose_command("up", "-d", "--no-deps", "core", capture=False)
+                    self._wait("core", health=True)
                 self.steps[-1]["state"] = "complete"
-                self.status("succeeded", 100, f"MediaHub {self.target} installed successfully")
-                self._cleanup_after_success(stage)
-            except Exception as error:
-                self._record_failure(error)
-                if request is None:
-                    raise
-                if not services_stopped:
-                    for step in self.steps:
-                        if step["state"] == "running":
-                            step["state"] = "error"
-                    self.status(
-                        "failed",
-                        100,
-                        str(error)
-                        if isinstance(error, (BuildSpaceError, InstalledVersionError))
-                        else "Update was rejected before any running service was changed",
-                    )
-                    return
-                try:
-                    self.steps[-1]["state"] = "running"
-                    self.status("rolling_back", 95, "Update failed; restoring the previous version")
-                    if backup and backup.is_dir():
-                        self._restore_configuration(backup)
-                    elif services_stopped:
-                        if "agent" in self.changed_roles:
-                            self._compose_command("up", "-d", "--no-deps", "agent", capture=False)
-                        if not self._embedded():
-                            self._wait("agent")
-                        self._compose_command("up", "-d", "--no-deps", "core", capture=False)
-                        self._wait("core", health=True)
-                    self.steps[-1]["state"] = "complete"
-                    self.status(
-                        "rolled_back", 100, "Update failed and the previous version was restored"
-                    )
-                except Exception:
-                    self.steps[-1]["state"] = "error"
-                    self.status(
-                        "failed",
-                        100,
-                        "Update and automatic rollback failed; administrator recovery is required",
-                    )
-                    raise
+                if retry:
+                    self._retry_notice()
+                    return True, built_images
+                self.status(
+                    "rolled_back", 100, "Update failed and the previous version was restored"
+                )
+                return False, built_images
+            except Exception:
+                self.steps[-1]["state"] = "error"
+                self.status(
+                    "failed",
+                    100,
+                    "Update and automatic rollback failed; administrator recovery is required",
+                )
+                raise
 
 
 def main():
