@@ -49,9 +49,17 @@ netværksfejl genforsøges. Genstart bruger samme cache og NAS-identitet. Cachen
 bundet til det verificerede mediefilsystem, så et forsvundet drev ikke omdirigerer
 skrivning til systemdisken.
 
-En eksisterende forbindelse uden skrivecache skal være fri for app- og
-Windows-tilknytninger, før denne ændring kan gennemføres. NAS-filer bevares.
+En eksisterende forbindelse uden skrivecache kan beholde sine app- og
+Windows-tilknytninger. Stop også øvrige apps, som bruger NAS-forbindelsen,
+før skrivecachen aktiveres første gang. Windows-delinger genoprettes automatisk
+med samme opsætning og login efter en kort afbrydelse. NAS-filer bevares.
 Native CIFS på en almindelig Linux-vært kræver ikke denne skrivecache.
+
+Core 0.6.64 og MediaSeed 0.1.31 understøtter denne overgang og NAS-visningens
+`files`-undermappe. Den lokale disk og dens standardplacering bevares; NAS'en
+tilføjes som et ekstra valg til torrents og RSS. Automatiske tests dækker frisk
+tilknytning, eksisterende app-/Windows-tilknytninger og gentaget aktivering.
+Overgangen er ikke fysisk verificeret på produktions-NAS'en i denne rettelse.
 
 ## Fjern tilknytningen
 

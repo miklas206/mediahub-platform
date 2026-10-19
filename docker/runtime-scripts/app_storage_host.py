@@ -284,12 +284,10 @@ class AppStorage:
             raise self.error("MediaSeed requires a NAS connection with read and write access")
         if not self.host.userspace_mounts() or row.get("cacheLocationId"):
             return
-        if any(
-            r["storageId"] == identifier for r in state["shares"] + state.get("appBindings", [])
-        ):
-            raise self.error(
-                "Remove this NAS from apps and Windows shares before enabling torrent writes"
-            )
+        bindings = [r for r in state.get("appBindings", []) if r["storageId"] == identifier]
+        for package in sorted({r["app"] for r in bindings}):
+            self.documents(package, [r for r in state["appBindings"] if r["app"] == package])
+        shared = any(r["storageId"] == identifier for r in state["shares"])
         candidates = []
         for location in self.host.locations():
             if (
@@ -311,14 +309,22 @@ class AppStorage:
             )
         row["cacheLocationId"] = max(candidates)[1]
         self.cache_directory(row)
-        # No existing app/share can be using this mount. Never discard a write cache.
-        self.release_view(identifier)
+        if shared:
+            self.host.configure_smb([])
+        for suffix in ("", "-ro"):
+            target = self.views / (identifier + suffix) / "files"
+            if self.host.mount_info(target).get("target") == str(target):
+                self.host.run(["umount", str(target)])
         self.host.run(["fusermount3", "-u", str(self.host.mounts / identifier)])
         self.host.run(
             ["systemctl", "stop", "mediahub-nas-" + self.host.installation + "-" + identifier]
         )
         self.save(self.host.file, state)
         self.host.mount_nas(row)
+        for binding in bindings:
+            self.view(identifier, read_only=binding["app"] == "plex")
+        if shared:
+            self.host.configure_smb(state["shares"])
 
     def managed(self, kind):
         policy = json.loads((self.host.root / "data/managed-apps.json").read_text())

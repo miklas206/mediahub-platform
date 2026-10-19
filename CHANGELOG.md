@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.64
+
+- Enable MediaSeed's NAS write cache without removing existing app bindings or Windows shares. Validate stopped apps, preserve shared mount parents, and restore NAS views and authenticated Windows shares after the cache transition. Existing local download mounts remain available.
+- Apply the same transition to fresh installations and existing uncached NAS connections; retain NAS identity, credentials, media and the selected persistent cache on retries.
+
 ## 0.6.63
 
 - Report Plex remote access from its active shared VPN and separate public port instead of the unused dedicated VPN. Require matching profile, endpoint and fresh public identity verification before showing the port as ready.

@@ -461,8 +461,10 @@ def test_write_cache_refuses_the_system_filesystem(installation, tmp_path, monke
     assert not calls
 
 
+@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("bound", [False, True])
 def test_write_cache_selection_preserves_nas_identity_and_login(
-    installation, tmp_path, monkeypatch
+    installation, tmp_path, monkeypatch, shared, bound
 ):
     host, _, _, _ = installation
     host.userspace_mounts = lambda: True
@@ -476,6 +478,18 @@ def test_write_cache_selection_preserves_nas_identity_and_login(
         }
     ]
     host.apps.cache_directory = lambda row: tmp_path / "cache"
+    state = host.state()
+    if shared:
+        state["shares"] = [{"name": "Media", "storageId": NAS, "readOnly": False}]
+    if bound:
+        state["appBindings"] = [{"app": "plex", "storageId": NAS}]
+    save(host.file, state)
+    validated = []
+    host.apps.documents = lambda package, bindings: validated.append((package, bindings))
+    shares = []
+    host.configure_smb = lambda selected: shares.append(copy.deepcopy(selected))
+    views = []
+    host.apps.view = lambda identifier, **options: views.append((identifier, options))
     monkeypatch.setattr(
         "scripts.app_storage_host.os.statvfs",
         lambda _: SimpleNamespace(f_bavail=50, f_frsize=1024**3),
@@ -494,6 +508,34 @@ def test_write_cache_selection_preserves_nas_identity_and_login(
     assert private.read_bytes() == before
     assert mounted[0] == row
     assert any(c[:2] == ["fusermount3", "-u"] for c in calls)
+    assert not any(c == ["umount", str(host.apps.views / NAS)] for c in calls)
+    assert host.state().get("appBindings", []) == state.get("appBindings", [])
+    assert host.state()["shares"] == state["shares"]
+    assert shares == ([[], state["shares"]] if shared else [])
+    assert validated == ([("plex", state["appBindings"])] if bound else [])
+    assert views == ([(NAS, {"read_only": True})] if bound else [])
+    count = len(calls)
+    host.apps.enable_writes(NAS)
+    assert len(calls) == count
+
+
+def test_write_cache_upgrade_validates_existing_apps_before_any_changes(installation):
+    host, _, _, _ = installation
+    host.userspace_mounts = lambda: True
+    state = host.state()
+    state["appBindings"] = [{"app": "plex", "storageId": NAS}]
+    save(host.file, state)
+    before = host.file.read_bytes()
+
+    def documents(*args):
+        raise StorageError("Stop Plex from MediaHub before changing storage")
+
+    host.apps.documents = documents
+    host.apps.cache_directory = lambda row: pytest.fail("Cache changed before validation")
+    host.run = lambda *args, **kwargs: pytest.fail("Mount changed before validation")
+    with pytest.raises(StorageError, match="Stop Plex"):
+        host.apps.enable_writes(NAS)
+    assert host.file.read_bytes() == before
 
 
 def test_install_recipe_is_updated_together_with_owned_media_seed_containers(installation):
