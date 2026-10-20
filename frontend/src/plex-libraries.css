@@ -1,0 +1,71 @@
+.plex-library-settings h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.plex-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.plex-library-card {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  min-width: 0;
+}
+.plex-library-card h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.plex-library-paths {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plex-library-paths li {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.plex-library-paths code,
+.plex-folder-path {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.plex-folder-chooser {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.plex-folder-chooser label {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.plex-folder-chooser select {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+.plex-library-create {
+  margin-top: 1rem;
+}
+.plex-library-remove {
+  justify-self: start;
+  color: var(--danger, #ef6a7e);
+  margin-top: 0.5rem;
+}
+@media (max-width: 480px) {
+  .plex-library-settings > .panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+}

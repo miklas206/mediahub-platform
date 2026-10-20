@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
 from mediahub.api import administrator, result, services
-from mediahub.apps.plex import PlexAccountClaim, PlexInstallation, PlexInstallRequest
+from mediahub.apps.plex import (
+    PlexAccountClaim,
+    PlexInstallation,
+    PlexInstallRequest,
+    PlexLibraryCreate,
+    PlexLibraryEdit,
+    PlexLibraryRemove,
+)
 from mediahub.apps.remote_registry import register_remote_apps
 from mediahub.db import InstalledApp, Setting
 from mediahub.errors import DomainError
@@ -119,11 +126,74 @@ def account_target(request):
 @router.get("/account")
 async def account_status(request: Request):
     from mediahub.app_settings import saved_address
+
     reply = await account_target(request).request("GET", "/v1/plex/account")
     address = saved_address(services(request), "org.mediahub.plex") or reply.get("localUrl")
-    return result({**reply, "openUrl": address.rstrip("/") + "/web/index.html" if address else None})
+    return result(
+        {**reply, "openUrl": address.rstrip("/") + "/web/index.html" if address else None}
+    )
 
 
 @router.post("/account", status_code=202)
 async def claim_account(body: PlexAccountClaim, request: Request):
-    return result(await account_target(request).request("POST", "/v1/plex/account", {"claimToken": body.claimToken.get_secret_value()}))
+    return result(
+        await account_target(request).request(
+            "POST", "/v1/plex/account", {"claimToken": body.claimToken.get_secret_value()}
+        )
+    )
+
+
+@router.get("/libraries")
+async def libraries(request: Request):
+    return result(await account_target(request).request("GET", "/v1/plex/libraries"))
+
+
+@router.get("/library-folders")
+async def library_folders(request: Request, path: str):
+    from urllib.parse import urlencode
+
+    if len(path) > 2048:
+        raise DomainError(
+            "plex_folder_denied", "Choose a folder inside Plex's assigned media storage", 403
+        )
+    return result(
+        await account_target(request).request(
+            "GET", "/v1/plex/library-folders?" + urlencode({"path": path})
+        )
+    )
+
+
+@router.post("/libraries")
+async def create_library(body: PlexLibraryCreate, request: Request):
+    services(request).setup.require_complete()
+    return result(
+        await account_target(request).request("POST", "/v1/plex/libraries", body.model_dump())
+    )
+
+
+@router.put("/libraries/{identifier}")
+async def edit_library(identifier: str, body: PlexLibraryEdit, request: Request):
+    import re
+
+    if not re.fullmatch(r"[0-9]{1,20}", identifier):
+        raise DomainError("plex_library_invalid", "Invalid Plex library", 422)
+    services(request).setup.require_complete()
+    return result(
+        await account_target(request).request(
+            "PUT", "/v1/plex/libraries/" + identifier, body.model_dump()
+        )
+    )
+
+
+@router.delete("/libraries/{identifier}")
+async def remove_library(identifier: str, body: PlexLibraryRemove, request: Request):
+    import re
+
+    if not re.fullmatch(r"[0-9]{1,20}", identifier):
+        raise DomainError("plex_library_invalid", "Invalid Plex library", 422)
+    services(request).setup.require_complete()
+    return result(
+        await account_target(request).request(
+            "DELETE", "/v1/plex/libraries/" + identifier, body.model_dump()
+        )
+    )

@@ -1,3 +1,4 @@
+import { PlexLibrarySettings } from "./plex-libraries";
 import { AppStorageSettings } from "./app-storage";
 import { AppResourceSettings } from "./app-resources";
 import { AppControlPanel, type AppControls } from "./app-controls";
@@ -228,6 +229,7 @@ export function AppSettingsPage({
               )}
             </div>
           </section>
+          {packageId === "org.mediahub.plex" && <PlexLibrarySettings />}
           <AppStorageSettings packageId={packageId} />
           {!embedded && (
             <AppControlPanel

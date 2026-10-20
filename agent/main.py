@@ -22,7 +22,14 @@ from mediahub.apps.containers import (
     ContainerRemoval,
 )
 from mediahub.apps.manifest import DeviceRequirement
-from mediahub.apps.plex import PlexAccountClaim, PlexInstallation, PlexInstallRequest
+from mediahub.apps.plex import (
+    PlexAccountClaim,
+    PlexInstallation,
+    PlexInstallRequest,
+    PlexLibraryCreate,
+    PlexLibraryEdit,
+    PlexLibraryRemove,
+)
 from mediahub.apps.seedbox import SeedboxInstallation
 from mediahub.apps.seedbox_daily import AddTorrent, TorrentAction, TorrentRetention, VPNLocation
 from mediahub.apps.seedbox_wizard import (
@@ -555,6 +562,31 @@ def create_agent(config: AgentConfig | None = None):
     async def plex_account_claim(body: PlexAccountClaim):
         from agent.plex_account import queue
         return await queue(plex_runtime, body)
+
+    @app.get("/v1/plex/libraries", dependencies=[Depends(secure_workflow)])
+    async def plex_libraries():
+        from agent.plex_libraries import PlexLibraries
+        return await PlexLibraries(plex_runtime).inventory()
+
+    @app.get("/v1/plex/library-folders", dependencies=[Depends(secure_workflow)])
+    async def plex_library_folders(path: str):
+        from agent.plex_libraries import PlexLibraries
+        return await PlexLibraries(plex_runtime).folders(path)
+
+    @app.post("/v1/plex/libraries", dependencies=[Depends(secure_workflow)])
+    async def plex_library_create(body: PlexLibraryCreate):
+        from agent.plex_libraries import PlexLibraries
+        return await PlexLibraries(plex_runtime).create(body)
+
+    @app.put("/v1/plex/libraries/{identifier}", dependencies=[Depends(secure_workflow)])
+    async def plex_library_edit(identifier: str, body: PlexLibraryEdit):
+        from agent.plex_libraries import PlexLibraries
+        return await PlexLibraries(plex_runtime).edit(identifier, body)
+
+    @app.delete("/v1/plex/libraries/{identifier}", dependencies=[Depends(secure_workflow)])
+    async def plex_library_remove(identifier: str, body: PlexLibraryRemove):
+        from agent.plex_libraries import PlexLibraries
+        return await PlexLibraries(plex_runtime).remove(identifier, body)
 
     @app.get("/v1/plex/install-options")
     async def plex_install_options():

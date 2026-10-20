@@ -330,6 +330,10 @@ class PlexRuntime:
         if self.libraries_ready:
             return
         plan = read_json(self.state_dir / "plex-plan.json")
+        if plan.get("bootstrapLibraries") is not True:
+            # Old installs adopt Plex's live libraries; subsequent user edits win.
+            self.libraries_ready = True
+            return
         sections = await self.control.plex_get(policy, "/library/sections")
         existing = {
             tuple(sorted(loc.get("path", "") for loc in section.findall("Location")))
@@ -353,6 +357,8 @@ class PlexRuntime:
                 *(("location", path) for path in paths),
             ]
             await self.control.plex_get(policy, "/library/sections", "POST", params=params)
+        plan["bootstrapLibraries"] = False
+        save_json(self.state_dir / "plex-plan.json", plan)
         self.libraries_ready = True
         self.control.record("libraries_ready")
 
@@ -754,6 +760,7 @@ class PlexRuntime:
                     PlexMount(source=m["Source"], target=m["Destination"], readOnly=not m["RW"])
                     for m in inspected["Mounts"]
                 ]
+                plan["bootstrapLibraries"] = True
                 save_json(self.state_dir / "plex-plan.json", plan)
                 save_json(Path(self.control.policy_file), guard.model_dump())
                 (self.state_dir / "plex-removal.json").unlink(missing_ok=True)

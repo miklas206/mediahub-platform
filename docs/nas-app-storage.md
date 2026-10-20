@@ -43,6 +43,10 @@ konverteret. Se også [NFS-eksportrettigheder](https://kb.synology.com/en-uk/PAS
 
 ## Plex
 
+Fra Core 0.6.71 kan biblioteker og mappevalg redigeres direkte i Plex-appens
+indstillinger i MediaHub. Se [Plex-biblioteker og mapper](plex-library-folders.md).
+
+
 1. Stop Plex fra MediaHub.
 2. Vælg NAS-lageret under Plex, og vælg **Tilknyt lager**.
 3. Start Plex igen.

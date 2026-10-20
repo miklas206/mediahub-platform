@@ -1,5 +1,7 @@
 """Plex installation contract. Browser requests select logical storage, never host paths."""
 
+from typing import Literal
+
 from pydantic import Field, SecretStr, model_validator
 
 from mediahub.contracts import StrictModel
@@ -44,3 +46,27 @@ class PlexInstallRequest(StrictModel):
 
 class PlexAccountClaim(StrictModel):
     claimToken: SecretStr = Field(exclude=True, min_length=12, max_length=256)
+
+
+class PlexLibraryLocations(StrictModel):
+    locations: list[str] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def bounded_paths(self):
+        if any(not path or len(path) > 2048 for path in self.locations):
+            raise ValueError("Choose valid library folders")
+        return self
+
+
+class PlexLibraryCreate(PlexLibraryLocations):
+    name: str = Field(min_length=1, max_length=80, pattern=r"^[^\x00-\x1f]+$")
+    kind: Literal["movies", "tv", "other"]
+
+
+class PlexLibraryEdit(PlexLibraryLocations):
+    expectedRevision: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class PlexLibraryRemove(StrictModel):
+    expectedRevision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    confirmRemove: bool = False

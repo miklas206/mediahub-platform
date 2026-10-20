@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.71
+
+- Edit Plex library folders from the app settings in MediaHub. Browse only assigned read-only media storage, add or remove library locations, and explicitly create or remove libraries without moving or deleting media files. Detect concurrent edits made directly in Plex.
+- Bootstrap library defaults once on new installations. Existing installations adopt the current Plex library state on upgrade; removed or manually changed libraries are no longer recreated after Agent restarts.
+
 ## 0.6.70
 
 - Offer SMB3 or native NFSv4.1 for new administrator-managed NAS connections, with protocol-specific paths, credentials and saved connection details. Existing connections remain SMB; media and app bindings are preserved.

@@ -100,7 +100,9 @@ class AgentClient:
                 base_url=self._base_url(),
                 transport=transport,
                 timeout=(
-                    (180 if method != "GET" else 20)
+                    (150 if method != "GET" else 20)
+                    if path.startswith(("/v1/plex/libraries", "/v1/plex/library-folders"))
+                    else (180 if method != "GET" else 20)
                     if path.startswith("/v1/apps/") and path.endswith("/resources")
                     else 900
                     if path.startswith("/v1/shared-vpn/") and method != "GET"
