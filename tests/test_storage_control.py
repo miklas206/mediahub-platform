@@ -452,6 +452,7 @@ def test_userspace_nas_mount_uses_private_config_and_preserves_read_only(control
     config = host.folder / (row["id"] + ".rclone.conf")
     assert stat.S_IMODE(config.stat().st_mode) == 0o600
     assert "synthetic-secret" not in config.read_text()
+    assert "idle_timeout = 5s" in config.read_text()
     mount = calls[-1][0]
     assert "--read-only" in mount
     assert "--property=Type=notify" in mount
@@ -643,21 +644,27 @@ def test_app_storage_transport_validates_admin_csrf_and_selection(logged_in, mon
 
 
 @pytest.mark.parametrize("existing_name", [None, "existing-operator-group"])
-def test_media_group_is_prepared_once_without_changing_existing_accounts(monkeypatch, existing_name):
+def test_media_group_is_prepared_once_without_changing_existing_accounts(
+    monkeypatch, existing_name
+):
     import scripts.storage_host as module
 
     groups = {1000: existing_name} if existing_name else {}
     calls = []
+
     def by_gid(gid):
         if gid not in groups:
             raise KeyError(gid)
         return SimpleNamespace(gr_name=groups[gid], gr_gid=gid)
+
     def by_name(name):
         raise KeyError(name)
+
     def command(args):
         calls.append(args)
         assert args == ["groupadd", "--gid", "1000", "mediahub-media"]
         groups[1000] = "mediahub-media"
+
     monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=by_gid, getgrnam=by_name))
     monkeypatch.setattr(module, "command", command)
     assert module.ensure_media_group() == (existing_name or "mediahub-media")
@@ -670,8 +677,14 @@ def test_media_group_name_collision_is_not_modified(monkeypatch):
 
     def missing(gid):
         raise KeyError(gid)
-    monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=missing, getgrnam=lambda _: SimpleNamespace(gr_gid=1234)))
+
+    monkeypatch.setattr(
+        module,
+        "grp",
+        SimpleNamespace(getgrgid=missing, getgrnam=lambda _: SimpleNamespace(gr_gid=1234)),
+    )
     from unittest.mock import Mock
+
     command = Mock()
     monkeypatch.setattr(module, "command", command)
     with pytest.raises(StorageError, match="already in use"):
@@ -680,7 +693,9 @@ def test_media_group_name_collision_is_not_modified(monkeypatch):
 
 
 @pytest.mark.parametrize("upgrading", [False, True])
-def test_storage_service_install_prepares_group_before_start_on_new_and_older_hosts(tmp_path, monkeypatch, upgrading):
+def test_storage_service_install_prepares_group_before_start_on_new_and_older_hosts(
+    tmp_path, monkeypatch, upgrading
+):
     import scripts.storage_host as module
 
     root = tmp_path / "hub"
@@ -689,9 +704,11 @@ def test_storage_service_install_prepares_group_before_start_on_new_and_older_ho
         (root / name).write_text("reviewed")
     events = []
     real_lstat = Path.lstat
+
     def lstat(path):
         details = real_lstat(path)
         return SimpleNamespace(st_uid=0, st_mode=details.st_mode)
+
     monkeypatch.setattr(Path, "lstat", lstat)
     monkeypatch.setattr(module, "ensure_media_group", lambda: events.append("group-ready"))
     monkeypatch.setattr(module, "save", lambda path, content: events.append((path, content)))
@@ -700,8 +717,22 @@ def test_storage_service_install_prepares_group_before_start_on_new_and_older_ho
     real_path = Path
     unit = tmp_path / "mediahub-storage.service"
     if upgrading:
-        unit.write_text("Description=MediaHub private storage controller\nExecStart=/usr/bin/python3 " + str(root / "storage_host.py") + " --root " + str(root) + "\nGroup=1000\n")
-    monkeypatch.setattr(module, "Path", lambda value: unit if str(value)=="/etc/systemd/system/mediahub-storage.service" else real_path(value))
+        unit.write_text(
+            "Description=MediaHub private storage controller\nExecStart=/usr/bin/python3 "
+            + str(root / "storage_host.py")
+            + " --root "
+            + str(root)
+            + "\nGroup=1000\n"
+        )
+    monkeypatch.setattr(
+        module,
+        "Path",
+        lambda value: (
+            unit
+            if str(value) == "/etc/systemd/system/mediahub-storage.service"
+            else real_path(value)
+        ),
+    )
     module.install(root)
     assert events[0] == "group-ready"
     assert "Group=1000" in events[1][1]
@@ -709,20 +740,26 @@ def test_storage_service_install_prepares_group_before_start_on_new_and_older_ho
 
 
 @pytest.mark.parametrize("concurrent_creation", [False, True])
-def test_media_group_creation_failure_is_clear_or_reuses_a_concurrent_installer(monkeypatch, concurrent_creation):
+def test_media_group_creation_failure_is_clear_or_reuses_a_concurrent_installer(
+    monkeypatch, concurrent_creation
+):
     import scripts.storage_host as module
 
     groups = {}
+
     def by_gid(gid):
         if gid not in groups:
             raise KeyError(gid)
         return SimpleNamespace(gr_name=groups[gid])
+
     def by_name(name):
         raise KeyError(name)
+
     def command(args):
         if concurrent_creation:
             groups[1000] = "operator-media"
         raise StorageError("groupadd failed")
+
     monkeypatch.setattr(module, "grp", SimpleNamespace(getgrgid=by_gid, getgrnam=by_name))
     monkeypatch.setattr(module, "command", command)
     if concurrent_creation:
@@ -730,3 +767,171 @@ def test_media_group_creation_failure_is_clear_or_reuses_a_concurrent_installer(
     else:
         with pytest.raises(StorageError, match="could not be prepared"):
             module.ensure_media_group()
+
+
+def test_nfs_input_does_not_require_or_expose_smb_credentials():
+    from pydantic import ValidationError
+
+    value = NasInput(
+        protocol="nfs", label="Test NAS", server="192.168.1.60", share="/volume1/Media"
+    )
+    assert body_values(value)["password"] is None
+    with pytest.raises(ValidationError):
+        NasInput(
+            protocol="nfs", label="NAS", server="192.168.1.60", share="/Media", username="wrong"
+        )
+    with pytest.raises(ValidationError):
+        NasInput(label="NAS", server="192.168.1.60", share="Media")
+
+
+def test_nfs_mount_reconnect_and_native_identity(controller):
+    host, calls = controller, []
+    host.packages = lambda: None
+    mounted = False
+
+    def info(path):
+        if mounted:
+            return {"source": "192.168.1.60:/volume1/Media", "target": str(path), "fstype": "nfs4"}
+        return {}
+
+    def run(args, **kwargs):
+        nonlocal mounted
+        calls.append(args)
+        assert args[:3] == ["mount", "-t", "nfs"]
+        mounted = True
+        return ""
+
+    host.mount_info, host.run = info, run
+    host.add_nas(
+        {
+            "protocol": "nfs",
+            "label": "NAS",
+            "server": "192.168.1.60",
+            "share": "/volume1/Media",
+            "readOnly": False,
+        }
+    )
+    row = host.state()["nas"][0]
+    assert host.nas_ready(row)
+    assert not (host.folder / (row["id"] + ".credentials")).exists()
+    assert "hard" in calls[0][-1].split(",")
+    assert "rw" in calls[0][-1].split(",")
+    assert "vers=4.1" in calls[0][-1]
+    assert "credentials" not in str(calls)
+    host.nas_action(row["id"], "connect")
+    assert len(calls) == 1
+    host.mount_info = lambda path: {
+        "target": str(path),
+        "source": "mediahub-nas-" + row["id"],
+        "fstype": "fuse.rclone",
+    }
+    assert not host.nas_ready(row)
+    with pytest.raises(StorageError, match="NFS uses export permissions"):
+        host.nas_credentials(row["id"], {"username": "wrong", "password": "synthetic"})
+
+
+@pytest.mark.parametrize(
+    "export",
+    [
+        "Media",
+        "/",
+        "/Media/../secret",
+        "/Media//sub",
+        "/Media/",
+        "/Media\nother",
+        "/Media,soft",
+        "//Media",
+    ],
+)
+def test_nfs_rejects_ambiguous_paths_before_saving(controller, export):
+    with pytest.raises(StorageError):
+        controller.add_nas(
+            {"protocol": "nfs", "label": "NAS", "server": "192.168.1.60", "share": export}
+        )
+    assert not controller.file.exists()
+
+
+def test_lxc_nfs_prerequisite_preserves_saved_connection_and_smb(controller):
+    host = controller
+    host.packages = lambda: None
+    host.userspace_mounts = lambda: True
+    host.run = lambda *a, **k: pytest.fail("Must not attempt a forbidden kernel mount")
+    with pytest.raises(StorageError, match="unprivileged LXC"):
+        host.add_nas(
+            {"protocol": "nfs", "label": "NAS", "server": "192.168.1.60", "share": "/volume1/Media"}
+        )
+    row = host.state()["nas"][0]
+    assert row["protocol"] == "nfs" and row["enabled"]
+    assert "unprivileged LXC" in row["error"]
+    assert not list(host.folder.glob("*.credentials"))
+
+
+@pytest.mark.parametrize("upgrade", [False, True])
+def test_nfs_client_prepared_on_fresh_install_and_upgrade(controller, monkeypatch, upgrade):
+    import scripts.storage_host as module
+
+    host, calls = controller, []
+    if upgrade:
+        save(host.file, {"nas": [], "shares": [], "passwordConfigured": False})
+        save(host.folder / "kept.credentials", "synthetic existing secret")
+    installed = {"mount.cifs"}
+    monkeypatch.setattr(
+        module.shutil, "which", lambda executable: executable if executable in installed else None
+    )
+
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["apt-get", "install"]:
+            installed.add("mount.nfs")
+        return ""
+
+    host.run = run
+    host.packages()
+    assert calls[-1][-1] == "nfs-common"
+    host.packages()
+    assert len(calls) == 2
+    if upgrade:
+        assert (host.folder / "kept.credentials").read_text() == "synthetic existing secret"
+
+
+def test_legacy_smb_connection_still_has_the_same_identity(controller):
+    host = controller
+    row = {
+        "id": "a" * 24,
+        "label": "Legacy",
+        "server": "192.168.1.60",
+        "share": "Media",
+        "username": "existing",
+        "readOnly": True,
+        "enabled": True,
+    }
+    state = {"nas": [row], "shares": [], "passwordConfigured": False}
+    save(host.file, state)
+    save(host.folder / (row["id"] + ".credentials"), "synthetic untouched credential")
+    original = host.file.read_bytes()
+    host.mount_info = lambda path: {
+        "target": str(path),
+        "source": "//192.168.1.60/Media",
+        "fstype": "cifs",
+    }
+    assert host.nas_ready(row)
+    host.packages = lambda: None
+    host.nas_action(row["id"], "connect")
+    assert host.file.read_bytes() == original
+    assert (
+        host.folder / (row["id"] + ".credentials")
+    ).read_text() == "synthetic untouched credential"
+
+
+def test_nfs_mount_failure_is_saved_for_retry_without_credentials(controller):
+    host = controller
+    host.packages = lambda: None
+    host.run = lambda *a, **kw: (_ for _ in ()).throw(StorageError("Synthetic inaccessible export"))
+    with pytest.raises(StorageError, match="Enable NFSv4.1"):
+        host.add_nas(
+            {"protocol": "nfs", "label": "NAS", "server": "192.168.1.60", "share": "/Media"}
+        )
+    row = host.state()["nas"][0]
+    assert row["enabled"] and "Enable NFSv4.1" in row["error"]
+    assert stat.S_IMODE((host.mounts / row["id"]).stat().st_mode) == 0
+    assert not list(host.folder.glob("*.credentials"))

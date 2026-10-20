@@ -5,6 +5,42 @@ forbundet, kan den tilknyttes under **NAS-lager til apps** på samme side eller 
 appens indstillinger. Tilknytningen er ekstra lager: nuværende downloads,
 mediebiblioteker, adgangskoder og appdata bliver liggende.
 
+## SMB eller NFS (0.6.70)
+
+Ved oprettelse vælges **SMB** eller **NFS**. Eksisterende forbindelser uden et
+protokolfelt fortolkes fortsat som SMB; login, identitet, mapper og tilknytninger
+ændres ikke. Der foretages ingen automatisk flytning eller protokolændring.
+
+SMB bruger delingsnavn og NAS-login. NFS bruger NAS-adresse og den præcise
+absolutte eksportsti, eksempelvis `/volume1/Media`, uden SMB-login. NAS'en skal
+have NFSv4.1 aktiveret og tillade serverens adresse og apps med UID/GID 1000.
+Rettigheder og root-squash på NAS'en bevares; MediaHub ændrer ikke eksportregler
+eller filers ejerskab. Plex får fortsat kun læseadgang gennem app-tilknytningen.
+
+Native NFS kan være et hensigtsmæssigt valg til Linux-medieapps og undgår den
+brugerrumsbaserede SMB-driver. Det garanterer ikke bedre ydelse eller modstand
+mod netværksafbrydelser. NFS monteres med TCP, NFSv4.1 og `hard`, så en
+forbindelsesafbrydelse ikke behandles som en vellykket skrivning. En utilgængelig
+NAS kan derfor få filoperationer til at vente på forbindelsen.
+
+En upriviligeret LXC kan ikke selv montere native NFS. Lagerformularen og den
+gemte forbindelsesstatus forklarer dette konkret. Brug SMB i LXC'en, eller lad
+værtsadministratoren montere NFS på Proxmox og tilknytte det som godkendt
+medielager. MediaHub aktiverer ikke privilegeret containerdrift eller lemper
+NAS-adgangskontroller for at omgå begrænsningen. Et mislykket NFS-forsøg gemmes
+med status og kan fjernes igen; der oprettes ingen falsk SMB-credentialfil.
+
+Både frisk installation og opdatering installerer `nfs-common` og `cifs-utils`
+gennem samme idempotente værtsklargøring. Nye brugerrumsbaserede SMB-forbindelser
+lukker ledige forbindelser efter fem sekunder, før netværkstimeouten udløber.
+Eksisterende aktive mounts genstartes ikke af denne kildeændring.
+
+Verifikation: syntetiske tests af native NFS-kommando, sti- og loginvalidering,
+mount-identitet, gentaget tilslutning, LXC-forudsætning og pakkeopgradering;
+frontend testes ved 320, 390 og 1440 pixels. En fysisk NFS-forbindelse til
+produktions-NAS'en er ikke verificeret, og eksisterende NAS-forbindelser er ikke
+konverteret. Se også [NFS-eksportrettigheder](https://kb.synology.com/en-uk/PAS/help/PAS/AdminCenter/file_share_privilege_nfs).
+
 ## Plex
 
 1. Stop Plex fra MediaHub.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.70
+
+- Offer SMB3 or native NFSv4.1 for new administrator-managed NAS connections, with protocol-specific paths, credentials and saved connection details. Existing connections remain SMB; media and app bindings are preserved.
+- Prepare NFS client packages automatically on fresh installs and upgrades. Validate NFS mount identity and show explicit host/export prerequisites when native mounts are unavailable, including unprivileged LXC.
+- Expire pooled SMB connections before the existing network idle timeout when establishing userspace SMB mounts.
+
 ## 0.6.69
 
 - Check Jellyfin, Sonarr, Radarr, Prowlarr and Autobrr through a shared cached public latest-release redirect, independently of GitHub REST quotas and credentials. Preserve stable-release selection, provider backoff and verified installed-version comparisons. Core and first-party source checks retain their Git transport; Plex keeps its own provider.

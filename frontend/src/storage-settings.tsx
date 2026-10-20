@@ -19,6 +19,7 @@ type Location = {
   freeBytes: number | null;
 };
 type Nas = {
+  protocol?: "smb" | "nfs";
   id: string;
   label: string;
   server: string;
@@ -42,6 +43,7 @@ type Inventory = {
   available: boolean;
   message?: string;
   prerequisite?: string;
+  nfsPrerequisite?: string | null;
   server?: string;
   locations: Location[];
   nas: Nas[];
@@ -187,6 +189,7 @@ export function StorageSettings() {
   const [notice, setNotice] = useState<{ text: string; error: boolean }>();
   const [busy, setBusy] = useState(false);
   const [nas, setNas] = useState({
+    protocol: "smb" as "smb" | "nfs",
     label: "",
     server: "",
     share: "",
@@ -256,8 +259,19 @@ export function StorageSettings() {
   };
   const addNas = (event: FormEvent) => {
     event.preventDefault();
-    void run("/nas", "POST", nas, () =>
-      setNas((current) => ({ ...current, password: "" })),
+    void run(
+      "/nas",
+      "POST",
+      nas.protocol === "smb"
+        ? nas
+        : {
+            protocol: nas.protocol,
+            label: nas.label,
+            server: nas.server,
+            share: nas.share,
+            readOnly: nas.readOnly,
+          },
+      () => setNas((current) => ({ ...current, password: "" })),
     );
   };
   const addShare = (event: FormEvent) => {
@@ -349,11 +363,38 @@ export function StorageSettings() {
               </h3>
               <p className="muted">
                 {t(
-                  "Connect an existing NAS share using SMB3. Saved connections reconnect when the server starts.",
+                  "Choose SMB3 or NFSv4.1. Saved connections reconnect when the server starts.",
                 )}
               </p>
               <form className="stack" onSubmit={addNas}>
                 <fieldset disabled={busy} className="storage-form">
+                  <label>
+                    {t("Connection type")}
+                    <select
+                      value={nas.protocol}
+                      onChange={(e) =>
+                        setNas({
+                          ...nas,
+                          protocol: e.target.value as "smb" | "nfs",
+                          share: "",
+                          username: "",
+                          password: "",
+                        })
+                      }
+                    >
+                      <option value="smb">SMB</option>
+                      <option value="nfs">NFS</option>
+                    </select>
+                  </label>
+                  {nas.protocol === "nfs" && (
+                    <p className="muted">
+                      {t(
+                        data.nfsPrerequisite ||
+                          "Enable NFSv4.1 on the NAS and allow this server's LAN address. Apps need access as UID/GID 1000; no NAS password is used.",
+                      )}
+                    </p>
+                  )}
+
                   <label>
                     {t("Name")}
                     <input
@@ -379,42 +420,50 @@ export function StorageSettings() {
                     />
                   </label>
                   <label>
-                    {t("Share name")}
+                    {t(
+                      nas.protocol === "nfs" ? "NFS export path" : "Share name",
+                    )}
                     <input
                       required
-                      maxLength={80}
+                      maxLength={nas.protocol === "nfs" ? 1024 : 80}
                       value={nas.share}
                       onChange={(e) =>
                         setNas({ ...nas, share: e.target.value })
                       }
-                      placeholder={t("Media")}
-                    />
-                  </label>
-                  <label>
-                    {t("NAS username")}
-                    <input
-                      required
-                      maxLength={128}
-                      autoComplete="off"
-                      value={nas.username}
-                      onChange={(e) =>
-                        setNas({ ...nas, username: e.target.value })
+                      placeholder={
+                        nas.protocol === "nfs" ? "/volume1/Media" : t("Media")
                       }
                     />
                   </label>
-                  <label>
-                    {t("NAS password")}
-                    <input
-                      type="password"
-                      required
-                      maxLength={256}
-                      autoComplete="new-password"
-                      value={nas.password}
-                      onChange={(e) =>
-                        setNas({ ...nas, password: e.target.value })
-                      }
-                    />
-                  </label>
+                  {nas.protocol === "smb" && (
+                    <>
+                      <label>
+                        {t("NAS username")}
+                        <input
+                          required
+                          maxLength={128}
+                          autoComplete="off"
+                          value={nas.username}
+                          onChange={(e) =>
+                            setNas({ ...nas, username: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("NAS password")}
+                        <input
+                          type="password"
+                          required
+                          maxLength={256}
+                          autoComplete="new-password"
+                          value={nas.password}
+                          onChange={(e) =>
+                            setNas({ ...nas, password: e.target.value })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
                   <label className="storage-check">
                     <input
                       type="checkbox"
@@ -538,7 +587,12 @@ export function StorageSettings() {
                     <strong>{row.label}</strong>
                     <span>{t(row.ready ? "Connected" : "Disconnected")}</span>
                     {row.error && <p className="muted">{t(row.error)}</p>}
-                    <code>{`\\\\${row.server}\\${row.share}`}</code>
+                    <code>
+                      {row.protocol === "nfs"
+                        ? `${row.server}:${row.share}`
+                        : `\\\\${row.server}\\${row.share}`}
+                    </code>
+                    <span>{row.protocol === "nfs" ? "NFS" : "SMB"}</span>
                     <p className="muted">
                       {row.readOnly
                         ? t("Read-only access")
@@ -607,56 +661,58 @@ export function StorageSettings() {
                             )}
                           </p>
                         )}
-                        <details>
-                          <summary>{t("Edit NAS login")}</summary>
-                          <form
-                            className="storage-form"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              const form = event.currentTarget;
-                              const values = new FormData(form);
-                              void run(
-                                `/nas/${row.id}/credentials`,
-                                "POST",
-                                {
-                                  username: values.get("username"),
-                                  password: values.get("password"),
-                                },
-                                () => form.reset(),
-                              );
-                            }}
-                          >
-                            <label>
-                              {t("NAS username")}
-                              <input
-                                name="username"
-                                required
-                                maxLength={128}
-                                defaultValue={row.username}
-                                autoComplete="off"
-                                disabled={busy}
-                              />
-                            </label>
-                            <label>
-                              {t("NAS password")}
-                              <input
-                                name="password"
-                                type="password"
-                                required
-                                maxLength={256}
-                                autoComplete="new-password"
-                                disabled={busy}
-                              />
-                            </label>
-                            <button
-                              className="primary"
-                              disabled={busy}
-                              type="submit"
+                        {row.protocol !== "nfs" && (
+                          <details>
+                            <summary>{t("Edit NAS login")}</summary>
+                            <form
+                              className="storage-form"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                const form = event.currentTarget;
+                                const values = new FormData(form);
+                                void run(
+                                  `/nas/${row.id}/credentials`,
+                                  "POST",
+                                  {
+                                    username: values.get("username"),
+                                    password: values.get("password"),
+                                  },
+                                  () => form.reset(),
+                                );
+                              }}
                             >
-                              {t("Save and reconnect")}
-                            </button>
-                          </form>
-                        </details>
+                              <label>
+                                {t("NAS username")}
+                                <input
+                                  name="username"
+                                  required
+                                  maxLength={128}
+                                  defaultValue={row.username}
+                                  autoComplete="off"
+                                  disabled={busy}
+                                />
+                              </label>
+                              <label>
+                                {t("NAS password")}
+                                <input
+                                  name="password"
+                                  type="password"
+                                  required
+                                  maxLength={256}
+                                  autoComplete="new-password"
+                                  disabled={busy}
+                                />
+                              </label>
+                              <button
+                                className="primary"
+                                disabled={busy}
+                                type="submit"
+                              >
+                                {t("Save and reconnect")}
+                              </button>
+                            </form>
+                          </details>
+                        )}
                       </>
                     )}
                   </article>

@@ -4361,5 +4361,15 @@
   "Starting...": "Starter...",
   "Not running": "Kører ikke",
   "Start the app to use it.": "Start appen for at bruge den.",
-  "Internet traffic is protected by the shared VPN. Local access remains available through the configured LAN address on port 32400.": "Internettrafikken beskyttes af den fælles VPN. Lokal adgang er tilgængelig via den konfigurerede LAN-adresse på port 32400."
+  "Internet traffic is protected by the shared VPN. Local access remains available through the configured LAN address on port 32400.": "Internettrafikken beskyttes af den fælles VPN. Lokal adgang er tilgængelig via den konfigurerede LAN-adresse på port 32400.",
+  "Connection type": "Forbindelsestype",
+  "Choose SMB3 or NFSv4.1. Saved connections reconnect when the server starts.": "Vælg SMB3 eller NFSv4.1. Gemte forbindelser tilsluttes igen, når serveren starter.",
+  "NFS export path": "NFS-eksportsti",
+  "Enable NFSv4.1 on the NAS and allow this server's LAN address. Apps need access as UID/GID 1000; no NAS password is used.": "Aktivér NFSv4.1 på NAS’en, og tillad denne servers LAN-adresse. Apps skal have adgang som UID/GID 1000; der bruges ingen NAS-adgangskode.",
+  "NFS requires native NFS mounts on the Linux host. This unprivileged LXC cannot mount NFS. Mount the export on the Proxmox host and attach it through approved media storage, or use SMB here. The NAS must allow this host and the apps' UID/GID 1000.": "NFS kræver native NFS-montering på Linux-værten. Denne upriviligerede LXC kan ikke montere NFS. Montér eksporten på Proxmox-værten og tilknyt den som godkendt medielager, eller brug SMB her. NAS’en skal tillade værten og apps med UID/GID 1000.",
+  "NFS mount failed. Enable NFSv4.1 on the NAS, check the exact export path and allow this Linux host in the export permissions. Apps use UID/GID 1000.": "NFS-montering mislykkedes. Aktivér NFSv4.1 på NAS’en, kontrollér den præcise eksportsti, og tillad denne Linux-vært i eksportrettighederne. Apps bruger UID/GID 1000.",
+  "Enter the exact absolute NFS export path, without traversal": "Angiv den præcise absolutte NFS-eksportsti uden mappehop",
+  "NFS uses export permissions, not an SMB login": "NFS bruger eksportrettigheder og ikke et SMB-login",
+  "Choose SMB or NFS": "Vælg SMB eller NFS",
+  "Automatic NAS client preparation failed. A supported Linux host needs cifs-utils and nfs-common. Retry server setup after restoring package access; an unprivileged LXC must use SMB or host-mounted NFS.": "Automatisk klargøring af NAS-klienter mislykkedes. En understøttet Linux-vært kræver cifs-utils og nfs-common. Genforsøg serverklargøring, når pakkeadgang virker; en upriviligeret LXC skal bruge SMB eller NFS monteret på værten."
 }

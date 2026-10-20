@@ -4,10 +4,11 @@ import json
 import os
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 
 from mediahub.api import administrator, result, services
 from mediahub.contracts import StrictModel
@@ -20,12 +21,23 @@ PREPARING = (
 
 
 class NasInput(StrictModel):
+    protocol: Literal["smb", "nfs"] = "smb"
     label: str = Field(min_length=1, max_length=80)
     server: str = Field(min_length=7, max_length=15)
-    share: str = Field(min_length=1, max_length=80)
-    username: str = Field(min_length=1, max_length=128)
-    password: SecretStr = Field(min_length=1, max_length=256, repr=False)
+    share: str = Field(min_length=1, max_length=1024)
+    username: str | None = Field(default=None, min_length=1, max_length=128)
+    password: SecretStr | None = Field(default=None, min_length=1, max_length=256, repr=False)
     readOnly: bool = True
+
+    @model_validator(mode="after")
+    def protocol_credentials(self):
+        if self.protocol == "smb" and (
+            self.username is None or self.password is None or len(self.share) > 80
+        ):
+            raise ValueError("SMB requires a share name and NAS login")
+        if self.protocol == "nfs" and (self.username is not None or self.password is not None):
+            raise ValueError("NFS uses export permissions, not an SMB login")
+        return self
 
 
 class ShareInput(StrictModel):

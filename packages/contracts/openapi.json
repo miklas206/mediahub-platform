@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.59"
+    "version": "0.6.70"
   },
   "paths": {
     "/api/v1/users": {
@@ -9659,6 +9659,15 @@
       },
       "NasInput": {
         "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "smb",
+              "nfs"
+            ],
+            "title": "Protocol",
+            "default": "smb"
+          },
           "label": {
             "type": "string",
             "maxLength": 80,
@@ -9673,23 +9682,37 @@
           },
           "share": {
             "type": "string",
-            "maxLength": 80,
+            "maxLength": 1024,
             "minLength": 1,
             "title": "Share"
           },
           "username": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Username"
           },
           "password": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1,
-            "format": "password",
-            "title": "Password",
-            "writeOnly": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1,
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
           },
           "readOnly": {
             "type": "boolean",
@@ -9702,9 +9725,7 @@
         "required": [
           "label",
           "server",
-          "share",
-          "username",
-          "password"
+          "share"
         ],
         "title": "NasInput"
       },

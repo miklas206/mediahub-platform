@@ -40,6 +40,11 @@ PRIVATE = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12",
 OWNER = "org.mediahub.storage"
 CONTAINER = "mediahub-storage-smb"
 RCLONE_VERSION = "1.75.2"
+NFS_PREREQUISITE = (
+    "NFS requires native NFS mounts on the Linux host. This unprivileged LXC cannot mount NFS. "
+    "Mount the export on the Proxmox host and attach it through approved media storage, "
+    "or use SMB here. The NAS must allow this host and the apps' UID/GID 1000."
+)
 RCLONE_ARCHIVES = {
     "x86_64": ("amd64", "349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702"),
     "aarch64": ("arm64", "7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10"),
@@ -160,6 +165,12 @@ class StorageHost:
 
     def nas_ready(self, row):
         info = self.mount_info(self.mounts / row["id"])
+        if row.get("protocol", "smb") == "nfs":
+            return (
+                info.get("target") == str(self.mounts / row["id"])
+                and info.get("fstype") in {"nfs", "nfs4"}
+                and info.get("source") == row["server"] + ":" + row["share"]
+            )
         return info.get("target") == str(self.mounts / row["id"]) and (
             (
                 info.get("fstype") == "cifs"
@@ -267,7 +278,7 @@ class StorageHost:
             + values["username"]
             + "\npass = "
             + obscured
-            + "\n",
+            + "\nidle_timeout = 5s\n",
         )
         # Validate authentication before exposing a mounted filesystem. No listing
         # or credentials are returned to the browser or written to the journal.
@@ -460,6 +471,7 @@ class StorageHost:
             "nas": [
                 {
                     **r,
+                    "protocol": r.get("protocol", "smb"),
                     "ready": self.nas_ready(r),
                     "path": str(self.mounts / r["id"]),
                     "writeCachePath": str(self.apps.cache_path(r))
@@ -474,12 +486,13 @@ class StorageHost:
             ],
             "passwordConfigured": state["passwordConfigured"],
             "prerequisite": self.package_error,
+            "nfsPrerequisite": NFS_PREREQUISITE if self.userspace_mounts() else None,
             "smbRunning": self.smb_running(),
             "apps": self.apps.public(),
         }
 
     def packages(self):
-        required = {"mount.cifs": "cifs-utils"}
+        required = {"mount.cifs": "cifs-utils", "mount.nfs": "nfs-common"}
         if self.userspace_mounts():
             self.prepare_rclone()
             required.update({"fusermount3": "fuse3"})
@@ -497,12 +510,17 @@ class StorageHost:
             )
             self.package_error = None
         except StorageError:
-            self.package_error = "Automatic CIFS preparation failed. This feature requires a Linux host with cifs-utils and permission to mount CIFS. In an LXC, the host administrator must allow CIFS mounts or mount the NAS on the Proxmox host."
+            self.package_error = "Automatic NAS client preparation failed. A supported Linux host needs cifs-utils and nfs-common. Retry server setup after restoring package access; an unprivileged LXC must use SMB or host-mounted NFS."
             raise StorageError(self.package_error) from None
 
     def mount_nas(self, row):
         if self.nas_ready(row):
             return
+        protocol = row.get("protocol", "smb")
+        if protocol not in {"smb", "nfs"}:
+            raise StorageError("Unknown NAS protocol", 422)
+        if protocol == "nfs" and self.userspace_mounts():
+            raise StorageError(NFS_PREREQUISITE)
         target = self.mounts / row["id"]
         if target.is_symlink() or (
             target.exists() and (any(target.iterdir()) or os.path.ismount(target))
@@ -510,6 +528,29 @@ class StorageHost:
             raise StorageError("NAS target is occupied; existing files were preserved")
         target.mkdir(mode=0o000, exist_ok=True)
         target.chmod(0o000)  # Unmounted storage must never become writable system-disk storage.
+        if protocol == "nfs":
+            options = "vers=4.1,proto=tcp,hard,timeo=50,retrans=2,retry=0,nosuid,nodev,noexec,"
+            try:
+                self.run(
+                    [
+                        "mount",
+                        "-t",
+                        "nfs",
+                        row["server"] + ":" + row["share"],
+                        str(target),
+                        "-o",
+                        options + ("ro" if row["readOnly"] else "rw"),
+                    ],
+                    timeout=40,
+                )
+            except StorageError:
+                raise StorageError(
+                    "NFS mount failed. Enable NFSv4.1 on the NAS, check the exact export path "
+                    "and allow this Linux host in the export permissions. Apps use UID/GID 1000."
+                ) from None
+            if not self.nas_ready(row):
+                raise StorageError("NAS mount identity could not be verified")
+            return
         if self.userspace_mounts():
             self.mount_userspace(row, target)
             if not self.nas_ready(row):
@@ -548,16 +589,38 @@ class StorageHost:
             raise StorageError("NAS mount identity could not be verified")
 
     def add_nas(self, body):
-        if set(body) - {"label", "server", "share", "username", "password", "readOnly"}:
+        if set(body) - {"protocol", "label", "server", "share", "username", "password", "readOnly"}:
             raise StorageError("Unexpected NAS fields", 422)
-        server, share = private_ip(body.get("server")), text(body.get("share"), 80)
-        if (
+        protocol = body.get("protocol", "smb")
+        if protocol not in {"smb", "nfs"}:
+            raise StorageError("Choose SMB or NFS", 422)
+        server = private_ip(body.get("server"))
+        share = text(body.get("share"), 1024 if protocol == "nfs" else 80)
+        if protocol == "nfs":
+            if (
+                not share.startswith("/")
+                or share == "/"
+                or str(Path(share)) != share
+                or any(part in {".", "..", ""} for part in share.split("/")[1:])
+                or not re.fullmatch(r"/[\w ./-]+", share)
+            ):
+                raise StorageError(
+                    "Enter the exact absolute NFS export path, without traversal", 422
+                )
+            if body.get("username") is not None or body.get("password") is not None:
+                raise StorageError("NFS uses export permissions, not an SMB login", 422)
+            username = password = None
+        elif (
             not re.fullmatch(r"[\w .-]{1,80}", share)
             or share in {".", ".."}
             or share != share.strip()
         ):
             raise StorageError("Enter the share name, without a path", 422)
-        username, password = text(body.get("username"), 128), text(body.get("password"), minimum=1)
+        if protocol == "smb":
+            username, password = (
+                text(body.get("username"), 128),
+                text(body.get("password"), minimum=1),
+            )
         label = text(body.get("label"), 80)
         read_only = body.get("readOnly", True)
         if type(read_only) is not bool:
@@ -565,7 +628,14 @@ class StorageHost:
         with self.lock:
             state = self.state()
             existing = next(
-                (r for r in state["nas"] if r["server"] == server and r["share"] == share), None
+                (
+                    r
+                    for r in state["nas"]
+                    if r["server"] == server
+                    and r["share"] == share
+                    and r.get("protocol", "smb") == protocol
+                ),
+                None,
             )
             if existing:
                 raise StorageError(
@@ -576,6 +646,7 @@ class StorageHost:
             identifier = os.urandom(12).hex()
             row = {
                 "id": identifier,
+                "protocol": protocol,
                 "label": label,
                 "server": server,
                 "share": share,
@@ -585,7 +656,8 @@ class StorageHost:
             }
             self.packages()
             credentials = self.folder / (identifier + ".credentials")
-            save(credentials, "username=" + username + "\npassword=" + password + "\n")
+            if protocol == "smb":
+                save(credentials, "username=" + username + "\npassword=" + password + "\n")
             # Persist before mounting: a timeout is recoverable and credentials stay private.
             state["nas"].append(row)
             save(self.file, state)
@@ -606,6 +678,8 @@ class StorageHost:
             row = next((r for r in state["nas"] if r["id"] == identifier), None)
             if not row:
                 raise StorageError("NAS not found", 404)
+            if row.get("protocol", "smb") != "smb":
+                raise StorageError("NFS uses export permissions, not an SMB login", 422)
             if self.nas_ready(row):
                 raise StorageError("Disconnect this NAS before changing its login")
             save(

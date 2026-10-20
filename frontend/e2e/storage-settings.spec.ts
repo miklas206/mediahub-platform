@@ -9,6 +9,7 @@ for (const width of [1440, 390, 320]) {
       server: "192.168.1.15",
       passwordConfigured: false,
       smbRunning: false,
+      nfsPrerequisite: null as string | null,
       locations: [
         {
           id: "media-root-test",
@@ -70,7 +71,7 @@ for (const width of [1440, 390, 320]) {
         const body = route.request().postDataJSON();
         writes.push({ path, body });
         inventory.nas.push({
-          id: "a".repeat(24),
+          id: (inventory.nas.length ? "b" : "a").repeat(24),
           ...body,
           password: undefined,
           ready: true,
@@ -108,9 +109,13 @@ for (const width of [1440, 390, 320]) {
     await nas.getByLabel("NAS password").fill("synthetic-nas-password");
     await expect(nas.getByLabel("Allow changes on the NAS")).not.toBeChecked();
     await nas.getByLabel("Allow changes on the NAS").check();
-    await expect(nas).toContainText("On: You can also create, change and delete files.");
+    await expect(nas).toContainText(
+      "On: You can also create, change and delete files.",
+    );
     await nas.getByLabel("Allow changes on the NAS").uncheck();
-    await expect(nas).toContainText("Off: You can only view and download files.");
+    await expect(nas).toContainText(
+      "Off: You can only view and download files.",
+    );
     await nas.getByRole("button", { name: "Connect NAS", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Saved NAS connections" }),
@@ -143,6 +148,33 @@ for (const width of [1440, 390, 320]) {
     expect(writes[0].body.readOnly).toBe(true);
     expect(writes[1].body.readOnly).toBe(true);
     expect(writes[1].body.storageId).toBe("media-root-test");
+    await nas.getByLabel("Connection type").selectOption("nfs");
+    await expect(nas.getByLabel("NAS username")).toHaveCount(0);
+    await expect(nas.getByLabel("NAS password")).toHaveCount(0);
+    await expect(nas).toContainText("Enable NFSv4.1 on the NAS");
+    await nas.getByLabel("NFS export path").fill("/volume1/Media");
+    await nas.getByRole("button", { name: "Connect NAS", exact: true }).click();
+    await expect(
+      page.getByText("192.168.1.60:/volume1/Media", { exact: true }),
+    ).toBeVisible();
+    expect(writes).toHaveLength(3);
+    expect(writes[2].body).toMatchObject({
+      protocol: "nfs",
+      share: "/volume1/Media",
+      readOnly: true,
+    });
+    expect(writes[2].body).not.toHaveProperty("username");
+    expect(writes[2].body).not.toHaveProperty("password");
+    inventory.nfsPrerequisite =
+      "NFS requires native NFS mounts on the Linux host. This unprivileged LXC cannot mount NFS.";
+    await page
+      .locator(".storage-settings")
+      .getByRole("button", { name: "Refresh", exact: true })
+      .click();
+    await expect(nas).toContainText("This unprivileged LXC cannot mount NFS.");
+    await nas.getByLabel("Connection type").selectOption("smb");
+    await expect(nas.getByLabel("NAS username")).toBeVisible();
+    await expect(nas.getByLabel("NAS password")).toHaveValue("");
     for (const panel of await page.locator(".storage-settings .panel").all()) {
       expect(
         await panel.evaluate((element) =>
