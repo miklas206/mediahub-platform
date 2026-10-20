@@ -255,6 +255,8 @@ async def app_runtime(app_id: str, request: Request, user=Depends(authenticated)
     svc = services(request)
     report = await adapter.status()
     operator_url = svc.config.operator_app_urls.get(adapter.definition.package_id)
+    if adapter.definition.package_id == "org.mediahub.plex-gpu-transcoder":
+        operator_url = report.get("url")
     if adapter.definition.package_id == "org.mediahub.plex":
         from mediahub.app_settings import saved_address
 

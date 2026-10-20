@@ -4404,5 +4404,21 @@
   "This Plex library changed elsewhere; cancel editing and refresh before saving": "Dette Plex-bibliotek er ændret et andet sted; annullér redigeringen, og opdatér listen, før du gemmer",
   "A library with this name already exists; edit its folders instead": "Et bibliotek med dette navn findes allerede; redigér dets mapper i stedet",
   "Confirm removal of the Plex library metadata first": "Bekræft først fjernelse af Plex-bibliotekets metadata",
-  "Plex library operation timed out; refresh the library list before retrying": "Handlingen på Plex-biblioteket fik timeout; opdatér bibliotekslisten, før du prøver igen"
+  "Plex library operation timed out; refresh the library list before retrying": "Handlingen på Plex-biblioteket fik timeout; opdatér bibliotekslisten, før du prøver igen",
+  "A separate GPU container connected to your existing Plex.": "En separat GPU-container tilsluttet din eksisterende Plex.",
+  "Open GPU dashboard": "Åbn GPU-status",
+  "NVIDIA GPU": "NVIDIA GPU",
+  "Graphics card": "Grafikkort",
+  "GPU encoder": "GPU-encoder",
+  "Graphics memory": "Grafikhukommelse",
+  "Temperature": "Temperatur",
+  "GPU usage includes other applications sharing the card.": "GPU-forbruget omfatter også andre apps, der deler kortet.",
+  "Plex connection": "Plex-forbindelse",
+  "Waiting for Plex connection": "Afventer forbindelse til Plex",
+  "Transcode jobs": "Transcode-jobs",
+  "Direct Play does not create a GPU job.": "Direct Play opretter ikke et GPU-job.",
+  "HDR and unsupported jobs use Plex's original transcoder.": "HDR og ikke-understøttede jobs bruger Plex’ originale transcoder.",
+  "Start GPU transcoder": "Start GPU-transcoder",
+  "Stop GPU transcoder": "Stop GPU-transcoder",
+  "Restart GPU transcoder": "Genstart GPU-transcoder"
 }

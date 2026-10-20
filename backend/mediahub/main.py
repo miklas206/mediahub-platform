@@ -129,6 +129,9 @@ def create_app(config: Config | None = None) -> FastAPI:
 
         reconcile_removed_settings(svc)
         svc.vpn_gateway = VPNGateway(svc)
+        from mediahub.apps.plex_gpu import discover as discover_plex_gpu
+
+        await discover_plex_gpu(svc)
         register_remote_apps(svc)
         from mediahub.app_dependencies import AppDependencies
 

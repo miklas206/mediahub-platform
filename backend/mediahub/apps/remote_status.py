@@ -148,6 +148,17 @@ class RuntimeStatus(PublicModel):
     host: HostMetrics = Field(default_factory=HostMetrics)
     control: ControlStatus = Field(default_factory=ControlStatus)
     plex: "PlexStatus | None" = None
+    gpu: "PlexGPUStatus | None" = None
+
+
+class PlexGPUStatus(PublicModel):
+    name: str = ""
+    linked: bool = False
+    encoderPercent: float | None = None
+    memoryUsedMiB: float | None = None
+    memoryTotalMiB: float | None = None
+    temperature: float | None = None
+    activeJobs: int | None = None
 
 
 class PlexLibrary(PublicModel):

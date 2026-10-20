@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.72
+
+- Show an explicitly installed Plex GPU sidecar as its own MediaHub app, with observed GPU status, a dashboard link and scoped start/stop/restart controls. Preserve Plex's independent runtime and read-only media mappings.
+- Run Plex update backups as the configured storage owner so NAS exports that restrict root can save rollback data. Allow bounded longer backups and give the helper enough memory for large metadata collections; disable its inherited web-service healthcheck. Media files and the existing Plex identity remain unchanged.
+
 ## 0.6.71
 
 - Edit Plex library folders from the app settings in MediaHub. Browse only assigned read-only media storage, add or remove library locations, and explicitly create or remove libraries without moving or deleting media files. Detect concurrent edits made directly in Plex.

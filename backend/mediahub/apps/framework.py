@@ -163,6 +163,7 @@ class AppManager:
         definition = getattr(adapter, "definition", None)
         return bool(
             not app.is_mock and app.state != "uninstalled" and adapter is not None
+            and getattr(adapter, "removal_supported", True)
             and (getattr(adapter, "managed", False) or hasattr(definition, "binding_key")
                  or app.package_id in {"org.mediahub.cloudflared", "org.mediahub.windows-share"})
         )

@@ -21,6 +21,10 @@ DEFINITIONS = (
         "/v1/seedbox",
         ("restart-vpn", "restart-qbittorrent", "test-vpn"),
     ),
+    RemoteAppDefinition(
+        "org.mediahub.plex-gpu-transcoder", "plex_gpu_installation",
+        "/v1/plex-gpu", view_id="plex-gpu",
+    ),
 ) + tuple(
     RemoteAppDefinition(
         "org.mediahub." + app, "container_installation_" + app,
@@ -39,7 +43,10 @@ def register_remote_apps(svc):
                 select(InstalledApp).where(InstalledApp.package_id == definition.package_id)
             )
             if binding is not None and app is not None:
-                svc.apps.adapters[app.id] = RemoteAppAdapter(
+                from mediahub.apps.plex_gpu import PlexGPUAdapter
+
+                adapter_type = PlexGPUAdapter if definition.package_id == "org.mediahub.plex-gpu-transcoder" else RemoteAppAdapter
+                svc.apps.adapters[app.id] = adapter_type(
                     definition,
                     binding.value["hostId"],
                     svc.hosts.client,

@@ -1,4 +1,5 @@
 import { AppSettingsPage } from "./app-settings";
+import { PlexGPUPanel } from "./plex-gpu-runtime";
 import { useConfirm } from "./confirmation-dialog";
 import { translateText, getLocale, t } from "./i18n";
 import { NotificationPopup } from "./notification-popup";
@@ -34,6 +35,12 @@ import {
 } from "./plex-install-progress";
 
 export type Runtime = {
+  url?: string | null;
+  gpu?: {
+    name: string; linked: boolean; encoderPercent?: number | null;
+    memoryUsedMiB?: number | null; memoryTotalMiB?: number | null;
+    temperature?: number | null; activeJobs: number | null;
+  };
   lanAccess?: { state: string; message: string };
   transcode?: { state: string; path?: string; message: string };
   operation?: PlexInstallOperation;
@@ -900,6 +907,7 @@ function CloudflaredPanel({
 }
 const views: Record<string, typeof PlexPanel> = {
   plex: PlexPanel,
+  "plex-gpu": PlexGPUPanel,
   cloudflare: CloudflaredPanel,
 };
 export function RemoteRuntimeLogs({ appId }: { appId: string }) {
@@ -1006,7 +1014,7 @@ export function AppRuntimePage() {
     if (
       action !== "test-vpn" &&
       !(await confirm(
-        `${action}: this can interrupt ${data?.view === "plex" ? t("Plex playback") : t("Seedbox transfers")}. Continue?`,
+        `${action}: this can interrupt ${data?.view === "plex" || data?.view === "plex-gpu" ? t("Plex playback") : t("Seedbox transfers")}. Continue?`,
         { title: "Confirm runtime action" },
       ))
     )
@@ -1167,7 +1175,11 @@ export function AppRuntimePage() {
                     ["stop", t("Stop Plex")],
                     ["restart", t("Restart Plex")],
                   ]
-                : [
+                : data.view === "plex-gpu" ? [
+                    ["start", t("Start GPU transcoder")],
+                    ["stop", t("Stop GPU transcoder")],
+                    ["restart", t("Restart GPU transcoder")],
+                  ] : [
                     ["start", t("Start Seedbox")],
                     ["stop", t("Stop Seedbox")],
                     ["restart", t("Restart Seedbox")],

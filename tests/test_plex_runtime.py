@@ -9,6 +9,34 @@ from mediahub.errors import DomainError
 from agent.plex_runtime import PlexRuntime
 
 
+def test_update_snapshot_uses_storage_owner_on_root_restricted_nas(tmp_path):
+    from unittest.mock import AsyncMock
+
+    runtime = PlexRuntime(SimpleNamespace(), None, tmp_path)
+    runtime.policy = lambda: SimpleNamespace(initImage="sha256:" + "a" * 64, uid=1042, gid=1055)
+    calls = []
+
+    async def request(method, path, body=None):
+        calls.append((method, path, body))
+        if method == "GET":
+            return {"State": {"Running": False, "ExitCode": 0}}
+        return {}
+
+    runtime.request = request
+    runtime.remove_helper = AsyncMock()
+    plan = {"name": "mediahub-plex-main", "appdataPath": "/nas/appdata/plex-main",
+            "container": {"Labels": {"org.mediahub.installation": "plex-main"}}}
+    result = asyncio.run(runtime.snapshot_appdata(None, plan))
+    helper = calls[0][2]
+    assert helper["User"] == "1042:1055"
+    assert helper["HostConfig"]["NetworkMode"] == "none"
+    assert helper["HostConfig"]["Mounts"] == [
+        {"Type": "bind", "Source": "/nas/appdata", "Target": "/appdata", "ReadOnly": False}
+    ]
+    assert result.startswith("/nas/appdata/before-update-")
+    runtime.remove_helper.assert_awaited_once()
+
+
 @pytest.mark.parametrize("reinstall", [False, True])
 def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_path, monkeypatch, reinstall):
     from unittest.mock import AsyncMock, Mock

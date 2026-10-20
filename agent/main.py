@@ -52,6 +52,7 @@ from agent.discovery import discovery_report
 from agent.fixtures import containers
 from agent.gpu_setup import GPUSetup
 from agent.plex_control import PlexControl
+from agent.plex_gpu import PlexGPU
 from agent.plex_media import PlexMedia
 from agent.plex_remote_access import RemoteAccessChoice as PlexRemoteAccessChoice
 from agent.plex_runtime import PlexRuntime
@@ -267,6 +268,7 @@ def create_agent(config: AgentConfig | None = None):
     plex = PlexControl(config.plex_policy_file, config.docker_socket)
     plex_media = PlexMedia(plex)
     plex_runtime = PlexRuntime(plex, config.plex_install_policy_file, config.state_dir)
+    plex_gpu = PlexGPU(plex_runtime)
     if config.plex_install_policy_file:
         plex.runtime = plex_runtime
     backups = AppBackups(plex, control)
@@ -367,6 +369,18 @@ def create_agent(config: AgentConfig | None = None):
 
         with app_storage_guard(config.state_dir):
             yield
+
+    @app.get("/v1/plex-gpu/status")
+    async def plex_gpu_status():
+        return await plex_gpu.status()
+
+    @app.get("/v1/plex-gpu/logs")
+    async def plex_gpu_logs():
+        return await plex_gpu.logs()
+
+    @app.post("/v1/plex-gpu/actions/{action}", dependencies=[Depends(secure_workflow)])
+    async def plex_gpu_action(action: Literal["start", "stop", "restart"]):
+        return await plex_gpu.action(action)
 
     @app.get("/v1/shared-vpn/{app_name}", dependencies=[Depends(secure_workflow)])
     async def shared_vpn_status(app_name: str):

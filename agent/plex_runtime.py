@@ -806,10 +806,14 @@ class PlexRuntime:
                 install_policy.uid,
                 install_policy.gid,
             )
+            from agent.plex_gpu_start import activate_relay, prepare_vendor
+
+            await prepare_vendor(self, policy, plan)
             await self.request("POST", f"/containers/{policy.container}/start")
             started = True
             if policy.vpnEnabled:
                 await self.vpn.activate(policy, vpn_port)
+            await activate_relay(self, policy, plan)
         except Exception as error:
             if policy.vpnEnabled:
                 self.vpn.current["lastErrorCode"] = (
@@ -1122,9 +1126,10 @@ class PlexRuntime:
             "/containers/create?name=" + name,
             body={
                 "Image": self.policy().initImage,
-                "User": "0:0",
+                "User": f"{self.policy().uid}:{self.policy().gid}",
                 "Labels": plan["container"]["Labels"],
                 "Entrypoint": ["python", "-c", code],
+                "Healthcheck": {"Test": ["NONE"]},
                 "HostConfig": {
                     "NetworkMode": "none",
                     "Mounts": [
@@ -1135,8 +1140,8 @@ class PlexRuntime:
                             "ReadOnly": False,
                         }
                     ],
-                    "Memory": 128 * 1024**2,
-                    "MemorySwap": 128 * 1024**2,
+                    "Memory": 512 * 1024**2,
+                    "MemorySwap": 512 * 1024**2,
                     "LogConfig": {"Type": "none", "Config": {}},
                     "Ulimits": [{"Name": "core", "Soft": 0, "Hard": 0}],
                 },
@@ -1144,7 +1149,7 @@ class PlexRuntime:
         )
         try:
             await self.request("POST", f"/containers/{name}/start")
-            for _ in range(600):
+            for _ in range(3600):
                 state = (await self.request("GET", f"/containers/{name}/json"))["State"]
                 if not state["Running"]:
                     if state["ExitCode"] != 0:
@@ -1211,6 +1216,7 @@ class PlexRuntime:
                         or any(
                             old["Config"].get("Labels", {}).get(k) != v
                             for k, v in plan["container"]["Labels"].items()
+                            if k != "org.mediahub.plex.gpu.revision"
                         )
                     ):
                         raise DomainError(
