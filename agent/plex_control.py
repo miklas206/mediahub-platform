@@ -17,6 +17,7 @@ from pydantic import Field, field_validator
 
 from agent.diagnostics import Diagnostics, error_fields, trace_async
 from agent.install_files import read_json, save_json
+from agent.plex_lifecycle_lock import PlexLifecycleLock
 
 
 class PlexMount(StrictModel):
@@ -66,7 +67,8 @@ class PlexPolicy(StrictModel):
 class PlexControl:
     def __init__(self, policy_file, socket):
         self.policy_file, self.socket = policy_file, socket
-        self.lock = asyncio.Lock()
+        self.lock = (PlexLifecycleLock(Path(policy_file).parent / "plex-lifecycle.lock")
+                     if policy_file else asyncio.Lock())
         self.events = []
         self.monitor_task = None
         self.storage_probe = None

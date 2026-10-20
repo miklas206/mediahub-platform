@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.73
+
+- Serialize Plex lifecycle operations across the supervisor and operator installer so the supervisor cannot stop a newly linked container using an intermediate desired state. Locks are released automatically if an operator process exits.
+
 ## 0.6.72
 
 - Show an explicitly installed Plex GPU sidecar as its own MediaHub app, with observed GPU status, a dashboard link and scoped start/stop/restart controls. Preserve Plex's independent runtime and read-only media mappings.
