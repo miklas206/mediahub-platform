@@ -37,7 +37,7 @@ export function PlexGPUPanel({ report, extraCards }: {
             <div className="runtime-row"><dt>{t("Transcode jobs")}</dt><dd>{gpu?.activeJobs ?? t("Not observed")}</dd></div>
           </dl>
           <p>{t("Direct Play does not create a GPU job.")}</p>
-          <p className="muted">{t("HDR and unsupported jobs use Plex's original transcoder.")}</p>
+          <p className="muted">{t(gpu?.hdrToneMapping ? "HDR10 and HLG use GPU tone mapping to SDR. Unsupported jobs use Plex's original transcoder." : "HDR GPU conversion is unavailable. HDR jobs use Plex's original transcoder.")}</p>
         </Panel>
       </div>
       {extraCards}

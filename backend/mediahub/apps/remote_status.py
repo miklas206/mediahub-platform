@@ -152,6 +152,7 @@ class RuntimeStatus(PublicModel):
 
 
 class PlexGPUStatus(PublicModel):
+    hdrToneMapping: bool = False
     name: str = ""
     linked: bool = False
     encoderPercent: float | None = None

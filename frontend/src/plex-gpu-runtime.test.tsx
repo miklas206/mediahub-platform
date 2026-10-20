@@ -5,7 +5,7 @@ import type { Runtime } from "./runtime";
 
 const report: Runtime = { health: "healthy", available: true, cached: false,
   agentOnline: true, url: "http://192.168.1.10:8090/", gpu: {
-    name: "Test NVIDIA", linked: true, encoderPercent: 43,
+    name: "Test NVIDIA", linked: true, hdrToneMapping: true, encoderPercent: 43,
     memoryUsedMiB: 512, memoryTotalMiB: 8192, temperature: 40, activeJobs: 2,
   } };
 
@@ -14,7 +14,7 @@ it("shows observed encoder usage and the separate dashboard", () => {
   expect(html).toContain("43 %");
   expect(html).toContain("Test NVIDIA");
   expect(html).toContain('href="http://192.168.1.10:8090/"');
-  expect(html).toContain("HDR");
+  expect(html).toContain("HDR10");
 });
 
 it("does not turn unavailable GPU observations into zero usage or an unsafe link", () => {

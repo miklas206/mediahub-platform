@@ -130,6 +130,7 @@ class PlexGPU:
                 "memoryTotalMiB": number("memoryTotal", 1048576),
                 "temperature": number("temperature", 150),
                 "activeJobs": active,
+                "hdrToneMapping": isinstance(observed.get("capabilities"), dict) and observed["capabilities"].get("hdrToneMapping") is True,
             },
         }
 

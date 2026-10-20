@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.74
+
+- Show observed GPU HDR tone-mapping capability for an explicitly installed Plex transcoder. Explain HDR10/HLG conversion only when the worker has verified it; retain the original-transcoder fallback explanation when it is unavailable.
+
 ## 0.6.73
 
 - Serialize Plex lifecycle operations across the supervisor and operator installer so the supervisor cannot stop a newly linked container using an intermediate desired state. Locks are released automatically if an operator process exits.

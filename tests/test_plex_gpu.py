@@ -94,7 +94,7 @@ def test_status_is_observed_and_does_not_forward_private_job_records(tmp_path, m
     service, _, _ = fixture(tmp_path)
     payload = {"gpu": {"name": "Test NVIDIA", "encoder": "43", "memoryUsed": "512",
                        "memoryTotal": "8192", "temperature": "40"},
-               "adapterInstalled": True, "active": 2,
+               "adapterInstalled": True, "active": 2, "capabilities": {"hdrToneMapping": True},
                "jobs": [{"token": "private-test-token", "source": "/private/media"}]}
     client = httpx.AsyncClient
     monkeypatch.setattr("agent.plex_gpu.httpx.AsyncClient", lambda **kw: client(
@@ -103,6 +103,7 @@ def test_status_is_observed_and_does_not_forward_private_job_records(tmp_path, m
     assert report["health"] == "healthy"
     assert report["gpu"]["encoderPercent"] == 43
     assert report["gpu"]["activeJobs"] == 2
+    assert report["gpu"]["hdrToneMapping"] is True
     assert "private-test-token" not in json.dumps(report)
     assert "/private/media" not in json.dumps(report)
     payload["adapterInstalled"] = False

@@ -37,7 +37,7 @@ import {
 export type Runtime = {
   url?: string | null;
   gpu?: {
-    name: string; linked: boolean; encoderPercent?: number | null;
+    name: string; linked: boolean; hdrToneMapping?: boolean; encoderPercent?: number | null;
     memoryUsedMiB?: number | null; memoryTotalMiB?: number | null;
     temperature?: number | null; activeJobs: number | null;
   };

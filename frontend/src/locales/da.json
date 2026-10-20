@@ -4420,5 +4420,7 @@
   "HDR and unsupported jobs use Plex's original transcoder.": "HDR og ikke-understøttede jobs bruger Plex’ originale transcoder.",
   "Start GPU transcoder": "Start GPU-transcoder",
   "Stop GPU transcoder": "Stop GPU-transcoder",
-  "Restart GPU transcoder": "Genstart GPU-transcoder"
+  "Restart GPU transcoder": "Genstart GPU-transcoder",
+  "HDR10 and HLG use GPU tone mapping to SDR. Unsupported jobs use Plex's original transcoder.": "HDR10 og HLG konverteres til SDR på GPU’en. Ikke-understøttede jobs bruger Plex’ originale transcoder.",
+  "HDR GPU conversion is unavailable. HDR jobs use Plex's original transcoder.": "HDR-konvertering på GPU er ikke tilgængelig. HDR-jobs bruger Plex’ originale transcoder."
 }

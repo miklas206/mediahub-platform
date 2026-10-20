@@ -21,8 +21,13 @@ from that exact official image into the existing RAM volume. This also prepares
 the matching fallback after an official Plex update. A fixed executable check
 starts the private callback relay after Plex starts. No Docker socket or TCP
 command interface is exposed to the adapter. Unsupported jobs and unavailable
-workers use the original transcoder. The separate adapter currently delegates
-HDR to the original transcoder until tone mapping is validated.
+workers use the original transcoder. Adapter release 0.3.0 converts HDR10/HLG to SDR using NVIDIA OpenCL
+and NVENC after a successful startup capability probe. Unsupported HDR colour
+metadata and Dolby Vision without a compatible HDR base layer retain the original
+fallback. The app displays observed HDR capability, including older adapters
+which do not provide it. Runtime-only adapter upgrades use an immutable, read-only
+release directory and preserve the existing Plex container when the static client
+and image remain unchanged.
 
 The dashboard reports whole-card encoder usage; other GPU applications can
 contribute. Direct Play creates no transcode job. An idle GPU can correctly show
