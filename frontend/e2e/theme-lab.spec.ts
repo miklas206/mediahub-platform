@@ -673,6 +673,7 @@ for(const width of [1440,390,320]) test(`duck pond is alive, pausable and accoun
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.getByRole('button',{name:'Save',exact:true}).click();expect(writes).toHaveLength(1);
  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-look','duck-pond');
+ await expect(page.locator('.hub-app-card').first()).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:`/tmp/mediahub-duck-pond-${width}.png`});
  await page.goto('/settings?section=Appearance');await page.locator('.theme-choice').filter({hasText:'Soft Orbit'}).click();
