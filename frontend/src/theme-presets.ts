@@ -88,4 +88,18 @@ export const themePresets: ThemePreset[] = [
       depth: 30,
     },
   },
+  {
+    id: "duck-pond",
+    name: "Duck Pond",
+    description: "Golden ducks, emerald water and fireflies. A living little pond.",
+    value: {
+      ...defaultAppearance,
+      style: "duck-pond",
+      mode: "dark",
+      accent: "#f6ce73",
+      secondary: "#9ed8bd",
+      background: "#204c42",
+      depth: 52,
+    },
+  },
 ];

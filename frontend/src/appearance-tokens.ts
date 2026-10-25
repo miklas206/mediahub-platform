@@ -5,6 +5,7 @@ export const themeStyles = [
   "precision-terminal",
   "floating-layers",
   "edge-signal",
+  "duck-pond",
 ] as const;
 export type ThemeStyle = (typeof themeStyles)[number];
 

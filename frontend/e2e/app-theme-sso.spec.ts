@@ -2,14 +2,15 @@ import {textOutsideCards} from "./text-containment";
 import {expect,test} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {appearanceTokens,defaultAppearance,type Appearance} from '../src/appearance-tokens';
-const styles=['midnight-glass','soft-orbit','precision-terminal','floating-layers','edge-signal'] as const;
+const styles=['midnight-glass','soft-orbit','precision-terminal','floating-layers','edge-signal','duck-pond'] as const;
 for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) test(`${app} inherits per-user SSO appearance at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:1000});
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  let appearance:Appearance|null={...defaultAppearance,style:'precision-terminal',accent:'#d044e8',mode:'dark',density:'compact',reducedMotion:true};
  let managed=true,language='en',theme='dark';let reads=0;let themeOverride:string|null=null;let rejectOverride=false;
- const staticRoot=resolve(process.cwd(),'../../'+app+'/'+app+'/static');
+ const staticRoot=fileURLToPath(new URL('../../docker/bundled/'+app+'/'+app+'/static',import.meta.url));
  await page.addInitScript(()=>localStorage.setItem('mediahub-app-theme-v2','edge-signal'));
  await page.route('https://app.example/**',async route=>{
   const path=new URL(route.request().url()).pathname;
@@ -44,7 +45,7 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
  await expect(page.locator('.theme-switch select')).toHaveValue('follow-hub');
  expect(await page.locator('.theme-switch select').evaluate(el=>getComputedStyle(el).appearance)).toBe('base-select');
  await page.locator('.theme-switch select').click();
- await expect(page.getByRole('option',{name:'Follow MediaHub',exact:true})).toBeVisible();
+ await expect(page.locator('.theme-switch select').getByRole('option',{name:'Follow MediaHub',exact:true})).toBeVisible();
  await page.screenshot({path:test.info().outputPath(`${app}-${width}-theme-picker.png`)});
  await page.keyboard.press('Escape');
 
@@ -55,6 +56,8 @@ for(const app of ['mediaseed','mediavpn']) for(const width of [1440,390,320]) te
   const previous=reads;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await expect.poll(()=>reads).toBeGreaterThan(previous);
   await expect(page.locator('html')).toHaveAttribute('data-look',style);
+  await expect(page.locator('.duck-pond-scene')).toHaveCount(style==='duck-pond'?1:0);
+  if(style==='duck-pond')await expect(page.locator('.duck-pond-scene')).toHaveAttribute('data-paused','true');
   const actual=await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   expect(actual).toBe(appearanceTokens(appearance,true)['--accent']);
  }

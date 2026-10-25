@@ -283,7 +283,7 @@ export function AppearanceSettings({ compact = false }: { compact?: boolean }) {
                   </span>
                 )}
               </span>
-              <strong>{preset.name}</strong>
+              <strong>{t(preset.name)}</strong>
               <small>{t(preset.description)}</small>
             </button>
           ))}

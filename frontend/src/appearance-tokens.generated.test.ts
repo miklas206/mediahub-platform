@@ -11,13 +11,8 @@ it('independent app bundles generate exactly the same colors as MediaHub', () =>
     for (const dark of [false,true]) expect(context.MediaHubAppearance!.appearanceTokens(preset,dark)).toEqual(appearanceTokens(preset,dark));
   }
 });
-it('matches sibling app bundles when their source checkouts are available', (context) => {
-  const roots = ['../../../', '../../../../'];
-  const siblingRoot = roots.find(root => ['mediaseed', 'mediavpn'].every(app => existsSync(new URL(root + app + '/' + app + '/static/themes/appearance-tokens.js', import.meta.url))));
-  if (!siblingRoot) { context.skip(); return; }
-  const bundled = readFileSync(new URL('../public/themes/appearance-tokens.js', import.meta.url), 'utf8');
-  for (const app of ['mediaseed','mediavpn']) {
-    expect(readFileSync(new URL(siblingRoot+app+'/'+app+'/static/themes/appearance-tokens.js',import.meta.url),'utf8')).toBe(bundled);
-    expect(readFileSync(new URL(siblingRoot+app+'/'+app+'/static/themes/select-controls.css',import.meta.url),'utf8')).toBe(readFileSync(new URL('./select-controls.css',import.meta.url),'utf8'));
+it('ships identical shared engines and pond assets in each bundled app', () => {
+  for (const app of ['mediaseed','mediavpn']) for (const name of ['appearance-tokens.js','duck-pond.js','duck-pond.css','duck.svg']) {
+    expect(readFileSync(new URL('../../docker/bundled/'+app+'/'+app+'/static/themes/'+name,import.meta.url),'utf8')).toBe(readFileSync(new URL('../public/themes/'+name,import.meta.url),'utf8'));
   }
 });

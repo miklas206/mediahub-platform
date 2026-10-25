@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.71"
+    "version": "0.6.75"
   },
   "paths": {
     "/api/v1/users": {
@@ -8529,7 +8529,8 @@
               "soft-orbit",
               "precision-terminal",
               "floating-layers",
-              "edge-signal"
+              "edge-signal",
+              "duck-pond"
             ],
             "title": "Style",
             "default": "classic"

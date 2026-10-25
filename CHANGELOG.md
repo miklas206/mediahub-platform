@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.75
+
+- Add Andedammen / Duck Pond across MediaHub and its independently themed MediaSeed/MediaVPN apps: original animated ducks, ripples, reeds, lily pads and fireflies, with pause, reduced-motion and background-tab support. Preserve existing palettes, saved preferences and app behavior.
+
 ## 0.6.74
 
 - Show observed GPU HDR tone-mapping capability for an explicitly installed Plex transcoder. Explain HDR10/HLG conversion only when the worker has verified it; retain the original-transcoder fallback explanation when it is unavailable.

@@ -655,3 +655,27 @@ for (const width of [1440,320]) test(`footer stays at viewport bottom across nav
   await page.evaluate(()=>{document.querySelector('main')!.style.minHeight='';window.scrollTo(0,0);});
  }
 });
+
+for(const width of [1440,390,320]) test(`duck pond is alive, pausable and account saved at ${width}px`,async({page})=>{
+ const {writes}=await mockHub(page);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewportSize({width,height:1000});await page.goto('/settings?section=Appearance');
+ await page.locator('.theme-choice').filter({hasText:'Duck Pond'}).click();
+ await expect(page.locator('html')).toHaveAttribute('data-look','duck-pond');
+ await expect(page.locator('.pond-duck')).toHaveCount(5);
+ await expect(page.locator('.duck-pond-scene')).toHaveAttribute('aria-hidden','true');
+ await expect(page.locator('.duck-pond-scene')).toHaveAttribute('data-paused','false');
+ const duck=page.locator('.pond-duck').first();const before=await duck.evaluate(e=>getComputedStyle(e).transform);
+ await page.waitForTimeout(250);expect(await duck.evaluate(e=>getComputedStyle(e).transform)).not.toBe(before);
+ await page.locator('.pond-motion').click();await expect(page.locator('.duck-pond-scene')).toHaveAttribute('data-paused','true');
+ await page.locator('.pond-motion').click();
+ await page.emulateMedia({reducedMotion:'reduce'});await expect(page.locator('.pond-motion')).toBeDisabled();
+ expect(await duck.evaluate(e=>getComputedStyle(e).animationName)).toBe('none');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.getByRole('button',{name:'Save',exact:true}).click();expect(writes).toHaveLength(1);
+ await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-look','duck-pond');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
+ await page.screenshot({path:`/tmp/mediahub-duck-pond-${width}.png`});
+ await page.goto('/settings?section=Appearance');await page.locator('.theme-choice').filter({hasText:'Soft Orbit'}).click();
+ await expect(page.locator('.duck-pond-scene')).toHaveCount(0);await expect(page.locator('.pond-motion')).toHaveCount(0);
+ expect(errors).toEqual([]);
+});

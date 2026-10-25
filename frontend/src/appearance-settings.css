@@ -599,3 +599,6 @@
     margin-left: 0;
   }
 }
+
+.theme-mini[data-style="duck-pond"]{background:radial-gradient(ellipse at 80% 75%,#f6ce7340,transparent 30%),#14352f;}
+.theme-mini[data-style="duck-pond"]::after{content:'';position:absolute;right:8px;bottom:5px;width:48px;height:38px;background:url('/themes/duck.svg') center/contain no-repeat;}

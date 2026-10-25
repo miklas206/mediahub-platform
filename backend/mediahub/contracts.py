@@ -37,7 +37,7 @@ class AppearancePreferences(StrictModel):
     depth: int = Field(strict=True, ge=0, le=100)
     style: Literal[
         "classic", "midnight-glass", "soft-orbit", "precision-terminal",
-        "floating-layers", "edge-signal",
+        "floating-layers", "edge-signal", "duck-pond",
     ] = "classic"
     mode: Literal["inherit", "dark", "light", "system"] = "inherit"
     density: Literal["comfortable", "compact"] = "comfortable"
