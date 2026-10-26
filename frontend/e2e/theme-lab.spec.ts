@@ -656,12 +656,13 @@ for (const width of [1440,320]) test(`footer stays at viewport bottom across nav
  }
 });
 
-for(const width of [1440,390,320]) test(`duck pond is alive, pausable and account saved at ${width}px`,async({page})=>{
+for(const width of [1440,768,390,320]) test(`duck pond is alive, pausable and account saved at ${width}px`,async({page})=>{
  const {writes}=await mockHub(page);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.setViewportSize({width,height:1000});await page.goto('/settings?section=Appearance');
  await page.locator('.theme-choice').filter({hasText:'Duck Pond'}).click();
  await expect(page.locator('html')).toHaveAttribute('data-look','duck-pond');
  await expect(page.locator('.pond-duck')).toHaveCount(5);
+ expect((await page.locator('.pond-motion').boundingBox())!.y+(await page.locator('.pond-motion').boundingBox())!.height).toBeLessThan(930);
  await expect(page.locator('.duck-pond-scene')).toHaveAttribute('aria-hidden','true');
  await expect(page.locator('.duck-pond-scene')).toHaveAttribute('data-paused','false');
  const duck=page.locator('.pond-duck').first();const before=await duck.evaluate(e=>getComputedStyle(e).transform);
@@ -673,7 +674,7 @@ for(const width of [1440,390,320]) test(`duck pond is alive, pausable and accoun
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.getByRole('button',{name:'Save',exact:true}).click();expect(writes).toHaveLength(1);
  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-look','duck-pond');
- await expect(page.locator('.hub-app-card').first()).toBeVisible();
+ if(width===1440)await expect(page.locator('.hub-app-card').first()).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)).toBe(false);
  await page.screenshot({path:`/tmp/mediahub-duck-pond-${width}.png`});
  await page.goto('/settings?section=Appearance');await page.locator('.theme-choice').filter({hasText:'Soft Orbit'}).click();

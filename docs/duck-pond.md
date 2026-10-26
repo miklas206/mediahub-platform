@@ -48,7 +48,7 @@ publicerer som en samlet apprelease.
 - Hele frontend-enhedstestsuiten: 348 tests består, inklusive paletkontrast i lys og
   mørk tilstand og identiske genererede farvemotorer/andeassets i bundlerne.
 - TypeScript- og produktionsbuild består.
-- Browserkontrol af Hubben ved 1440, 390 og 320 px: preview, gem/genindlæs, levende
+- Browserkontrol af Hubben ved 1440, 768, 390 og 320 px: preview, gem/genindlæs, levende
   bevægelse, pause, reduceret bevægelse, temaskift og ingen vandret overflow.
 - Begge appfrontends ved samme bredder: SSO-arv, samme farvetokens, dammens
   reducerede bevægelse, overrides, fejl ved gem, sprog og tilbage til standard.

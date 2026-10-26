@@ -19,7 +19,7 @@
 :root[data-look="duck-pond"] :is(.panel,.workspace-card,.hub-app-card,.resource-card,.profile,.card){border-color:color-mix(in srgb,var(--accent) 17%,var(--line));}
 :root[data-look="duck-pond"] :is(.primary,button.primary){box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 40%,transparent);}
 :root[data-look="duck-pond"] :is(button,input,select,textarea){border-radius:10px;}
-.pond-motion{position:fixed;right:18px;bottom:18px;z-index:40;min-height:34px;padding:6px 11px;border:1px solid var(--line);border-radius:20px;background:var(--surface,var(--panel));color:var(--text);font:500 11px/1.3 system-ui,sans-serif;box-shadow:0 3px 16px #001b161a;cursor:pointer;}
+.pond-motion{position:fixed;right:18px;bottom:84px;z-index:40;min-height:34px;padding:6px 11px;border:1px solid var(--line);border-radius:20px;background:var(--surface,var(--panel));color:var(--text);font:500 11px/1.3 system-ui,sans-serif;box-shadow:0 3px 16px #001b161a;cursor:pointer;}
 .pond-motion:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 :root:is([data-navigation="dock-bottom"],[data-app-navigation="dock-bottom"]) .pond-motion{bottom:100px;}
 .duck-pond-scene[data-paused="true"] *,.duck-pond-scene[data-paused="true"] *::after{animation-play-state:paused!important;}
