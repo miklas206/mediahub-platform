@@ -73,3 +73,54 @@
 
 /* Short status cards keep their own height around the wider central tracker. */
 @media(max-width:1100px){.download-status-cards{grid-template-columns:minmax(0,1fr);align-items:start;}}
+
+/* Andedammen: the measured transfer lanes become a small stream. */
+:root[data-look="duck-pond"] .download-route .route-packets {
+  height:32px; border-radius:48% 52% 45% 55% / 24% 34% 28% 32%;
+  background:linear-gradient(180deg,#315e50aa,#173f3be6 48%,#397b695c);
+  box-shadow:inset 0 1px #89c2a43b,inset 0 -1px #90c7b233;
+  clip-path:inset(-10px 0 round 16px);
+}
+:root[data-look="duck-pond"] .route-packets::before,
+:root[data-look="duck-pond"] .route-packets::after {
+  height:7px; background:none; border-top:1px solid #a0dbc52e;
+  border-radius:50%; transform:skewX(-24deg); top:24%;
+}
+:root[data-look="duck-pond"] .route-packets::after {top:68%;left:8%;right:5%;}
+:root[data-look="duck-pond"] .route-packets .traffic-packet {
+  width:26px;height:20px;background:none;opacity:1;
+  animation-duration:calc(var(--packet-duration) * 1.6);
+}
+:root[data-look="duck-pond"] .route-packets .packet-small {width:21px;height:17px;}
+:root[data-look="duck-pond"] .route-packets .packet-large {width:32px;height:25px;}
+:root[data-look="duck-pond"] .packet-lane-download .traffic-packet {top:22%;}
+:root[data-look="duck-pond"] .packet-lane-upload .traffic-packet {top:77%;}
+:root[data-look="duck-pond"] .traffic-packet::before {
+  content:"";position:absolute;inset:-6px -2px 0;
+  background:url("themes/duck.svg") center/contain no-repeat;
+  animation:river-swimmer-bob 2.2s ease-in-out infinite alternate;
+}
+:root[data-look="duck-pond"] .packet-lane-upload .traffic-packet::before {scale:-1 1;}
+:root[data-look="duck-pond"] .traffic-packet::after {
+  content:"";position:absolute;left:-15%;right:-15%;height:5px;bottom:-1px;
+  border:1px solid #b1e4cd55;border-top-color:transparent;border-radius:50%;
+}
+:root[data-look="duck-pond"] .traffic-packet:nth-child(3n)::before {
+  inset:4px 0 0;border-radius:50%;scale:1;
+  background:radial-gradient(ellipse at 65% 37%,#ffe8b8 0 6%,#edb6bf 8% 21%,transparent 23%),conic-gradient(from 35deg,transparent 0deg 42deg,#70b58b 44deg 360deg);
+  box-shadow:0 2px 2px #061f2280;animation-delay:-1.1s;
+}
+/* Keep the stream legible even at very high throughput. Hidden swimmers retain
+   their animation events so the existing rate-based retirement still works. */
+:root[data-look="duck-pond"] .traffic-packet:nth-child(n+9) {visibility:hidden;}
+@keyframes river-swimmer-bob {from{transform:translateY(-1px) rotate(-3deg);}to{transform:translateY(1px) rotate(3deg);}}
+:root[data-look="duck-pond"] .duck-pond-scene[data-paused="true"] ~ * .route-packets *,
+:root[data-look="duck-pond"] .duck-pond-scene[data-paused="true"] ~ * .route-packets *::before {animation-play-state:paused!important;}
+:root[data-look="duck-pond"][data-reduced-motion="true"] .traffic-packet::before {animation:none;}
+@media(prefers-reduced-motion:reduce) {:root[data-look="duck-pond"] .traffic-packet::before {animation:none;}}
+@media(max-width:650px) {
+  :root[data-look="duck-pond"] .route-packets .traffic-packet {width:19px;height:16px;}
+  :root[data-look="duck-pond"] .route-packets .packet-small {width:16px;height:14px;}
+  :root[data-look="duck-pond"] .route-packets .packet-large {width:23px;height:19px;}
+  :root[data-look="duck-pond"] .traffic-packet:nth-child(n+5) {visibility:hidden;}
+}

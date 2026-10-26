@@ -109,3 +109,20 @@ med de fire temafiler. Gateway-login, CSRF og den stramme eksisterende CSP er
 bevaret og testes sammen med 401/404-afvisninger. Medfølgende browserkontrol bruger
 samme CSP. De pakkede ASGI-apps serverer henholdsvis 36, 20 og 6 assets uden
 produktionsdata. Antal assets kan ændres, når appenes øvrige lokale arbejde pakkes.
+
+## Beskyttet overførsel som å
+
+26. oktober 2026: MediaSeeds eksisterende målte pakkebaner vises i Andedammen
+som en smal å med svømmende ænder, drivende blomstrende åkander og kølvand.
+Download og upload bevæger sig fortsat i modsatte retninger. Tæthed og hastighed
+bevarer den eksisterende målelogik; antallet af synlige figurer begrænses på små
+skærme. De fire forbindelsesikoner og deres rigtige status er bevaret.
+
+Ændringen er afgrænset til CSS og HTML-cacheversion. Den almindelige animation
+er bevaret i andre temaer. Temaets pauseknap, skjult fane, reduceret bevægelse
+og de eksisterende blokeringer ved inaktiv forbindelse eller forældede målinger
+gælder også åen. Der tilføjes ingen timere, afhængigheder eller datamigrationer.
+Friske installationer og opdateringer får CSS fra den medfølgende apppakke;
+kilde-manifestet er opdateret og tre bundletests består. Browserkontrol ved
+1440/768/390/320 px dækker figurer, retning, pause, reduceret bevægelse,
+forældede/blokerede/tomme trafikdata, temaskift og vandret overflow.
