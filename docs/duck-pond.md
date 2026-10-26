@@ -68,7 +68,7 @@ Selve dammens grafik og animation er skrevet til MediaHubs fælles temakontrakt.
 ## Status og tilbageførsel
 
 Installeret live efter brugerens udtrykkelige godkendelse 26. oktober 2026:
-MediaHub **0.6.75**, runtime-commit `17763261c8a2f54b3bf574a966af10025a34673a`.
+MediaHub **0.6.75**, runtime-commit `9843022519259f6dec85c2470059e4e2ec355cca`.
 Core-image, projektversion, rapporteret version og hostens installerede markører
 stemmer overens. MediaSeed og MediaVPN har afgrænsede temaoverlays oven på deres
 faktisk kørende images; deres øvrige kildekode og funktioner er bevaret.
@@ -176,3 +176,23 @@ bredder, klik på en knap oven på en and, tastatur, reduceret bevægelse,
 temaskift, pointercancel, pause midt i et kast og rigtig touch-scroll.
 Hub-layoutet er desuden kontrolleret med syntetiske kontodata. Hele
 frontend-enhedstestsuiten (348 tests), TypeScript og produktionsbuild består.
+
+Udrullet live efter brugerens bestilling. Core/MediaSeed/MediaVPN har afgrænsede
+overlays med de faktiske kørende images som grundlag; de tidligere images og
+private Compose-/SQLite-backups er bevaret. MediaUpload fik kun statiske filer
+og HTML, uden servicegenstart eller ændring af jobs/databaser. Backupstier:
+
+- Core: `/opt/mediahub/duck-play-30b6b302092db4af`
+- MediaSeed: `/opt/mediahub/local-apps/mediaseed/duck-play-e212b03f277cb7ff`
+- MediaVPN: `/opt/mediahub/local-apps/mediavpn/duck-play-240eeeaa54e71330`
+- MediaUpload i CT109: `/opt/mediaupload/duck-play-20261026-004707`
+
+Alle fire apps svarer sundt, og serverede temaassets matcher den kanoniske kilde.
+Nye cacheversioner i HTML sikrer indlæsning efter genindlæsning. Kontrollerne
+bruger syntetiske API-/kontodata og opretter ingen brugerjobs eller torrents.
+
+Ni afsluttende browserkontroller består med live serverede assets (streng
+CSP, mus/touch/tastatur, fire bredder og den faktiske Hub-frontend med
+syntetiske kontosvar). Tre bundletests og en fuld kontrol af source-manifestets
+hashes består. Ingen login med brugerens konto eller mediehandlinger er udført
+som verifikation.
