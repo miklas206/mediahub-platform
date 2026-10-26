@@ -21,6 +21,7 @@ for(const width of [1440,768,390,320]) test(`Duck Pond boards at the VPN hop at 
  });
  await page.goto('https://boarding.example/');
  await page.waitForFunction('!!globalThis.MediaSeedWorkspace');
+ await page.waitForLoadState('networkidle');
  const sample=(active=true,age=0)=>page.evaluate(`downloadsEnabled=${active};torrentSnapshotValid=true;lastTorrentSample=Date.now()-${age};torrents=[{hash:'a'.repeat(40),name:'Synthetic traffic',state:'downloading',dlspeed:1e6,upspeed:1e6}];document.querySelector('#connection-flow').dataset.state='${active?'active':'blocked'}';MediaSeedWorkspace.render();`);
  await sample();
  const crossing=await page.evaluate(()=>{

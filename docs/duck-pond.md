@@ -143,3 +143,8 @@ installation og opdatering, uden at kopiere andre igangværende appfunktioner.
 `frontend/e2e/duck-transfer-boarding.spec.ts` kontrollerer hoppingens placering
 og bladets synlighed i begge retninger ved fire bredder, pause, reduceret
 bevægelse, gamle/blokerede trafikdata og tilbagevenden til et andet tema.
+
+Installeret live som et afgrænset MediaSeed-overlay
+`mediahub-mediaseed:duck-boarding-6dadb84642d69cf9`. Installerede kildefiler
+matcher, appen er sund, og øvrige containere er bevaret. Privat rollback-backup:
+`/opt/mediahub/local-apps/mediaseed/duck-boarding-6dadb84642d69cf9`.
