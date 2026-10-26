@@ -22,8 +22,9 @@ Pause dammen stopper kun baggrundens dekoration og huskes lokalt i browseren.
 Systemets og kontoens reducerede bevægelse stopper animationen. Skjulte browserfaner
 pauser CSS-animationerne. Ved temaskift fjernes både dam og pauseknap. Baggrunden
 er inert, aria-hidden, har ingen pointer-events og lægger ingen grafik oven på
-kontrollerne. Der oprettes højst én scene; ingen requestAnimationFrame-løkke,
-WebGL, canvas, partikelgenerator eller kontinuerlige JavaScript-timere.
+kontrollerne. Der oprettes højst én scene. Den almindelige baggrund bruger CSS uden
+WebGL, canvas eller kontinuerlige JavaScript-timere. Kun et aktivt kast bruger
+en kort requestAnimationFrame-løkke, som stoppes ved landing eller afbrydelse.
 
 ## Kilde og installation
 
@@ -148,3 +149,30 @@ Installeret live som et afgrænset MediaSeed-overlay
 `mediahub-mediaseed:duck-boarding-6dadb84642d69cf9`. Installerede kildefiler
 matcher, appen er sund, og øvrige containere er bevaret. Privat rollback-backup:
 `/opt/mediahub/local-apps/mediaseed/duck-boarding-6dadb84642d69cf9`.
+
+## Grib og kast baggrundsænder
+
+Mus og touch kan gribe en synlig baggrundsand, trække den og slippe med
+hastighed fra bevægelsen. Anden flakser med vingerne, mens den holdes. Kastet
+bruger tyngdekraft, dæmpning og skærmgrænser; ved landing kommer et kort plask
+med otte dråber og to vandringe, og anden svømmer videre fra sin nye position.
+
+En separat, inert grafikoverflade viser kun anden over brugerfladen under
+selve grebet/kastet. Knapper, links, formularer, appkort og dækkende paneler
+ejer fortsat deres klik. Almindelig touch-scroll virker uden for ænderne.
+Den dekorative scene forbliver aria-hidden/inert; fem selvstændige
+tastaturkontroller bliver synlige ved tastaturfokus: Enter/mellemrum løfter
+og slipper, piletaster flytter, Shift giver større trin, Escape sætter ned.
+
+Pause/reduceret bevægelse stopper vingeflap og giver direkte landing. Ved
+temaskift, skjult fane, mistet fokus, annulleret pointer eller ændret
+skærmstørrelse stoppes et aktivt kast og midlertidig grafik ryddes. Der er
+højst én flyvende and og otte samtidige plask. Ingen pointerdata eller
+andepositioner gemmes eller sendes til serveren. Der kræves ingen nye
+pakker, mounts, kontorettigheder eller datamigrationer ved installation/opdatering.
+
+Browserkontroller under streng CSP dækker greb/kast/vinger/plask ved fire
+bredder, klik på en knap oven på en and, tastatur, reduceret bevægelse,
+temaskift, pointercancel, pause midt i et kast og rigtig touch-scroll.
+Hub-layoutet er desuden kontrolleret med syntetiske kontodata. Hele
+frontend-enhedstestsuiten (348 tests), TypeScript og produktionsbuild består.

@@ -681,3 +681,13 @@ for(const width of [1440,768,390,320]) test(`duck pond is alive, pausable and ac
  await expect(page.locator('.duck-pond-scene')).toHaveCount(0);await expect(page.locator('.pond-motion')).toHaveCount(0);
  expect(errors).toEqual([]);
 });
+
+for(const width of [1440,390])test(`background duck keyboard play works around the real Hub at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:1000});await mockHub(page);await page.goto('/settings?section=Appearance');
+ await page.locator('.theme-choice').filter({hasText:'Duck Pond'}).click();await page.getByRole('button',{name:'Save',exact:true}).click();await page.goto('/');
+ await expect(page.locator('.pond-duck-lane')).toHaveCount(5);
+ await page.locator('.pond-duck-lane').evaluateAll(lanes=>lanes.forEach(lane=>lane.getAnimations().forEach(a=>a.pause())));
+ const control=page.locator('.pond-play-controls button').first();await control.focus();await control.press('Enter');await expect(page.locator('.pond-held')).toHaveCount(1);await control.press('ArrowRight');await control.press('Enter');
+ await expect(page.locator('.pond-relocated')).toHaveCount(1,{timeout:4000});await expect(page.locator('.pond-toss-duck')).toHaveCount(0);
+ await page.goto('/settings?section=Appearance');await page.locator('.theme-choice').filter({hasText:'Soft Orbit'}).click();await expect(page.locator('.pond-play-layer,.pond-play-controls')).toHaveCount(0);
+});

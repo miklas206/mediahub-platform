@@ -32,3 +32,30 @@
 @media(max-width:600px){.pond-duck-lane{width:80px;}.pond-duck-lane:nth-of-type(5){display:none;}.pond-motion{right:10px;bottom:calc(84px + env(safe-area-inset-bottom));font-size:10px;}.pond-moon{width:42px;}}
 @media(prefers-reduced-motion:reduce){.duck-pond-scene *,.duck-pond-scene *::after{animation:none!important;}}
 :root[data-reduced-motion="true"] .duck-pond-scene *,:root[data-reduced-motion="true"] .duck-pond-scene *::after{animation:none!important;}
+
+/* Direct manipulation lives above the app only while a duck is held/thrown. */
+.pond-play-layer{position:fixed;inset:0;z-index:1000;pointer-events:none;overflow:hidden;}
+.pond-play-layer .pond-toss-duck{position:absolute;left:0;top:0;animation:none;transform-origin:50% 60%;will-change:transform;filter:drop-shadow(0 12px 8px #001b1640);}
+.pond-wing-far{visibility:hidden;}
+.pond-held .pond-wing-far{visibility:visible;}
+.pond-held .pond-wing{transform-box:fill-box;transform-origin:90% 60%;animation:pond-wing-flap .13s ease-in-out infinite alternate;}
+.pond-held .pond-wing-far{animation-delay:-.1s;}
+.pond-away{visibility:hidden;animation-play-state:paused!important;}
+.pond-relocated{animation-name:pond-relocated-swim;animation-delay:0s;}
+html.pond-over-duck,html.pond-over-duck *:not(button):not(a){cursor:grab;}
+html.pond-grabbing,html.pond-grabbing *{cursor:grabbing!important;user-select:none;}
+.pond-play-controls{position:fixed;left:12px;bottom:125px;z-index:1001;pointer-events:none;}
+.pond-play-controls button{position:absolute;width:1px;height:1px;padding:0;border:0;clip-path:inset(50%);overflow:hidden;white-space:nowrap;}
+.pond-play-controls button:focus-visible{position:relative;display:block;clip-path:none;width:auto;max-width:calc(100vw - 24px);height:auto;white-space:normal;padding:10px 14px;background:var(--surface,var(--panel));color:var(--text);border:2px solid var(--accent);pointer-events:auto;}
+.pond-splash{position:absolute;width:var(--splash-size);height:18px;translate:-50% -50%;pointer-events:none;animation:pond-splash-life .95s linear both;}
+.pond-splash::before,.pond-splash::after{content:'';position:absolute;inset:0;border:2px solid var(--pond-ring);border-radius:50%;animation:pond-splash-ring .9s ease-out both;}
+.pond-splash::after{animation-delay:.12s;border-width:1px;}
+.pond-splash i{position:absolute;left:50%;top:40%;width:5px;height:9px;border-radius:60% 60% 50% 50%;background:var(--pond-ring);animation:pond-splash-drop .65s ease-out var(--drop-delay) both;}
+.pond-play-layer[data-paused="true"] *{animation:none!important;}
+@keyframes pond-wing-flap{from{transform:rotate(-40deg) scaleY(.65);}to{transform:rotate(40deg) scaleY(1.2);}}
+@keyframes pond-relocated-swim{from{translate:0 0;}to{translate:var(--duck-drift,24px) -6px;}}
+@keyframes pond-splash-life{0%,99%{opacity:1;}100%{opacity:0;}}
+@keyframes pond-splash-ring{from{transform:scale(.35);opacity:.9;}to{transform:scale(1.9);opacity:0;}}
+@keyframes pond-splash-drop{0%{transform:translate(0,0) scale(.5);opacity:0;}18%{opacity:.9;}65%{transform:translate(var(--splash-x),var(--splash-y)) scale(1);opacity:.8;}100%{transform:translate(calc(var(--splash-x) * 1.1),6px) scale(.3);opacity:0;}}
+@media(prefers-reduced-motion:reduce){.pond-play-layer *{animation:none!important;}}
+:root[data-reduced-motion="true"] .pond-play-layer *{animation:none!important;}
