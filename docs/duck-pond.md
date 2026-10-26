@@ -126,3 +126,20 @@ Friske installationer og opdateringer får CSS fra den medfølgende apppakke;
 kilde-manifestet er opdateret og tre bundletests består. Browserkontrol ved
 1440/768/390/320 px dækker figurer, retning, pause, reduceret bevægelse,
 forældede/blokerede/tomme trafikdata, temaskift og vandret overflow.
+
+### Anden stiger om ved VPN
+
+Anden hopper nu op på en åkande ved VPN-ikonet og fortsætter på bladet.
+Boardingpunktet beregnes fra de faktiske ikonpositioner ved layoutændringer.
+Download- og uploadretningen har hver deres synkroniserede CSS-keyframes;
+and, blad og den målte trafik deler varighed og forsinkelse. Der bruges
+ingen nye timere eller JavaScript-animationsløkker. Pause og reduceret bevægelse
+gælder også bladet. Status, hastighedsmåling og adgang til VPN ændres ikke.
+
+Den ældre medfølgende apprenderer får samme pakkemotor og en afgrænset kobling
+til den eksisterende renderfunktion. Dens almindelige overførselsanimation
+bevares uden for Andedammen. Det gør funktionen tilgængelig ved både frisk
+installation og opdatering, uden at kopiere andre igangværende appfunktioner.
+`frontend/e2e/duck-transfer-boarding.spec.ts` kontrollerer hoppingens placering
+og bladets synlighed i begge retninger ved fire bredder, pause, reduceret
+bevægelse, gamle/blokerede trafikdata og tilbagevenden til et andet tema.

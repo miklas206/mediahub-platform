@@ -105,11 +105,6 @@
   content:"";position:absolute;left:-15%;right:-15%;height:5px;bottom:-1px;
   border:1px solid #b1e4cd55;border-top-color:transparent;border-radius:50%;
 }
-:root[data-look="duck-pond"] .traffic-packet:nth-child(3n)::before {
-  inset:4px 0 0;border-radius:50%;scale:1;
-  background:radial-gradient(ellipse at 65% 37%,#ffe8b8 0 6%,#edb6bf 8% 21%,transparent 23%),conic-gradient(from 35deg,transparent 0deg 42deg,#70b58b 44deg 360deg);
-  box-shadow:0 2px 2px #061f2280;animation-delay:-1.1s;
-}
 /* Keep the stream legible even at very high throughput. Hidden swimmers retain
    their animation events so the existing rate-based retirement still works. */
 :root[data-look="duck-pond"] .traffic-packet:nth-child(n+9) {visibility:hidden;}
@@ -124,3 +119,45 @@
   :root[data-look="duck-pond"] .route-packets .packet-large {width:23px;height:19px;}
   :root[data-look="duck-pond"] .traffic-packet:nth-child(n+5) {visibility:hidden;}
 }
+
+/* VPN boarding shares the packet's duration, delay and travel direction. */
+:root[data-look="duck-pond"] .traffic-packet::before {
+  animation:river-duck-board-down calc(var(--packet-duration) * 1.6) linear infinite both;
+  animation-delay:inherit;
+}
+:root[data-look="duck-pond"] .traffic-packet::after {
+  z-index:-1;left:-18%;right:-18%;height:11px;bottom:3px;border:0;
+  background:conic-gradient(from 35deg,transparent 0deg 36deg,#70b58b 38deg 360deg);
+  box-shadow:0 2px 1px #061f2280,inset 0 1px #b7e3ac77;
+  animation:river-leaf-board-down calc(var(--packet-duration) * 1.6) linear infinite both;
+  animation-delay:inherit;
+}
+:root[data-look="duck-pond"] .packet-lane-upload .traffic-packet::before {animation-name:river-duck-board-up;animation-direction:reverse;}
+:root[data-look="duck-pond"] .packet-lane-upload .traffic-packet::after {animation-name:river-leaf-board-up;animation-direction:reverse;}
+@keyframes river-duck-board-down {0%,31%{transform:translateY(0);}33%{transform:translateY(-12px);}35%,100%{transform:translateY(-5px);}}
+@keyframes river-duck-board-up {0%,31%{transform:translateY(-5px);}33%{transform:translateY(-12px);}35%,100%{transform:translateY(0);}}
+@keyframes river-leaf-board-down {0%,31%{opacity:0;}35%,100%{opacity:1;}}
+@keyframes river-leaf-board-up {0%,31%{opacity:1;}35%,100%{opacity:0;}}
+:root[data-look="duck-pond"] .duck-pond-scene[data-paused="true"] ~ * .route-packets *::after {animation-play-state:paused!important;}
+:root[data-look="duck-pond"][data-reduced-motion="true"] .traffic-packet::before {animation:none;transform:translateY(-5px);}
+:root[data-look="duck-pond"][data-reduced-motion="true"] .traffic-packet::after {animation:none;opacity:1;}
+@media(prefers-reduced-motion:reduce) {
+  :root[data-look="duck-pond"] .traffic-packet::before {animation:none;transform:translateY(-5px);}
+  :root[data-look="duck-pond"] .traffic-packet::after {animation:none;opacity:1;}
+}
+
+.route-packets {display:none;}
+:root[data-look="duck-pond"] .download-route {position:relative;isolation:isolate;align-items:flex-start;}
+:root[data-look="duck-pond"] .download-route-node {position:relative;z-index:1;}
+:root[data-look="duck-pond"] .route-icon {background:var(--surface);}
+:root[data-look="duck-pond"] .download-route-link {border:0;}
+:root[data-look="duck-pond"] .download-route-link i {display:none;}
+:root[data-look="duck-pond"] .route-packets {display:block;position:absolute;z-index:0;transform:translateY(-50%);pointer-events:none;}
+:root[data-look="duck-pond"] .route-packets::before,:root[data-look="duck-pond"] .route-packets::after {content:"";position:absolute;left:0;right:0;}
+:root[data-look="duck-pond"] .packet-lane {position:absolute;inset:0;}
+:root[data-look="duck-pond"] .route-packets .traffic-packet {position:absolute;left:0;display:block;translate:0 -50%;animation-name:route-packet-travel;animation-timing-function:linear;animation-iteration-count:infinite;animation-fill-mode:both;}
+:root[data-look="duck-pond"] .packet-lane-upload .traffic-packet {animation-direction:reverse;}
+:root[data-look="duck-pond"] .download-flow[data-active="false"] .route-packets {visibility:hidden;}
+@keyframes route-packet-travel {from{transform:translateX(-20px);}to{transform:translateX(var(--packet-distance));}}
+:root[data-look="duck-pond"][data-reduced-motion="true"] .traffic-packet {animation:none!important;left:var(--packet-rest);}
+@media(prefers-reduced-motion:reduce) {:root[data-look="duck-pond"] .traffic-packet {animation:none!important;left:var(--packet-rest);}}

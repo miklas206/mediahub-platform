@@ -9,9 +9,10 @@
   const routePaths=['<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>','<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/>','<path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/>','<path d="m5 4-3 12v4h20v-4L19 4Z M2 16h20M17 18h2"/>'];
   for(const [index,label] of ['Internet','MediaVPN','MediaSeed','Media storage'].entries()) {
     if(index) {const link=element('span',undefined,'download-route-link');link.setAttribute('aria-hidden','true');link.append(element('i',undefined,'packet-down'),element('i',undefined,'packet-up'));route.append(link);}
-    const node=element('span',undefined,'download-route-node');node.append(svgIcon(routePaths[index]),element('strong',t(label)));route.append(node);
+    const node=element('span',undefined,'download-route-node');if(index===1)node.classList.add('route-vpn');node.append(svgIcon(routePaths[index]),element('strong',t(label)));route.append(node);
   }
   flow.append(description,route);workspace.querySelector('.seed-stats').before(flow);
+  const packetFlow=MediaSeedPackets.mount(route);
   for(const [index,article] of [...workspace.querySelectorAll('.seed-stats article')].entries()) {
     const paths=['<path d="M12 3v18m-6-6 6 6 6-6"/>','<path d="M12 21V3m-6 6 6-6 6 6"/>','<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M4 9h16M4 15h16"/>'];
     const mark=svgIcon(paths[index]);mark.className='stat-icon';article.querySelector(':scope > span').replaceWith(mark);
@@ -44,11 +45,13 @@
   function openEditor(kind){if(appRole!=='administrator')return;editors[kind]?.showModal();setTimeout(syncBadges,0);}
   function render(){
     const active=document.querySelector('#connection-flow').dataset.state==='active' && downloadsEnabled;
-    const traffic=torrentSnapshotValid?torrentTraffic():null;
+    const age=Date.now()-lastTorrentSample;
+    const traffic=torrentSnapshotValid&&age>=0&&age<30000?torrentTraffic():null;
     flow.dataset.active=String(active);flow.dataset.download=String(active&&!!traffic&&traffic.dl_info_speed>0);flow.dataset.upload=String(active&&!!traffic&&traffic.up_info_speed>0);
     const status=active?traffic&&(traffic.dl_info_speed>0||traffic.up_info_speed>0)?'Protected transfers active':'VPN ready · waiting for peers':'Transfers blocked · check VPN';
     description.textContent=t(status);
     flow.hidden=document.querySelector('#downloads').hidden;
+    packetFlow.update(traffic?.dl_info_speed,traffic?.up_info_speed,active&&!!traffic&&!document.hidden&&!flow.hidden);
     const runtime=document.querySelector('#connection-country').textContent;
     vpn.replaceChildren(element('span',t('Connection')),element('strong',active?t('VPN verified'):t('Status cannot be verified')),element('small',active?runtime:t('Check the connection under VPN')));
     if(active)vpn.append(element('small',document.querySelector('#connection-ip').textContent+' · '+document.querySelector('#connection-port').textContent),element('small',document.querySelector('#connection-checked').textContent));
