@@ -66,17 +66,43 @@ Selve dammens grafik og animation er skrevet til MediaHubs fælles temakontrakt.
 
 ## Status og tilbageførsel
 
-Kilden klargøres som MediaHub 0.6.75 og skubbes til main. Dette er ikke en live
-installation. Projektets AGENTS.md kræver udtrykkelig tilladelse før produktionen
-opdateres eller genstartes. Intet kørende system er ændret under udvikling/test.
+Installeret live efter brugerens udtrykkelige godkendelse 26. oktober 2026:
+MediaHub **0.6.75**, runtime-commit `17763261c8a2f54b3bf574a966af10025a34673a`.
+Core-image, projektversion, rapporteret version og hostens installerede markører
+stemmer overens. MediaSeed og MediaVPN har afgrænsede temaoverlays oven på deres
+faktisk kørende images; deres øvrige kildekode og funktioner er bevaret.
+MediaVPNs HTML bevarer den installerede 0.2.31-version. MediaUpload **0.1.38**
+er installeret i sin egen CT109, mens Studio i CT102 fortsat fungerer som gateway.
+Temaet er valgbart; eksisterende kontopræferencer er ikke overskrevet.
 
-Ved godkendt udrulning: tag konsistente backups, opdatér kun de nødvendige
-app-/Core-services og bevar mounts, secrets, VPN-tunneler og torrentklient. Bevar
-de nuværende appimages og øvrige lokale rettelser. En scoped theme-overlay må
-ikke erstatte de nyere MediaSeed-funktioner med en ældre medfølgende appkodebase.
-Tilbageførsel bruger de foregående images og Compose-filer. Ingen skemaændringer
-kræver databasegendannelse. Det gemte Duck Pond-valg kan kasseres/nulstilles via
-den almindelige temakontrol; andre temaer og præferencer er bevaret.
+Private backups og buildkontekster på de respektive værter:
+
+- CT107 Core: `/opt/mediahub/duck-pond-16b5259361e830fc`
+- CT107 MediaSeed: `/opt/mediahub/local-apps/mediaseed/duck-pond-0b585138833f16a7`
+- CT107 MediaVPN: `/opt/mediahub/local-apps/mediavpn/duck-pond-0e03cafbbdb0b6ef`
+- CT109 MediaUpload: `/opt/mediaupload/duck-pond-before-0.1.38-r2`
+
+Compose-filer og konsistente SQLite-backups er bevaret i private mapper.
+MediaUploads syv afsluttede jobs samt hashes for opsætning, credentials og
+bilag er sammenlignet før/efter og bevaret. Ingen brugeruploads eller ændringer
+af mediefiler er udført som verifikation. Aktive VPN-tunneler er ikke erstattet.
+Webapp-genstart kan aktivere de eksisterende supervisorers afstemning af klienter
+og leases; det er ikke en ny tunnelkonfiguration eller en lækagetest.
+
+Live sundhedstjek består for alle fire apps, og installerede filer matcher
+udrulningens kildefiler. 13 ekstra browserkontroller består med faktisk serverede
+assets: Hub ved 1440/768/390/320 px, begge SSO-apps ved 1440/390/320 px og
+MediaUpload ved 1440/390/320 px. Browsernes API-/kontosvar er syntetiske, så gem,
+SSO-arv og genindlæsning ikke ændrer rigtige konti eller opretter brugerjobs.
+Dette er ikke et gennemført login med brugerens konto.
+
+Tilbageførsel: gendan den respektive `compose.before.json` og start kun den
+berørte `core`/`app` med `--no-deps --no-build`; de tidligere images er bevaret.
+For Core skal også `installed-version` og `updates/installed-source.json`
+gendannes fra samme backup, så markører og runtime stemmer. MediaUpload-backuppen
+bevarer både den foregående installerede Python-pakke med metadata og source.
+Ingen skemaændringer kræver databasegendannelse. Vælg et tidligere tema inden
+en tilbageførsel, hvis Andedammen er gemt; andre temaer og præferencer er bevaret.
 
 MediaUpload 0.1.38 udvider kun sin præcise, gateway-beskyttede statiske allowlist
 med de fire temafiler. Gateway-login, CSRF og den stramme eksisterende CSP er
