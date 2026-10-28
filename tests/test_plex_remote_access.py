@@ -146,7 +146,8 @@ async def test_hub_requires_distinct_port_and_public_identity():
             }
         )
     )
-    shared = SimpleNamespace(bindings=lambda: [{"id": "plex"}], target=lambda _: (None, client))
+    shared = SimpleNamespace(bindings=lambda: [{"id": "plex"}], target=lambda _: (None, client),
+                             peer_id=lambda _: "owned-peer", assignment=lambda _: None)
     service = SimpleNamespace(
         shared_vpn=shared,
         cloudflare_management=SimpleNamespace(

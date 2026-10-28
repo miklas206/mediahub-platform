@@ -20,6 +20,15 @@ class PlexForwarding:
         shared = getattr(self.svc, "shared_vpn", None)
         return bool(shared and any(row["id"] == "plex" for row in shared.bindings()))
 
+    def dedicated_profile(self, state):
+        shared = self.svc.shared_vpn
+        binding = next((row for row in shared.bindings() if row["id"] == "plex"), None)
+        if binding is None:
+            return None
+        peer = shared.peer_id(binding)
+        profile = shared.assignment(peer)
+        return profile if profile and profile != state.get("profileId") else None
+
     async def target(self):
         _, client = self.svc.shared_vpn.target("plex")
         state = await client.request("GET", "/v1/shared-vpn/plex")
@@ -58,7 +67,7 @@ class PlexForwarding:
         result.setdefault("ready", False)
         if (
             not state.get("plexPortEnabled")
-            or not self.gateway.gateway.get("providerReady")
+            or not (result.get("dedicatedProfile") or self.gateway.gateway.get("providerReady"))
             or not -5 <= time.time() - (result.get("verifiedAt") or 0) <= 90
         ):
             result.update(ready=False)
@@ -107,18 +116,21 @@ class PlexForwarding:
                 lastVerified=time.time() if verified else None,
             )
             state = self.gateway.state()
+            dedicated = self.dedicated_profile(state)
+            if dedicated:
+                gateway = provider
             lease = gateway.get("plexPort") or {}
             endpoint = state.get("plexPortStatus") or {}
             age = time.time() - (endpoint.get("verifiedAt") or 0)
-            # The inbound gateway may intentionally use a different profile from
-            # Plex's outbound VPN. Validate its own saved profile and Plex identity.
+            # Dedicated profiles use their own primary port; the legacy shared
+            # gateway keeps its independently leased Plex port.
             same_profile = bool(
-                state.get("profileId") and state["profileId"] == gateway.get("profileId")
+                (dedicated or state.get("profileId")) == gateway.get("profileId")
             )
             leased = bool(
                 verified
                 and same_profile
-                and gateway.get("providerReady")
+                and (gateway.get("ready") if dedicated else gateway.get("providerReady"))
                 and lease.get("ready")
                 and state.get("plexPortEnabled")
             )
@@ -127,6 +139,7 @@ class PlexForwarding:
             public_ready = bool(
                 leased
                 and endpoint.get("ready")
+                and (not dedicated or endpoint.get("dedicatedProfile") == dedicated)
                 and -5 <= age <= 90
                 and endpoint.get("publicIp") == lease.get("publicIp")
                 and endpoint.get("publicPort") == lease.get("publicPort")
@@ -148,12 +161,25 @@ class PlexForwarding:
 
     async def apply(self, state, reply):
         enabled = bool(state.get("plexPortEnabled"))
+        dedicated = self.dedicated_profile(state) if enabled else None
+        previous = state.get("plexForwardingProfile")
+        if previous and previous != dedicated:
+            await self.svc.shared_vpn.vpn("DELETE", "/profiles/" + previous + "/plex")
+            state.pop("plexForwardingProfile", None)
         if not enabled:
             if state.get("plexPortApplied") and self.installed():
                 _, client = self.svc.shared_vpn.target("plex")
                 await client.request("PUT", "/v1/plex/shared-remote-access", {"enabled": False})
             state.update(plexPortApplied=False, plexPortStatus={"ready": False})
             return
+        if dedicated:
+            shared = self.svc.shared_vpn
+            binding, _ = shared.target("plex")
+            peer = shared.peer_id(binding)
+            if shared.assignment_pending(peer):
+                raise DomainError("vpn_assignment_pending", "Wait for the Plex VPN assignment", 409)
+            reply = await shared.vpn("PUT", "/profiles/" + dedicated + "/plex", {"peerId": peer})
+            state["plexForwardingProfile"] = dedicated
         lease = reply.get("plexPort") or {}
         if not lease.get("ready"):
             state["plexPortStatus"] = {
@@ -165,7 +191,7 @@ class PlexForwarding:
         if (
             type(port) is not int
             or not 1 <= port <= 65535
-            or port in {reply.get("publicPort"), reply.get("torrentPort")}
+            or (not dedicated and port in {reply.get("publicPort"), reply.get("torrentPort")})
             or not ipaddress.IPv4Address(address).is_global
         ):
             raise DomainError(
@@ -189,6 +215,7 @@ class PlexForwarding:
         verified = await self.probe(address, port, response.get("identityHash"))
         state["plexPortStatus"] = {
             "ready": verified,
+            "dedicatedProfile": dedicated,
             "verifiedAt": time.time() if verified else None,
             "publicPort": port,
             "publicIp": address,

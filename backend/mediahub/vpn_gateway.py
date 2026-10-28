@@ -631,14 +631,16 @@ class VPNGateway:
             state = self.state()
             if enabled:
                 await self.plex_forwarding.target()
-                shared = await self.svc.shared_vpn.vpn()
+                dedicated = self.plex_forwarding.dedicated_profile(state)
+                shared = await self.svc.shared_vpn.vpn(path="/profiles/" + dedicated) if dedicated else await self.svc.shared_vpn.vpn()
                 profile = shared.get("profileId")
                 if not shared.get("enabled") or not re.fullmatch(r"[a-f0-9]{24}", str(profile or "")):
                     raise DomainError("plex_shared_vpn_required", "Connect Plex to the shared VPN before enabling its separate port", 409)
-                if state["enabled"] and state.get("profileId") != profile:
-                    raise DomainError("vpn_conflict", "Select the same VPN profile for Plex and app domains", 409)
+                if not dedicated:
+                    if state["enabled"] and state.get("profileId") != profile:
+                        raise DomainError("vpn_conflict", "Select the same VPN profile for Plex and app domains", 409)
+                    state["profileId"] = profile
                 await self.check_legacy_provider()
-                state["profileId"] = profile
             state.update(plexPortEnabled=enabled, plexPortManaged=True, plexPortStatus={"ready": False}, revision=state.get("revision", 0) + 1, ownerId=state.get("ownerId") or uuid4().hex)
             self.save(state)
         self.schedule()
@@ -997,14 +999,15 @@ class VPNGateway:
                     self.gateway = self.sanitized_gateway(await self.vpn())
                     self.save(state)
                     return self.snapshot()
+                dedicated_plex = self.plex_forwarding.dedicated_profile(state) if state.get("plexPortEnabled") else None
                 payload = {
-                    "enabled": bool((state["enabled"] and active) or state.get("plexPortEnabled")),
+                    "enabled": bool((state["enabled"] and active) or (state.get("plexPortEnabled") and not dedicated_plex)),
                     "profileId": state["profileId"],
                     "routes": machine_routes,
                 }
                 if state.get("plexPortManaged"):
                     payload["plex"] = None
-                    if state.get("plexPortEnabled") and payload["enabled"]:
+                    if state.get("plexPortEnabled") and payload["enabled"] and not dedicated_plex:
                         try:
                             payload["plex"] = await self.plex_forwarding.target()
                         except DomainError as error:

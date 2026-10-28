@@ -26,6 +26,7 @@ def fixture():
     provider = {"ready": True, "profileId": "profile-a", "publicIp": "8.8.8.8"}
     web = {"providerReady": True, "profileId": "profile-a", "plexPort": endpoint}
     shared = SimpleNamespace(
+        bindings=lambda: [{"id": "plex", "hostId": "local"}],
         target=lambda _: ({"hostId": "local", "id": "plex"}, None),
         peer_id=lambda _: "peer",
         assignment_pending=lambda _: False,
