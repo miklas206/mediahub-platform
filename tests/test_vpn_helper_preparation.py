@@ -18,7 +18,7 @@ def test_fresh_install_builds_helpers_and_pulls_provider_without_starting_anythi
 ):
     source = tmp_path / "source"
     for folder, files in [
-        ("relay_image", ["Dockerfile", "runtime.py"]),
+        ("relay_image", ["Dockerfile", "runtime.py", "plex_forward.py"]),
         ("gateway_image", ["Dockerfile", "config.py", "observer.py", "natpmp.py", "plex_port.py"]),
     ]:
         directory = source / "mediavpn" / folder

@@ -71,7 +71,7 @@ class SharedVPN:
         fingerprint = hashlib.sha256(
             b"".join(
                 (source / name).read_bytes().replace(b"\r\n", b"\n")
-                for name in ("Dockerfile", "runtime.py")
+                for name in ("Dockerfile", "runtime.py", "plex_forward.py")
             )
         ).hexdigest()
         tag = "mediahub-vpn-relay:" + fingerprint[:16]

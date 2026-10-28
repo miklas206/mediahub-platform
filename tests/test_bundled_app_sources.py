@@ -32,7 +32,7 @@ def test_reviewed_bundle_matches_manifest_and_relay_protocol():
         assert hashlib.sha256(content).hexdigest() == digest, name
         assert path.suffix not in {".token", ".sqlite", ".key", ".pem", ".conf"}
         assert path.name != ".env"
-    for name in ("runtime.py", "Dockerfile"):
+    for name in ("runtime.py", "Dockerfile", "plex_forward.py"):
         assert (bundle / "mediavpn/mediavpn/relay_image" / name).read_bytes().replace(
             b"\r\n", b"\n"
         ) == (root / "agent/relay_image" / name).read_bytes().replace(b"\r\n", b"\n")

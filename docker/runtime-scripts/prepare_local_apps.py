@@ -159,6 +159,8 @@ def prepare_vpn_helpers(context, root):
         if not source.is_dir():
             # Older reviewed bundles only included the relay; never invent sources.
             continue
+        if kind == "relay" and (source / "plex_forward.py").is_file():
+            names = (*names, "plex_forward.py")
         digest = hashlib.sha256(
             b"".join((source / name).read_bytes().replace(b"\r\n", b"\n") for name in names)
         ).hexdigest()
