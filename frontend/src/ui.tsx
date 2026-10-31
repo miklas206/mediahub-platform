@@ -1,3 +1,4 @@
+import { NavIcon } from "./nav-icon";
 import {
   lazy,
   Suspense,
@@ -1071,11 +1072,11 @@ function Shell({
       </div>
       <nav className="mobile-dock" aria-label={t("Quick navigation")}>
         <NavLink to="/" end>
-          <LayoutDashboard size={19} />
+          <NavIcon name="apps" size={19} />
           <span>{t("Home")}</span>
         </NavLink>
         <NavLink to="/settings">
-          <Settings2 size={19} />
+          <NavIcon name="settings" size={19} />
           <span>{t("Settings")}</span>
         </NavLink>
       </nav>

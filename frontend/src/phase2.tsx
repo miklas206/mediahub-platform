@@ -1,3 +1,4 @@
+import { NavIcon } from "./nav-icon";
 import { isFjordHubInstalled, type FjordHubInstallation } from "./fjordhub-status";
 import { getLocale, translateText, t } from "./i18n";
 import { ServiceIcon } from "./service-icon";
@@ -1860,7 +1861,7 @@ export function SettingsExtensions({
             key={tabName}
             onClick={() => setTab(tabName)}
           >
-            {t(tabName)}
+            <NavIcon name={tabName} size={18}/>{t(tabName)}
           </button>
         ))}
       </div>

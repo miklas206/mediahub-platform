@@ -2,7 +2,7 @@ import { usePageSnapshot } from "./use-service-snapshot";
 import { StopAppButton } from "./app-controls";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, Search, Settings2 } from "lucide-react";
+import { Search, Settings2 } from "lucide-react";
 import { AppUninstall } from "./app-uninstall";
 import type { AppInfo, InstalledAppInfo } from "./contracts";
 import type { CatalogApp } from "./phase2-types";
@@ -564,7 +564,7 @@ export function HubHome({
                 <div className="hub-card-main">
                   <span className="hub-app-icon">
                     {entry.id === "healthcheck" ? (
-                      <Activity size={29} />
+                      <ServiceIcon packageId="healthcheck" size={29} />
                     ) : (
                       <ServiceIcon packageId={entry.id} size={32} />
                     )}

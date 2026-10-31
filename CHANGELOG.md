@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.78
+
+- Add theme-aware Prisme app logos and a shared open navigation icon family across MediaHub and bundled MediaSeed/MediaVPN. Preserve FjordHub artwork, settings, labels and navigation behavior.
+- Include fresh-install assets, versioned browser caches, native shortcut exports and unique SVG gradients for repeated logos.
+
 ## 0.6.75
 
 - Add Andedammen / Duck Pond across MediaHub and its independently themed MediaSeed/MediaVPN apps: original animated ducks, ripples, reeds, lily pads and fireflies, with pause, reduced-motion and background-tab support. Preserve existing palettes, saved preferences and app behavior.

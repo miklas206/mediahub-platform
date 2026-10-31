@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" class="brand-mark" data-brand="videodownloader" data-brand-version="prisme-1" aria-hidden="true"><defs><linearGradient id="prisme-videodownloader-9-front" class="prisme-front" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-videodownloader-9-back" class="prisme-back" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-videodownloader-9-fold" class="prisme-fold" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-videodownloader-9-light" class="prisme-light" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><radialGradient id="prisme-videodownloader-9-orb" cx="30%" cy="25%" r="75%"><stop offset="0" class="prisme-orb-light"/><stop offset=".42" class="prisme-mid"/><stop offset="1" class="prisme-end"/></radialGradient></defs><style>.brand-mark{display:inline-block;flex-shrink:0;color:var(--accent,#25c9ed);vertical-align:middle;stroke:none!important;overflow:visible}
+.brand-mark path{stroke:color-mix(in srgb,var(--accent,#25c9ed) 60%,white)!important;stroke-width:.12;stroke-linejoin:round;paint-order:stroke fill}
+.prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 65%,white)}
+.prisme-mid{stop-color:var(--accent,#25c9ed)}
+.prisme-end{stop-color:var(--indigo,var(--secondary,#8d9cff))}
+.prisme-back .prisme-start{stop-color:var(--indigo,var(--secondary,#8d9cff))}
+.prisme-back .prisme-mid{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 60%,var(--indigo,var(--secondary,#8d9cff)))}
+.prisme-back .prisme-end,.prisme-fold .prisme-end{stop-color:color-mix(in srgb,var(--indigo,var(--secondary,#8d9cff)) 65%,black)}
+.prisme-fold .prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 45%,black)}
+.prisme-light .prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 35%,white)}
+.prisme-light .prisme-end{stop-color:var(--accent,#25c9ed)}
+.sidebar-heading .brand .brand-mark{width:29px;height:29px}.shell-brand .brand .brand-mark{width:28px;height:28px}.mobile-brand .brand .brand-mark{width:26px;height:26px}
+.prisme-nav-icon{display:inline-block;vertical-align:middle;flex-shrink:0;color:inherit}
+.settings-tabs button{display:inline-flex;align-items:center;gap:8px}
+[data-prisme-nav]{display:inline-flex;align-items:center;gap:8px}
+.app-nav-icon>.prisme-nav-icon{width:20px;height:20px}
+@media(forced-colors:active){.brand-mark path{fill:CanvasText!important}}
+
+.prisme-orb-light{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 20%,white)}
+</style><path d="M4.48 6.08Q4.48 3.52 7.04 5.12L24.64 15.36Q26.56 16.64 26.56 19.2V23.04H30.08L24.32 29.76 18.56 23.04H21.76V19.2L9.28 11.84V24.96Q9.28 27.2 7.04 25.92L4.48 24.32Z" fill="url(#prisme-videodownloader-9-front)" fill-rule="evenodd"/><path d="M4.48 8.64 9.28 11.84V24.96Q9.28 27.2 7.04 25.92L4.48 24.32Z" fill="url(#prisme-videodownloader-9-back)" fill-rule="evenodd"/><path d="M9.28 11.84 16.96 16.32 9.28 20.8Z" fill="url(#prisme-videodownloader-9-fold)" fill-rule="evenodd"/><path d="M4.48 6.08Q4.48 3.52 7.04 5.12L24.64 15.36Q26.56 16.64 26.56 19.2L21.76 19.2 7.68 10.88Q4.48 9.28 4.48 6.08Z" fill="url(#prisme-videodownloader-9-light)" fill-rule="evenodd"/></svg>

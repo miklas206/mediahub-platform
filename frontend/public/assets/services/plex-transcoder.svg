@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" class="brand-mark" data-brand="plex-transcoder" data-brand-version="prisme-1" aria-hidden="true"><defs><linearGradient id="prisme-plex-transcoder-27-front" class="prisme-front" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-plex-transcoder-27-back" class="prisme-back" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-plex-transcoder-27-fold" class="prisme-fold" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><linearGradient id="prisme-plex-transcoder-27-light" class="prisme-light" gradientUnits="userSpaceOnUse" x1="5" y1="4" x2="28" y2="30"><stop offset="0" class="prisme-start"/><stop offset=".48" class="prisme-mid"/><stop offset="1" class="prisme-end"/></linearGradient><radialGradient id="prisme-plex-transcoder-27-orb" cx="30%" cy="25%" r="75%"><stop offset="0" class="prisme-orb-light"/><stop offset=".42" class="prisme-mid"/><stop offset="1" class="prisme-end"/></radialGradient></defs><style>.brand-mark{display:inline-block;flex-shrink:0;color:var(--accent,#25c9ed);vertical-align:middle;stroke:none!important;overflow:visible}
+.brand-mark path{stroke:color-mix(in srgb,var(--accent,#25c9ed) 60%,white)!important;stroke-width:.12;stroke-linejoin:round;paint-order:stroke fill}
+.prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 65%,white)}
+.prisme-mid{stop-color:var(--accent,#25c9ed)}
+.prisme-end{stop-color:var(--indigo,var(--secondary,#8d9cff))}
+.prisme-back .prisme-start{stop-color:var(--indigo,var(--secondary,#8d9cff))}
+.prisme-back .prisme-mid{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 60%,var(--indigo,var(--secondary,#8d9cff)))}
+.prisme-back .prisme-end,.prisme-fold .prisme-end{stop-color:color-mix(in srgb,var(--indigo,var(--secondary,#8d9cff)) 65%,black)}
+.prisme-fold .prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 45%,black)}
+.prisme-light .prisme-start{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 35%,white)}
+.prisme-light .prisme-end{stop-color:var(--accent,#25c9ed)}
+.sidebar-heading .brand .brand-mark{width:29px;height:29px}.shell-brand .brand .brand-mark{width:28px;height:28px}.mobile-brand .brand .brand-mark{width:26px;height:26px}
+.prisme-nav-icon{display:inline-block;vertical-align:middle;flex-shrink:0;color:inherit}
+.settings-tabs button{display:inline-flex;align-items:center;gap:8px}
+[data-prisme-nav]{display:inline-flex;align-items:center;gap:8px}
+.app-nav-icon>.prisme-nav-icon{width:20px;height:20px}
+@media(forced-colors:active){.brand-mark path{fill:CanvasText!important}}
+
+.prisme-orb-light{stop-color:color-mix(in srgb,var(--accent,#25c9ed) 20%,white)}
+</style><path d="M4.48 6.4H23.04V2.88L30.08 8.96 23.04 15.04V11.2H4.48Z" fill="url(#prisme-plex-transcoder-27-front)" fill-rule="evenodd"/><path d="M27.52 25.6H8.96V29.12L1.92 23.04 8.96 16.96V20.8H27.52Z" fill="url(#prisme-plex-transcoder-27-back)" fill-rule="evenodd"/></svg>

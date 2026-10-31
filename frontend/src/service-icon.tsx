@@ -39,6 +39,9 @@ export function ServiceIcon({
   if (appId === "mediaseed" || appId === "seedbox") return <BrandIcon brand="mediaseed" size={size} className={className} {...props} />;
   if (appId === "mediavpn") return <BrandIcon brand="mediavpn" size={size} className={className} {...props} />;
   if (/mediahub.*core|^mediahub$|^core$/.test(id)) return <BrandIcon brand="mediahub" size={size} className={className} {...props} />;
+  const prismBrands = {healthcheck:'healthcheck',mediaupload:'mediaupload',videodownloader:'videodownloader','video-downloader':'videodownloader',plex:'plex',jellyfin:'jellyfin',qbittorrent:'qbittorrent',sonarr:'sonarr',radarr:'radarr',prowlarr:'prowlarr',autobrr:'autobrr','plex-transcoder':'plex-transcoder','plex-gpu':'plex-transcoder','plex-gpu-transcoder':'plex-transcoder'} as const;
+  const prism = prismBrands[appId as keyof typeof prismBrands];
+  if(prism) return <BrandIcon brand={prism} size={size} className={className} {...props} />;
   const Fallback = fjordFallbacks[appId as keyof typeof fjordFallbacks];
   if (Fallback)
     return (
