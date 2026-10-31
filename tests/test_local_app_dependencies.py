@@ -527,3 +527,47 @@ def test_core_and_app_preparation_preserves_explicit_nas_roots_and_vpn_mappings(
             "MEDIAVPN_MEDIASEED_STORAGE"
         ]
     ) == [nas]
+
+
+def test_local_helper_reuses_only_matching_owned_image(monkeypatch):
+    image = 'mediahub-mediaseed-converter:synthetic'
+    digest = 'sha256:' + 'a' * 64
+    owner = {'Image': digest, 'Config': {'Image': image, 'Labels': {
+        'com.docker.compose.project': 'mediahub-mediaseed',
+        'com.docker.compose.service': 'conversion-worker'}}}
+    calls = []
+    def run(*args):
+        calls.append(args)
+        return json.dumps([{'Id': digest}])
+    monkeypatch.setattr(module, 'run', run)
+    assert module.owned_local_image(image, [owner], 'mediahub-mediaseed', 'conversion-worker') == digest
+    assert module.owned_local_image(digest, [owner], 'mediahub-mediaseed', 'conversion-worker') == digest
+    assert all(args[:3] == ('docker', 'image', 'inspect') for args in calls)
+    assert module.owned_local_image('lscr.io/linuxserver/qbittorrent:latest', [], 'p', 'q') is None
+    for owners, project, service in [([], 'mediahub-mediaseed','conversion-worker'), ([owner], 'foreign', 'conversion-worker'), ([owner], 'mediahub-mediaseed','foreign')]:
+        with pytest.raises(ValueError): module.owned_local_image(image, owners, project, service)
+    monkeypatch.setattr(module,'run',lambda *args:json.dumps([{'Id':'sha256:'+'b'*64}]))
+    with pytest.raises(ValueError):module.owned_local_image(image,[owner],'mediahub-mediaseed','conversion-worker')
+
+
+@pytest.mark.parametrize('fault', [None, 'missing', 'different', 'readonly', 'outside'])
+def test_custom_seeding_roots_survive_updates_only_with_verified_binds(tmp_path, fault):
+    root=tmp_path/'hub';folder=root/'local-apps/mediaseed';folder.mkdir(parents=True)
+    media=tmp_path/'media';source=media/'Converted Films';source.mkdir(parents=True)
+    (root/'agent').mkdir();(root/'agent/container-apps.json').write_text(json.dumps({'requiredMounts':{str(media):'synthetic'}}))
+    target='/downloads/media/converted-movies'
+    bind={'type':'bind','source':str(source),'target':target,'read_only':False}
+    cfg={'name':'mediahub-mediaseed','services':{'app':{'environment':{'MEDIASEED_STORAGE_ROOTS':json.dumps([{'id':'converted-movies','label':'Converted','path':target}])},'volumes':[dict(bind)]},'qbittorrent':{'volumes':[dict(bind)]}}}
+    if fault=='missing':cfg['services']['qbittorrent']['volumes']=[]
+    if fault=='different':cfg['services']['qbittorrent']['volumes'][0]['source']=str(media)
+    if fault=='readonly':cfg['services']['qbittorrent']['volumes'][0]['read_only']=True
+    if fault=='outside':
+        for service in cfg['services'].values():service['volumes'][0]['source']=str(tmp_path)
+    (folder/'compose.json').write_text(json.dumps(cfg))
+    if fault:
+        with pytest.raises(ValueError):module.retained_media_storage(root,[])
+    else:
+        expected=[{'id':'converted-movies','label':'Converted','path':target,'source':str(source)}]
+        assert module.retained_media_storage(root,[])==expected
+        assert module.retained_media_storage(root,expected)==expected
+        assert json.loads((folder/'compose.json').read_text())==cfg

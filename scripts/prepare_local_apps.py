@@ -412,6 +412,60 @@ def approved_media_storage(root):
     return locations
 
 
+def retained_media_storage(root, locations):
+    """Keep extra seeding roots already approved by both owned MediaSeed services."""
+    saved = root / "local-apps/mediaseed/compose.json"
+    if not saved.is_file():
+        return locations
+    cfg = json.loads(saved.read_text())
+    if cfg.get("name") != "mediahub-mediaseed":
+        raise ValueError("MediaSeed storage ownership changed")
+    services = cfg["services"]
+    previous = json.loads(services["app"].get("environment", {}).get("MEDIASEED_STORAGE_ROOTS", "[]"))
+    known = {row["id"] for row in locations}
+    extras = [row for row in previous if row["id"] not in known and not row["id"].startswith("nas-")]
+    if not extras:
+        return locations
+    policy = json.loads((root / "agent/container-apps.json").read_text())
+    roots = set(policy.get("requiredMounts", {})) | set(policy.get("requiredFilesystemUuids", {}))
+    retained = list(locations)
+    for row in extras:
+        identifier = row["id"]
+        target = "/downloads/media/" + identifier
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", identifier) or row.get("path") != target or identifier in known:
+            raise ValueError("Invalid retained media storage identifier")
+        mounts = []
+        for service in ("app", "qbittorrent"):
+            matches = [v for v in services.get(service, {}).get("volumes", []) if isinstance(v, dict) and v.get("target") == target]
+            if len(matches) != 1 or matches[0].get("type") != "bind" or matches[0].get("read_only", False):
+                raise ValueError("Retained media storage requires matching writable owned binds")
+            mounts.append(matches[0]["source"])
+        source = Path(mounts[0])
+        if mounts[0] != mounts[1] or not source.is_absolute() or source.resolve(strict=True) != source or not source.is_dir() or not any(source.is_relative_to(Path(base)) for base in roots):
+            raise ValueError("Retained media storage is outside verified host storage")
+        retained.append({"id": identifier, "label": row["label"], "path": target, "source": str(source)})
+        known.add(identifier)
+    return retained
+
+
+def owned_local_image(image, before, project, service):
+    """Pin installed local helper images; they are not registry downloads."""
+    if not (image.startswith("mediahub-") and "/" not in image or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
+        return None
+    owners = [row for row in before if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.project") == project
+              and row["Config"]["Labels"].get("com.docker.compose.service") == service]
+    if len(owners) != 1:
+        raise ValueError("Local helper image requires an existing owned service")
+    owner = owners[0]
+    if image not in (owner.get("Image"), owner["Config"].get("Image")):
+        raise ValueError("Local helper image reference changed")
+    inspected = json.loads(run("docker", "image", "inspect", image))[0]
+    identifier = inspected.get("Id", "")
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}", identifier) or owner.get("Image") != identifier:
+        raise ValueError("Local helper image identity changed")
+    return identifier
+
+
 def configure_media_storage(cfg, locations):
     previous = json.loads(
         cfg["services"]["app"].get("environment", {}).get("MEDIASEED_STORAGE_ROOTS", "[]")
@@ -670,7 +724,7 @@ def provision(
     if not app:
         prepare_host_metrics(root, hub_compose)
     browser_origin = hub_browser_origin(hub_compose, lan)
-    locations = approved_media_storage(root)
+    locations = retained_media_storage(root, approved_media_storage(root))
     if not app:
         prepare_storage_host(root, lan, source, locations)
     # Domain changes must invalidate the marker too, without changing internal API URLs.
@@ -813,6 +867,10 @@ def provision(
                     else "mediahub-" + kind + ":bundled-" + digest[:16]
                 )
             elif "image" in values and rebuilding:
+                local_image = owned_local_image(values["image"], before, project, service)
+                if local_image:
+                    values["image"] = local_image
+                    continue
                 run("docker", "pull", values["image"])
                 image = json.loads(run("docker", "image", "inspect", values["image"]))[0]
                 values["image"] = image["RepoDigests"][0]
@@ -838,12 +896,14 @@ def provision(
         )
         command = ["docker", "compose", "-p", project, "-f", str(compose_path)]
         try:
-            if approved_media_storage(root) != locations:
+            if retained_media_storage(root, approved_media_storage(root)) != locations:
                 raise ValueError("Approved media storage changed during preparation")
             compose_path.write_text(json.dumps(cfg))
             if rebuilding:
                 build_app_images(command, cfg, kind, context, root)
             services = ["app", "sso-proxy"] if kind == "mediavpn" else ["app", "qbittorrent"]
+            # Auxiliary workers keep their current jobs; update only selected app services.
+            running = [service for service in running if service in services]
             changed = not previous_compose or json.loads(previous_compose) != cfg
             if rebuilding or changed:
                 run(*command, "up", "--no-start", "--no-build", "--no-deps", *services)

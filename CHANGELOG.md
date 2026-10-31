@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.79
+
+- Preserve verified custom MediaSeed storage bindings during app updates, including converted movies shared with the VPN client. Existing files and saved configuration are retained.
+- Reuse verified, locally built converter images instead of pulling private local tags from Docker Hub. Keep auxiliary conversion workers running while updating the selected app services.
+
 ## 0.6.78
 
 - Add theme-aware Prisme app logos and a shared open navigation icon family across MediaHub and bundled MediaSeed/MediaVPN. Preserve FjordHub artwork, settings, labels and navigation behavior.
