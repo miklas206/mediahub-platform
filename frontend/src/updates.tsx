@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { Bell, RefreshCw, Box, Download, Terminal } from "lucide-react";
+import { Bell, RefreshCw, Box, Download, LoaderCircle, Terminal } from "lucide-react";
 import { ServiceIcon } from "./service-icon";
 import { NotificationPopup } from "./notification-popup";
 import { api, ApiResponseError } from "./api";
@@ -1064,10 +1064,11 @@ export function UpdatesPage({
               disabled={!!busy || !apps || !batchPlan.tasks.length}
               onClick={() => void installAll()}
             >
-              <Download
-                size={16}
-                className={operations.batch?.status === "running" ? "spin" : ""}
-              />
+              {operations.batch?.status === "running" ? (
+                <LoaderCircle size={16} className="spin" aria-hidden="true" />
+              ) : (
+                <Download size={16} aria-hidden="true" />
+              )}
               {operations.batch?.status === "running"
                 ? t("Updating all…")
                 : t("Update all")}

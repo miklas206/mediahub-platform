@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.80
+
+- Show a circular loading spinner while Update all is running, retaining the download icon when idle.
+
 ## 0.6.79
 
 - Preserve verified custom MediaSeed storage bindings during app updates, including converted movies shared with the VPN client. Existing files and saved configuration are retained.
