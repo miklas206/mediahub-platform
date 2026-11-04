@@ -433,7 +433,10 @@ class PlatformUpdateRuntime:
             raise
 
     def maintenance_status(self):
-        if not self._host_capability("maintenance") or not self._host_capability("ownedHelperCleanup"):
+        if not all(
+            self._host_capability(key)
+            for key in ("maintenance", "ownedHelperCleanup", "cacheCleanup")
+        ):
             return {
                 "state": "unavailable",
                 "message": MAINTENANCE_UNAVAILABLE,
@@ -473,7 +476,10 @@ class PlatformUpdateRuntime:
             return {"state": "invalid", "message": "Maintenance status could not be read."}
 
     def start_maintenance(self):
-        if not self._host_capability("maintenance") or not self._host_capability("ownedHelperCleanup"):
+        if not all(
+            self._host_capability(key)
+            for key in ("maintenance", "ownedHelperCleanup", "cacheCleanup")
+        ):
             raise DomainError("maintenance_unavailable", MAINTENANCE_UNAVAILABLE, 409)
         if (
             self.status()["state"] in RUNNING

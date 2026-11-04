@@ -484,7 +484,7 @@ def main():
     updater_name = "mediahub-platform-update"
     new_file(
         root / "updates/host-capabilities.json",
-        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true, "maintenance": true, "ownedHelperCleanup": true}\n',
+        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true, "maintenance": true, "ownedHelperCleanup": true, "cacheCleanup": true}\n',
         0o644,
     )
     new_file(
@@ -503,7 +503,7 @@ def main():
         "PrivateTmp=true\n"
         "ProtectHome=true\n"
         "ProtectSystem=strict\n"
-        f"ReadWritePaths={root} /var/run/docker.sock\n"
+        f"ReadWritePaths={root} /var/run/docker.sock -/var/cache/apt/archives\n"
         "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6\n",
         0o644,
     )

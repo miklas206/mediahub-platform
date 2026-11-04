@@ -72,13 +72,29 @@ def test_helper_sources_are_part_of_reviewed_bundle():
     ).read_bytes()
 
 
-def test_upgrade_refreshes_reviewed_oneshot_helper_and_keeps_previous_source(tmp_path):
+def test_upgrade_refreshes_reviewed_oneshot_helper_and_keeps_previous_source(tmp_path, monkeypatch):
+    access = []
+    monkeypatch.setattr(
+        module.HostUpdater, "install_cleanup_access", lambda self: access.append(True)
+    )
     root, source = tmp_path / "hub", tmp_path / "source"
     (root / "updates").mkdir(parents=True)
     (source / "scripts").mkdir(parents=True)
     old = root / "platform_update_host.py"
     old.write_text("old_version = True\n")
     old.chmod(0o700)
+    # Model a root-owned installed helper even when pytest runs unprivileged.
+    original_stat = Path.stat
+
+    def installed_stat(path, *args, **kwargs):
+        result = original_stat(path, *args, **kwargs)
+        if path == old:
+            values = list(result)
+            values[4] = 0
+            return module.os.stat_result(values)
+        return result
+
+    monkeypatch.setattr(Path, "stat", installed_stat)
     reviewed = source / "scripts/platform_update_host.py"
     reviewed.write_text("new_version = True\n")
     caps = root / "updates/host-capabilities.json"
@@ -90,7 +106,9 @@ def test_upgrade_refreshes_reviewed_oneshot_helper_and_keeps_previous_source(tmp
         "mainBranchUpdates": True,
         "maintenance": True,
         "ownedHelperCleanup": True,
+        "cacheCleanup": True,
     }
+    assert access == [True]
     # Idempotence preserves the useful previous helper instead of backing up itself.
     module.refresh_host_updater(root, source)
     assert (root / "updates/platform_update_host.previous.py").read_text() == "old_version = True\n"

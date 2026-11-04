@@ -4424,5 +4424,8 @@
   "Stop GPU transcoder": "Stop GPU-transcoder",
   "Restart GPU transcoder": "Genstart GPU-transcoder",
   "HDR10 and HLG use GPU tone mapping to SDR. Unsupported jobs use Plex's original transcoder.": "HDR10 og HLG konverteres til SDR på GPU’en. Ikke-understøttede jobs bruger Plex’ originale transcoder.",
-  "HDR GPU conversion is unavailable. HDR jobs use Plex's original transcoder.": "HDR-konvertering på GPU er ikke tilgængelig. HDR-jobs bruger Plex’ originale transcoder."
+  "HDR GPU conversion is unavailable. HDR jobs use Plex's original transcoder.": "HDR-konvertering på GPU er ikke tilgængelig. HDR-jobs bruger Plex’ originale transcoder.",
+  "Check the platform, apps and storage, then remove old update files, verified unused MediaHub images, unused build cache and downloaded package archives. Services keep running.": "Kontrollér platform, apps og lager, og fjern gamle opdateringsfiler, verificeret ubrugte MediaHub-images, ubrugt build-cache og downloadede installationspakker. Tjenesterne kører videre.",
+  "Movies, TV series, downloads, app data, containers, Docker volumes and rollback backups are preserved. Unused build cache and completed package downloads are removed; future builds may take longer. Media folders are never scanned.": "Film, serier, downloads, appdata, containere, Docker-volumes og rollback-backups bevares. Ubrugt build-cache og færdigdownloadede installationspakker fjernes; fremtidige builds kan tage længere tid. Mediemapper scannes aldrig.",
+  "Maintenance completed. Removed old update files, verified unused MediaHub images, unused build cache and downloaded package archives. Media, app data, containers, volumes and rollback backups were preserved.": "Oprydningen er færdig. Gamle opdateringsfiler, verificeret ubrugte MediaHub-images, ubrugt build-cache og downloadede installationspakker er fjernet. Medier, appdata, containere, volumes og rollback-backups er bevaret."
 }

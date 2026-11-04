@@ -40,7 +40,9 @@ def enable(root, repository=None):
         if (updater.updates / "request.json").exists() or any(
             updater.updates.glob("maintenance-running-*.json")
         ):
-            raise ValueError("Finish the pending update or maintenance before refreshing the helper")
+            raise ValueError(
+                "Finish the pending update or maintenance before refreshing the helper"
+            )
         policy = json.loads(previous_policy)
         if repository is not None:
             if policy.get("sourceRepository", repository) != repository:
@@ -74,6 +76,7 @@ def enable(root, repository=None):
         if repository is not None:
             updater._atomic_text(override, content)
             updater.command("systemctl", "daemon-reload", capture=False)
+        updater.install_cleanup_access(SYSTEMD_DROPIN)
         # Advertise only after helper and explicit trust are installed. Public metadata only.
         # Existing source-built images already carry their exact Git revision.
         # Seed the marker for installations created before commit-based updates.
@@ -97,6 +100,8 @@ def enable(root, repository=None):
                 "automaticFastUpdate": repository is not None,
                 "mainBranchUpdates": repository is not None,
                 "maintenance": True,
+                "ownedHelperCleanup": True,
+                "cacheCleanup": True,
             },
             uid=0,
             gid=0,
@@ -111,7 +116,9 @@ if __name__ == "__main__":
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--repository", help="Explicitly enable source updates from this repository")
     mode.add_argument(
-        "--refresh-helper", action="store_true", help="Refresh helper while preserving existing trust"
+        "--refresh-helper",
+        action="store_true",
+        help="Refresh helper while preserving existing trust",
     )
     args = parser.parse_args()
     enable(args.root, args.repository)

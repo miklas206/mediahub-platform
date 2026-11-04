@@ -11,7 +11,8 @@ This is not a guarantee of uninterrupted playback during a Plex image update,
 manual Plex/VPN restart, host reboot, VPN failure or unavailable media storage.
 Those operations or safety failures can interrupt streams. After an Agent update,
 Plex monitoring resumes and retains the existing fail-closed storage/VPN checks.
-Updating Plex itself should be scheduled when nobody is watching. from GitHub source
+Updating Plex itself should be scheduled when nobody is watching.
+ from GitHub source
 MediaHub downloads **source code** from GitHub and builds Core and the local
 Agent on the user's server. The update channel follows the configured repository's `main` branch.
 The installed Git commit is compared with `main`; a new commit is an update even
@@ -265,8 +266,12 @@ tags, unknown ownership and installations without a current helper-image registr
 are preserved. The planner rechecks ownership and all references immediately before
 deleting an immutable image ID without `--force`.
 
-It never prunes build cache, volumes or containers, scans media folders, or deletes
-app data, configuration, rollback backups or unknown files. Failed recovery
+On an explicit cleanup request, it also removes unused Docker build cache and
+completed `.deb` files in `/var/cache/apt/archives` under the APT archive lock.
+Active builds and partial package downloads are preserved. Future builds may take
+longer because cached layers must be rebuilt. No packages are uninstalled.
+It never prunes images indiscriminately, volumes or containers, scans media folders,
+or deletes app data, configuration, rollback backups or unknown files. Failed recovery
 directories remain available for investigation. The maintenance result includes
 `helperCleanup.planned` and `helperCleanup.removedImageIds` for review.
 
@@ -279,8 +284,10 @@ sudo python3 /opt/mediahub/platform_update_host.py --root /opt/mediahub --cleanu
 
 The automatic app-preparation helper refreshes this host script from the immutable
 installed Core image. Healthcheck cleanup remains unavailable until the host reports
-the `ownedHelperCleanup` capability, so an older helper cannot run its former broad
-build-cache pruning. If preparation fails, retry it from Updates. For explicit
+both the `ownedHelperCleanup` and `cacheCleanup` capabilities. Preparation also
+adds a narrow systemd write allowance for the package archive directory, preserving
+other unit overrides and repository trust. Older helpers cannot advertise the new
+cleanup behavior before these prerequisites are installed. If preparation fails, retry it from Updates. For explicit
 administrator recovery, the equivalent reviewed-checkout command is:
 
 ```sh

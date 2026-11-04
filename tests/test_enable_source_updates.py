@@ -67,7 +67,10 @@ def test_refresh_installs_real_helper_before_capabilities_and_preserves_trust(
     migration.enable(root)
     assert json.loads((root / "update-policy.json").read_text()) == policy
     helper = (root / "platform_update_host.py").read_text()
-    assert helper == migration.Path(migration.__file__).with_name("platform_update_host.py").read_text()
+    assert (
+        helper
+        == migration.Path(migration.__file__).with_name("platform_update_host.py").read_text()
+    )
     assert "def _maintenance(" in helper
     capabilities = json.loads((root / "updates/host-capabilities.json").read_text())
     assert capabilities == {
@@ -75,11 +78,13 @@ def test_refresh_installs_real_helper_before_capabilities_and_preserves_trust(
         "automaticFastUpdate": source,
         "mainBranchUpdates": source,
         "maintenance": True,
+        "ownedHelperCleanup": True,
+        "cacheCleanup": True,
     }
     assert events.index("platform_update_host.py") < events.index("host-capabilities.json")
     assert (root / "platform_update_host.py.before-source").read_text() == "old helper"
     assert "update-policy.json" not in events
-    assert migration.SYSTEMD_DROPIN.exists() is source
+    assert migration.SYSTEMD_DROPIN.exists()
     migration.enable(root)
     assert (root / "platform_update_host.py.before-source").read_text() == "old helper"
 

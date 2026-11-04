@@ -2025,7 +2025,7 @@ function MaintenancePage() {
             <h3>{t("Keep MediaHub healthy")}</h3>
             <p>
               {t(
-                "Check the platform, apps and storage, then remove old update files and verified unused MediaHub helper images. Services keep running.",
+                "Check the platform, apps and storage, then remove old update files, verified unused MediaHub images, unused build cache and downloaded package archives. Services keep running.",
               )}
             </p>
           </div>
@@ -2106,7 +2106,7 @@ function MaintenancePage() {
             <strong>{t("Media stays protected")}</strong>
             <p>
               {t(
-                "Movies, TV series, downloads, app data, Docker volumes, build cache and rollback backups are preserved. Maintenance only removes known disposable update files and owned helper images that no container or recovery configuration uses.",
+                "Movies, TV series, downloads, app data, containers, Docker volumes and rollback backups are preserved. Unused build cache and completed package downloads are removed; future builds may take longer. Media folders are never scanned.",
               )}
             </p>
           </div>

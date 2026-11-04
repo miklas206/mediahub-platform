@@ -36,6 +36,9 @@ IMAGE = re.compile(r"^ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[a-f0-9]{64}$")
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 ID = re.compile(r"^[a-f0-9]{32}$")
 MAX_BUNDLE = 2 * 1024**3
+APT_ARCHIVES = Path("/var/cache/apt/archives")
+CLEANUP_DROPIN = Path("/etc/systemd/system/mediahub-platform-update.service.d")
+
 LOADED_IMAGE = re.compile(r"^sha256:[a-f0-9]{64}$")
 
 
@@ -147,7 +150,9 @@ class HostUpdater:
             env=environment,
         )
         output = result.stdout or ""
-        if len(output) > 65536:
+        # Inventory grows with retained app builds; keep other command limits narrow.
+        limit = 8 * 1024**2 if args[:3] == ["docker", "image", "ls"] else 65536
+        if len(output) > limit:
             raise ValueError("Command output exceeded safety limit")
         return output.strip()
 
@@ -1227,6 +1232,45 @@ class HostUpdater:
                 stage.rmdir()
         return removed
 
+    def install_cleanup_access(self, dropin=None):
+        """Add only package-archive write access; preserve other unit restrictions."""
+        directory = dropin if dropin is not None else CLEANUP_DROPIN
+        directory.mkdir(mode=0o755, parents=True, exist_ok=True)
+        self._directory(directory, owner=0)
+        path = directory / "package-cache.conf"
+        content = "[Service]\nReadWritePaths=-/var/cache/apt/archives\n"
+        if path.exists() or path.is_symlink():
+            if self._trusted_file(path).strip() != content.strip():
+                raise ValueError("Refusing to replace an unrelated package-cache override")
+        else:
+            self._atomic_text(path, content)
+        # Reload also on retries after an interrupted previous reload.
+        self.command("systemctl", "daemon-reload", capture=False)
+
+    def _cleanup_build_cache(self):
+        # BuildKit retains in-use records. No image/container/volume/system prune.
+        self.command("docker", "builder", "prune", "--all", "--force", capture=False)
+
+    def _cleanup_package_cache(self):
+        """Remove completed .deb archives under APT's lock, never partial downloads."""
+        root = APT_ARCHIVES
+        if not root.exists():
+            return 0  # Non-APT hosts have no package archive cache.
+        self._directory(root, owner=0)
+        removed = 0
+        flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+        with os.fdopen(os.open(root / "lock", flags, 0o640), "r+") as lock:
+            if not stat.S_ISREG(os.fstat(lock.fileno()).st_mode):
+                raise ValueError("Invalid package cache lock")
+            fcntl.lockf(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            device = root.stat().st_dev
+            for path in root.glob("*.deb"):
+                info = path.lstat()
+                if stat.S_ISREG(info.st_mode) and info.st_dev == device and not path.is_mount():
+                    path.unlink()
+                    removed += 1
+        return removed
+
     def _maintenance(self, request):
         if (
             set(request) != {"action", "operationId"}
@@ -1262,12 +1306,14 @@ class HostUpdater:
 
         try:
             report("running", "Cleaning unused system files; media and app data are protected.")
-            removed = self._cleanup_staging()
+            self._cleanup_staging()
             self._cleanup_update_images()
             self._cleanup_helper_images(helper_cleanup)
+            self._cleanup_build_cache()
+            self._cleanup_package_cache()
             report(
                 "succeeded",
-                f"Maintenance completed. Removed {removed} old update files and {len(helper_cleanup['removedImageIds'])} unused MediaHub helper images. Media, app data, containers, build cache and rollback backups were preserved.",
+                "Maintenance completed. Removed old update files, verified unused MediaHub images, unused build cache and downloaded package archives. Media, app data, containers, volumes and rollback backups were preserved.",
             )
         except Exception:
             report(

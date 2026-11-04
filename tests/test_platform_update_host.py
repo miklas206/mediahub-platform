@@ -50,10 +50,11 @@ def test_maintenance_limits_docker_cleanup_and_reports_failure(tmp_path, monkeyp
     monkeypatch.setattr(
         updater, "_atomic_json", lambda path, value, **kwargs: path.write_text(json.dumps(value))
     )
+    monkeypatch.setattr(updater, "_cleanup_package_cache", lambda: 0)
     monkeypatch.setattr(updater, "_cleanup_staging", lambda: 3)
     monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
     updater._maintenance(request)
-    assert commands == []
+    assert commands == [["docker", "builder", "prune", "--all", "--force"]]
     status = json.loads((updater.updates / "maintenance-status.json").read_text())
     assert status["state"] == "succeeded"
     assert not (updater.updates / "request.json").exists()
@@ -74,30 +75,39 @@ def test_cleanup_has_no_blanket_docker_prune_commands():
         assert '"prune"' not in inspect.getsource(method)
 
 
-@pytest.mark.parametrize("delta", [0, 2048, 2*1024**3, -4096])
+@pytest.mark.parametrize("delta", [0, 2048, 2 * 1024**3, -4096])
 def test_maintenance_reports_measured_space_and_signed_change(tmp_path, monkeypatch, delta):
     from types import SimpleNamespace
+
     updater = HostUpdater(tmp_path)
     updater.updates.mkdir()
-    request = {"action":"maintenance", "operationId":OPERATION}
+    request = {"action": "maintenance", "operationId": OPERATION}
     (updater.updates / "request.json").write_text(json.dumps(request))
-    before=10*1024**3
-    free=[before]
-    monkeypatch.setattr("scripts.platform_update_host.shutil.disk_usage",lambda _:SimpleNamespace(free=free[0]))
-    monkeypatch.setattr(updater,"_atomic_json",lambda path,value,**kwargs:path.write_text(json.dumps(value)))
+    before = 10 * 1024**3
+    free = [before]
+    monkeypatch.setattr(
+        "scripts.platform_update_host.shutil.disk_usage", lambda _: SimpleNamespace(free=free[0])
+    )
+    monkeypatch.setattr(
+        updater, "_atomic_json", lambda path, value, **kwargs: path.write_text(json.dumps(value))
+    )
+
     def clean():
         free[0] += delta
         return 3
-    monkeypatch.setattr(updater,"_cleanup_staging",clean)
-    monkeypatch.setattr(updater,"_cleanup_update_images",lambda:None)
-    monkeypatch.setattr(updater,"_cleanup_helper_images",lambda progress:None)
+
+    monkeypatch.setattr(updater, "_cleanup_staging", clean)
+    monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
+    monkeypatch.setattr(updater, "_cleanup_helper_images", lambda progress: None)
+    monkeypatch.setattr(updater, "_cleanup_build_cache", lambda: None)
+    monkeypatch.setattr(updater, "_cleanup_package_cache", lambda: 0)
     updater._maintenance(request)
-    report=json.loads((updater.updates/"maintenance-status.json").read_text())
-    assert report["state"]=="succeeded"
-    assert report["freeBytesBefore"]==before
-    assert report["freeBytes"]==before+delta
-    assert report["freeBytesChange"]==delta
-    assert report["reclaimedBytes"]==max(0,delta)
+    report = json.loads((updater.updates / "maintenance-status.json").read_text())
+    assert report["state"] == "succeeded"
+    assert report["freeBytesBefore"] == before
+    assert report["freeBytes"] == before + delta
+    assert report["freeBytesChange"] == delta
+    assert report["reclaimedBytes"] == max(0, delta)
 
 
 def test_maintenance_skips_mounted_stage(tmp_path, monkeypatch):
@@ -1118,3 +1128,91 @@ def test_failed_rollback_never_retries(tmp_path, monkeypatch):
         updater.process()
     assert len(snapshot) == 1
     assert json.loads((root / "updates/status.json").read_text())["state"] == "failed"
+
+
+def test_large_image_inventory_keeps_bounded_output_without_truncation(monkeypatch):
+    output = "x" * 105000
+    monkeypatch.setattr(
+        host_module.subprocess, "run", lambda *a, **kw: SimpleNamespace(stdout=output)
+    )
+    assert HostUpdater._run_command(["docker", "image", "ls"], True, None) == output
+    with pytest.raises(ValueError, match="safety limit"):
+        HostUpdater._run_command(["docker", "inspect"], True, None)
+    output = "x" * (8 * 1024**2 + 1)
+    with pytest.raises(ValueError, match="safety limit"):
+        HostUpdater._run_command(["docker", "image", "ls"], True, None)
+
+
+def test_package_cleanup_keeps_partial_unknown_and_symlink_targets(tmp_path, monkeypatch):
+    root = tmp_path / "archives"
+    root.mkdir()
+    (root / "old.deb").write_bytes(b"downloaded package")
+    (root / "keep.txt").write_text("keep")
+    (root / "partial").mkdir()
+    (root / "partial/new.deb").write_bytes(b"in progress")
+    outside = tmp_path / "outside.deb"
+    outside.write_bytes(b"keep")
+    (root / "linked.deb").symlink_to(outside)
+    (root / "directory.deb").mkdir()
+    monkeypatch.setattr(host_module, "APT_ARCHIVES", root)
+    updater = HostUpdater(tmp_path)
+    monkeypatch.setattr(updater, "_directory", lambda path, **kwargs: path)
+    assert updater._cleanup_package_cache() == 1
+    assert not (root / "old.deb").exists()
+    assert outside.read_bytes() == b"keep"
+    assert (root / "linked.deb").is_symlink()
+    assert (root / "directory.deb").is_dir()
+    assert (root / "partial/new.deb").read_bytes() == b"in progress"
+    assert (root / "keep.txt").exists()
+    assert updater._cleanup_package_cache() == 0
+
+
+def test_package_cleanup_respects_active_apt_lock(tmp_path, monkeypatch):
+    import subprocess
+
+    root = tmp_path / "archives"
+    root.mkdir()
+    (root / "package.deb").write_bytes(b"keep")
+    monkeypatch.setattr(host_module, "APT_ARCHIVES", root)
+    updater = HostUpdater(tmp_path)
+    monkeypatch.setattr(updater, "_directory", lambda path, **kwargs: path)
+    # A separate process is required: POSIX record locks are per process.
+    script = "import fcntl,sys; f=open(sys.argv[1],'w'); fcntl.lockf(f,fcntl.LOCK_EX); print('locked',flush=True); sys.stdin.read()"
+    with subprocess.Popen(
+        [sys.executable, "-c", script, str(root / "lock")],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    ) as proc:
+        try:
+            assert proc.stdout.readline().strip() == "locked"
+            with pytest.raises(BlockingIOError):
+                updater._cleanup_package_cache()
+            assert (root / "package.deb").exists()
+        finally:
+            proc.stdin.close()
+            proc.wait(timeout=5)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_package_cache_access_is_narrow_and_idempotent(tmp_path, monkeypatch, existing):
+    directory = tmp_path / "service.d"
+    if existing:
+        directory.mkdir()
+        (directory / "custom.conf").write_text("[Service]\nProtectHome=true\n")
+    calls = []
+    updater = HostUpdater(tmp_path, runner=lambda args, **kw: calls.append(args) or "")
+    monkeypatch.setattr(updater, "_directory", lambda path, **kwargs: path)
+    monkeypatch.setattr(updater, "_trusted_file", lambda path: path.read_text())
+    monkeypatch.setattr(updater, "_atomic_text", lambda path, value: path.write_text(value))
+    updater.install_cleanup_access(directory)
+    updater.install_cleanup_access(directory)
+    assert (
+        directory / "package-cache.conf"
+    ).read_text() == "[Service]\nReadWritePaths=-/var/cache/apt/archives\n"
+    if existing:
+        assert (directory / "custom.conf").read_text() == "[Service]\nProtectHome=true\n"
+    assert calls == [["systemctl", "daemon-reload"]] * 2
+    (directory / "package-cache.conf").write_text("[Service]\nPrivateNetwork=true\n")
+    with pytest.raises(ValueError, match="unrelated"):
+        updater.install_cleanup_access(directory)

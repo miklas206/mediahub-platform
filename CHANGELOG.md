@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.81
+
+- Include unused Docker build cache and completed APT package downloads in Healthcheck cleanup while preserving containers, volumes, app data, media and rollback images. Provision package-cache access on fresh installs and upgrades.
+- Fix cleanup stopping on large Docker image inventories; retain bounded command output and reference checks.
+
 ## 0.6.80
 
 - Show a circular loading spinner while Update all is running, retaining the download icon when idle.

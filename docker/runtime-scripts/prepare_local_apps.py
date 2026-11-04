@@ -20,6 +20,7 @@ import tomllib
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from platform_update_host import HostUpdater
 from prepare_managed_install import prepare
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -126,11 +127,12 @@ def refresh_host_updater(root, source):
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
+    HostUpdater(root).install_cleanup_access()
     capabilities = root / "updates/host-capabilities.json"
     if capabilities.is_symlink():
         raise ValueError("Unsafe host capability metadata")
     value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
-    value.update(ownedHelperCleanup=True, maintenance=True)
+    value.update(ownedHelperCleanup=True, cacheCleanup=True, maintenance=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".capabilities-", dir=capabilities.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
