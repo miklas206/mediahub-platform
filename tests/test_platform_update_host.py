@@ -1216,3 +1216,21 @@ def test_package_cache_access_is_narrow_and_idempotent(tmp_path, monkeypatch, ex
     (directory / "package-cache.conf").write_text("[Service]\nPrivateNetwork=true\n")
     with pytest.raises(ValueError, match="unrelated"):
         updater.install_cleanup_access(directory)
+
+
+def test_cache_prune_uses_disposable_client_state_under_protect_home(monkeypatch):
+    calls = []
+    def run(args, **kwargs):
+        env = kwargs['env']
+        assert Path(env['DOCKER_CONFIG']).is_dir()
+        assert env['HOME'] == env['DOCKER_CONFIG']
+        assert env['DOCKER_HOST'] == 'unix:///var/run/docker.sock'
+        assert 'REGISTRY_PASSWORD' not in env
+        calls.append((args, env))
+        return SimpleNamespace(stdout='')
+    from pathlib import Path
+    monkeypatch.setenv('REGISTRY_PASSWORD', 'synthetic-not-inherited')
+    monkeypatch.setattr(host_module.subprocess, 'run', run)
+    HostUpdater._run(['docker', 'builder', 'prune', '--all', '--force'], capture=False)
+    assert len(calls) == 1
+    assert not Path(calls[0][1]['DOCKER_CONFIG']).exists()

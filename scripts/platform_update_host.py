@@ -120,6 +120,18 @@ class HostUpdater:
 
     @staticmethod
     def _run(args, capture=True, on_output=None):
+        if args[:3] == ["docker", "builder", "prune"]:
+            # Buildx also writes client state for prune. The service deliberately
+            # protects /root; use disposable state rather than weakening that guard.
+            with tempfile.TemporaryDirectory(prefix="mediahub-cache-cleanup-") as directory:
+                environment = {
+                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                    "HOME": directory,
+                    "DOCKER_CONFIG": directory,
+                    "BUILDX_CONFIG": str(Path(directory) / "buildx"),
+                    "DOCKER_HOST": "unix:///var/run/docker.sock",
+                }
+                return HostUpdater._run_command(args, capture, environment)
         source_build = args[:2] == ["docker", "build"]
         environment = None
         if source_build:
