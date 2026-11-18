@@ -396,3 +396,22 @@ def test_version_refresh_skips_sso_only_app_without_lifecycle_adapter(logged_in,
     monkeypatch.setattr(svc.apps, "adapter", missing)
     asyncio.run(svc.updates.refresh_managed_versions())
     assert not any(item["id"] == "external" for item in svc.updates.summary()["items"])
+
+def test_plex_update_summary_displays_versions_and_tracks_image_digest():
+    from mediahub.update_monitor import UpdateMonitor
+
+    digest = "sha256:" + "a" * 64
+    item = UpdateMonitor._app_result(
+        {"id": "plex", "name": "Plex", "packageId": "org.mediahub.plex"},
+        {
+            "updateSource": "container-image",
+            "supported": True,
+            "updateAvailable": True,
+            "latestVersion": digest,
+            "installedPlexVersion": "1.43.5.11079",
+            "latestPlexVersion": "1.43.5.11079",
+        },
+    )
+    assert item["installedVersion"] == item["latestVersion"] == "1.43.5.11079"
+    assert item["latestImageDigest"] == digest
+    assert item["updateAvailable"] is True

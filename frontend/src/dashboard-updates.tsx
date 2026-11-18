@@ -5,6 +5,9 @@ import { api } from "./api";
 import { t } from "./i18n";
 import { ServiceIcon } from "./service-icon";
 
+const visibleVersion = (version: string | null) =>
+  version && !version.startsWith("sha256:") ? version : "—";
+
 type Summary = {
   count: number;
   checkedAt: number | null;
@@ -89,10 +92,10 @@ export function DashboardUpdates() {
                         ? t("Check failed")
                         : item.updateAvailable
                           ? t("Available: {version}", {
-                              version: item.latestVersion || "—",
+                              version: visibleVersion(item.latestVersion),
                             })
                           : t("Installed: {version}", {
-                              version: item.installedVersion || "—",
+                              version: visibleVersion(item.installedVersion),
                             })}
                   </small>
                 </span>

@@ -93,15 +93,22 @@ class UpdateMonitor:
     def _app_result(app, result):
         versions = [str(value)[:128] for value in result.get("releaseVersions") or [] if value]
         latest = result.get("latestVersion") or (versions[0] if versions else None)
+        plex = app.get("packageId") == "org.mediahub.plex" or result.get("updateSource") == "container-image"
+        installed = result.get("installedVersion")
+        image_digest = latest if plex else None
+        if plex:
+            installed = result.get("installedPlexVersion")
+            latest = result.get("latestPlexVersion")
         available = bool(result.get("updateAvailable", bool(versions)))
         if result.get("supported") is False:
             available = False
         return {
             "id": app["id"],
             "name": app["name"],
-            "installedVersion": result.get("installedVersion") or (app.get("version") if app.get("version") != "managed" else None),
+            "installedVersion": installed or (app.get("version") if app.get("version") != "managed" else None),
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
+            **({"latestImageDigest": image_digest} if image_digest else {}),
             "checkStatus": "unsupported"
             if result.get("supported") is False
             else result.get("checkStatus") or ("checked" if latest else "unchecked"),
@@ -135,7 +142,7 @@ class UpdateMonitor:
         if failed:
             error = "Could not check: " + ", ".join(item["name"] for item in failed)
         available = sorted(
-            f"{item['id']}:{item.get('latestCommit') or item.get('latestVersion') or 'available'}"
+            f"{item['id']}:{item.get('latestCommit') or item.get('latestImageDigest') or item.get('latestVersion') or 'available'}"
             for item in items
             if item.get("updateAvailable")
         )

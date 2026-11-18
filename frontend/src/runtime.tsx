@@ -1044,10 +1044,25 @@ export function AppRuntimePage() {
         installedVersion?: string | null;
         latestVersion?: string | null;
         releaseUrl?: string | null;
+        installedPlexVersion?: string | null;
+        latestPlexVersion?: string | null;
       }>(`/apps/${appId}/update-check`, "POST");
-      const versions = result.latestVersion
-        ? `Installed ${result.installedVersion || "not observed"} · Latest ${result.latestVersion}`
-        : "";
+      const versions =
+        data?.view === "plex"
+          ? [
+              t("Installed: {version}", {
+                version:
+                  result.installedPlexVersion ||
+                  data.report.plex?.version ||
+                  t("Not verified"),
+              }),
+              t("Available: {version}", {
+                version: result.latestPlexVersion || t("Not verified"),
+              }),
+            ].join(" · ")
+          : result.latestVersion
+            ? `Installed ${result.installedVersion || "not observed"} · Latest ${result.latestVersion}`
+            : "";
       setUpdateResult(
         [
           result.message || result.reason || "Update check completed",

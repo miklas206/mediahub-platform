@@ -17,6 +17,7 @@ from pathlib import Path
 
 import httpx
 from mediahub.apps.plex import PlexInstallRequest
+from mediahub.apps.plex_image import package_version
 from mediahub.errors import DomainError
 from mediahub.secret_store import SecretStore
 
@@ -1054,6 +1055,12 @@ class PlexRuntime:
                 "updateAvailable": available,
                 "installedVersion": installed[len(prefix) :],
                 "latestVersion": digest,
+                "installedPlexVersion": package_version(local.get("Config") or {}),
+                "imagePlatform": {
+                    "os": local.get("Os"),
+                    "architecture": local.get("Architecture"),
+                    "variant": local.get("Variant", ""),
+                },
                 "message": (
                     "A new publisher image is available; the Plex server version may be unchanged."
                     if available

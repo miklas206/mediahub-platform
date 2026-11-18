@@ -285,7 +285,12 @@ def test_update_check_uses_publisher_digest_without_mutation(tmp_path, new_image
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.request = AsyncMock(
         side_effect=[
-            {"RepoDigests": [image], "Os": "linux", "Architecture": "amd64"},
+            {
+                "RepoDigests": [image],
+                "Os": "linux",
+                "Architecture": "amd64",
+                "Config": {"Labels": {"build_version": "Linuxserver.io version:- 1.43.5.11029-6bf8af3f0-ls329"}},
+            },
             {
                 "Descriptor": {
                     "digest": latest,
@@ -307,6 +312,7 @@ def test_update_check_uses_publisher_digest_without_mutation(tmp_path, new_image
     assert result["updateSource"] == "container-image"
     assert result["installedVersion"] == installed
     assert result["latestVersion"] == latest
+    assert result["installedPlexVersion"] == "1.43.5.11029"
     assert not result["downloadRequested"] and not result["installationRequested"]
     assert all(call.args[0] == "GET" for call in runtime.request.call_args_list)
     assert (

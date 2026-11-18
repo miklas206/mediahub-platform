@@ -58,7 +58,7 @@ describe("Plex image update approval", () => {
     );
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Update Plex<\/button>/);
     expect(html).toContain('href="/apps/plex"');
-    expect(html).toContain("Latest publisher image");
+    expect(html).toContain("<span>Latest</span>");
     expect(html).toContain(
       "MediaHub checks the LinuxServer publisher image digest",
     );

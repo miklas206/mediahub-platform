@@ -95,9 +95,18 @@ class RemoteAppAdapter:
 
     async def updateCheck(self):
         if self.definition.supports_update_check:
-            return await self.client_factory(self.host_id).request(
+            checked = await self.client_factory(self.host_id).request(
                 "POST", self.definition.agent_prefix + "/update-check"
             )
+            if self.definition.package_id == "org.mediahub.plex" and checked.get("supported"):
+                from mediahub.apps.plex_image import publisher_version
+
+                checked["latestPlexVersion"] = (
+                    await publisher_version(checked.get("latestVersion"), checked.get("imagePlatform"))
+                    if checked.get("updateAvailable")
+                    else checked.get("installedPlexVersion")
+                )
+            return checked
         from mediahub.app_releases import REPOSITORIES, latest_release
 
         if self.definition.package_id in REPOSITORIES:

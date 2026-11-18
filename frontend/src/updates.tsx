@@ -612,6 +612,7 @@ export function UpdatesPage({
           releaseVersions?: string[];
           latestVersion?: string | null;
           installedVersion?: string | null;
+          latestPlexVersion?: string | null;
           supported?: boolean;
           checkStatus?: string;
           message?: string;
@@ -631,7 +632,7 @@ export function UpdatesPage({
               : t("Update check deferred")
             : app.packageId === "org.mediahub.plex"
               ? result.updateSource === "container-image"
-                ? result.latestVersion ||
+                ? result.latestPlexVersion ||
                   result.reason ||
                   "Image update not verified"
                 : "Managed image update not verified"
@@ -1381,6 +1382,9 @@ export function UpdatesPage({
                     {(isBundled && bundled?.installedVersion !== "managed"
                       ? bundled?.installedVersion
                       : null) ||
+                      (isPlex && bundled?.installedVersion?.match(/^1\.\d+\.\d+\.\d+$/)
+                        ? bundled.installedVersion
+                        : null) ||
                       version?.plex?.version ||
                       version?.qBittorrent?.version ||
                       version?.cloudflare?.version ||
@@ -1392,10 +1396,12 @@ export function UpdatesPage({
                   </strong>
                 </div>
                 <div className="runtime-row">
-                  <span>{isPlex ? "Latest publisher image" : t("Latest")}</span>
+                  <span>{t("Latest")}</span>
                   <span>
                     {(isBundled ? bundled?.latestVersion : null) ||
-                      latest[app.id] ||
+                      (isPlex && latest[app.id]?.startsWith("sha256:")
+                        ? null
+                        : latest[app.id]) ||
                       t("Not checked")}
                   </span>
                 </div>
