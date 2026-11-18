@@ -1017,8 +1017,10 @@ def test_update_and_rollback_preserve_live_storage_socket(tmp_path, monkeypatch,
     runtime = root / "data/storage-control"
     runtime.mkdir()
     path = runtime / "service.sock"
+    # AF_UNIX limits the address length even when the test root is nested.
+    monkeypatch.chdir(runtime)
     with socket.socket(socket.AF_UNIX) as listener:
-        listener.bind(str(path))
+        listener.bind(path.name)
         listener.listen(1)
         identity = path.stat().st_ino
         updater.process()
@@ -1026,7 +1028,7 @@ def test_update_and_rollback_preserve_live_storage_socket(tmp_path, monkeypatch,
         assert status["state"] == ("rolled_back" if rollback else "succeeded")
         assert path.stat().st_ino == identity
         with socket.socket(socket.AF_UNIX) as client:
-            client.connect(str(path))
+            client.connect(path.name)
             connection, _ = listener.accept()
             connection.close()
         assert not (root / "update-backups" / OPERATION / "data/storage-control").exists()
