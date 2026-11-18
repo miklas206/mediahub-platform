@@ -3,7 +3,7 @@ import { Activity, History, Cpu } from "lucide-react";
 import type { Runtime } from "./runtime";
 import { PlexGPUHistory, PlexGPUSessions } from "./plex-gpu-sessions";
 import { Panel } from "./phase2";
-import { t } from "./i18n";
+import { getLocale, t } from "./i18n";
 import { safeAppUrl } from "./app-uptime";
 
 export function PlexGPUPanel({
@@ -16,7 +16,9 @@ export function PlexGPUPanel({
 }) {
   const [view, setView] = useState<"live" | "history" | "gpu">("live");
   const gpu = report.gpu;
-  const url = safeAppUrl(report.url, "org.mediahub.plex-gpu-transcoder");
+  const dashboard = safeAppUrl(report.url, "org.mediahub.plex-gpu-transcoder");
+  const url = dashboard ? new URL(dashboard) : null;
+  url?.searchParams.set("lang", getLocale().slice(0, 2));
   // Expiry and the next poll happen together. Retain the last layout while fetching.
   const hasObservation = report.available;
   const stale = hasObservation && !!report.observationHealth;
@@ -159,7 +161,7 @@ export function PlexGPUPanel({
                 </p>
               )}
               {url && (
-                <a href={url} target="_blank" rel="noopener noreferrer">
+                <a href={url.href} target="_blank" rel="noopener noreferrer">
                   {t("Open GPU dashboard on local network")} ↗
                 </a>
               )}

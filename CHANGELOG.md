@@ -4,6 +4,8 @@
 
 - Open the embedded Hub after host storage is prepared. Optional download and VPN app prerequisites continue in the background and report status in the App Store.
 - Fix the Cloudflare release-cache expiry calculation on recently booted hosts.
+- Preserve the setup language when opening the optional Plex GPU dashboard.
+- Initialize host update capabilities before app storage setup, record the Proxmox install revision and prepare apps through the verified host mounts.
 
 ## 0.6.89
 

@@ -14,7 +14,7 @@ it("shows observed encoder usage and the separate dashboard", () => {
   const html = renderToStaticMarkup(<PlexGPUPanel report={report} />);
   expect(html).toContain("43 %");
   expect(html).toContain("Test NVIDIA");
-  expect(html).toContain('href="http://192.168.1.10:8090/"');
+  expect(html).toContain('href="http://192.168.1.10:8090/?lang=en"');
   expect(html).toContain("HDR10");
 });
 
