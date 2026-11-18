@@ -98,6 +98,30 @@ def runtime_and_spec(tmp_path, app="radarr", *, uid=1000):
     return runtime, ContainerInstallation(app=app, hostId="test", storageIds=slots)
 
 
+@pytest.mark.parametrize("with_other", [False, True])
+def test_jellyfin_accepts_shared_storage_policy_without_mounting_other(tmp_path, with_other):
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    policy = json.loads(runtime.policy_file.read_text())
+    if with_other:
+        policy["storage"]["other"] = {
+            "label": "Other",
+            "kind": "other",
+            "path": str(tmp_path / "other"),
+        }
+    runtime.policy_file.write_text(json.dumps(policy))
+    options = asyncio.run(runtime.options("jellyfin"))
+    assert {item["kind"] for item in options["storage"]} == {"appdata", "movies", "tv"}
+    plan = asyncio.run(runtime.build_plan(spec))
+    assert all(
+        mount["Source"] != str(tmp_path / "other")
+        for mount in plan["container"]["HostConfig"]["Mounts"]
+    )
+    if with_other:
+        spec.storageIds["movies"] = "other"
+        with pytest.raises(DomainError, match="Choose approved storage"):
+            asyncio.run(runtime.build_plan(spec))
+
+
 def inspected_container(plan):
     return {
         "Image": "sha256:" + "a" * 64,

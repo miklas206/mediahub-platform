@@ -29,7 +29,7 @@ from agent.plex_install import PlexInstallPolicy
 
 class ContainerStorage(StrictModel):
     label: str = Field(min_length=1, max_length=100)
-    kind: str = Field(pattern=r"^(appdata|movies|tv|downloads)$")
+    kind: str = Field(pattern=r"^(appdata|movies|tv|downloads|other)$")
     path: str
 
     @field_validator("path")
@@ -205,6 +205,7 @@ class ContainerApps:
             "storage": [
                 {"id": key, "label": choice.label, "kind": choice.kind}
                 for key, choice in policy.storage.items()
+                if choice.kind in container_slots(app)
             ],
         }
 

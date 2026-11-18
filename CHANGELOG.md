@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.92
+
+- Jellyfin installation now accepts fresh and existing shared storage policies containing the Other media category. The installer offers only supported Jellyfin slots and retains the existing mount and access checks.
+
 ## 0.6.91
 
 - Limit automatic rollback retention to snapshots explicitly created and marked by the host updater. Keep manual and earlier unmarked backup directories.
