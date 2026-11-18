@@ -938,6 +938,9 @@ class HostUpdater:
                 shutil.copy2(marker, temporary / "installed-source.json")
             for name in self._state_directories():
                 self._copy_state(self.root / name, temporary / name, name)
+            marker = temporary / ".mediahub-rollback"
+            marker.write_text(backup.name + "\n", encoding="ascii")
+            marker.chmod(0o600)
             os.replace(temporary, backup)
         except Exception:
             shutil.rmtree(temporary, ignore_errors=True)
@@ -1190,7 +1193,14 @@ class HostUpdater:
         try:
             shutil.rmtree(stage)
             backups = sorted(
-                (path for path in self.backups.iterdir() if path.is_dir()),
+                (
+                    path for path in self.backups.iterdir()
+                    if not path.is_symlink() and path.is_dir()
+                    and re.fullmatch(r"[a-f0-9]{32}(?:-attempt-[2-9][0-9]*)?", path.name)
+                    and not (path / ".mediahub-rollback").is_symlink()
+                    and (path / ".mediahub-rollback").is_file()
+                    and self._trusted_file(path / ".mediahub-rollback", 128).strip() == path.name
+                ),
                 key=lambda path: path.stat().st_mtime,
                 reverse=True,
             )

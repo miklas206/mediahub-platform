@@ -2,6 +2,8 @@
 
 ## 0.6.91
 
+- Limit automatic rollback retention to snapshots explicitly created and marked by the host updater. Keep manual and earlier unmarked backup directories.
+
 - Update an individual app when its sibling has been uninstalled. Keep the verified reinstall recipe for an intentionally removed app during host preparation.
 
 ## 0.6.90

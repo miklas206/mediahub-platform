@@ -1234,3 +1234,30 @@ def test_cache_prune_uses_disposable_client_state_under_protect_home(monkeypatch
     HostUpdater._run(['docker', 'builder', 'prune', '--all', '--force'], capture=False)
     assert len(calls) == 1
     assert not Path(calls[0][1]['DOCKER_CONFIG']).exists()
+
+
+def test_retention_keeps_operator_and_unmarked_backups(tmp_path, monkeypatch):
+    updater = HostUpdater(tmp_path)
+    updater.backups.mkdir()
+    monkeypatch.setattr(updater, "_trusted_file", lambda path, limit: path.read_text())
+    monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
+    monkeypatch.setattr(updater, "_cleanup_helper_images", lambda: None)
+    stage = tmp_path / "operation-staging"
+    stage.mkdir()
+    owned = []
+    for stamp, key in enumerate("abc", start=10):
+        folder = updater.backups / (key * 32)
+        folder.mkdir()
+        (folder / ".mediahub-rollback").write_text(folder.name)
+        os.utime(folder, (stamp, stamp))
+        owned.append(folder)
+    for name in ["operator-backup", "d" * 32]:
+        manual = updater.backups / name
+        manual.mkdir()
+        (manual / "keep").write_text("manual backup")
+        os.utime(manual, (1, 1))
+    updater._cleanup_after_success(stage)
+    assert not owned[0].exists()
+    assert all(p.exists() for p in owned[1:])
+    for name in ["operator-backup", "d" * 32]:
+        assert (updater.backups / name / "keep").read_text() == "manual backup"
