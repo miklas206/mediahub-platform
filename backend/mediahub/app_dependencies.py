@@ -106,7 +106,7 @@ class AppDependencies:
                 body={
                     "Image": own["Image"],
                     "User": "0:0",
-                    "Env": ["DOCKER_CONFIG=/tmp/docker-config"],
+                    "Env": ["DOCKER_CONFIG=/tmp/docker-config", "MEDIAHUB_DEPENDENCY_CONTAINER=1"],
                     "Entrypoint": ["python"],
                     "Cmd": ["/app/scripts/prepare_local_apps.py", "--root", str(root)]
                     + self.lan_argument()

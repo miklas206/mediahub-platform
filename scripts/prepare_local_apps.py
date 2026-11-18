@@ -127,12 +127,16 @@ def refresh_host_updater(root, source):
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
-    HostUpdater(root).install_cleanup_access()
+    on_host = os.environ.get("MEDIAHUB_DEPENDENCY_CONTAINER") != "1"
+    if on_host:
+        HostUpdater(root).install_cleanup_access()
     capabilities = root / "updates/host-capabilities.json"
     if capabilities.is_symlink():
         raise ValueError("Unsafe host capability metadata")
     value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
-    value.update(ownedHelperCleanup=True, cacheCleanup=True, maintenance=True)
+    value.update(ownedHelperCleanup=True, maintenance=True)
+    if on_host:
+        value["cacheCleanup"] = True
     descriptor, temporary = tempfile.mkstemp(prefix=".capabilities-", dir=capabilities.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

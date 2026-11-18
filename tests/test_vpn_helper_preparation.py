@@ -109,6 +109,11 @@ def test_upgrade_refreshes_reviewed_oneshot_helper_and_keeps_previous_source(tmp
         "cacheCleanup": True,
     }
     assert access == [True]
+    monkeypatch.setenv("MEDIAHUB_DEPENDENCY_CONTAINER", "1")
+    caps.write_text('{"mainBranchUpdates": true}')
+    module.refresh_host_updater(root, source)
+    assert access == [True]
+    assert "cacheCleanup" not in json.loads(caps.read_text())
     # Idempotence preserves the useful previous helper instead of backing up itself.
     module.refresh_host_updater(root, source)
     assert (root / "updates/platform_update_host.previous.py").read_text() == "old_version = True\n"
