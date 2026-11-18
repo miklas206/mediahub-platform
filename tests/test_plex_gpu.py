@@ -95,7 +95,11 @@ def test_status_is_observed_and_does_not_forward_private_job_records(tmp_path, m
     payload = {"gpu": {"name": "Test NVIDIA", "encoder": "43", "memoryUsed": "512",
                        "memoryTotal": "8192", "temperature": "40"},
                "adapterInstalled": True, "active": 2, "capabilities": {"hdrToneMapping": True},
-               "jobs": [{"token": "private-test-token", "source": "/private/media"}]}
+               "activePlaybacks": 1, "playbackAvailable": True,
+               "playbacks": [{"id": "private-playback-id", "media": "Example Film", "live": True,
+                              "playbackMode": "direct_play", "sourceFile": "/private/media"}],
+               "jobs": [{"id": "private-job-id", "status": "encoding", "bufferSeconds": 30,
+                         "token": "private-test-token", "source": "/private/media"}]}
     client = httpx.AsyncClient
     monkeypatch.setattr("agent.plex_gpu.httpx.AsyncClient", lambda **kw: client(
         transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)), **kw))
@@ -104,6 +108,14 @@ def test_status_is_observed_and_does_not_forward_private_job_records(tmp_path, m
     assert report["gpu"]["encoderPercent"] == 43
     assert report["gpu"]["activeJobs"] == 2
     assert report["gpu"]["hdrToneMapping"] is True
+    from mediahub.apps.remote_status import RuntimeStatus
+    gpu = RuntimeStatus.model_validate(report).gpu
+    assert gpu.activePlaybacks == 1
+    assert gpu.playbacks[0].media == "Example Film"
+    assert gpu.playbacks[0].playbackMode == "direct_play"
+    assert gpu.jobs[0].bufferSeconds == 30
+    assert "private-playback-id" not in json.dumps(report)
+    assert "private-job-id" not in json.dumps(report)
     assert "private-test-token" not in json.dumps(report)
     assert "/private/media" not in json.dumps(report)
     payload["adapterInstalled"] = False

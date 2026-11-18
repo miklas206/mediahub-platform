@@ -981,3 +981,16 @@ th[aria-sort] .torrent-column-sort {
     text-align: center;
   }
 }
+
+.plex-gpu-session {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+  overflow-wrap: anywhere;
+}
+.plex-gpu-session p {
+  margin: 0.35rem 0;
+}
+.plex-gpu-session progress {
+  width: min(22rem, 100%);
+  accent-color: var(--accent);
+}

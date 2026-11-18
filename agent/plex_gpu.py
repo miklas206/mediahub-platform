@@ -1,17 +1,54 @@
 """Observe and control only an explicitly linked, operator-installed GPU sidecar."""
 
 import asyncio
+import hashlib
 import ipaddress
+import json
 import re
 import time
 
 import httpx
+from mediahub.apps.remote_status import PlexGPUSession
 from mediahub.errors import DomainError
+from pydantic import ValidationError
 
 from agent.install_files import read_json, save_json
 
 PACKAGE = "org.mediahub.plex-gpu-transcoder"
 NAME = "mediahub-plex-gpu-transcoder"
+STATUS_LIMIT = 512 * 1024
+
+
+def sessions(value, limit):
+    if not isinstance(value, list):
+        return []
+    rows = []
+    for row in value[:limit]:
+        try:
+            public = PlexGPUSession.model_validate(row).model_dump()
+            public["id"] = hashlib.sha256(public["id"].encode()).hexdigest()[:24]
+            rows.append(public)
+        except ValidationError:
+            continue
+    return rows
+
+
+async def read_dashboard(url):
+    try:
+        async with asyncio.timeout(4), httpx.AsyncClient(
+            timeout=3, trust_env=False, follow_redirects=False
+        ) as client:
+            async with client.stream("GET", url + "/api/status") as response:
+                response.raise_for_status()
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    if len(body) + len(chunk) > STATUS_LIMIT:
+                        return {}
+                    body.extend(chunk)
+                value = json.loads(body)
+                return value if isinstance(value, dict) else {}
+    except (httpx.HTTPError, ValueError, TimeoutError):
+        return {}
 
 
 class PlexGPU:
@@ -76,17 +113,7 @@ class PlexGPU:
         row, url = await self.owned(record)
         state = row["State"]
         running = state.get("Running") is True and not state.get("Restarting")
-        observed = {}
-        if running:
-            try:
-                async with httpx.AsyncClient(timeout=3, trust_env=False, follow_redirects=False) as client:
-                    response = await client.get(url + "/api/status")
-                if response.status_code == 200 and len(response.content) <= 131072:
-                    observed = response.json()
-            except (httpx.HTTPError, ValueError):
-                pass
-        if not isinstance(observed, dict):
-            observed = {}
+        observed = await read_dashboard(url) if running else {}
         gpu = observed.get("gpu") or {}
         if not isinstance(gpu, dict):
             gpu = {}
@@ -104,6 +131,15 @@ class PlexGPU:
                 return value if 0 <= value <= maximum else None
             except (TypeError, ValueError):
                 return None
+
+        playback_count = observed.get("activePlaybacks")
+        if type(playback_count) is not int or not 0 <= playback_count <= 1000:
+            playback_count = None
+        buffer = observed.get("buffer")
+        buffer_seconds = buffer.get("seconds") if isinstance(buffer, dict) else None
+        if type(buffer_seconds) not in (int, float) or not 0 <= buffer_seconds <= 86400:
+            buffer_seconds = None
+        playback_available = observed.get("playbackAvailable")
 
         linked = observed.get("adapterInstalled") is True
         healthy = running and bool(gpu) and linked
@@ -130,6 +166,11 @@ class PlexGPU:
                 "memoryTotalMiB": number("memoryTotal", 1048576),
                 "temperature": number("temperature", 150),
                 "activeJobs": active,
+                "activePlaybacks": playback_count,
+                "playbackAvailable": playback_available if isinstance(playback_available, bool) else None,
+                "bufferSeconds": buffer_seconds,
+                "playbacks": sessions(observed.get("playbacks"), 80),
+                "jobs": sessions(observed.get("jobs"), 60),
                 "hdrToneMapping": isinstance(observed.get("capabilities"), dict) and observed["capabilities"].get("hdrToneMapping") is True,
             },
         }

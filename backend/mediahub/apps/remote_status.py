@@ -151,6 +151,27 @@ class RuntimeStatus(PublicModel):
     gpu: "PlexGPUStatus | None" = None
 
 
+class PlexGPUSession(PublicModel):
+    id: str = Field(max_length=128)
+    media: str = Field(default="", max_length=300)
+    user: str | None = Field(default=None, max_length=120)
+    player: str | None = Field(default=None, max_length=120)
+    status: str = Field(default="", max_length=32)
+    playbackMode: str | None = Field(default=None, max_length=32)
+    encoder: str | None = Field(default=None, max_length=180)
+    started: float | None = Field(default=None, ge=0, le=4102444800)
+    position: int | None = Field(default=None, ge=0, le=864000000)
+    duration: int | None = Field(default=None, ge=0, le=864000000)
+    segments: int | None = Field(default=None, ge=0, le=1000000)
+    speed: str | None = Field(default=None, max_length=32)
+    bufferSeconds: float | None = Field(default=None, ge=0, le=86400)
+    bufferTargetSeconds: float | None = Field(default=None, ge=0, le=86400)
+    live: bool = False
+    usingGpu: bool | None = None
+    paused: bool = False
+    throttled: bool = False
+
+
 class PlexGPUStatus(PublicModel):
     hdrToneMapping: bool = False
     name: str = ""
@@ -160,6 +181,11 @@ class PlexGPUStatus(PublicModel):
     memoryTotalMiB: float | None = None
     temperature: float | None = None
     activeJobs: int | None = None
+    activePlaybacks: int | None = Field(default=None, ge=0, le=1000)
+    playbackAvailable: bool | None = None
+    bufferSeconds: float | None = Field(default=None, ge=0, le=86400)
+    playbacks: list[PlexGPUSession] = Field(default_factory=list, max_length=80)
+    jobs: list[PlexGPUSession] = Field(default_factory=list, max_length=60)
 
 
 class PlexLibrary(PublicModel):

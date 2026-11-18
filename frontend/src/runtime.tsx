@@ -34,6 +34,8 @@ import {
   type PlexInstallOperation,
 } from "./plex-install-progress";
 
+import type { PlexGPUSession } from "./plex-gpu-sessions";
+
 export type Runtime = {
   state?: string;
   url?: string | null;
@@ -41,6 +43,11 @@ export type Runtime = {
     name: string; linked: boolean; hdrToneMapping?: boolean; encoderPercent?: number | null;
     memoryUsedMiB?: number | null; memoryTotalMiB?: number | null;
     temperature?: number | null; activeJobs: number | null;
+    activePlaybacks?: number | null;
+    playbackAvailable?: boolean | null;
+    bufferSeconds?: number | null;
+    playbacks?: PlexGPUSession[];
+    jobs?: PlexGPUSession[];
   };
   lanAccess?: { state: string; message: string };
   transcode?: { state: string; path?: string; message: string };

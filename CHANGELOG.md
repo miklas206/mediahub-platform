@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.85
+
+- Show active Plex playbacks, recent playback history and transcode job details inside the authenticated MediaHub GPU page.
+
 ## 0.6.84
 
 - Show live Plex GPU job activity in the signed-in MediaHub view, including remote access through MediaHub.

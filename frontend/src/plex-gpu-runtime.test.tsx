@@ -54,3 +54,23 @@ describe("Plex GPU activity", () => {
     expect(staleHtml).not.toContain("Encoding now");
   });
 });
+
+it("shows live playback and job details only for a fresh observation", () => {
+  const gpu = {
+    ...report.gpu!,
+    activePlaybacks: 1,
+    playbackAvailable: true,
+    playbacks: [{ id: "play", media: "Example film", status: "playing", playbackMode: "direct_play", live: true }],
+    jobs: [{ id: "job", media: "Previous film", status: "complete", bufferSeconds: 42 }],
+  };
+  const live = renderToStaticMarkup(<PlexGPUPanel report={{ ...report, gpu }} />);
+  expect(live).toContain("Example film");
+  expect(live).toContain("Direct Play");
+  expect(live).toContain("Previous film");
+  expect(live).toContain("Buffer: 42 sec.");
+  const stale = renderToStaticMarkup(
+    <PlexGPUPanel report={{ ...report, gpu, observationHealth: "healthy" }} />,
+  );
+  expect(stale).not.toContain("Example film");
+  expect(stale).not.toContain("Previous film");
+});

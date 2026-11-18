@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Runtime } from "./runtime";
+import { PlexGPUSessions } from "./plex-gpu-sessions";
 import { Panel } from "./phase2";
 import { t } from "./i18n";
 import { safeAppUrl } from "./app-uptime";
@@ -49,6 +50,14 @@ export function PlexGPUPanel({
           {activity}
         </div>
       </header>
+      <PlexGPUSessions
+        playbacks={gpu?.playbacks}
+        jobs={gpu?.jobs}
+        count={gpu?.activePlaybacks}
+        available={gpu?.playbackAvailable}
+        fresh={fresh}
+        buffer={gpu?.bufferSeconds}
+      />
       <div className="runtime-panels">
         <Panel title={t("NVIDIA GPU")}>
           <dl>

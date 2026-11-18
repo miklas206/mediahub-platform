@@ -1,6 +1,6 @@
 {
   "name": "@mediahub/frontend",
-  "version": "0.6.84",
+  "version": "0.6.85",
   "private": true,
   "type": "module",
   "scripts": {
