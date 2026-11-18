@@ -66,21 +66,23 @@ class AppDependencies:
                 paths.add("/host-evidence")
                 for path in sorted(paths):
                     candidate = PurePosixPath(path)
-                    if (
-                        not candidate.is_absolute()
-                        or len(candidate.parts) < 3
-                        or ".." in candidate.parts
-                    ):
-                        if path != "/host-evidence":
-                            raise ValueError()
+                    if not candidate.is_absolute() or ".." in candidate.parts:
+                        raise ValueError()
+                    if len(candidate.parts) < 3 and path not in {"/storage", "/host-evidence"}:
+                        raise ValueError()
+                    sources = {path}
+                    if path == "/host-evidence":
+                        sources.add(str(root / "evidence"))
                     matching = [
                         m
                         for m in own["Mounts"]
-                        if m["Type"] == "bind" and m["Source"] == path and m["Destination"] == path
+                        if m["Type"] == "bind"
+                        and m["Destination"] == path
+                        and m["Source"] in sources
                     ]
                     if len(matching) != 1:
                         raise ValueError()
-                    storage_binds.append(path + ":" + path + ":ro")
+                    storage_binds.append(matching[0]["Source"] + ":" + path + ":ro")
             name = "mediahub-app-dependencies"
             previous = await manager.docker("GET", "/containers/" + name + "/json", missing=True)
             if previous:

@@ -7,15 +7,18 @@ import mediahub.app_dependencies as dependencies
 import pytest
 
 
+@pytest.mark.parametrize("fresh", [False, True])
 @pytest.mark.parametrize("changed_source", [False, True])
 def test_helper_inherits_only_existing_approved_core_storage(
-    tmp_path, monkeypatch, changed_source
+    tmp_path, monkeypatch, changed_source, fresh
 ):
+    storage = "/storage" if fresh else "/mnt/media"
+    evidence = "/opt/mediahub/evidence" if fresh else "/host-evidence"
     approved = tmp_path / "container-apps.json"
     approved.write_text(
         json.dumps(
             {
-                "requiredMounts": {"/mnt/media": "synthetic-device"},
+                "requiredMounts": {storage: "synthetic-device"},
                 "hostMountSnapshot": "/host-evidence/snapshot.json",
             }
         )
@@ -42,10 +45,10 @@ def test_helper_inherits_only_existing_approved_core_storage(
             {"Type": "bind", "Source": "/opt/mediahub/data", "Destination": "/data"},
             {
                 "Type": "bind",
-                "Source": "/other" if changed_source else "/mnt/media",
-                "Destination": "/mnt/media",
+                "Source": "/other" if changed_source else storage,
+                "Destination": storage,
             },
-            {"Type": "bind", "Source": "/host-evidence", "Destination": "/host-evidence"},
+            {"Type": "bind", "Source": evidence, "Destination": "/host-evidence"},
             {"Type": "bind", "Source": "/unapproved", "Destination": "/unapproved"},
         ],
     }
@@ -75,8 +78,8 @@ def test_helper_inherits_only_existing_approved_core_storage(
         assert controller.message is None
         binds = created[0]["HostConfig"]["Binds"]
         assert created[0]["HostConfig"]["GroupAdd"] == ["1000", "10001", "991"]
-        assert "/mnt/media:/mnt/media:ro" in binds
-        assert "/host-evidence:/host-evidence:ro" in binds
+        assert f"{storage}:{storage}:ro" in binds
+        assert f"{evidence}:/host-evidence:ro" in binds
         assert not any("unapproved" in bind for bind in binds)
 
 
@@ -85,7 +88,9 @@ def test_preparation_refreshes_observed_versions_after_finishing(failed, monkeyp
     monkeypatch.setattr("mediahub.storage_control.ensure_storage", AsyncMock())
     monitor = SimpleNamespace(refresh_managed_versions=AsyncMock())
     manager = SimpleNamespace(lock=asyncio.Lock())
-    controller = dependencies.AppDependencies(SimpleNamespace(updates=monitor, managed_apps=manager))
+    controller = dependencies.AppDependencies(
+        SimpleNamespace(updates=monitor, managed_apps=manager)
+    )
     controller._run = AsyncMock()
     controller.message = "Preparation failed" if failed else None
     asyncio.run(controller.run())
