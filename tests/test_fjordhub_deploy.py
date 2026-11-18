@@ -253,6 +253,7 @@ def test_worker_streams_output_and_reports_exit(logged_in, monkeypatch, exit_cod
 
 def test_endpoint_rejects_arbitrary_script_and_missing_csrf(logged_in, monkeypatch):
     from mediahub.db import InstallationState
+
     with logged_in.app.state.services.sessions.begin() as db:
         db.scalar(select(InstallationState)).setup_completed = True
     monkeypatch.setattr("mediahub.fjordhub_deploy.FjordHubDeploy.launch", lambda *args: None)

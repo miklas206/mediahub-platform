@@ -29,7 +29,9 @@ def test_prowlarr_reuses_approved_host_without_installed_plex(tmp_path, monkeypa
     )
     approved["storage"].pop("downloads")
     approved["storage"]["other"] = {
-        "label": "Other", "kind": "other", "path": str(tmp_path / "other")
+        "label": "Other",
+        "kind": "other",
+        "path": str(tmp_path / "other"),
     }
     runtime.policy_file.write_text(json.dumps(approved))
     runtime.approved_host_policy_file = runtime.policy_file
@@ -43,7 +45,9 @@ def test_prowlarr_reuses_approved_host_without_installed_plex(tmp_path, monkeypa
         )
         assert runtime.policy().uid == 10001
     plan = asyncio.run(runtime.build_plan(spec))
-    assert plan["container"]["HostConfig"]["PortBindings"]["9696/tcp"][0]["HostIp"] == "192.168.1.110"
+    assert (
+        plan["container"]["HostConfig"]["PortBindings"]["9696/tcp"][0]["HostIp"] == "192.168.1.110"
+    )
     runtime.policy_file = tmp_path / "missing-explicit-policy.json"
     with pytest.raises(DomainError, match="not been configured"):
         runtime.policy()
@@ -111,7 +115,9 @@ def inspected_container(plan):
 
 
 def test_vpn_recreation_restores_only_missing_owned_jellyfin_cache(tmp_path):
-    runtime, spec = runtime_and_spec(tmp_path, "jellyfin", uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000)
+    runtime, spec = runtime_and_spec(
+        tmp_path, "jellyfin", uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000
+    )
     plan = asyncio.run(runtime.build_plan(spec))
     config = tmp_path / "appdata" / "mediahub-jellyfin"
     config.mkdir()
@@ -254,16 +260,20 @@ def test_download_progress_survives_public_status_forwarding(tmp_path, monkeypat
 
     async def scenario():
         started, release = asyncio.Event(), asyncio.Event()
+
         async def pull(*args):
             started.set()
             await release.wait()
             raise DomainError("pull_failed", "Image download failed", 503)
+
         monkeypatch.setattr("agent.container_apps.pull_latest", pull)
         task = asyncio.create_task(runtime.provision("jellyfin", plan))
         await started.wait()
         report = await runtime.status("jellyfin")
         client = SimpleNamespace(request=AsyncMock(return_value=report))
-        forwarded = await RemoteStatusCache().get("test", client, "/v1/container-apps/jellyfin/status")
+        forwarded = await RemoteStatusCache().get(
+            "test", client, "/v1/container-apps/jellyfin/status"
+        )
         assert forwarded["operation"]["phase"] == "download"
         assert forwarded["operation"]["progress"] == 10
         assert forwarded["operation"]["indeterminate"] is True
@@ -302,12 +312,17 @@ def test_owned_existing_container_can_resume_after_failed_install(tmp_path):
         )
     )
     assert result["state"] == "installed"
-    assert runtime.request.call_args_list[-1].args == ("POST", "/containers/mediahub-jellyfin/start")
+    assert runtime.request.call_args_list[-1].args == (
+        "POST",
+        "/containers/mediahub-jellyfin/start",
+    )
     assert "jellyfin" not in runtime.operations
 
 
 def test_provision_records_ownership_before_creating_and_starting(tmp_path, monkeypatch):
-    runtime, spec = runtime_and_spec(tmp_path, uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000)
+    runtime, spec = runtime_and_spec(
+        tmp_path, uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000
+    )
     plan = asyncio.run(runtime.build_plan(spec))
     calls = []
     publisher = "linuxserver/radarr@sha256:" + "b" * 64
@@ -360,6 +375,7 @@ def test_container_api_install_registers_owning_host_and_adapter(logged_in):
     svc = logged_in.app.state.services
     from mediahub.db import InstallationState
     from sqlalchemy import select
+
     with svc.sessions.begin() as db:
         db.scalar(select(InstallationState)).setup_completed = True
     agent = SimpleNamespace(
@@ -394,6 +410,7 @@ def test_retired_apps_hidden_and_installation_rejected(logged_in, app):
     svc = logged_in.app.state.services
     from mediahub.db import InstallationState
     from sqlalchemy import select
+
     with svc.sessions.begin() as db:
         db.scalar(select(InstallationState)).setup_completed = True
     assert "org.mediahub." + app not in {item["id"] for item in svc.catalog.list()}
@@ -420,9 +437,14 @@ def test_agent_rejects_retired_installations(tmp_path, app):
     with pytest.raises(DomainError, match="no longer available"):
         asyncio.run(runtime.plan(spec))
     with pytest.raises(DomainError, match="no longer available"):
-        asyncio.run(runtime.install(ContainerInstallRequest(
-            installation=spec, confirmedPlanDigest="a" * 64,
-        )))
+        asyncio.run(
+            runtime.install(
+                ContainerInstallRequest(
+                    installation=spec,
+                    confirmedPlanDigest="a" * 64,
+                )
+            )
+        )
     runtime.request.assert_not_called()
 
 
@@ -448,12 +470,18 @@ def test_container_status_passes_shared_adapter_schema_without_claiming_health(t
     assert forwarded["installationId"] == "mediahub-radarr"
 
 
-@pytest.mark.parametrize("labels,expected", [
-    ({"org.opencontainers.image.version": "10.11.1"}, "10.11.1"),
-    ({"build_version": "Linuxserver.io version:- 4.0.15.2941-ls284 Build-date:- 2026-01-01"}, "4.0.15.2941"),
-    ({"org.opencontainers.image.version": "v2.4.0-ls12"}, "2.4.0"),
-    ({"build_version": "unknown"}, None),
-    ({"org.opencontainers.image.version": "1.2.3-rc1"}, None),
-])
+@pytest.mark.parametrize(
+    "labels,expected",
+    [
+        ({"org.opencontainers.image.version": "10.11.1"}, "10.11.1"),
+        (
+            {"build_version": "Linuxserver.io version:- 4.0.15.2941-ls284 Build-date:- 2026-01-01"},
+            "4.0.15.2941",
+        ),
+        ({"org.opencontainers.image.version": "v2.4.0-ls12"}, "2.4.0"),
+        ({"build_version": "unknown"}, None),
+        ({"org.opencontainers.image.version": "1.2.3-rc1"}, None),
+    ],
+)
 def test_publisher_version_labels_are_normalized(labels, expected):
     assert ContainerApps.image_version(labels) == expected

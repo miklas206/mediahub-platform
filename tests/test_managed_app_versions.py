@@ -72,7 +72,9 @@ def test_bundled_checks_use_running_app_version_and_report_preparation_failure(
     assert checked["installedVersion"] == version
     assert checked["checkStatus"] == status
     assert checked["updateAvailable"] is (version is not None and version != BUNDLED_VERSION)
-    assert checked["installReady"] is (version is not None and version != BUNDLED_VERSION and preparation == "ready")
+    assert checked["installReady"] is (
+        version is not None and version != BUNDLED_VERSION and preparation == "ready"
+    )
     result = UpdateMonitor._app_result(
         {"id": "seed", "name": "MediaSeed", "version": "managed"}, checked
     )

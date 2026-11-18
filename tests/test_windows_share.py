@@ -101,7 +101,13 @@ def test_optional_fields_default_and_normalize():
 def test_routes_require_login_and_configuration_changes_require_csrf(client, logged_in):
     cookie = client.cookies.get("mediahub_session")
     client.cookies.clear()
-    for suffix in ("configuration", "status", "connect.ps1", "diagnostics.ps1", "reset-password.ps1"):
+    for suffix in (
+        "configuration",
+        "status",
+        "connect.ps1",
+        "diagnostics.ps1",
+        "reset-password.ps1",
+    ):
         assert client.get("/api/v1/windows-share/" + suffix).status_code == 401
     assert client.post("/api/v1/windows-share/check").status_code == 401
     assert client.put("/api/v1/windows-share/configuration", json=CONFIG).status_code == 401

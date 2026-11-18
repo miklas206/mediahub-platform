@@ -56,11 +56,18 @@ class ManagedInstaller:
             raise DomainError("not_found", "App is not supported", 404)
         manifest = self.svc.catalog.get(package)
         repository = REPOSITORIES[package.rsplit(".", 1)[-1]]
-        if (manifest.lifecycle != "managed-compose" or manifest.adapter.id != package
-                or manifest.repository != f"https://github.com/{repository}"
-                or manifest.updateSource.package != repository
-                or __version__ not in SpecifierSet(manifest.coreCompatibility)):
-            raise DomainError("invalid_manifest", "The app catalog is incompatible with this MediaHub version", 409)
+        if (
+            manifest.lifecycle != "managed-compose"
+            or manifest.adapter.id != package
+            or manifest.repository != f"https://github.com/{repository}"
+            or manifest.updateSource.package != repository
+            or __version__ not in SpecifierSet(manifest.coreCompatibility)
+        ):
+            raise DomainError(
+                "invalid_manifest",
+                "The app catalog is incompatible with this MediaHub version",
+                409,
+            )
         policy = self.manager.policy.get(package)
         if not policy or not policy.installFile:
             raise DomainError(

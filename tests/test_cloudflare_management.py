@@ -63,7 +63,9 @@ def managed(logged_in, monkeypatch):
     monkeypatch.setattr(manager, "call", call)
     response = logged_in.put(BASE + "/credentials", json={"accountId": ACCOUNT, "token": TOKEN})
     assert response.status_code == 200, response.text
-    asyncio.run(manager.create("Home"))  # Legacy journal fixtures; tunnel creation is no longer public.
+    asyncio.run(
+        manager.create("Home")
+    )  # Legacy journal fixtures; tunnel creation is no longer public.
     return svc, manager, remote
 
 

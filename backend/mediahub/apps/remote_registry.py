@@ -22,14 +22,19 @@ DEFINITIONS = (
         ("restart-vpn", "restart-qbittorrent", "test-vpn"),
     ),
     RemoteAppDefinition(
-        "org.mediahub.plex-gpu-transcoder", "plex_gpu_installation",
-        "/v1/plex-gpu", view_id="plex-gpu",
+        "org.mediahub.plex-gpu-transcoder",
+        "plex_gpu_installation",
+        "/v1/plex-gpu",
+        view_id="plex-gpu",
     ),
 ) + tuple(
     RemoteAppDefinition(
-        "org.mediahub." + app, "container_installation_" + app,
-        "/v1/container-apps/" + app, view_id="container",
-    ) for app in CONTAINER_APPS
+        "org.mediahub." + app,
+        "container_installation_" + app,
+        "/v1/container-apps/" + app,
+        view_id="container",
+    )
+    for app in CONTAINER_APPS
 )
 
 
@@ -45,7 +50,11 @@ def register_remote_apps(svc):
             if binding is not None and app is not None:
                 from mediahub.apps.plex_gpu import PlexGPUAdapter
 
-                adapter_type = PlexGPUAdapter if definition.package_id == "org.mediahub.plex-gpu-transcoder" else RemoteAppAdapter
+                adapter_type = (
+                    PlexGPUAdapter
+                    if definition.package_id == "org.mediahub.plex-gpu-transcoder"
+                    else RemoteAppAdapter
+                )
                 svc.apps.adapters[app.id] = adapter_type(
                     definition,
                     binding.value["hostId"],
@@ -55,7 +64,8 @@ def register_remote_apps(svc):
                     app.id,
                     status_enricher=(
                         svc.vpn_gateway.plex_forwarding.runtime_status
-                        if definition.package_id == "org.mediahub.plex" else None
+                        if definition.package_id == "org.mediahub.plex"
+                        else None
                     ),
                     metadata_cache=getattr(getattr(svc, "updates", None), "github_metadata", None),
                 )

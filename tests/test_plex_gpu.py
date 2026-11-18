@@ -14,27 +14,48 @@ def fixture(tmp_path):
     media = {"Source": "/verified/media", "Destination": "/media/movies/1", "RW": False}
     row = {
         "Image": "sha256:" + "a" * 64,
-        "Config": {"User": "1000:1000", "Labels": {"org.mediahub.package": PACKAGE,
-                               "org.mediahub.plex.installation": "plex-main"}},
-        "HostConfig": {"ReadonlyRootfs": True,
-                       "PortBindings": {"8090/tcp": [{"HostIp": "192.168.1.10", "HostPort": "8090"}]}},
+        "Config": {
+            "User": "1000:1000",
+            "Labels": {
+                "org.mediahub.package": PACKAGE,
+                "org.mediahub.plex.installation": "plex-main",
+            },
+        },
+        "HostConfig": {
+            "ReadonlyRootfs": True,
+            "PortBindings": {"8090/tcp": [{"HostIp": "192.168.1.10", "HostPort": "8090"}]},
+        },
         "Mounts": [dict(media)],
-        "State": {"Running": True, "StartedAt": "2026-01-01T00:00:00Z",
-                  "Health": {"Status": "healthy"}},
+        "State": {
+            "Running": True,
+            "StartedAt": "2026-01-01T00:00:00Z",
+            "Health": {"Status": "healthy"},
+        },
     }
     policy = SimpleNamespace(installationId="plex-main", hostId="local")
     runtime = SimpleNamespace(
         state_dir=tmp_path,
         policy=lambda: SimpleNamespace(bindAddress="192.168.1.10", uid=1000, gid=1000),
-        control=SimpleNamespace(policy=lambda: policy,
-                                inspect=AsyncMock(return_value={"Mounts": [media]}),
-                                storage_verified=AsyncMock(return_value=True)),
+        control=SimpleNamespace(
+            policy=lambda: policy,
+            inspect=AsyncMock(return_value={"Mounts": [media]}),
+            storage_verified=AsyncMock(return_value=True),
+        ),
         request=AsyncMock(return_value=row),
     )
     service = PlexGPU(runtime)
-    service.path.write_text(json.dumps({"enabled": True, "container": NAME,
-        "imageId": row["Image"], "plexInstallationId": "plex-main",
-        "installationId": "plex-main-gpu", "version": "0.2.0"}))
+    service.path.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "container": NAME,
+                "imageId": row["Image"],
+                "plexInstallationId": "plex-main",
+                "installationId": "plex-main-gpu",
+                "version": "0.2.0",
+            }
+        )
+    )
     return service, runtime, row
 
 
@@ -92,23 +113,52 @@ def test_stop_and_restart_target_only_the_gpu_container(tmp_path):
 
 def test_status_is_observed_and_does_not_forward_private_job_records(tmp_path, monkeypatch):
     service, _, _ = fixture(tmp_path)
-    payload = {"gpu": {"name": "Test NVIDIA", "encoder": "43", "memoryUsed": "512",
-                       "memoryTotal": "8192", "temperature": "40"},
-               "adapterInstalled": True, "active": 2, "capabilities": {"hdrToneMapping": True},
-               "activePlaybacks": 1, "playbackAvailable": True,
-               "playbacks": [{"id": "private-playback-id", "media": "Example Film", "live": True,
-                              "playbackMode": "direct_play", "sourceFile": "/private/media"}],
-               "jobs": [{"id": "private-job-id", "status": "encoding", "bufferSeconds": 30,
-                         "token": "private-test-token", "source": "/private/media"}]}
+    payload = {
+        "gpu": {
+            "name": "Test NVIDIA",
+            "encoder": "43",
+            "memoryUsed": "512",
+            "memoryTotal": "8192",
+            "temperature": "40",
+        },
+        "adapterInstalled": True,
+        "active": 2,
+        "capabilities": {"hdrToneMapping": True},
+        "activePlaybacks": 1,
+        "playbackAvailable": True,
+        "playbacks": [
+            {
+                "id": "private-playback-id",
+                "media": "Example Film",
+                "live": True,
+                "playbackMode": "direct_play",
+                "sourceFile": "/private/media",
+            }
+        ],
+        "jobs": [
+            {
+                "id": "private-job-id",
+                "status": "encoding",
+                "bufferSeconds": 30,
+                "token": "private-test-token",
+                "source": "/private/media",
+            }
+        ],
+    }
     client = httpx.AsyncClient
-    monkeypatch.setattr("agent.plex_gpu.httpx.AsyncClient", lambda **kw: client(
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)), **kw))
+    monkeypatch.setattr(
+        "agent.plex_gpu.httpx.AsyncClient",
+        lambda **kw: client(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)), **kw
+        ),
+    )
     report = asyncio.run(service.status())
     assert report["health"] == "healthy"
     assert report["gpu"]["encoderPercent"] == 43
     assert report["gpu"]["activeJobs"] == 2
     assert report["gpu"]["hdrToneMapping"] is True
     from mediahub.apps.remote_status import RuntimeStatus
+
     gpu = RuntimeStatus.model_validate(report).gpu
     assert gpu.activePlaybacks == 1
     assert gpu.playbacks[0].media == "Example Film"
@@ -129,8 +179,13 @@ def test_discovery_is_idempotent_and_preserves_existing_registration(client):
 
     svc = client.app.state.services
     original = svc.hosts
-    report = {"installed": True, "hostId": "local", "installationId": "plex-main-gpu",
-              "state": "running", "version": "0.2.0"}
+    report = {
+        "installed": True,
+        "hostId": "local",
+        "installationId": "plex-main-gpu",
+        "state": "running",
+        "version": "0.2.0",
+    }
     remote = SimpleNamespace(request=AsyncMock(return_value=report))
     svc.hosts = SimpleNamespace(client=lambda host: remote)
     with svc.sessions.begin() as db:

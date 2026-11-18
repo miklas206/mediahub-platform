@@ -62,17 +62,37 @@ def test_legacy_palette_gets_safe_theme_defaults(logged_in):
     assert response.json()["data"]["appearance"] == APPEARANCE
 
 
-@pytest.mark.parametrize("style", ["midnight-glass", "soft-orbit", "precision-terminal", "floating-layers", "edge-signal"])
+@pytest.mark.parametrize(
+    "style",
+    ["midnight-glass", "soft-orbit", "precision-terminal", "floating-layers", "edge-signal"],
+)
 def test_beta_theme_and_layout_persist(logged_in, style):
-    value = {**APPEARANCE, "style": style, "mode": "light", "density": "compact", "reducedMotion": True}
+    value = {
+        **APPEARANCE,
+        "style": style,
+        "mode": "light",
+        "density": "compact",
+        "reducedMotion": True,
+    }
     response = logged_in.put("/api/v1/auth/preferences", json={"appearance": value})
     assert response.status_code == 200
     assert logged_in.get("/api/v1/auth/me").json()["data"]["appearance"] == value
 
 
-@pytest.mark.parametrize("field,value", [("style", "bad"), ("mode", "bad"), ("density", "bad"), ("reducedMotion", "true"), ("navigation", "unknown")])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("style", "bad"),
+        ("mode", "bad"),
+        ("density", "bad"),
+        ("reducedMotion", "true"),
+        ("navigation", "unknown"),
+    ],
+)
 def test_invalid_theme_preferences_are_rejected(logged_in, field, value):
-    response = logged_in.put("/api/v1/auth/preferences", json={"appearance": {**APPEARANCE, field: value}})
+    response = logged_in.put(
+        "/api/v1/auth/preferences", json={"appearance": {**APPEARANCE, field: value}}
+    )
     assert response.status_code == 422
 
 
@@ -241,13 +261,27 @@ def test_navigation_layout_is_persisted_for_the_account(logged_in, navigation):
     assert response.status_code == 200
     assert logged_in.get("/api/v1/auth/me").json()["data"]["appearance"] == value
     user_id = logged_in.get("/api/v1/auth/me").json()["data"]["id"]
-    assert SettingsService(logged_in.app.state.services.sessions).user_preferences(user_id).appearance.navigation == navigation
+    assert (
+        SettingsService(logged_in.app.state.services.sessions)
+        .user_preferences(user_id)
+        .appearance.navigation
+        == navigation
+    )
 
 
-@pytest.mark.parametrize("host_locale,expected", [
-    ("da_DK.UTF-8", "da"), ("da-DK", "da"), ("en_GB.UTF-8", "en"),
-    ("de-DE", "en"), ("sv_SE", "en"), ("nb-NO", "en"), ("C", "en"), ("", "en"),
-])
+@pytest.mark.parametrize(
+    "host_locale,expected",
+    [
+        ("da_DK.UTF-8", "da"),
+        ("da-DK", "da"),
+        ("en_GB.UTF-8", "en"),
+        ("de-DE", "en"),
+        ("sv_SE", "en"),
+        ("nb-NO", "en"),
+        ("C", "en"),
+        ("", "en"),
+    ],
+)
 def test_fresh_language_and_restart(tmp_path, monkeypatch, host_locale, expected):
     from fastapi.testclient import TestClient
     from mediahub.config import Config
@@ -261,16 +295,25 @@ def test_fresh_language_and_restart(tmp_path, monkeypatch, host_locale, expected
     other = "en" if expected == "da" else "da"
     with TestClient(create_app(config), base_url=config.base_url) as client:
         assert client.get("/api/v1/setup/status").json()["data"]["defaultLanguage"] == expected
-        account = client.post("/api/v1/setup/administrator", json={"username": "admin", "password": password}).json()["data"]
+        account = client.post(
+            "/api/v1/setup/administrator", json={"username": "admin", "password": password}
+        ).json()["data"]
         assert account["language"] == expected
         client.headers["X-MediaHub-CSRF"] = account["csrf"]
         assert client.put("/api/v1/auth/preferences", json={"language": other}).status_code == 200
-        member = client.post("/api/v1/users", json={"username": "member", "password": password, "role": "user"}).json()["data"]
+        member = client.post(
+            "/api/v1/users", json={"username": "member", "password": password, "role": "user"}
+        ).json()["data"]
         assert member["language"] == expected
         assert client.post("/api/v1/auth/logout").status_code == 200
     monkeypatch.setenv("MEDIAHUB_HOST_LOCALE", other)
     with TestClient(create_app(config), base_url=config.base_url) as client:
         assert client.get("/api/v1/setup/status").json()["data"]["defaultLanguage"] == expected
-        assert client.post("/api/v1/auth/login", json={"username": "admin", "password": password}).json()["data"]["language"] == other
+        assert (
+            client.post(
+                "/api/v1/auth/login", json={"username": "admin", "password": password}
+            ).json()["data"]["language"]
+            == other
+        )
         with client.app.state.services.sessions() as db:
             assert db.get(User, member["id"]).preferred_language == expected

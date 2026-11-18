@@ -19,7 +19,11 @@ def hub_stack(compose: dict, root: Path) -> tuple[dict, dict]:
         if not isinstance(binding, str):
             raise ValueError("Expected explicit hub HTTPS bindings")
         address, port, target = binding.split(":")
-        if not ipaddress.IPv4Address(address).is_private or port not in {"443", "18765"} or target != "18765":
+        if (
+            not ipaddress.IPv4Address(address).is_private
+            or port not in {"443", "18765"}
+            or target != "18765"
+        ):
             raise ValueError("Expected explicit private hub HTTPS bindings")
     mounts = {}
     for volume in [*hub["volumes"], *runtime["volumes"]]:
@@ -33,7 +37,9 @@ def hub_stack(compose: dict, root: Path) -> tuple[dict, dict]:
             continue
         mounts[target] = volume
     hub["volumes"] = list(mounts.values())
-    hub["group_add"] = list(dict.fromkeys([*hub.get("group_add", []), *runtime.get("group_add", [])]))
+    hub["group_add"] = list(
+        dict.fromkeys([*hub.get("group_add", []), *runtime.get("group_add", [])])
+    )
     hub["environment"].update(runtime["environment"])
     hub["environment"]["MEDIAHUB_RUNTIME_MODE"] = "embedded"
     hub["environment"].pop("MEDIAHUB_AGENT_TLS_CERT", None)
@@ -61,10 +67,14 @@ def hub_stack(compose: dict, root: Path) -> tuple[dict, dict]:
     }
     routing = {
         "tcp": {
-            "routers": {"hub": {
-                "entryPoints": ["hub"], "rule": "HostSNI(`*`)",
-                "service": "hub", "tls": {"passthrough": True},
-            }},
+            "routers": {
+                "hub": {
+                    "entryPoints": ["hub"],
+                    "rule": "HostSNI(`*`)",
+                    "service": "hub",
+                    "tls": {"passthrough": True},
+                }
+            },
             "services": {"hub": {"loadBalancer": {"servers": [{"address": "core:18765"}]}}},
         },
     }

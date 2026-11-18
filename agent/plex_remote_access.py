@@ -108,7 +108,9 @@ async def configure(runtime, shared, body):
             await runtime.checkpoint(policy)
             from agent.plex_lan import configure as advertise_endpoint
 
-            await advertise_endpoint(runtime, policy, public_endpoint=(body.publicIp, body.publicPort), refresh=False)
+            await advertise_endpoint(
+                runtime, policy, public_endpoint=(body.publicIp, body.publicPort), refresh=False
+            )
             endpoint = {"publicIp": body.publicIp, "publicPort": body.publicPort}
             if saved.get("published") != endpoint:
                 await control.plex_get(policy, "/myplex/refreshReachability", "PUT")

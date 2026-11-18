@@ -35,8 +35,18 @@ async def discover(svc):
             binding.value = value
         app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == PACKAGE))
         if app is None:
-            db.add(InstalledApp(package_id=PACKAGE, name="Plex GPU Transcoder",
-                                version=report.get("version", "unknown"),
-                                state=report["state"], is_mock=False))
+            db.add(
+                InstalledApp(
+                    package_id=PACKAGE,
+                    name="Plex GPU Transcoder",
+                    version=report.get("version", "unknown"),
+                    state=report["state"],
+                    is_mock=False,
+                )
+            )
         else:
-            app.version, app.state, app.is_mock = report.get("version", "unknown"), report["state"], False
+            app.version, app.state, app.is_mock = (
+                report.get("version", "unknown"),
+                report["state"],
+                False,
+            )

@@ -973,7 +973,9 @@ def test_cleanup_preserves_current_rollback_container_and_foreign_images(tmp_pat
 
     def command(*args):
         if args[:3] == ("docker", "image", "inspect"):
-            return ids["old"] if args[-1] == "mediahub-core:source-0.4.29-333333333333" else args[-1]
+            return (
+                ids["old"] if args[-1] == "mediahub-core:source-0.4.29-333333333333" else args[-1]
+            )
         if args[:3] == ("docker", "ps", "-aq"):
             return "container-id"
         if args[:2] == ("docker", "inspect"):
@@ -1037,8 +1039,10 @@ def test_update_and_rollback_preserve_live_storage_socket(tmp_path, monkeypatch,
 
 def test_failed_snapshot_keeps_private_diagnostics_without_public_secret(tmp_path, monkeypatch):
     updater, root, _ = fixture(tmp_path, monkeypatch)
+
     def fail(backup):
         raise OSError("synthetic-sensitive-detail")
+
     monkeypatch.setattr(updater, "_copy_configuration", fail)
     updater.process()
     log = root / "update-diagnostics/last-failure.log"
@@ -1079,15 +1083,19 @@ def test_sqlite_snapshot_keeps_committed_wal_and_ignores_new_sidecars(tmp_path, 
 
 
 @pytest.mark.parametrize("failures,expected,attempts", [(1, "succeeded", 2), (9, "rolled_back", 3)])
-def test_snapshot_transient_failure_retries_with_same_operation(tmp_path, monkeypatch, failures, expected, attempts):
+def test_snapshot_transient_failure_retries_with_same_operation(
+    tmp_path, monkeypatch, failures, expected, attempts
+):
     updater, root, commands = fixture(tmp_path, monkeypatch)
     original = updater._copy_configuration
     calls = []
+
     def snapshot(backup):
         calls.append(backup)
         if len(calls) <= failures:
             raise FileNotFoundError(2, "temporary SQLite sidecar")
         original(backup)
+
     monkeypatch.setattr(updater, "_copy_configuration", snapshot)
     updater.process()
     status = json.loads((root / "updates/status.json").read_text())
@@ -1103,6 +1111,7 @@ def test_failed_health_retries_only_after_successful_rollback(tmp_path, monkeypa
     updater, root, _ = fixture(tmp_path, monkeypatch)
     original = updater._wait
     count = [0]
+
     def wait(service, health=False, **kwargs):
         compose = json.loads(updater.compose.read_text())
         if service == "core" and health and ":release-" in compose["services"]["core"]["image"]:
@@ -1110,6 +1119,7 @@ def test_failed_health_retries_only_after_successful_rollback(tmp_path, monkeypa
             if count[0] < 3:
                 raise host_module.HealthVerificationError("temporary probe failure")
         return original(service, health=health, **kwargs)
+
     monkeypatch.setattr(updater, "_wait", wait)
     updater.process()
     assert json.loads((root / "updates/status.json").read_text())["state"] == "succeeded"
@@ -1121,11 +1131,17 @@ def test_failed_health_retries_only_after_successful_rollback(tmp_path, monkeypa
 def test_failed_rollback_never_retries(tmp_path, monkeypatch):
     updater, root, _ = fixture(tmp_path, monkeypatch)
     snapshot = []
+
     def fail(backup):
         snapshot.append(backup)
         raise FileNotFoundError(2, "temporary")
+
     monkeypatch.setattr(updater, "_copy_configuration", fail)
-    monkeypatch.setattr(updater, "_wait", lambda *args, **kwargs: (_ for _ in ()).throw(host_module.HealthVerificationError()))
+    monkeypatch.setattr(
+        updater,
+        "_wait",
+        lambda *args, **kwargs: (_ for _ in ()).throw(host_module.HealthVerificationError()),
+    )
     with pytest.raises(host_module.HealthVerificationError):
         updater.process()
     assert len(snapshot) == 1
@@ -1222,20 +1238,23 @@ def test_package_cache_access_is_narrow_and_idempotent(tmp_path, monkeypatch, ex
 
 def test_cache_prune_uses_disposable_client_state_under_protect_home(monkeypatch):
     calls = []
+
     def run(args, **kwargs):
-        env = kwargs['env']
-        assert Path(env['DOCKER_CONFIG']).is_dir()
-        assert env['HOME'] == env['DOCKER_CONFIG']
-        assert env['DOCKER_HOST'] == 'unix:///var/run/docker.sock'
-        assert 'REGISTRY_PASSWORD' not in env
+        env = kwargs["env"]
+        assert Path(env["DOCKER_CONFIG"]).is_dir()
+        assert env["HOME"] == env["DOCKER_CONFIG"]
+        assert env["DOCKER_HOST"] == "unix:///var/run/docker.sock"
+        assert "REGISTRY_PASSWORD" not in env
         calls.append((args, env))
-        return SimpleNamespace(stdout='')
+        return SimpleNamespace(stdout="")
+
     from pathlib import Path
-    monkeypatch.setenv('REGISTRY_PASSWORD', 'synthetic-not-inherited')
-    monkeypatch.setattr(host_module.subprocess, 'run', run)
-    HostUpdater._run(['docker', 'builder', 'prune', '--all', '--force'], capture=False)
+
+    monkeypatch.setenv("REGISTRY_PASSWORD", "synthetic-not-inherited")
+    monkeypatch.setattr(host_module.subprocess, "run", run)
+    HostUpdater._run(["docker", "builder", "prune", "--all", "--force"], capture=False)
     assert len(calls) == 1
-    assert not Path(calls[0][1]['DOCKER_CONFIG']).exists()
+    assert not Path(calls[0][1]["DOCKER_CONFIG"]).exists()
 
 
 def test_retention_keeps_operator_and_unmarked_backups(tmp_path, monkeypatch):

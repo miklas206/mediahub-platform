@@ -108,7 +108,9 @@ def test_refresh_preflight_does_not_install_or_advertise_on_conflict(
         repository = "other/repository"
     elif blocked == "override":
         migration.SYSTEMD_DROPIN.mkdir()
-        (migration.SYSTEMD_DROPIN / "source-build.conf").write_text("[Service]\nPrivateNetwork=yes\n")
+        (migration.SYSTEMD_DROPIN / "source-build.conf").write_text(
+            "[Service]\nPrivateNetwork=yes\n"
+        )
     elif blocked == "request":
         (root / "updates/request.json").write_text("{}")
     else:

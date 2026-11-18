@@ -76,9 +76,16 @@ def setup_manager(logged_in, tmp_path, monkeypatch, package=SEED, runtime=False)
     svc = logged_in.app.state.services
     policy = {package: {"installationId": "synthetic-installation", "project": "synthetic-app"}}
     if runtime:
-        policy[package]["runtimeLabels"] = ({"org.mediahub.mediavpn.seedbox": "mediaseed"} if package == SEED else {"org.mediahub.mediavpn.owner": "mediavpn"})
+        policy[package]["runtimeLabels"] = (
+            {"org.mediahub.mediavpn.seedbox": "mediaseed"}
+            if package == SEED
+            else {"org.mediahub.mediavpn.owner": "mediavpn"}
+        )
         if package == SEED:
-            policy[package].update(integrationUrl="http://127.0.0.1:18802", integrationTokenFile=str(tmp_path / "synthetic-integration.token"))
+            policy[package].update(
+                integrationUrl="http://127.0.0.1:18802",
+                integrationTokenFile=str(tmp_path / "synthetic-integration.token"),
+            )
     path = tmp_path / "policy.json"
     path.write_text(json.dumps(policy))
     svc.config.managed_apps_policy_file = path
@@ -190,7 +197,9 @@ def test_managed_registration_confirmation_removal_and_restart(logged_in, tmp_pa
     )
 
 
-def test_live_seed_health_ignores_saved_stopped_state_and_replaced_client(logged_in, tmp_path, monkeypatch):
+def test_live_seed_health_ignores_saved_stopped_state_and_replaced_client(
+    logged_in, tmp_path, monkeypatch
+):
     from mediahub.db import InstalledApp
     from sqlalchemy import select
 
@@ -200,12 +209,18 @@ def test_live_seed_health_ignores_saved_stopped_state_and_replaced_client(logged
         stored.state = "stopped"
         app_id = stored.id
     rows = [
-        {"Config": {"Labels": {"com.docker.compose.service": "app"}},
-         "State": {"Running": True, "Health": {"Status": "healthy"}}},
-        {"Config": {"Labels": {"com.docker.compose.service": "qbittorrent"}},
-         "State": {"Running": False}},
-        {"Config": {"Labels": {"org.mediahub.mediavpn.seedbox": "mediaseed"}},
-         "State": {"Running": True}},
+        {
+            "Config": {"Labels": {"com.docker.compose.service": "app"}},
+            "State": {"Running": True, "Health": {"Status": "healthy"}},
+        },
+        {
+            "Config": {"Labels": {"com.docker.compose.service": "qbittorrent"}},
+            "State": {"Running": False},
+        },
+        {
+            "Config": {"Labels": {"org.mediahub.mediavpn.seedbox": "mediaseed"}},
+            "State": {"Running": True},
+        },
     ]
     monkeypatch.setattr(manager, "containers", AsyncMock(return_value=rows))
     response = logged_in.get("/api/v1/apps")
@@ -266,7 +281,9 @@ def test_uninstall_requires_admin_and_csrf(logged_in, tmp_path, monkeypatch):
     assert not any(method != "GET" for method, _ in calls)
 
 
-def test_vpn_removal_dependency_has_persistent_guidance_but_post_stays_blocked(logged_in, tmp_path, monkeypatch):
+def test_vpn_removal_dependency_has_persistent_guidance_but_post_stays_blocked(
+    logged_in, tmp_path, monkeypatch
+):
     _, manager, rows, calls = setup_manager(logged_in, tmp_path, monkeypatch, VPN, True)
     rows["b" * 64] = {
         "Id": "b" * 64,

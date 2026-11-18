@@ -28,7 +28,8 @@ class UpdateMonitor:
         data_dir = getattr(getattr(services, "config", None), "data_dir", None)
         self.git_checks = (
             GitHubGitChecks(data_dir, lambda: self.services.release_credentials.token())
-            if data_dir else None
+            if data_dir
+            else None
         )
         self.github_metadata = GitHubMetadata(
             state_file=data_dir / "github-cooldowns.json" if data_dir else None
@@ -70,12 +71,17 @@ class UpdateMonitor:
 
     def summary(self):
         value = self._load()
-        retired = {app["id"] for app in self.services.apps.list()
-                   if app.get("packageId") == "org.mediahub.cloudflared"}
+        retired = {
+            app["id"]
+            for app in self.services.apps.list()
+            if app.get("packageId") == "org.mediahub.cloudflared"
+        }
         value["items"] = [item for item in value["items"] if item["id"] not in retired]
         value["count"] = sum(bool(item.get("updateAvailable")) for item in value["items"])
         if retired and value.get("lastError") and value["lastError"].startswith("Could not check:"):
-            failed = [item["name"] for item in value["items"] if item.get("checkStatus") == "failed"]
+            failed = [
+                item["name"] for item in value["items"] if item.get("checkStatus") == "failed"
+            ]
             value["lastError"] = "Could not check: " + ", ".join(failed) if failed else None
         for item in value["items"]:
             if item.get("installedVersion") == "managed":
@@ -93,7 +99,10 @@ class UpdateMonitor:
     def _app_result(app, result):
         versions = [str(value)[:128] for value in result.get("releaseVersions") or [] if value]
         latest = result.get("latestVersion") or (versions[0] if versions else None)
-        plex = app.get("packageId") == "org.mediahub.plex" or result.get("updateSource") == "container-image"
+        plex = (
+            app.get("packageId") == "org.mediahub.plex"
+            or result.get("updateSource") == "container-image"
+        )
         installed = result.get("installedVersion")
         image_digest = latest if plex else None
         if plex:
@@ -105,7 +114,8 @@ class UpdateMonitor:
         return {
             "id": app["id"],
             "name": app["name"],
-            "installedVersion": installed or (app.get("version") if app.get("version") != "managed" else None),
+            "installedVersion": installed
+            or (app.get("version") if app.get("version") != "managed" else None),
             "latestVersion": str(latest)[:128] if latest else None,
             "updateAvailable": available,
             **({"latestImageDigest": image_digest} if image_digest else {}),
@@ -115,7 +125,18 @@ class UpdateMonitor:
             "message": str(result.get("message") or result.get("reason") or "Checked")[:200],
             **{
                 key: result[key]
-                for key in ("checkStatus", "stale", "retryAt", "checkedAt", "errorCode", "bundledVersion", "preparationState", "latestCommit", "installedCommit", "automaticUpdate")
+                for key in (
+                    "checkStatus",
+                    "stale",
+                    "retryAt",
+                    "checkedAt",
+                    "errorCode",
+                    "bundledVersion",
+                    "preparationState",
+                    "latestCommit",
+                    "installedCommit",
+                    "automaticUpdate",
+                )
                 if key in result
             },
         }
@@ -196,8 +217,10 @@ class UpdateMonitor:
             if cached and time.monotonic() < cached[0]:
                 return copy.deepcopy(cached[1])
             result = await GitHubSourceProvider(
-                current_version, installed_commit,
-                source_access=self.source_access or self.git_checks, metadata_cache=self.github_metadata,
+                current_version,
+                installed_commit,
+                source_access=self.source_access or self.git_checks,
+                metadata_cache=self.github_metadata,
                 project_path=project_path,
             ).check(repository, token)
             self.source_checks[key] = (time.monotonic() + 60, copy.deepcopy(result))
@@ -255,9 +278,7 @@ class UpdateMonitor:
             {
                 "id": "mediahub-core",
                 "name": "MediaHub Core",
-                "checkStatus": "checked"
-                if result.get("latestVersion")
-                else "unchecked",
+                "checkStatus": "checked" if result.get("latestVersion") else "unchecked",
                 "installedVersion": result.get("installedVersion"),
                 "checkedAt": time.time(),
                 "latestCommit": result.get("latestCommit"),

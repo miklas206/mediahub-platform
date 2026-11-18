@@ -43,11 +43,18 @@ def authenticated(request: Request):
                 raise DomainError("administrator_required", "Administrator access is required", 403)
             app = svc.apps.get(parts[2])
             svc.auth.app_role(user["id"], app["packageId"])
-        elif path not in own_paths and not path.startswith("/security") and not path.startswith("/sso/"):
+        elif (
+            path not in own_paths
+            and not path.startswith("/security")
+            and not path.startswith("/sso/")
+        ):
             raise DomainError("administrator_required", "Administrator access is required", 403)
     if user.get("totpRequired") and not user.get("totpEnabled"):
         path = request.url.path.removeprefix("/api/v1").removeprefix("/api")
-        if not (path.startswith("/security") or path in {"/auth/me", "/auth/logout", "/auth/preferences"}):
+        if not (
+            path.startswith("/security")
+            or path in {"/auth/me", "/auth/logout", "/auth/preferences"}
+        ):
             raise DomainError(
                 "enrollment_required", "Set up two-factor authentication to continue", 403
             )
@@ -91,12 +98,26 @@ async def users(request: Request, user=Depends(administrator)):
 
 @router.post("/users")
 async def create_user(body: ManagedUser, request: Request, user=Depends(administrator)):
-    return result(services(request).auth.save_user(body.username, body.password, role=body.role, app_roles=body.appRoles, language=body.language))
+    return result(
+        services(request).auth.save_user(
+            body.username,
+            body.password,
+            role=body.role,
+            app_roles=body.appRoles,
+            language=body.language,
+        )
+    )
 
 
 @router.put("/users/{user_id}")
-async def update_user(user_id: str, body: ManagedUser, request: Request, user=Depends(administrator)):
-    return result(services(request).auth.save_user(body.username, body.password, user_id, body.role, body.appRoles, body.language))
+async def update_user(
+    user_id: str, body: ManagedUser, request: Request, user=Depends(administrator)
+):
+    return result(
+        services(request).auth.save_user(
+            body.username, body.password, user_id, body.role, body.appRoles, body.language
+        )
+    )
 
 
 @router.delete("/users/{user_id}")
@@ -146,7 +167,9 @@ async def me(request: Request, user=Depends(authenticated)):
 
 
 @router.put("/auth/preferences")
-async def save_user_preferences(body: UserPreferences, request: Request, user=Depends(authenticated)):
+async def save_user_preferences(
+    body: UserPreferences, request: Request, user=Depends(authenticated)
+):
     saved = services(request).settings.save_user_preferences(user["id"], body)
     return result(saved.model_dump())
 
@@ -182,7 +205,13 @@ async def _apps_with_health(svc, listing=None, *, include_runtime=False):
                 details = {**await runtime_summary(svc, app), "controls": controls(svc, app)}
             return {**app, **details, "health": (await svc.apps.health(app["id"])).model_dump()}
 
-    return await asyncio.gather(*(with_health(app) for app in (svc.apps.list() if listing is None else listing) if app.get("packageId") != "org.mediahub.cloudflared"))
+    return await asyncio.gather(
+        *(
+            with_health(app)
+            for app in (svc.apps.list() if listing is None else listing)
+            if app.get("packageId") != "org.mediahub.cloudflared"
+        )
+    )
 
 
 @router.get("/apps")
@@ -195,10 +224,19 @@ async def apps(
     listing = [app for app in svc.apps.list() if app["packageId"] != "org.mediahub.cloudflared"]
     from mediahub.app_settings import saved_address
 
-    listing = [{**app, "externalUrl": saved_address(svc, app["packageId"]), "localUrl": svc.config.operator_app_urls.get(app["packageId"])} for app in listing]
+    listing = [
+        {
+            **app,
+            "externalUrl": saved_address(svc, app["packageId"]),
+            "localUrl": svc.config.operator_app_urls.get(app["packageId"]),
+        }
+        for app in listing
+    ]
     registered_apps = listing
     registered = {app["packageId"] for app in listing}
-    listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
+    listing = [
+        {**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing
+    ]
     for package_id, origin in svc.config.sso_app_urls.items():
         from mediahub.managed_apps import unavailable
 
@@ -206,26 +244,80 @@ async def apps(
             continue
         origin = saved_address(svc, package_id) or origin
         if package_id not in registered:
-            connected = {"id": package_id, "packageId": package_id, "name": {"org.mediahub.mediaseed": "MediaSeed", "org.mediahub.mediavpn": "MediaVPN"}[package_id], "version": "connected", "state": "registered", "isMock": False, "ssoSupported": True, "openUrl": origin + "/auth/hub/start"}
-            connected.update(localUrl=svc.config.operator_app_urls.get(package_id), externalUrl=saved_address(svc, package_id))
+            connected = {
+                "id": package_id,
+                "packageId": package_id,
+                "name": {
+                    "org.mediahub.mediaseed": "MediaSeed",
+                    "org.mediahub.mediavpn": "MediaVPN",
+                }[package_id],
+                "version": "connected",
+                "state": "registered",
+                "isMock": False,
+                "ssoSupported": True,
+                "openUrl": origin + "/auth/hub/start",
+            }
+            connected.update(
+                localUrl=svc.config.operator_app_urls.get(package_id),
+                externalUrl=saved_address(svc, package_id),
+            )
             if include_health:
                 from mediahub.mediaseed_api import available
 
                 private_origin = svc.config.operator_app_urls.get(package_id)
-                healthy = bool(private_origin) and await available(private_origin, svc.config.agent_ca_file)
-                connected["health"] = {"status": "healthy" if healthy else "unknown", "summary": "App available" if healthy else "Check connection", "checks": []}
+                healthy = bool(private_origin) and await available(
+                    private_origin, svc.config.agent_ca_file
+                )
+                connected["health"] = {
+                    "status": "healthy" if healthy else "unknown",
+                    "summary": "App available" if healthy else "Check connection",
+                    "checks": [],
+                }
             listing.append(connected)
     if "org.mediahub.fjordhub" not in registered:
         from sqlalchemy import select
 
         from mediahub.db import ExternalIntegration
+
         with svc.sessions() as db:
-            integration = db.scalar(select(ExternalIntegration).where(ExternalIntegration.provider == "fjordhub", ExternalIntegration.enabled.is_(True)))
+            integration = db.scalar(
+                select(ExternalIntegration).where(
+                    ExternalIntegration.provider == "fjordhub",
+                    ExternalIntegration.enabled.is_(True),
+                )
+            )
             if integration:
                 snapshot = integration.snapshot or {}
-                listing.append({"id": "org.mediahub.fjordhub", "packageId": "org.mediahub.fjordhub", "name": "FjordHub", "version": "connected", "state": "connected", "isMock": False,
-                    "localUrl": integration.base_url, "externalUrl": saved_address(svc, "org.mediahub.fjordhub"), "detailPath": f"/integrations/{integration.id}",
-                    **({"health": {"status": "healthy" if snapshot.get("status") == "online" and not snapshot.get("stale") else "unknown", "summary": "Connected" if snapshot.get("status") == "online" and not snapshot.get("stale") else "Status unavailable", "checks": []}} if include_health else {})})
+                listing.append(
+                    {
+                        "id": "org.mediahub.fjordhub",
+                        "packageId": "org.mediahub.fjordhub",
+                        "name": "FjordHub",
+                        "version": "connected",
+                        "state": "connected",
+                        "isMock": False,
+                        "localUrl": integration.base_url,
+                        "externalUrl": saved_address(svc, "org.mediahub.fjordhub"),
+                        "detailPath": f"/integrations/{integration.id}",
+                        **(
+                            {
+                                "health": {
+                                    "status": "healthy"
+                                    if snapshot.get("status") == "online"
+                                    and not snapshot.get("stale")
+                                    else "unknown",
+                                    "summary": "Connected"
+                                    if snapshot.get("status") == "online"
+                                    and not snapshot.get("stale")
+                                    else "Status unavailable",
+                                    "checks": [],
+                                }
+                            }
+                            if include_health
+                            else {}
+                        ),
+                    }
+                )
     if user["role"] != "administrator":
         visible = []
         for app in listing:
@@ -236,7 +328,10 @@ async def apps(
             visible.append(app)
         return result(visible)
     if include_health:
-        health = {app["id"]: app for app in await _apps_with_health(svc, registered_apps, include_runtime=True)}
+        health = {
+            app["id"]: app
+            for app in await _apps_with_health(svc, registered_apps, include_runtime=True)
+        }
         listing = [{**app, **health.get(app["id"], {})} for app in listing]
     return result(listing)
 
@@ -267,7 +362,9 @@ async def app_runtime(app_id: str, request: Request, user=Depends(authenticated)
         operator_url = saved_address(svc, adapter.definition.package_id) or report.get("url")
         if operator_url:
             operator_url = operator_url.rstrip("/") + "/web/index.html"
-    return result({"view": adapter.definition.view_id, "report": report, "operatorUrl": operator_url})
+    return result(
+        {"view": adapter.definition.view_id, "report": report, "operatorUrl": operator_url}
+    )
 
 
 @router.post("/apps/{app_id}/actions/{action}")
@@ -493,11 +590,23 @@ async def logs(request: Request, user=Depends(authenticated)):
         try:
             payload = await reader()
             for entry in payload.get("entries", []):
-                entries.append({"timestamp": datetime.fromtimestamp(entry["timestamp"], UTC).isoformat(),
-                                "level": entry["severity"].upper(), "component": entry["type"], "message": entry["message"]})
+                entries.append(
+                    {
+                        "timestamp": datetime.fromtimestamp(entry["timestamp"], UTC).isoformat(),
+                        "level": entry["severity"].upper(),
+                        "component": entry["type"],
+                        "message": entry["message"],
+                    }
+                )
         except (DomainError, KeyError, TypeError, ValueError):
-            entries.append({"timestamp": datetime.now(UTC).isoformat(), "level": "WARNING", "component": component,
-                            "message": "Persistent lifecycle diagnostics unavailable from this component; update or check its connection."})
+            entries.append(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "level": "WARNING",
+                    "component": component,
+                    "message": "Persistent lifecycle diagnostics unavailable from this component; update or check its connection.",
+                }
+            )
     return result(sorted(entries, key=lambda entry: entry["timestamp"])[-400:])
 
 

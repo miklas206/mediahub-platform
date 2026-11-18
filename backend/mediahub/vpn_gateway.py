@@ -106,8 +106,11 @@ class VPNGateway:
         if state.get("enabled"):
             for row in state.get("routes", []):
                 ledger = state.get("records", {}).get(row.get("id"), {})
-                if (row.get("packageId") == "mediahub" and ledger.get("id")
-                        and ledger.get("applied", {}).get("name") == row.get("hostname")):
+                if (
+                    row.get("packageId") == "mediahub"
+                    and ledger.get("id")
+                    and ledger.get("applied", {}).get("name") == row.get("hostname")
+                ):
                     self.svc.cloudflare_management.allow_hub_origin(row["hostname"])
 
     def state(self):
@@ -220,7 +223,12 @@ class VPNGateway:
             ) as client:
                 response = await client.request(
                     method,
-                    address + ("/api/integration/diagnostics/logs" if diagnostics else "/api/integration/web-gateway"),
+                    address
+                    + (
+                        "/api/integration/diagnostics/logs"
+                        if diagnostics
+                        else "/api/integration/web-gateway"
+                    ),
                     headers={"X-MediaHub-Key": token},
                     json=body,
                 )
@@ -519,8 +527,14 @@ class VPNGateway:
     async def configure(self, body):
         async with self.lock:
             state = self.state()
-            if body.expectedRevision is not None and body.expectedRevision != state.get("revision", 0):
-                raise DomainError("revision_conflict", "Gateway settings changed; review the latest configuration and retry", 409)
+            if body.expectedRevision is not None and body.expectedRevision != state.get(
+                "revision", 0
+            ):
+                raise DomainError(
+                    "revision_conflict",
+                    "Gateway settings changed; review the latest configuration and retry",
+                    409,
+                )
             if not body.enabled:
                 # Disabling must work when an app is gone, its LAN host is down,
                 # or Cloudflare discovery is unavailable. Keep saved selections.
@@ -632,16 +646,36 @@ class VPNGateway:
             if enabled:
                 await self.plex_forwarding.target()
                 dedicated = self.plex_forwarding.dedicated_profile(state)
-                shared = await self.svc.shared_vpn.vpn(path="/profiles/" + dedicated) if dedicated else await self.svc.shared_vpn.vpn()
+                shared = (
+                    await self.svc.shared_vpn.vpn(path="/profiles/" + dedicated)
+                    if dedicated
+                    else await self.svc.shared_vpn.vpn()
+                )
                 profile = shared.get("profileId")
-                if not shared.get("enabled") or not re.fullmatch(r"[a-f0-9]{24}", str(profile or "")):
-                    raise DomainError("plex_shared_vpn_required", "Connect Plex to the shared VPN before enabling its separate port", 409)
+                if not shared.get("enabled") or not re.fullmatch(
+                    r"[a-f0-9]{24}", str(profile or "")
+                ):
+                    raise DomainError(
+                        "plex_shared_vpn_required",
+                        "Connect Plex to the shared VPN before enabling its separate port",
+                        409,
+                    )
                 if not dedicated:
                     if state["enabled"] and state.get("profileId") != profile:
-                        raise DomainError("vpn_conflict", "Select the same VPN profile for Plex and app domains", 409)
+                        raise DomainError(
+                            "vpn_conflict",
+                            "Select the same VPN profile for Plex and app domains",
+                            409,
+                        )
                     state["profileId"] = profile
                 await self.check_legacy_provider()
-            state.update(plexPortEnabled=enabled, plexPortManaged=True, plexPortStatus={"ready": False}, revision=state.get("revision", 0) + 1, ownerId=state.get("ownerId") or uuid4().hex)
+            state.update(
+                plexPortEnabled=enabled,
+                plexPortManaged=True,
+                plexPortStatus={"ready": False},
+                revision=state.get("revision", 0) + 1,
+                ownerId=state.get("ownerId") or uuid4().hex,
+            )
             self.save(state)
         self.schedule()
         return self.snapshot()
@@ -927,7 +961,8 @@ class VPNGateway:
                     for key, value in (line.split(":", 1) for line in lines[1:] if ":" in line)
                 }
                 return {
-                    "reachable": (200 <= code < 400 or code in {401, 403}) and fields.get("x-mediavpn-route") == route_id,
+                    "reachable": (200 <= code < 400 or code in {401, 403})
+                    and fields.get("x-mediavpn-route") == route_id,
                     "statusCode": code,
                     "checkedAt": int(time.time()),
                 }
@@ -974,10 +1009,16 @@ class VPNGateway:
             state.update(issues=[], checks=[], checkedAt=int(time.time()))
             try:
                 with self.svc.sessions() as db:
-                    removed_packages = set(db.scalars(select(InstalledApp.package_id).where(
-                        InstalledApp.state == "uninstalled", InstalledApp.is_mock.is_(False)
-                    )))
-                removed_ids = {row["id"] for row in state["routes"] if row["packageId"] in removed_packages}
+                    removed_packages = set(
+                        db.scalars(
+                            select(InstalledApp.package_id).where(
+                                InstalledApp.state == "uninstalled", InstalledApp.is_mock.is_(False)
+                            )
+                        )
+                    )
+                removed_ids = {
+                    row["id"] for row in state["routes"] if row["packageId"] in removed_packages
+                }
                 active, machine_routes = [], []
                 for row in state["routes"]:
                     if not state["enabled"]:
@@ -993,15 +1034,27 @@ class VPNGateway:
                 # An app restart is not a request to remove its hostname. If
                 # every selected app is unavailable, preserve the last machine
                 # configuration and all owned DNS until inspection can recover.
-                if (state["enabled"] and not state.get("plexPortEnabled") and not active
-                        and not removed_ids and not state.get("retired")
-                        and any(row["id"] not in removed_ids for row in state["routes"])):
+                if (
+                    state["enabled"]
+                    and not state.get("plexPortEnabled")
+                    and not active
+                    and not removed_ids
+                    and not state.get("retired")
+                    and any(row["id"] not in removed_ids for row in state["routes"])
+                ):
                     self.gateway = self.sanitized_gateway(await self.vpn())
                     self.save(state)
                     return self.snapshot()
-                dedicated_plex = self.plex_forwarding.dedicated_profile(state) if state.get("plexPortEnabled") else None
+                dedicated_plex = (
+                    self.plex_forwarding.dedicated_profile(state)
+                    if state.get("plexPortEnabled")
+                    else None
+                )
                 payload = {
-                    "enabled": bool((state["enabled"] and active) or (state.get("plexPortEnabled") and not dedicated_plex)),
+                    "enabled": bool(
+                        (state["enabled"] and active)
+                        or (state.get("plexPortEnabled") and not dedicated_plex)
+                    ),
                     "profileId": state["profileId"],
                     "routes": machine_routes,
                 }
@@ -1050,7 +1103,11 @@ class VPNGateway:
                 active_ids = {row["id"] for row in active}
                 cleanup = [
                     *state.get("retired", []),
-                    *(row for row in state["routes"] if not state["enabled"] or row["id"] in removed_ids),
+                    *(
+                        row
+                        for row in state["routes"]
+                        if not state["enabled"] or row["id"] in removed_ids
+                    ),
                 ]
                 for row in cleanup:
                     try:
@@ -1063,7 +1120,11 @@ class VPNGateway:
                 state["retired"] = [
                     row for row in state.get("retired", []) if row["id"] in state["records"]
                 ]
-                selected_routes = [row for row in state["routes"] if row["id"] not in removed_ids] if state["enabled"] else []
+                selected_routes = (
+                    [row for row in state["routes"] if row["id"] not in removed_ids]
+                    if state["enabled"]
+                    else []
+                )
                 zones = {row["zoneId"] for row in selected_routes}
                 for zone_id in set(state["rules"]) - zones:
                     try:
@@ -1271,17 +1332,36 @@ async def reconcile(request: Request):
 async def app_domain(app_id: str, body: AppDomainChoice, request: Request):
     svc = services(request)
     app = svc.apps.get(app_id)
-    if app["packageId"] not in {"org.mediahub.plex", "org.mediahub.jellyfin"} or app["isMock"] or app["state"] in {"removing", "uninstalled"}:
+    if (
+        app["packageId"] not in {"org.mediahub.plex", "org.mediahub.jellyfin"}
+        or app["isMock"]
+        or app["state"] in {"removing", "uninstalled"}
+    ):
         raise DomainError("app_unavailable", "Choose an installed Plex or Jellyfin server", 409)
     service = svc.vpn_gateway
     state = service.state()
     if not state["enabled"] or not state.get("profileId"):
-        raise DomainError("gateway_required", "Enable the shared gateway in MediaVPN before choosing an app domain", 409)
-    routes = [{key: row[key] for key in ("id", "packageId", "zoneId", "label")} for row in state["routes"]]
+        raise DomainError(
+            "gateway_required",
+            "Enable the shared gateway in MediaVPN before choosing an app domain",
+            409,
+        )
+    routes = [
+        {key: row[key] for key in ("id", "packageId", "zoneId", "label")} for row in state["routes"]
+    ]
     previous = next((row for row in routes if row["packageId"] == app["packageId"]), None)
     selected = {"packageId": app["packageId"], "zoneId": body.zoneId, "label": body.label}
     if previous:
         previous.update(selected)
     else:
         routes.append(selected)
-    return result(await service.configure(GatewayConfig(enabled=True, profileId=state["profileId"], routes=routes, expectedRevision=state.get("revision", 0))))
+    return result(
+        await service.configure(
+            GatewayConfig(
+                enabled=True,
+                profileId=state["profileId"],
+                routes=routes,
+                expectedRevision=state.get("revision", 0),
+            )
+        )
+    )

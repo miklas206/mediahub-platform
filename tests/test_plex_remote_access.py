@@ -45,8 +45,14 @@ def runtime(tmp_path):
         plex_get=AsyncMock(side_effect=plex_get),
     )
     return (
-        SimpleNamespace(control=control, state_dir=tmp_path, checkpoint=AsyncMock(),
-                        preferences=AsyncMock(return_value=('<Preferences CertificateUUID="' + 'a'*32 + '"/>').encode())),
+        SimpleNamespace(
+            control=control,
+            state_dir=tmp_path,
+            checkpoint=AsyncMock(),
+            preferences=AsyncMock(
+                return_value=('<Preferences CertificateUUID="' + "a" * 32 + '"/>').encode()
+            ),
+        ),
         values,
         original,
     )
@@ -142,12 +148,16 @@ async def test_hub_requires_distinct_port_and_public_identity():
                 "ready": True,
                 "publicPort": 50003,
                 "identityHash": "verified-hash",
-                "relayAddress": "10.250.87.2", # May belong to a different VPN profile.
+                "relayAddress": "10.250.87.2",  # May belong to a different VPN profile.
             }
         )
     )
-    shared = SimpleNamespace(bindings=lambda: [{"id": "plex"}], target=lambda _: (None, client),
-                             peer_id=lambda _: "owned-peer", assignment=lambda _: None)
+    shared = SimpleNamespace(
+        bindings=lambda: [{"id": "plex"}],
+        target=lambda _: (None, client),
+        peer_id=lambda _: "owned-peer",
+        assignment=lambda _: None,
+    )
     service = SimpleNamespace(
         shared_vpn=shared,
         cloudflare_management=SimpleNamespace(

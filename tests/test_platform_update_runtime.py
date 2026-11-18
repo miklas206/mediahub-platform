@@ -20,7 +20,11 @@ def test_orphaned_download_fails_after_restart(tmp_path, monkeypatch):
     updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
     operation = "a" * 32
     updater._write_status(
-        "downloading", 5, "Downloading", operation, "0.5.0",
+        "downloading",
+        5,
+        "Downloading",
+        operation,
+        "0.5.0",
         [{"id": "download", "state": "running"}],
     )
     status = updater.status()
@@ -76,13 +80,26 @@ def test_maintenance_exposes_only_bounded_owned_helper_identities(tmp_path, monk
     updater, spool = runtime(tmp_path, monkeypatch, lambda _: httpx.Response(200))
     monkeypatch.setattr(updater, "_host_capability", lambda name: True)
     identifier = "sha256:" + "a" * 64
-    (spool / "maintenance-status.json").write_text(json.dumps({
-        "state": "succeeded", "message": "Finished", "helperCleanup": {
-            "planned": [{"id": identifier, "tags": ["mediahub-web-gateway:" + "b" * 16], "component": "vpn-gateway", "private": "do-not-return"},
-                        {"id": "invalid", "tags": ["foreign:latest"], "component": "foreign"}],
-            "removedImageIds": [identifier, "invalid"],
-        },
-    }))
+    (spool / "maintenance-status.json").write_text(
+        json.dumps(
+            {
+                "state": "succeeded",
+                "message": "Finished",
+                "helperCleanup": {
+                    "planned": [
+                        {
+                            "id": identifier,
+                            "tags": ["mediahub-web-gateway:" + "b" * 16],
+                            "component": "vpn-gateway",
+                            "private": "do-not-return",
+                        },
+                        {"id": "invalid", "tags": ["foreign:latest"], "component": "foreign"},
+                    ],
+                    "removedImageIds": [identifier, "invalid"],
+                },
+            }
+        )
+    )
     result = updater.maintenance_status()
     assert result["helperCleanup"]["removedImageIds"] == [identifier]
     assert len(result["helperCleanup"]["planned"]) == 1

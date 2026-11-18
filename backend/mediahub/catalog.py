@@ -33,7 +33,9 @@ class Catalog:
         return self.manifests[package_id]
 
     def list(self):
-        retired = {"org.mediahub." + app for app in CONTAINER_APPS if app not in INSTALLABLE_CONTAINER_APPS}
+        retired = {
+            "org.mediahub." + app for app in CONTAINER_APPS if app not in INSTALLABLE_CONTAINER_APPS
+        }
         retired.add("org.mediahub.cloudflared")
         return [m.model_dump() for m in self.manifests.values() if m.id not in retired]
 

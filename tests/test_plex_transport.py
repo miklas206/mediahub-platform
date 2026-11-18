@@ -15,19 +15,24 @@ def client_for(url, embedded):
 
 
 @pytest.mark.parametrize("target_function", [target, container_target])
-@pytest.mark.parametrize("url,embedded,trusted", [
-    ("http://127.0.0.1:18767", True, True),
-    ("https://192.0.2.10:18767", False, True),
-    ("http://192.0.2.10:18767", False, False),
-    ("http://127.0.0.1:18767", False, False),
-])
+@pytest.mark.parametrize(
+    "url,embedded,trusted",
+    [
+        ("http://127.0.0.1:18767", True, True),
+        ("https://192.0.2.10:18767", False, True),
+        ("http://192.0.2.10:18767", False, False),
+        ("http://127.0.0.1:18767", False, False),
+    ],
+)
 def test_plex_target_accepts_embedded_or_https_only(url, embedded, trusted, target_function):
     client = client_for(url, embedded)
     request = SimpleNamespace(
         url=SimpleNamespace(scheme="https"),
-        app=SimpleNamespace(state=SimpleNamespace(services=SimpleNamespace(
-            hosts=SimpleNamespace(client=lambda host: client)
-        ))),
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                services=SimpleNamespace(hosts=SimpleNamespace(client=lambda host: client))
+            )
+        ),
     )
     assert client.trusted_transport is trusted
     if trusted:
@@ -47,7 +52,9 @@ def test_plex_update_queue_applies_same_transport_boundary(embedded):
     adapter = SimpleNamespace(host_id="local", client_factory=lambda host: client)
     queue = UpdateQueue(SimpleNamespace(apps=SimpleNamespace(adapter=lambda identifier: adapter)))
     if embedded:
-        assert asyncio.run(queue.launch({"kind": "plex", "id": "plex"}, {})) == {"state": "starting"}
+        assert asyncio.run(queue.launch({"kind": "plex", "id": "plex"}, {})) == {
+            "state": "starting"
+        }
         client.request.assert_awaited_once_with("POST", "/v1/plex/update")
     else:
         with pytest.raises(DomainError, match="trusted HTTPS Agent"):
@@ -64,29 +71,49 @@ def test_embedded_install_plan_passes_real_agent_https_guard(tmp_path):
     token_file.write_text(token)
     policy_file = tmp_path / "plex-install.json"
     policy = PlexInstallPolicy(
-        hostId="local", bindAddress="192.0.2.10",
+        hostId="local",
+        bindAddress="192.0.2.10",
         image="lscr.io/linuxserver/plex@sha256:" + "a" * 64,
         initImage="sha256:" + "b" * 64,
         hostMountSnapshot=str(tmp_path / "snapshot.json"),
-        storage={kind: {"label": kind, "kind": kind, "path": str(tmp_path / kind)}
-                 for kind in ("movies", "tv", "appdata")},
-        requiredFilesystemUuids={}, requiredMounts={str(tmp_path): "mediahub-main"},
+        storage={
+            kind: {"label": kind, "kind": kind, "path": str(tmp_path / kind)}
+            for kind in ("movies", "tv", "appdata")
+        },
+        requiredFilesystemUuids={},
+        requiredMounts={str(tmp_path): "mediahub-main"},
         storageMarkers={str(tmp_path / "marker"): "verified-media"},
     )
     policy_file.write_text(policy.model_dump_json())
-    app = create_agent(AgentConfig(
-        state_dir=tmp_path, token_file=token_file, dev_mode=True,
-        plex_install_policy_file=policy_file, _env_file=None,
-    ))
-    client = AgentClient(SimpleNamespace(agent_url="http://127.0.0.1:18767"),
-                         token=token, local_app=app)
-    result = asyncio.run(client.request("POST", "/v1/plex/install-plan", {
-        "moviesStorageIds": ["movies"], "tvStorageIds": ["tv"],
-        "appdataStorageId": "appdata",
-    }))
+    app = create_agent(
+        AgentConfig(
+            state_dir=tmp_path,
+            token_file=token_file,
+            dev_mode=True,
+            plex_install_policy_file=policy_file,
+            _env_file=None,
+        )
+    )
+    client = AgentClient(
+        SimpleNamespace(agent_url="http://127.0.0.1:18767"), token=token, local_app=app
+    )
+    result = asyncio.run(
+        client.request(
+            "POST",
+            "/v1/plex/install-plan",
+            {
+                "moviesStorageIds": ["movies"],
+                "tvStorageIds": ["tv"],
+                "appdataStorageId": "appdata",
+            },
+        )
+    )
     assert result["mediaReadOnly"] is True
     assert len(result["planDigest"]) == 64
-    assert asyncio.run(client.request("GET", "/v1/plex/install-status"))["operation"]["state"] == "idle"
+    assert (
+        asyncio.run(client.request("GET", "/v1/plex/install-status"))["operation"]["state"]
+        == "idle"
+    )
 
 
 @pytest.mark.parametrize("method", ["GET", "PUT"])
@@ -118,15 +145,18 @@ def test_shared_vpn_routes_enter_real_https_and_storage_guard(tmp_path, monkeypa
     monkeypatch.setattr("agent.nas_storage.app_storage_guard", guard)
     monkeypatch.setattr(SharedVPN, "status", observed)
     monkeypatch.setattr(SharedVPN, "configuration", observed)
-    app = create_agent(AgentConfig(state_dir=tmp_path, token_file=token_file,
-                                   dev_mode=True, _env_file=None))
+    app = create_agent(
+        AgentConfig(state_dir=tmp_path, token_file=token_file, dev_mode=True, _env_file=None)
+    )
     # Avoid background monitors; this test exercises the actual route dependency.
     client = TestClient(app, base_url="https://agent")
     body = {"enabled": False} if method == "PUT" else None
     url = "/v1/shared-vpn/plex"
     assert client.request(method, url, json=body).status_code == 401
     headers = {"Authorization": "Bearer " + token}
-    assert client.request(method, "http://agent" + url, json=body, headers=headers).status_code == 403
+    assert (
+        client.request(method, "http://agent" + url, json=body, headers=headers).status_code == 403
+    )
     assert entered == []
     response = client.request(method, url, json=body, headers=headers)
     assert response.status_code == 200, response.text

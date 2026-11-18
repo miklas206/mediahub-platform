@@ -18,7 +18,17 @@ class RemoteAppDefinition:
 
 
 class RemoteAppAdapter:
-    def __init__(self, definition, host_id, client_factory, status_cache, events, app_id, metadata_cache=None, status_enricher=None):
+    def __init__(
+        self,
+        definition,
+        host_id,
+        client_factory,
+        status_cache,
+        events,
+        app_id,
+        metadata_cache=None,
+        status_enricher=None,
+    ):
         self.definition, self.host_id = definition, host_id
         self.client_factory, self.status_cache = client_factory, status_cache
         self.events, self.app_id = events, app_id
@@ -48,7 +58,9 @@ class RemoteAppAdapter:
             summary="Remote app: " + report["health"],
             checks=[
                 HealthCheck(
-                    name=c["name"], status=states.get(c["status"], "unknown"), message=c.get("message") or c["status"]
+                    name=c["name"],
+                    status=states.get(c["status"], "unknown"),
+                    message=c.get("message") or c["status"],
                 )
                 for c in report.get("checks", [])
             ],
@@ -102,7 +114,9 @@ class RemoteAppAdapter:
                 from mediahub.apps.plex_image import publisher_version
 
                 checked["latestPlexVersion"] = (
-                    await publisher_version(checked.get("latestVersion"), checked.get("imagePlatform"))
+                    await publisher_version(
+                        checked.get("latestVersion"), checked.get("imagePlatform")
+                    )
                     if checked.get("updateAvailable")
                     else checked.get("installedPlexVersion")
                 )
@@ -111,7 +125,9 @@ class RemoteAppAdapter:
 
         if self.definition.package_id in REPOSITORIES:
             status = await self.status()
-            return await latest_release(self.definition.package_id, status.get("version"), self.metadata_cache)
+            return await latest_release(
+                self.definition.package_id, status.get("version"), self.metadata_cache
+            )
         return {
             "supported": False,
             "reason": "Digest-pinned runtime; no automatic update provider configured",

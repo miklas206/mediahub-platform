@@ -10,11 +10,19 @@ import re
 import httpx
 from mediahub.errors import DomainError
 
-PUBLISHERS = frozenset({
-    "lscr.io/linuxserver/plex", "jellyfin/jellyfin", "linuxserver/prowlarr",
-    "linuxserver/radarr", "linuxserver/sonarr", "ghcr.io/autobrr/autobrr",
-    "qmcgaw/gluetun", "lscr.io/linuxserver/qbittorrent", "cloudflare/cloudflared",
-})
+PUBLISHERS = frozenset(
+    {
+        "lscr.io/linuxserver/plex",
+        "jellyfin/jellyfin",
+        "linuxserver/prowlarr",
+        "linuxserver/radarr",
+        "linuxserver/sonarr",
+        "ghcr.io/autobrr/autobrr",
+        "qmcgaw/gluetun",
+        "lscr.io/linuxserver/qbittorrent",
+        "cloudflare/cloudflared",
+    }
+)
 
 
 def resolved_seedbox_policy(policy, images):
@@ -46,12 +54,19 @@ async def pull_latest(socket, repository):
         raise DomainError("install_image_denied", "Unsupported image publisher", 403)
     try:
         async with httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(uds=str(socket)), base_url="http://docker",
-            timeout=httpx.Timeout(600, connect=5), trust_env=False,
+            transport=httpx.AsyncHTTPTransport(uds=str(socket)),
+            base_url="http://docker",
+            timeout=httpx.Timeout(600, connect=5),
+            trust_env=False,
         ) as client:
-            async with client.stream("POST", "/images/create", params={
-                "fromImage": repository, "tag": "latest",
-            }) as response:
+            async with client.stream(
+                "POST",
+                "/images/create",
+                params={
+                    "fromImage": repository,
+                    "tag": "latest",
+                },
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if not line:
@@ -59,7 +74,11 @@ async def pull_latest(socket, repository):
                     if len(line) > 65536:
                         raise ValueError("Oversized pull response")
                     event = json.loads(line)
-                    if not isinstance(event, dict) or event.get("error") or event.get("errorDetail"):
+                    if (
+                        not isinstance(event, dict)
+                        or event.get("error")
+                        or event.get("errorDetail")
+                    ):
                         raise ValueError("Publisher pull failed")
             response = await client.get("/images/" + repository + ":latest/json")
             response.raise_for_status()
@@ -71,5 +90,6 @@ async def pull_latest(socket, repository):
     except (httpx.HTTPError, ValueError, TypeError):
         raise DomainError(
             "install_image_download_failed",
-            "The latest publisher image could not be downloaded; installation was stopped", 503,
+            "The latest publisher image could not be downloaded; installation was stopped",
+            503,
         ) from None

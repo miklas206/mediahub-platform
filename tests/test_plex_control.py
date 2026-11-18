@@ -219,7 +219,9 @@ def test_runtime_nas_still_requires_fresh_host_evidence(policy, tmp_path):
     from agent.plex_control import PlexMount
 
     identifier = "a" * 24
-    policy.mounts = [PlexMount(source="/approved", target="/media/nas/" + identifier, readOnly=True)]
+    policy.mounts = [
+        PlexMount(source="/approved", target="/media/nas/" + identifier, readOnly=True)
+    ]
     assert not plex_nas_ready(policy, tmp_path)
     evidence = tmp_path / "nas-storage-status.json"
     evidence.write_text(json.dumps({"observedAt": time.time(), "nas": {identifier: True}}))

@@ -11,10 +11,18 @@ pytestmark = pytest.mark.skipif(os.name != "posix", reason="Linux Docker host li
 
 
 def child(path):
-    return subprocess.Popen([sys.executable, "-u", "-c",
-        "import fcntl,sys,time;f=open(sys.argv[1],'a');"
-        "fcntl.flock(f,fcntl.LOCK_EX);print('locked',flush=True);time.sleep(30)", str(path)],
-        stdout=subprocess.PIPE, text=True)
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            "import fcntl,sys,time;f=open(sys.argv[1],'a');"
+            "fcntl.flock(f,fcntl.LOCK_EX);print('locked',flush=True);time.sleep(30)",
+            str(path),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
 
 
 def test_supervisor_waits_for_other_process_and_process_exit_releases_lock(tmp_path):
@@ -30,6 +38,7 @@ def test_supervisor_waits_for_other_process_and_process_exit_releases_lock(tmp_p
             async def supervisor():
                 async with lock:
                     entered.set()
+
             task = asyncio.create_task(supervisor())
             with pytest.raises(TimeoutError):
                 await asyncio.wait_for(entered.wait(), 0.1)
@@ -37,6 +46,7 @@ def test_supervisor_waits_for_other_process_and_process_exit_releases_lock(tmp_p
             process.wait(timeout=3)
             await asyncio.wait_for(task, 3)
             assert entered.is_set() and not lock.locked()
+
         asyncio.run(run())
     finally:
         process.terminate()
@@ -48,6 +58,7 @@ def test_cancelled_waiter_releases_local_lock_and_file_descriptor(tmp_path):
     process = child(path)
     try:
         assert process.stdout.readline().strip() == "locked"
+
         async def run():
             lock = PlexLifecycleLock(path)
             with pytest.raises(TimeoutError):
@@ -57,6 +68,7 @@ def test_cancelled_waiter_releases_local_lock_and_file_descriptor(tmp_path):
             process.wait(timeout=3)
             async with lock:
                 pass
+
         asyncio.run(run())
     finally:
         process.terminate()

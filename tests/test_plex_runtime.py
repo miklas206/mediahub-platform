@@ -24,8 +24,11 @@ def test_update_snapshot_uses_storage_owner_on_root_restricted_nas(tmp_path):
 
     runtime.request = request
     runtime.remove_helper = AsyncMock()
-    plan = {"name": "mediahub-plex-main", "appdataPath": "/nas/appdata/plex-main",
-            "container": {"Labels": {"org.mediahub.installation": "plex-main"}}}
+    plan = {
+        "name": "mediahub-plex-main",
+        "appdataPath": "/nas/appdata/plex-main",
+        "container": {"Labels": {"org.mediahub.installation": "plex-main"}},
+    }
     result = asyncio.run(runtime.snapshot_appdata(None, plan))
     helper = calls[0][2]
     assert helper["User"] == "1042:1055"
@@ -38,7 +41,9 @@ def test_update_snapshot_uses_storage_owner_on_root_restricted_nas(tmp_path):
 
 
 @pytest.mark.parametrize("reinstall", [False, True])
-def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_path, monkeypatch, reinstall):
+def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(
+    tmp_path, monkeypatch, reinstall
+):
     from unittest.mock import AsyncMock, Mock
 
     from mediahub.apps.plex import PlexInstallation, PlexInstallRequest
@@ -46,18 +51,25 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     from agent.plex_install import PlexInstallPolicy, installation_plan
 
     policy = PlexInstallPolicy(
-        hostId="local", bindAddress="192.168.1.10",
+        hostId="local",
+        bindAddress="192.168.1.10",
         image="lscr.io/linuxserver/plex@sha256:" + "a" * 64,
         initImage="sha256:" + "b" * 64,
-        storage={kind: {"label": kind, "kind": kind, "path": str(tmp_path / kind)}
-                 for kind in ("movies", "tv", "appdata")},
+        storage={
+            kind: {"label": kind, "kind": kind, "path": str(tmp_path / kind)}
+            for kind in ("movies", "tv", "appdata")
+        },
         hostMountSnapshot=str(tmp_path / "snapshot"),
         requiredFilesystemUuids={str(tmp_path): "verified-media"},
         storageMarkers={str(tmp_path / "marker"): "verified-media"},
     )
     control = SimpleNamespace(
-        lock=asyncio.Lock(), socket="unused", policy_file=tmp_path / "managed.json",
-        storage_verified=AsyncMock(return_value=True), save_intent=Mock(), record=Mock(),
+        lock=asyncio.Lock(),
+        socket="unused",
+        policy_file=tmp_path / "managed.json",
+        storage_verified=AsyncMock(return_value=True),
+        save_intent=Mock(),
+        record=Mock(),
     )
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.policy = lambda: policy
@@ -76,7 +88,13 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
         if path == "/volumes":
             assert runtime.operation["phase"] == "storage"
             assert runtime.operation["progress"] == 50
-            return {"Volumes": [{**plan["runtimeVolume"], "Options": plan["runtimeVolume"]["DriverOpts"]}] if reinstall else []}
+            return {
+                "Volumes": [
+                    {**plan["runtimeVolume"], "Options": plan["runtimeVolume"]["DriverOpts"]}
+                ]
+                if reinstall
+                else []
+            }
         if path.startswith("/containers/create"):
             if body.get("Labels", {}).get("org.mediahub.plex.role") == "transcode-preparation":
                 assert body["HostConfig"]["NetworkMode"] == "none"
@@ -98,15 +116,24 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     plan = installation_plan(policy, spec)
     if reinstall:
         from agent.install_files import save_json
+
         control.policy_file.write_text("retained ownership policy")
-        control.policy = lambda: SimpleNamespace(installationId=spec.installationId, vpnEnabled=False)
+        control.policy = lambda: SimpleNamespace(
+            installationId=spec.installationId, vpnEnabled=False
+        )
         save_json(tmp_path / "plex-removal.json", {"installationId": spec.installationId})
-        runtime.vault.put(spec.installationId, b'<Preferences MachineIdentifier="preserved-identity"/>')
+        runtime.vault.put(
+            spec.installationId, b'<Preferences MachineIdentifier="preserved-identity"/>'
+        )
     assert plan["container"]["Image"] == "lscr.io/linuxserver/plex:latest"
+
     async def run():
-        result = await runtime.queue_install(PlexInstallRequest(
-            installation=spec, reviewedPlanDigest=plan["planDigest"],
-        ))
+        result = await runtime.queue_install(
+            PlexInstallRequest(
+                installation=spec,
+                reviewedPlanDigest=plan["planDigest"],
+            )
+        )
         pull.assert_not_awaited()
         await runtime.install_task
         assert runtime.operation["state"] == "succeeded"
@@ -118,16 +145,19 @@ def test_fresh_install_pulls_latest_pins_result_and_removes_prepare_helper(tmp_p
     result = asyncio.run(run())
     assert result["state"] == "accepted"
     pull.assert_awaited_once_with("unused", "lscr.io/linuxserver/plex")
-    assert calls[-2:] == [("POST", "/containers/owned-prepare-helper/stop?t=2"),
-                          ("DELETE", "/containers/owned-prepare-helper")]
+    assert calls[-2:] == [
+        ("POST", "/containers/owned-prepare-helper/stop?t=2"),
+        ("DELETE", "/containers/owned-prepare-helper"),
+    ]
     assert not any("/images/" in path and method == "DELETE" for method, path in calls)
     assert not list(tmp_path.glob(".metadata-*"))
     if reinstall:
-        assert b'preserved-identity' not in runtime.vault.get(spec.installationId)
+        assert b"preserved-identity" not in runtime.vault.get(spec.installationId)
         assert not (tmp_path / "plex-removal.json").exists()
         assert not any(path == "/volumes/create" for _, path in calls)
-        assert not any(method == "DELETE" and path.startswith("/volumes/") for method, path in calls)
-
+        assert not any(
+            method == "DELETE" and path.startswith("/volumes/") for method, path in calls
+        )
 
 
 def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkeypatch):
@@ -138,17 +168,23 @@ def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkey
     control = SimpleNamespace(lock=asyncio.Lock(), policy_file=tmp_path / "missing.json")
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.policy = lambda: SimpleNamespace(hostId="local")
-    monkeypatch.setattr("agent.plex_runtime.installation_plan", lambda *args: {"planDigest": "reviewed"})
+    monkeypatch.setattr(
+        "agent.plex_runtime.installation_plan", lambda *args: {"planDigest": "reviewed"}
+    )
+
     async def fail_install(_):
         runtime.install_progress("download", 10, "Downloading app image", indeterminate=True)
         from agent.install_files import read_json
+
         persisted = read_json(runtime.install_operation_path)
         assert persisted["phase"] == "download"
         assert persisted["indeterminate"] is True
         raise DomainError("download_failed", "Image download failed", 503)
 
     runtime.install = AsyncMock(side_effect=fail_install)
-    body = SimpleNamespace(installation=SimpleNamespace(installationId="plex-test"), reviewedPlanDigest="reviewed")
+    body = SimpleNamespace(
+        installation=SimpleNamespace(installationId="plex-test"), reviewedPlanDigest="reviewed"
+    )
 
     async def run():
         assert (await runtime.queue_install(body))["state"] == "accepted"
@@ -162,16 +198,21 @@ def test_queued_install_failure_is_visible_and_survives_restart(tmp_path, monkey
     assert restarted.operation["phase"] == "download"
     assert restarted.operation["progress"] == 10
     assert restarted.operation["indeterminate"] is False
-    report = asyncio.run(PlexControl.status(SimpleNamespace(runtime=restarted, policy_file=control.policy_file)))
+    report = asyncio.run(
+        PlexControl.status(SimpleNamespace(runtime=restarted, policy_file=control.policy_file))
+    )
     assert report["health"] == "unknown"
     assert report["operation"]["message"] == "Image download failed"
 
 
-@pytest.mark.parametrize("status,path,code", [
-    (404, "/images/approved-image/json", "plex_image_missing"),
-    (500, "/images/approved-image/json", "plex_provision_failed"),
-    (404, "/containers/plex/json", "plex_provision_failed"),
-])
+@pytest.mark.parametrize(
+    "status,path,code",
+    [
+        (404, "/images/approved-image/json", "plex_image_missing"),
+        (500, "/images/approved-image/json", "plex_provision_failed"),
+        (404, "/containers/plex/json", "plex_provision_failed"),
+    ],
+)
 def test_missing_install_image_has_actionable_error_without_docker_details(
     tmp_path, monkeypatch, status, path, code
 ):
@@ -289,7 +330,11 @@ def test_update_check_uses_publisher_digest_without_mutation(tmp_path, new_image
                 "RepoDigests": [image],
                 "Os": "linux",
                 "Architecture": "amd64",
-                "Config": {"Labels": {"build_version": "Linuxserver.io version:- 1.43.5.11029-6bf8af3f0-ls329"}},
+                "Config": {
+                    "Labels": {
+                        "build_version": "Linuxserver.io version:- 1.43.5.11029-6bf8af3f0-ls329"
+                    }
+                },
             },
             {
                 "Descriptor": {
@@ -448,21 +493,28 @@ def test_concurrent_updates_admit_only_one_background_transaction(tmp_path):
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("receipt,containers,expected", [
-    (None, [], False),
-    ({"installationId": "other-install"}, [], False),
-    ({"installationId": "plex-test"}, [{"Id": "still-present"}], False),
-    ({"installationId": "plex-test"}, [], True),
-])
-def test_reinstall_requires_matching_removal_and_absent_owned_containers(tmp_path, receipt, containers, expected):
+@pytest.mark.parametrize(
+    "receipt,containers,expected",
+    [
+        (None, [], False),
+        ({"installationId": "other-install"}, [], False),
+        ({"installationId": "plex-test"}, [{"Id": "still-present"}], False),
+        ({"installationId": "plex-test"}, [], True),
+    ],
+)
+def test_reinstall_requires_matching_removal_and_absent_owned_containers(
+    tmp_path, receipt, containers, expected
+):
     from unittest.mock import AsyncMock
 
     from agent.install_files import save_json
 
     policy_file = tmp_path / "managed.json"
     policy_file.write_text("retained ownership")
-    control = SimpleNamespace(policy_file=policy_file, policy=lambda: SimpleNamespace(
-        installationId="plex-test", vpnEnabled=False))
+    control = SimpleNamespace(
+        policy_file=policy_file,
+        policy=lambda: SimpleNamespace(installationId="plex-test", vpnEnabled=False),
+    )
     runtime = PlexRuntime(control, None, tmp_path)
     runtime.request = AsyncMock(return_value=containers)
     runtime.reset_configuration = AsyncMock()
@@ -474,40 +526,60 @@ def test_reinstall_requires_matching_removal_and_absent_owned_containers(tmp_pat
     assert not any(call.args[0] != "GET" for call in runtime.request.await_args_list)
 
 
-@pytest.mark.parametrize('owned', [True, False])
+@pytest.mark.parametrize("owned", [True, False])
 def test_reinstall_recovers_only_stopped_owned_prepare_helper(tmp_path, owned):
     from unittest.mock import AsyncMock
 
     from agent.install_files import read_json, save_json
-    policy_file = tmp_path / 'managed.json'
-    policy_file.write_text('retained')
-    policy = SimpleNamespace(installationId='plex-test', vpnEnabled=False)
-    runtime = PlexRuntime(SimpleNamespace(policy_file=policy_file, policy=lambda: policy), None, tmp_path)
-    save_json(tmp_path / 'plex-removal.json', {'installationId': 'plex-test'})
-    helper = {'Id': 'helper', 'Names': ['/mediahub-plex-test-prepare']}
-    actual = {'Name': '/mediahub-plex-test-prepare', 'State': {'Running': False},
-              'Config': {'Labels': {'org.mediahub.package': 'org.mediahub.plex' if owned else 'foreign', 'org.mediahub.installation': 'plex-test'}}}
-    runtime.request = AsyncMock(side_effect=[[helper], actual, {}, []] if owned else [[helper], actual])
+
+    policy_file = tmp_path / "managed.json"
+    policy_file.write_text("retained")
+    policy = SimpleNamespace(installationId="plex-test", vpnEnabled=False)
+    runtime = PlexRuntime(
+        SimpleNamespace(policy_file=policy_file, policy=lambda: policy), None, tmp_path
+    )
+    save_json(tmp_path / "plex-removal.json", {"installationId": "plex-test"})
+    helper = {"Id": "helper", "Names": ["/mediahub-plex-test-prepare"]}
+    actual = {
+        "Name": "/mediahub-plex-test-prepare",
+        "State": {"Running": False},
+        "Config": {
+            "Labels": {
+                "org.mediahub.package": "org.mediahub.plex" if owned else "foreign",
+                "org.mediahub.installation": "plex-test",
+            }
+        },
+    }
+    runtime.request = AsyncMock(
+        side_effect=[[helper], actual, {}, []] if owned else [[helper], actual]
+    )
     runtime.reset_configuration = AsyncMock()
-    assert asyncio.run(runtime.can_reinstall('plex-test')) is owned
+    assert asyncio.run(runtime.can_reinstall("plex-test")) is owned
     if owned:
-        assert runtime.request.call_args_list[2].args == ('DELETE', '/containers/helper?force=false&v=false')
-        runtime.reset_configuration.assert_awaited_once_with('plex-test')
-        assert read_json(tmp_path / 'plex-removal.json')['configurationReset']
+        assert runtime.request.call_args_list[2].args == (
+            "DELETE",
+            "/containers/helper?force=false&v=false",
+        )
+        runtime.reset_configuration.assert_awaited_once_with("plex-test")
+        assert read_json(tmp_path / "plex-removal.json")["configurationReset"]
     else:
         runtime.reset_configuration.assert_not_awaited()
-        assert all(call.args[0] == 'GET' for call in runtime.request.call_args_list)
+        assert all(call.args[0] == "GET" for call in runtime.request.call_args_list)
 
 
 def test_exited_preparation_helper_is_deleted_after_stop_reports_already_stopped(tmp_path):
     from unittest.mock import AsyncMock
+
     runtime = PlexRuntime(SimpleNamespace(), None, tmp_path)
-    runtime.request = AsyncMock(side_effect=[DomainError('stopped', 'Already stopped', 409), {}])
-    asyncio.run(runtime.remove_helper('owned-prepare'))
-    assert runtime.request.call_args_list[-1].args == ('DELETE', '/containers/owned-prepare')
+    runtime.request = AsyncMock(side_effect=[DomainError("stopped", "Already stopped", 409), {}])
+    asyncio.run(runtime.remove_helper("owned-prepare"))
+    assert runtime.request.call_args_list[-1].args == ("DELETE", "/containers/owned-prepare")
 
 
-@pytest.mark.parametrize("name", ["mediahub-test", "mediahub-test-prepare", "mediahub-test-backup", "mediahub-test-restore"])
+@pytest.mark.parametrize(
+    "name",
+    ["mediahub-test", "mediahub-test-prepare", "mediahub-test-backup", "mediahub-test-restore"],
+)
 def test_shared_vpn_transforms_only_actual_plex_server(tmp_path, monkeypatch, name):
     import json
     from unittest.mock import AsyncMock
@@ -517,33 +589,68 @@ def test_shared_vpn_transforms_only_actual_plex_server(tmp_path, monkeypatch, na
     control = SimpleNamespace(socket="unused", policy_file=None)
     runtime = PlexRuntime(control, None, tmp_path)
     labels = {"org.mediahub.package": "org.mediahub.plex", "org.mediahub.installation": "test"}
-    original = {"Image": "owned-image", "Labels": labels, "Entrypoint": ["python", "-c", "prepare"], "HostConfig": {"NetworkMode": "none"}}
+    original = {
+        "Image": "owned-image",
+        "Labels": labels,
+        "Entrypoint": ["python", "-c", "prepare"],
+        "HostConfig": {"NetworkMode": "none"},
+    }
     transformed = {**original, "HostConfig": {"NetworkMode": "container:verified-relay"}}
     runtime.shared_vpn = SimpleNamespace(prepare=AsyncMock(return_value=transformed))
     seen = []
+
     def handler(request):
         seen.append(json.loads(request.content))
         return httpx.Response(201, json={"Id": "synthetic"})
+
     client = httpx.AsyncClient
-    monkeypatch.setattr("agent.plex_runtime.httpx.AsyncClient", lambda **kwargs: client(transport=httpx.MockTransport(handler), base_url="http://docker"))
+    monkeypatch.setattr(
+        "agent.plex_runtime.httpx.AsyncClient",
+        lambda **kwargs: client(transport=httpx.MockTransport(handler), base_url="http://docker"),
+    )
     asyncio.run(runtime.request("POST", "/containers/create?name=" + name, body=original))
     assert seen == [transformed if name == "mediahub-test" else original]
     assert runtime.shared_vpn.prepare.await_count == (1 if name == "mediahub-test" else 0)
 
 
 @pytest.mark.parametrize("owned,running", [(True, False), (False, False), (True, True)])
-def test_prepare_recovers_only_stopped_owned_helper_and_excludes_vpn_labels(tmp_path, owned, running):
+def test_prepare_recovers_only_stopped_owned_helper_and_excludes_vpn_labels(
+    tmp_path, owned, running
+):
     from unittest.mock import AsyncMock
+
     runtime = PlexRuntime(SimpleNamespace(), None, tmp_path)
-    labels = {"org.mediahub.package": "org.mediahub.plex", "org.mediahub.installation": "test", "org.mediahub.vpn.namespace": "relay"}
-    plan = {"name": "mediahub-test", "container": {"Labels": labels, "HostConfig": {"Mounts": [{"Type": "volume", "Source": "owned"}]}}}
-    previous = {"Name": "/mediahub-test-prepare", "State": {"Running": running}, "Config": {"Labels": {**labels, "org.mediahub.package": "org.mediahub.plex" if owned else "foreign"}}}
+    labels = {
+        "org.mediahub.package": "org.mediahub.plex",
+        "org.mediahub.installation": "test",
+        "org.mediahub.vpn.namespace": "relay",
+    }
+    plan = {
+        "name": "mediahub-test",
+        "container": {
+            "Labels": labels,
+            "HostConfig": {"Mounts": [{"Type": "volume", "Source": "owned"}]},
+        },
+    }
+    previous = {
+        "Name": "/mediahub-test-prepare",
+        "State": {"Running": running},
+        "Config": {
+            "Labels": {
+                **labels,
+                "org.mediahub.package": "org.mediahub.plex" if owned else "foreign",
+            }
+        },
+    }
     replies = [[{"Id": "old", "Names": ["/mediahub-test-prepare"]}], previous]
     runtime.request = AsyncMock(side_effect=replies + [{}, {"Id": "new"}, {}, b"prepared"])
     policy = SimpleNamespace(uid=1000, gid=1000, initImage="owned-core-image")
     if owned and not running:
         assert asyncio.run(runtime.helper(policy, plan)) == "mediahub-test-prepare"
-        assert runtime.request.call_args_list[2].args == ("DELETE", "/containers/old?force=false&v=false")
+        assert runtime.request.call_args_list[2].args == (
+            "DELETE",
+            "/containers/old?force=false&v=false",
+        )
         body = runtime.request.call_args_list[3].kwargs["body"]
         assert body["HostConfig"]["NetworkMode"] == "none"
         assert body["Entrypoint"][0] == "python"
@@ -555,17 +662,30 @@ def test_prepare_recovers_only_stopped_owned_helper_and_excludes_vpn_labels(tmp_
         assert runtime.request.await_count == 2
 
 
-@pytest.mark.parametrize("running,mounted,matching", [(True, True, True), (False, True, True), (True, False, True), (True, True, False)])
-def test_failed_start_recovery_requires_owned_running_runtime_and_storage(tmp_path, running, mounted, matching):
+@pytest.mark.parametrize(
+    "running,mounted,matching",
+    [(True, True, True), (False, True, True), (True, False, True), (True, True, False)],
+)
+def test_failed_start_recovery_requires_owned_running_runtime_and_storage(
+    tmp_path, running, mounted, matching
+):
     from unittest.mock import AsyncMock
-    policy = SimpleNamespace(installationId='plex-main' if matching else 'other-plex')
-    control = SimpleNamespace(policy=lambda: policy,
-                              inspect=AsyncMock(return_value={'State': {'Running': running}}),
-                              storage_verified=AsyncMock(return_value=mounted))
+
+    policy = SimpleNamespace(installationId="plex-main" if matching else "other-plex")
+    control = SimpleNamespace(
+        policy=lambda: policy,
+        inspect=AsyncMock(return_value={"State": {"Running": running}}),
+        storage_verified=AsyncMock(return_value=mounted),
+    )
     runtime = PlexRuntime(control, None, tmp_path)
-    runtime.operation = {'action': 'install', 'state': 'failed', 'phase': 'start', 'installationId': 'plex-main'}
-    result = asyncio.run(runtime.installation_status())['operation']
-    assert (result['state'] == 'succeeded') is (running and mounted and matching)
+    runtime.operation = {
+        "action": "install",
+        "state": "failed",
+        "phase": "start",
+        "installationId": "plex-main",
+    }
+    result = asyncio.run(runtime.installation_status())["operation"]
+    assert (result["state"] == "succeeded") is (running and mounted and matching)
     if not matching:
         control.inspect.assert_not_called()
 
@@ -577,15 +697,25 @@ def test_image_id_after_storage_change_recovers_only_exact_owned_publisher(tmp_p
     image_id = "sha256:" + "c" * 64
     digest = "sha256:" + "a" * 64
     control = SimpleNamespace(
-        policy=lambda: SimpleNamespace(imageId=image_id), lock=asyncio.Lock(),
+        policy=lambda: SimpleNamespace(imageId=image_id),
+        lock=asyncio.Lock(),
         inspect=AsyncMock(return_value={"Config": {"Image": image_id}}),
     )
     runtime = PlexRuntime(control, None, tmp_path)
-    runtime.request = AsyncMock(side_effect=[
-        {"Id": image_id if owned else "sha256:" + "d" * 64,
-         "RepoDigests": ["lscr.io/linuxserver/plex@" + digest], "Os": "linux", "Architecture": "amd64"},
-        {"Descriptor": {"digest": digest}, "Platforms": [{"os": "linux", "architecture": "amd64"}]},
-    ])
+    runtime.request = AsyncMock(
+        side_effect=[
+            {
+                "Id": image_id if owned else "sha256:" + "d" * 64,
+                "RepoDigests": ["lscr.io/linuxserver/plex@" + digest],
+                "Os": "linux",
+                "Architecture": "amd64",
+            },
+            {
+                "Descriptor": {"digest": digest},
+                "Platforms": [{"os": "linux", "architecture": "amd64"}],
+            },
+        ]
+    )
     result = asyncio.run(runtime.update_check())
     assert result["supported"] is owned
     assert result["updateAvailable"] is False

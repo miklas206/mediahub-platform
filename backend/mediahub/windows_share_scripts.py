@@ -16,13 +16,16 @@ def _configuration(host: str, share: str, drive: str, username: str | None) -> s
     # Use the same boundary contract as saved settings to avoid download failures
     # for valid names such as .hidden and normalize lowercase drive letters.
     configuration = WindowsShareConfiguration(
-        server=host, shareName=share, driveLetter=drive,
+        server=host,
+        shareName=share,
+        driveLetter=drive,
         username="" if username is None else username,
     )
     return "\n".join(
         (
             "$ServerAddress = " + _literal(configuration.server),
-            "$SharePath = " + _literal("\\\\" + configuration.server + "\\" + configuration.shareName),
+            "$SharePath = "
+            + _literal("\\\\" + configuration.server + "\\" + configuration.shareName),
             "$DriveName = " + _literal(configuration.driveLetter),
             "$SuggestedUsername = " + _literal(configuration.username),
             "$LocalPath = $DriveName + ':'",
@@ -35,15 +38,20 @@ def utf8_bom_script(script: str) -> bytes:
     return script.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
 
 
-def generate_password_reset_script(host: str, share: str, drive: str, username: str | None = None) -> str:
+def generate_password_reset_script(
+    host: str, share: str, drive: str, username: str | None = None
+) -> str:
     """Reset an existing local Samba account through a user-owned SSH terminal.
 
     No password goes through Core, command arguments, or a generated file.
     The user supplies a separate server administrator account at run time.
     """
-    return r'''[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
+    return (
+        r"""[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact='High')]
 param([string]$SmbUsername = '', [string]$ServerAdmin = '', [string]$IdentityFile = '')
-''' + _configuration(host, share, drive, username) + r'''
+"""
+        + _configuration(host, share, drive, username)
+        + r"""
 $ErrorActionPreference = 'Stop'
 Write-Host ('MediaHub - Nulstil SMB-adgangskode paa ' + $ServerAddress)
 Write-Host 'Dette er til en Linux/Samba-server med SSH og en eksisterende lokal SMB-konto.'
@@ -117,14 +125,15 @@ Write-Host ('Luk filer paa ' + $LocalPath + ' og afbryd kun dette netvaerksdrev 
 Write-Host ('Aabn Windows Legitimationsstyring, og fjern kun et gammelt gemt Windows-login til ' + $ServerAddress + ', hvis det findes.')
 Write-Host ('Forbind igen til ' + $SharePath + ' med SMB-brugeren ' + $SmbUsername + ' og din nye kode.')
 Write-Host 'Dette vaerktoej aendrer ikke dine Windows-drev, delingsrettigheder eller mediefiler.'
-'''
+"""
+    )
 
 
 # Potentially blocking read operations run in an owned, hidden child process.
 # Its only output is small JSON metadata; killing it cannot affect another shell.
 # In particular Test-Path/Get-PSDrive on an offline SMB server cannot stall the UI
 # indefinitely. No execution-policy change, credentials, or file writes are needed.
-_COMMON = r'''
+_COMMON = r"""
 $ErrorActionPreference = 'Stop'
 
 function Invoke-BoundedRead {
@@ -253,9 +262,9 @@ if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
 }
 Write-Host 'Kræver lokal netværksadgang og SMB 2/3 med en brugerkonto. Ingen SMB1, gæsteadgang eller firewallændringer aktiveres.'
 Write-Host 'VPN: Tillad dit lokale LAN i din Windows-VPN. Seedboxens torrent-VPN giver ikke i sig selv adgang til hjemmenetværket.'
-'''
+"""
 
-_CONNECT = r'''
+_CONNECT = r"""
 
 Write-Host 'Scriptet opretter kun det valgte netværksdrev efter din bekræftelse. Eksisterende drev og forbindelser bevares.'
 $Inventory = Get-LocalInventory
@@ -319,9 +328,9 @@ try {
     $Credential = $null
     if ($null -ne $Password) { $Password.Dispose(); $Password = $null }
 }
-'''
+"""
 
-_DIAGNOSTICS = r'''
+_DIAGNOSTICS = r"""
 
 Write-Host 'Læsekontrol: Ingen filer oprettes, og ingen drev, legitimationsoplysninger eller serverindstillinger ændres.'
 Write-Host 'En adgangskontrol kan åbne en normal SMB-session med din eksisterende Windows-konto. Den beviser ikke skriverettigheder.'
@@ -413,7 +422,7 @@ Write-Host 'Forkert ledig plads: Sammenlign med lagerpuljen i MediaHub. Hvis dre
 Write-Host 'Fejlkoder: 53 = netværkssti, 67 = delingsnavn, 5 = adgang, 1219 = forskellige SMB-konti til samme server.'
 Write-Host 'Ved fejl 1219: Luk berørte filer og gennemgå kun forbindelser til denne server. Afbryd aldrig alle netværksdrev som standardløsning.'
 Write-Host 'Kontrollen er afsluttet. Oplysningerne bliver i dette vindue og sendes ikke til MediaHub.'
-'''
+"""
 
 
 def generate_connect_script(host: str, share: str, drive: str, username: str | None = None) -> str:
@@ -428,7 +437,9 @@ def generate_connect_script(host: str, share: str, drive: str, username: str | N
     )
 
 
-def generate_diagnostics_script(host: str, share: str, drive: str, username: str | None = None) -> str:
+def generate_diagnostics_script(
+    host: str, share: str, drive: str, username: str | None = None
+) -> str:
     """Generate bounded local-PC diagnostics without creating/removing mappings."""
     return (
         "#Requires -Version 5.1\n"

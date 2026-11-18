@@ -65,7 +65,10 @@ class ProductionInstallDriver:
         }
         plan["digest"] = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
         plan["qBittorrent"] = self.settings.model_dump()
-        for service, repository in (("vpn", "qmcgaw/gluetun"), ("torrent", "lscr.io/linuxserver/qbittorrent")):
+        for service, repository in (
+            ("vpn", "qmcgaw/gluetun"),
+            ("torrent", "lscr.io/linuxserver/qbittorrent"),
+        ):
             plan["compose"]["services"][service]["image"] = repository + ":latest"
         plan["executionStage"] = "transactional-install"
         return plan
@@ -108,7 +111,10 @@ class ProductionInstallDriver:
                     )
         if not adoption:
             images = {}
-            for field, repository in (("vpnImage", "qmcgaw/gluetun"), ("torrentImage", "lscr.io/linuxserver/qbittorrent")):
+            for field, repository in (
+                ("vpnImage", "qmcgaw/gluetun"),
+                ("torrentImage", "lscr.io/linuxserver/qbittorrent"),
+            ):
                 image = await pull_latest(self.runtime.socket, repository)
                 images[field] = publisher_reference(image, repository)
             self.runtime.resolved_images = images

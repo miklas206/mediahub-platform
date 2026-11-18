@@ -26,8 +26,18 @@ def migrate(root: Path, source: Path, apply: bool):
         return
     tag = "mediahub-core:hub-migration-" + str(int(time.time()))
     run("docker", "build", "-f", source / "docker/Dockerfile", "-t", tag, source)
-    run("docker", "run", "--rm", "--network", "none", "--entrypoint", "sh", tag,
-        "-c", "python -c 'import agent.main, mediahub.main' && docker compose version")
+    run(
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--entrypoint",
+        "sh",
+        tag,
+        "-c",
+        "python -c 'import agent.main, mediahub.main' && docker compose version",
+    )
     run("docker", "pull", updated["services"]["proxy"]["image"])
     updated["services"]["core"]["image"] = tag
     updated["services"]["core"].pop("build", None)
@@ -53,8 +63,20 @@ def migrate(root: Path, source: Path, apply: bool):
         compose.write_text(json.dumps(updated, indent=2))
         shutil.copy2(source / "scripts/platform_update_host.py", updater)
         updater.chmod(0o700)
-        run("docker", "compose", "-f", compose, "up", "-d", "--no-deps", "--wait",
-            "--wait-timeout", "180", "core", "proxy")
+        run(
+            "docker",
+            "compose",
+            "-f",
+            compose,
+            "up",
+            "-d",
+            "--no-deps",
+            "--wait",
+            "--wait-timeout",
+            "180",
+            "core",
+            "proxy",
+        )
         print("Hub and proxy started; separate Agent remains stopped. Backup:", backup)
     except Exception:
         if stopped:
@@ -75,7 +97,9 @@ def migrate(root: Path, source: Path, apply: bool):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Migrate the authorized beta without resetting data")
+    parser = argparse.ArgumentParser(
+        description="Migrate the authorized beta without resetting data"
+    )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--apply", action="store_true")

@@ -266,10 +266,13 @@ class PlatformUpdateRuntime:
                     if isinstance(step, dict) and step.get("state") == "running":
                         step["state"] = "error"
                 self._write_status(
-                    "failed", 100,
+                    "failed",
+                    100,
                     "Core restarted before the download completed; no host update was started. "
                     "Check for updates and retry.",
-                    operation, str(value.get("toVersion") or __version__), steps,
+                    operation,
+                    str(value.get("toVersion") or __version__),
+                    steps,
                 )
                 value = json.loads(path.read_text(encoding="utf-8"))
             return {
@@ -453,7 +456,9 @@ class PlatformUpdateRuntime:
                 "message": str(value["message"])[:400],
                 "operationId": str(value.get("operationId", ""))[:32],
                 "freeBytes": max(0, int(value.get("freeBytes", 0))),
-                "reclaimedBytes": max(0, value["reclaimedBytes"]) if type(value.get("reclaimedBytes")) is int else None,
+                "reclaimedBytes": max(0, value["reclaimedBytes"])
+                if type(value.get("reclaimedBytes")) is int
+                else None,
             }
             for key in ["freeBytesBefore", "freeBytesChange"]:
                 if type(value.get(key)) is int:
@@ -463,13 +468,22 @@ class PlatformUpdateRuntime:
                 planned = cleanup.get("planned", [])
                 removed = cleanup.get("removedImageIds", [])
                 report["helperCleanup"] = {
-                    "planned": [{"id": row["id"], "tags": [str(tag)[:128] for tag in row.get("tags", [])[:1]],
-                                 "component": row.get("component")}
-                                for row in planned[:100] if isinstance(row, dict)
-                                and re.fullmatch(r"sha256:[a-f0-9]{64}", str(row.get("id", "")))
-                                and row.get("component") in {"vpn-gateway", "vpn-relay"}],
-                    "removedImageIds": [item for item in removed[:100] if isinstance(item, str)
-                                        and re.fullmatch(r"sha256:[a-f0-9]{64}", item)],
+                    "planned": [
+                        {
+                            "id": row["id"],
+                            "tags": [str(tag)[:128] for tag in row.get("tags", [])[:1]],
+                            "component": row.get("component"),
+                        }
+                        for row in planned[:100]
+                        if isinstance(row, dict)
+                        and re.fullmatch(r"sha256:[a-f0-9]{64}", str(row.get("id", "")))
+                        and row.get("component") in {"vpn-gateway", "vpn-relay"}
+                    ],
+                    "removedImageIds": [
+                        item
+                        for item in removed[:100]
+                        if isinstance(item, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", item)
+                    ],
                 }
             return report
         except (OSError, ValueError, KeyError, TypeError):

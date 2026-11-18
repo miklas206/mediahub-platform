@@ -35,16 +35,35 @@ def test_unicode_and_dollar_share_are_literal_and_download_is_ps51_utf8_bom(gene
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"host": "127.0.0.1"}, {"host": "8.8.8.8"}, {"host": "169.254.1.1"},
-        {"host": "100.64.0.1"}, {"host": "server.local"}, {"host": "::1"},
-        {"host": "192.168.1.2'; Stop-Computer #"}, {"host": 3232235778},
-        {"share": "../medier"}, {"share": "medier\\film"}, {"share": "medier\nexit"},
-        {"share": "media'; exit; '"}, {"share": "$(Stop-Computer)"},
-        {"share": "."}, {"share": ".."}, {"share": "media."}, {"share": " media"},
-        {"share": ""}, {"share": "x" * 81}, {"drive": "C"},
-        {"drive": "M:"}, {"drive": "M;exit"}, {"username": "user\nexit"},
-        {"username": "user'"}, {"username": "a`nb"}, {"username": " user"},
-        {"username": "x" * 129}, {"username": "user:password"}, {"username": 0},
+        {"host": "127.0.0.1"},
+        {"host": "8.8.8.8"},
+        {"host": "169.254.1.1"},
+        {"host": "100.64.0.1"},
+        {"host": "server.local"},
+        {"host": "::1"},
+        {"host": "192.168.1.2'; Stop-Computer #"},
+        {"host": 3232235778},
+        {"share": "../medier"},
+        {"share": "medier\\film"},
+        {"share": "medier\nexit"},
+        {"share": "media'; exit; '"},
+        {"share": "$(Stop-Computer)"},
+        {"share": "."},
+        {"share": ".."},
+        {"share": "media."},
+        {"share": " media"},
+        {"share": ""},
+        {"share": "x" * 81},
+        {"drive": "C"},
+        {"drive": "M:"},
+        {"drive": "M;exit"},
+        {"username": "user\nexit"},
+        {"username": "user'"},
+        {"username": "a`nb"},
+        {"username": " user"},
+        {"username": "x" * 129},
+        {"username": "user:password"},
+        {"username": 0},
     ],
 )
 def test_rejects_unsafe_or_out_of_scope_connection_metadata(generate, overrides):
@@ -100,9 +119,28 @@ def test_diagnostics_bound_access_and_capacity_and_explain_failures():
     assert "$Access = Invoke-BoundedRead" in script
     assert "Test-Path -LiteralPath $SharePath -PathType Container" in script
     assert "Mapping changed during diagnostics" in script
-    for guidance in ("Fejl 53:", "Fejl 67:", "Fejl 5:", "Fejl 1219:", "Samba dfree", "Kvoter", "Windows-VPN", "DNS:"):
+    for guidance in (
+        "Fejl 53:",
+        "Fejl 67:",
+        "Fejl 5:",
+        "Fejl 1219:",
+        "Samba dfree",
+        "Kvoter",
+        "Windows-VPN",
+        "DNS:",
+    ):
         assert guidance in script
-    for forbidden in ("New-PSDrive", "Get-Credential", "Remove-PSDrive", "Set-ExecutionPolicy", "cmdkey", "net use", "Set-Smb", "Set-NetFirewall", "WriteAllText"):
+    for forbidden in (
+        "New-PSDrive",
+        "Get-Credential",
+        "Remove-PSDrive",
+        "Set-ExecutionPolicy",
+        "cmdkey",
+        "net use",
+        "Set-Smb",
+        "Set-NetFirewall",
+        "WriteAllText",
+    ):
         assert forbidden not in script
 
 
@@ -113,7 +151,9 @@ def _powershell(command: str, timeout: int = 15) -> str:
     encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
     result = subprocess.run(
         [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-        capture_output=True, timeout=timeout, check=False,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
@@ -171,7 +211,8 @@ def _parse_file(path: Path) -> str:
         "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); "
         "$Tokens = $null; $Errors = $null; "
         "$Ast = [System.Management.Automation.Language.Parser]::ParseFile("
-        + literal + ", [ref]$Tokens, [ref]$Errors); "
+        + literal
+        + ", [ref]$Tokens, [ref]$Errors); "
         "if ($Errors.Count -gt 0) { $Errors | Out-String | Write-Error; exit 1 }; "
     )
 
@@ -181,14 +222,20 @@ def _parse_file(path: Path) -> str:
 def test_real_ps51_parser_accepts_scripts_and_mutation_surface_is_limited(generate, tmp_path):
     path = tmp_path / "download.ps1"
     path.write_bytes(utf8_bom_script(generate("192.168.1.148", "Medier ÆØÅ$", "M", "HJEM\\søren")))
-    output = _powershell(_parse_file(path) + """
+    output = _powershell(
+        _parse_file(path)
+        + """
     @($Ast.FindAll({ param($Node)
         $Node -is [System.Management.Automation.Language.CommandAst]
     }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ }) | ConvertTo-Json -Compress
-    """)
+    """
+    )
     commands = json.loads(output)
     assert "Remove-PSDrive" not in commands
-    assert not any(command.startswith(("Set-", "Remove-", "Clear-", "Enable-", "Disable-")) for command in commands)
+    assert not any(
+        command.startswith(("Set-", "Remove-", "Clear-", "Enable-", "Disable-"))
+        for command in commands
+    )
     assert ("New-PSDrive" in commands) == (generate is generate_connect_script)
     assert "Get-Credential" not in commands
     assert ("Read-Host" in commands) == (generate is not generate_diagnostics_script)
@@ -202,7 +249,9 @@ def test_bounded_worker_transports_unicode_and_kills_only_its_own_timed_out_proc
     # Neither script main, inventory, TCP checks nor share access are ever executed.
     path = tmp_path / "download.ps1"
     path.write_bytes(utf8_bom_script(generate_diagnostics_script("192.168.1.148", "MediaHub", "M")))
-    command = _parse_file(path) + """
+    command = (
+        _parse_file(path)
+        + """
     $Function = $Ast.Find({ param($Node)
         $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
         $Node.Name -eq 'Invoke-BoundedRead'
@@ -214,6 +263,7 @@ def test_bounded_worker_transports_unicode_and_kills_only_its_own_timed_out_proc
     $Timeout = Invoke-BoundedRead -TimeoutSeconds 1 -Operation { Start-Sleep -Seconds 30 }
     @{ Success = $Success; Timeout = $Timeout } | ConvertTo-Json -Depth 5 -Compress
     """
+    )
     started = time.monotonic()
     result = json.loads(_powershell(command))
     assert time.monotonic() - started < 12
@@ -228,7 +278,9 @@ def test_bounded_worker_drains_large_stdout_and_stderr_without_false_timeout(tmp
     # Windows pipe buffers, never network access or the generated script's main.
     path = tmp_path / "download.ps1"
     path.write_bytes(utf8_bom_script(generate_diagnostics_script("192.168.1.148", "MediaHub", "M")))
-    command = _parse_file(path) + """
+    command = (
+        _parse_file(path)
+        + """
     $Function = $Ast.Find({ param($Node)
         $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
         $Node.Name -eq 'Invoke-BoundedRead'
@@ -241,6 +293,7 @@ def test_bounded_worker_drains_large_stdout_and_stderr_without_false_timeout(tmp
     @{ Ok = $Result.Ok; Length = $Result.Value.Length; Value = $Result.Value } |
         ConvertTo-Json -Compress
     """
+    )
     result = json.loads(_powershell(command))
     assert result == {"Ok": True, "Length": 12000, "Value": "x" * 12000}
 
@@ -257,8 +310,12 @@ def test_access_operation_checks_browsing_without_returning_names(tmp_path):
     absent = tmp_path / "does-not-exist"
     path = tmp_path / "download.ps1"
     path.write_bytes(utf8_bom_script(generate_diagnostics_script("192.168.1.148", "MediaHub", "M")))
-    paths = ", ".join("'" + str(value).replace("'", "''") + "'" for value in (empty, populated, absent))
-    command = _parse_file(path) + """
+    paths = ", ".join(
+        "'" + str(value).replace("'", "''") + "'" for value in (empty, populated, absent)
+    )
+    command = (
+        _parse_file(path)
+        + """
     $Function = $Ast.Find({ param($Node)
         $Node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
         $Node.Name -eq 'Invoke-BoundedRead'
@@ -268,11 +325,14 @@ def test_access_operation_checks_browsing_without_returning_names(tmp_path):
         $Node -is [System.Management.Automation.Language.ScriptBlockExpressionAst] -and
         $Node.Extent.Text.Contains('EnumerateFileSystemEntries')
     }, $true).ScriptBlock.GetScriptBlock()
-    $Results = foreach ($LocalFolder in @(""" + paths + """)) {
+    $Results = foreach ($LocalFolder in @("""
+        + paths
+        + """)) {
         Invoke-BoundedRead -Operation $AccessBlock -Values @($LocalFolder)
     }
     @($Results) | ConvertTo-Json -Depth 4 -Compress
     """
+    )
     output = _powershell(command)
     assert json.loads(output) == [
         {"Ok": True, "Value": True},
@@ -299,7 +359,9 @@ def test_password_reset_requires_confirmation_and_only_changes_existing_samba_ac
 @pytest.mark.skipif(not POWERSHELL, reason="Windows PowerShell requires Windows")
 def test_password_reset_whatif_and_invalid_users_never_invoke_ssh(tmp_path):
     path = tmp_path / "reset.ps1"
-    path.write_bytes(utf8_bom_script(generate_password_reset_script("192.168.1.148", "MediaHub", "M")))
+    path.write_bytes(
+        utf8_bom_script(generate_password_reset_script("192.168.1.148", "MediaHub", "M"))
+    )
     literal = "'" + str(path).replace("'", "''") + "'"
     command = r"""
     $ErrorActionPreference = 'Stop'
@@ -316,7 +378,7 @@ def test_password_reset_whatif_and_invalid_users_never_invoke_ssh(tmp_path):
       catch { $Rejected += $true }
     }
     $Rejected | ConvertTo-Json -Compress
-    """.replace("SCRIPT", "([scriptblock]::Create([System.IO.File]::ReadAllText(" + literal + ")))" )
+    """.replace("SCRIPT", "([scriptblock]::Create([System.IO.File]::ReadAllText(" + literal + ")))")
     assert json.loads(_powershell(command).splitlines()[-1]) == [True, True, True, True]
 
 
@@ -326,7 +388,10 @@ def test_password_reset_transports_key_path_and_explains_ssh_failure_without_res
     key.write_text("not-a-real-key", encoding="utf-8")
     script = generate_password_reset_script("192.168.1.148", "MediaHub", "M")
     # Replace only the SSH boundary; no process or network is invoked.
-    script = script.replace("& $Ssh @SshArguments $ServerAddress $RemoteCommand", "Invoke-TestSsh @SshArguments $ServerAddress $RemoteCommand")
+    script = script.replace(
+        "& $Ssh @SshArguments $ServerAddress $RemoteCommand",
+        "Invoke-TestSsh @SshArguments $ServerAddress $RemoteCommand",
+    )
     script = script.replace("if (-not (Test-Path -LiteralPath $Ssh -PathType Leaf))", "if ($false)")
     source = "'" + script.replace("'", "''") + "'"
     key_literal = "'" + str(key).replace("'", "''") + "'"

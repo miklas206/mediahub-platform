@@ -273,7 +273,9 @@ def create_agent(config: AgentConfig | None = None):
         plex.runtime = plex_runtime
     backups = AppBackups(plex, control)
     container_apps = ContainerApps(
-        config.container_apps_policy_file, config.docker_socket, config.state_dir,
+        config.container_apps_policy_file,
+        config.docker_socket,
+        config.state_dir,
         approved_host_policy_file=config.plex_install_policy_file,
     )
     shared_vpn = SharedVPN(config, container_apps, plex_runtime)
@@ -281,8 +283,8 @@ def create_agent(config: AgentConfig | None = None):
     gpu_setup = GPUSetup(container_apps)
     plex_runtime.shared_vpn = shared_vpn
     from agent.app_resources import agent_resources
-    resources = agent_resources(config, plex_runtime, container_apps)
 
+    resources = agent_resources(config, plex_runtime, container_apps)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -290,7 +292,8 @@ def create_agent(config: AgentConfig | None = None):
         cleanup = asyncio.create_task(uploads.cleanup())
         container_monitor = (
             asyncio.create_task(container_apps.monitor())
-            if config.container_apps_policy_file or config.plex_install_policy_file else None
+            if config.container_apps_policy_file or config.plex_install_policy_file
+            else None
         )
         torrent_cleanup = (
             asyncio.create_task(torrents.retention.poll()) if config.seedbox_policy_file else None
@@ -388,7 +391,9 @@ def create_agent(config: AgentConfig | None = None):
 
     @app.put("/v1/shared-vpn/{app_name}", dependencies=[Depends(secure_workflow)])
     async def shared_vpn_choice(app_name: str, body: SharedVPNChoice):
-        return await shared_vpn.configuration(app_name, body.peer.model_dump() if body.peer else {}, body.enabled)
+        return await shared_vpn.configuration(
+            app_name, body.peer.model_dump() if body.peer else {}, body.enabled
+        )
 
     @app.get("/v1/version")
     async def version():
@@ -481,12 +486,16 @@ def create_agent(config: AgentConfig | None = None):
         if package == "plex":
             lock = plex.lock
             if plex_runtime.update_task and not plex_runtime.update_task.done():
-                raise DomainError("resources_busy", "Plex update is running; retry afterwards.", 409)
+                raise DomainError(
+                    "resources_busy", "Plex update is running; retry afterwards.", 409
+                )
         else:
             container_apps.app(package)
             lock = container_apps.locks[package]
             if package in container_apps.tasks and not container_apps.tasks[package].done():
-                raise DomainError("resources_busy", "App installation is running; retry afterwards.", 409)
+                raise DomainError(
+                    "resources_busy", "App installation is running; retry afterwards.", 409
+                )
         async with lock:
             return await resources.change(package, body)
 
@@ -514,7 +523,9 @@ def create_agent(config: AgentConfig | None = None):
     async def container_plan(body: ContainerInstallation):
         return await container_apps.plan(body)
 
-    @app.post("/v1/container-apps/install", dependencies=[Depends(secure_workflow)], status_code=202)
+    @app.post(
+        "/v1/container-apps/install", dependencies=[Depends(secure_workflow)], status_code=202
+    )
     async def container_install(body: ContainerInstallRequest):
         return await container_apps.install(body)
 
@@ -525,20 +536,34 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/container-apps/{app_id}/uninstall-status")
     async def container_uninstall_status(app_id: str):
         report = await container_apps.status(app_id)
-        return {"state": "succeeded" if report["state"] == "not-installed" or (report["state"] == "removed" and (container_apps.record(app_id) or {}).get("configurationReset")) else "ready",
-                "installationId": report["installationId"], "dataPreserved": True,
-                "configurationReset": report["state"] == "not-installed" or bool((container_apps.record(app_id) or {}).get("configurationReset"))}
+        return {
+            "state": "succeeded"
+            if report["state"] == "not-installed"
+            or (
+                report["state"] == "removed"
+                and (container_apps.record(app_id) or {}).get("configurationReset")
+            )
+            else "ready",
+            "installationId": report["installationId"],
+            "dataPreserved": True,
+            "configurationReset": report["state"] == "not-installed"
+            or bool((container_apps.record(app_id) or {}).get("configurationReset")),
+        }
 
     @app.post("/v1/container-apps/{app_id}/uninstall", dependencies=[Depends(secure_workflow)])
     async def container_uninstall(app_id: str, body: ContainerRemoval):
         if app_id == "jellyfin":
-            await shared_vpn.remove_connection(app_id, body.confirmedInstallationId, fence_only=True)
+            await shared_vpn.remove_connection(
+                app_id, body.confirmedInstallationId, fence_only=True
+            )
         response = await container_apps.action(app_id, "uninstall", body.confirmedInstallationId)
         if app_id == "jellyfin":
             await shared_vpn.cleanup_removed(app_id)
         return {**response, "state": "accepted"}
 
-    @app.post("/v1/container-apps/{app_id}/actions/{action}", dependencies=[Depends(secure_workflow)])
+    @app.post(
+        "/v1/container-apps/{app_id}/actions/{action}", dependencies=[Depends(secure_workflow)]
+    )
     async def container_action(app_id: str, action: str):
         return await container_apps.action(app_id, action)
 
@@ -570,36 +595,43 @@ def create_agent(config: AgentConfig | None = None):
     @app.get("/v1/plex/account", dependencies=[Depends(secure_workflow)])
     async def plex_account_status():
         from agent.plex_account import status
+
         return await status(plex_runtime)
 
     @app.post("/v1/plex/account", dependencies=[Depends(secure_workflow)], status_code=202)
     async def plex_account_claim(body: PlexAccountClaim):
         from agent.plex_account import queue
+
         return await queue(plex_runtime, body)
 
     @app.get("/v1/plex/libraries", dependencies=[Depends(secure_workflow)])
     async def plex_libraries():
         from agent.plex_libraries import PlexLibraries
+
         return await PlexLibraries(plex_runtime).inventory()
 
     @app.get("/v1/plex/library-folders", dependencies=[Depends(secure_workflow)])
     async def plex_library_folders(path: str):
         from agent.plex_libraries import PlexLibraries
+
         return await PlexLibraries(plex_runtime).folders(path)
 
     @app.post("/v1/plex/libraries", dependencies=[Depends(secure_workflow)])
     async def plex_library_create(body: PlexLibraryCreate):
         from agent.plex_libraries import PlexLibraries
+
         return await PlexLibraries(plex_runtime).create(body)
 
     @app.put("/v1/plex/libraries/{identifier}", dependencies=[Depends(secure_workflow)])
     async def plex_library_edit(identifier: str, body: PlexLibraryEdit):
         from agent.plex_libraries import PlexLibraries
+
         return await PlexLibraries(plex_runtime).edit(identifier, body)
 
     @app.delete("/v1/plex/libraries/{identifier}", dependencies=[Depends(secure_workflow)])
     async def plex_library_remove(identifier: str, body: PlexLibraryRemove):
         from agent.plex_libraries import PlexLibraries
+
         return await PlexLibraries(plex_runtime).remove(identifier, body)
 
     @app.get("/v1/plex/install-options")
@@ -628,7 +660,9 @@ def create_agent(config: AgentConfig | None = None):
         return {
             "entries": [
                 {**entry, "hostId": policy.hostId, "app": "org.mediahub.plex"}
-                for entry in (plex.diagnostics.entries() if plex.diagnostics else plex.events[-100:])
+                for entry in (
+                    plex.diagnostics.entries() if plex.diagnostics else plex.events[-100:]
+                )
             ]
         }
 
@@ -760,6 +794,7 @@ def create_agent(config: AgentConfig | None = None):
     @app.put("/v1/plex/shared-remote-access", dependencies=[Depends(secure_workflow)])
     async def plex_shared_remote_access(body: PlexRemoteAccessChoice):
         from agent.plex_remote_access import configure
+
         return await configure(plex_runtime, shared_vpn, body)
 
     @app.post("/v1/plex/uninstall", dependencies=[Depends(secure_workflow)], status_code=202)

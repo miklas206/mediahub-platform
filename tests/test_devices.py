@@ -20,7 +20,9 @@ from agent.devices import (
 @pytest.mark.parametrize("changed", [False, True])
 def test_proxmox_mount_identity_requires_matching_live_source(monkeypatch, changed):
     identity = {"path": "/storage", "source": "/dev/mapper/new-disk", "uuid": "approved-uuid"}
-    monkeypatch.setattr(Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o600, st_size=200))
+    monkeypatch.setattr(
+        Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o600, st_size=200)
+    )
     monkeypatch.setattr(Path, "read_text", lambda _: json.dumps([identity]))
     mount = {**identity, "uuid": None, "root": "/"}
     if changed:
@@ -33,7 +35,9 @@ def test_proxmox_mount_identity_requires_matching_live_source(monkeypatch, chang
 
 
 def test_proxmox_mount_identity_rejects_writable_identity(monkeypatch):
-    monkeypatch.setattr(Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o666, st_size=200))
+    monkeypatch.setattr(
+        Path, "stat", lambda _: SimpleNamespace(st_uid=0, st_mode=0o666, st_size=200)
+    )
     with pytest.raises(ValueError, match="Untrusted"):
         apply_mount_identities([], Path("identity.json"))
 

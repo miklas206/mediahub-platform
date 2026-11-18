@@ -47,9 +47,19 @@ try { & $scriptPath -InstallDirectory 'C:\MediaHub-Test' -Update } catch { $fail
 [pscustomobject]@{ calls = $global:desktopUpdateCalls; failed = $failed; message = $failureMessage } | ConvertTo-Json -Compress
 """.replace("__SCRIPT__", str(script).replace("'", "''")).replace("__SCENARIO__", scenario)
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
-         base64.b64encode(command.encode("utf-16le")).decode()],
-        capture_output=True, text=True, timeout=20, check=True,
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            base64.b64encode(command.encode("utf-16le")).decode(),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=True,
     )
     outcome = json.loads(result.stdout.splitlines()[-1])
     calls = outcome["calls"]

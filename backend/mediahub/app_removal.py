@@ -12,9 +12,11 @@ CLOUDFLARE = "org.mediahub.cloudflared"
 
 def forget_settings(db, package):
     changed = False
-    for model, column, key in [(Setting, Setting.key, "app_address:" + package),
-                               (Setting, Setting.key, "app_runtime_control:" + package),
-                               (AppConfiguration, AppConfiguration.package_id, package)]:
+    for model, column, key in [
+        (Setting, Setting.key, "app_address:" + package),
+        (Setting, Setting.key, "app_runtime_control:" + package),
+        (AppConfiguration, AppConfiguration.package_id, package),
+    ]:
         row = db.scalar(select(model).where(column == key))
         if row:
             db.delete(row)
@@ -26,11 +28,21 @@ def forget_settings(db, package):
         if removed:
             retired = {row["id"]: row for row in value.get("retired", [])}
             retired.update({row["id"]: {**row, "previousExternalUrl": ""} for row in removed})
-            value.update(routes=[row for row in value["routes"] if row["packageId"] != package], retired=list(retired.values()))
+            value.update(
+                routes=[row for row in value["routes"] if row["packageId"] != package],
+                retired=list(retired.values()),
+            )
             changed = True
-        if package == "org.mediahub.plex" and any(value.get(key) for key in
-                ("plexPortEnabled", "plexPortManaged", "plexPortApplied", "plexPortStatus")):
-            value.update(plexPortEnabled=False, plexPortManaged=False, plexPortApplied=False, plexPortStatus={})
+        if package == "org.mediahub.plex" and any(
+            value.get(key)
+            for key in ("plexPortEnabled", "plexPortManaged", "plexPortApplied", "plexPortStatus")
+        ):
+            value.update(
+                plexPortEnabled=False,
+                plexPortManaged=False,
+                plexPortApplied=False,
+                plexPortStatus={},
+            )
             changed = True
         if changed:
             value["revision"] = value.get("revision", 0) + 1
@@ -41,13 +53,25 @@ def forget_settings(db, package):
 def reconcile_removed_settings(svc):
     # Old releases could finish runtime removal but retain an opening address
     # and selected VPN domain. Repair only confirmed uninstalled remote apps.
-    bindings = {"org.mediahub.plex": "plex_installation", "org.mediahub.jellyfin": "container_installation_jellyfin", "org.mediahub.seedbox": "seedbox_installation"}
+    bindings = {
+        "org.mediahub.plex": "plex_installation",
+        "org.mediahub.jellyfin": "container_installation_jellyfin",
+        "org.mediahub.seedbox": "seedbox_installation",
+    }
     with svc.sessions.begin() as db:
-        packages = db.scalars(select(InstalledApp.package_id).where(
-            InstalledApp.state == "uninstalled", InstalledApp.is_mock.is_(False),
-            InstalledApp.package_id.in_(bindings))).all()
+        packages = db.scalars(
+            select(InstalledApp.package_id).where(
+                InstalledApp.state == "uninstalled",
+                InstalledApp.is_mock.is_(False),
+                InstalledApp.package_id.in_(bindings),
+            )
+        ).all()
         for package in set(packages):
-            if db.scalar(select(InstalledApp.id).where(InstalledApp.package_id == package, InstalledApp.state != "uninstalled")):
+            if db.scalar(
+                select(InstalledApp.id).where(
+                    InstalledApp.package_id == package, InstalledApp.state != "uninstalled"
+                )
+            ):
                 continue
             forget_settings(db, package)
             binding = db.scalar(select(Setting).where(Setting.key == bindings[package]))
@@ -97,12 +121,18 @@ async def removal_status(svc, app_id):
             "removal_unverified", "Runtime removal has not passed its final checks", 409
         )
     if report.get("state") == "succeeded" and report.get("configurationReset") is not True:
-        raise DomainError("reset_unverified", "App configuration reset has not been verified. Update the Agent and retry removal.", 409)
+        raise DomainError(
+            "reset_unverified",
+            "App configuration reset has not been verified. Update the Agent and retry removal.",
+            409,
+        )
     if report.get("state") == "succeeded":
         with svc.sessions() as db:
             binding = db.scalar(select(Setting).where(Setting.key == definition.binding_key))
             if not binding or report.get("installationId") != binding.value.get("installationId"):
-                raise DomainError("installation_changed", "Installation identity could not be verified", 409)
+                raise DomainError(
+                    "installation_changed", "Installation identity could not be verified", 409
+                )
         await svc.shared_vpn.forget_peer(app["packageId"], adapter.host_id)
     with svc.sessions.begin() as db:
         binding = db.scalar(select(Setting).where(Setting.key == definition.binding_key))
@@ -187,7 +217,9 @@ async def remove_app(svc, app_id, confirmed):
             )
             if binding:
                 db.delete(binding)
-            configuration = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == app["packageId"]))
+            configuration = db.scalar(
+                select(AppConfiguration).where(AppConfiguration.package_id == app["packageId"])
+            )
             if configuration:
                 db.delete(configuration)
         return {"state": "succeeded", "dataPreserved": True, "configurationReset": True}

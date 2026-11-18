@@ -124,9 +124,7 @@ class PlexForwarding:
             age = time.time() - (endpoint.get("verifiedAt") or 0)
             # Dedicated profiles use their own primary port; the legacy shared
             # gateway keeps its independently leased Plex port.
-            same_profile = bool(
-                (dedicated or state.get("profileId")) == gateway.get("profileId")
-            )
+            same_profile = bool((dedicated or state.get("profileId")) == gateway.get("profileId"))
             leased = bool(
                 verified
                 and same_profile

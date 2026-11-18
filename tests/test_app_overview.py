@@ -23,7 +23,10 @@ def test_overview_uses_short_lived_scoped_grant_and_cleans_it_up(logged_in, monk
         return httpx.Response(200, json={"checkedAt": time.time(), "ready": True, "torrents": []})
 
     original = httpx.AsyncClient
-    monkeypatch.setattr("mediahub.mediaseed_api.httpx.AsyncClient", lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(handler)}))
+    monkeypatch.setattr(
+        "mediahub.mediaseed_api.httpx.AsyncClient",
+        lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(handler)}),
+    )
     response = logged_in.get("/api/v1/app-overview")
     assert response.status_code == 200
     assert response.json()["data"]["mediaseed"]["status"] == "ok"
@@ -37,9 +40,14 @@ def test_overview_uses_short_lived_scoped_grant_and_cleans_it_up(logged_in, monk
 def test_denied_app_never_requested(logged_in, monkeypatch):
     configure(logged_in)
     own = logged_in.get("/api/auth/me").json()["data"]["id"]
-    logged_in.put(f"/api/users/{own}", json={"username": "tester", "appRoles": {"org.mediahub.mediaseed": "denied"}}).raise_for_status()
+    logged_in.put(
+        f"/api/users/{own}",
+        json={"username": "tester", "appRoles": {"org.mediahub.mediaseed": "denied"}},
+    ).raise_for_status()
+
     def no_client(**kwargs):
         raise AssertionError("Denied app must not receive a request")
+
     monkeypatch.setattr("mediahub.mediaseed_api.httpx.AsyncClient", no_client)
     assert logged_in.get("/api/v1/app-overview").json()["data"]["mediaseed"]["status"] == "denied"
 
@@ -50,10 +58,15 @@ def test_overview_needs_hub_login(client):
 
 def test_failed_app_does_not_keep_grants_or_claim_healthy(logged_in, monkeypatch):
     configure(logged_in)
+
     async def failed(request):
         raise httpx.ConnectError("Synthetic offline app")
+
     original = httpx.AsyncClient
-    monkeypatch.setattr("mediahub.mediaseed_api.httpx.AsyncClient", lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(failed)}))
+    monkeypatch.setattr(
+        "mediahub.mediaseed_api.httpx.AsyncClient",
+        lambda **kwargs: original(**{**kwargs, "transport": httpx.MockTransport(failed)}),
+    )
     response = logged_in.get("/api/v1/app-overview").json()["data"]
     assert response["mediaseed"] == {"status": "unavailable"}
     with logged_in.app.state.services.sessions() as db:

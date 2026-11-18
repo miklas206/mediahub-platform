@@ -91,6 +91,9 @@ async def test_removed_status_requires_missing_containers_not_just_old_marker(tm
 
     control.driver.container = AsyncMock(side_effect=missing)
     assert (await control.uninstall_status())["state"] == "ready"
-    save_json(tmp_path / "runtime-removal.json", {"installationId": "seedbox-test", "configurationReset": True})
+    save_json(
+        tmp_path / "runtime-removal.json",
+        {"installationId": "seedbox-test", "configurationReset": True},
+    )
     control.driver.request = AsyncMock(return_value=httpx.Response(200, json=[]))
     assert (await control.uninstall_status())["state"] == "succeeded"

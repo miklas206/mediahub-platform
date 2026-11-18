@@ -103,7 +103,12 @@ class GitHubGitChecks:
                     project_path=project_path or "pyproject.toml",
                 )
             except DomainError as error:
-                self.failures[identity] = (self.clock() + 60, error.code, error.message, error.status)
+                self.failures[identity] = (
+                    self.clock() + 60,
+                    error.code,
+                    error.message,
+                    error.status,
+                )
                 while len(self.failures) > 32:
                     self.failures.pop(next(iter(self.failures)))
                 raise

@@ -17,11 +17,20 @@ def test_installed_seedbox_pins_survive_runtime_reload_without_changing_storage(
     from agent.install_images import resolved_seedbox_policy
     from agent.seedbox_driver import ScopedDriver
 
-    policy = SimpleNamespace(workRoot=str(tmp_path), hostId=spec().hostId,
-                             downloadsStorageId=spec().downloadsStorageId, paths=paths())
-    pins = {"vpnImage": "qmcgaw/gluetun@sha256:" + "c" * 64,
-            "torrentImage": "lscr.io/linuxserver/qbittorrent@sha256:" + "d" * 64}
-    save_json(tmp_path / "installation.json", {"installation": spec().model_dump(), "resolvedImages": pins})
+    policy = SimpleNamespace(
+        workRoot=str(tmp_path),
+        hostId=spec().hostId,
+        downloadsStorageId=spec().downloadsStorageId,
+        paths=paths(),
+    )
+    pins = {
+        "vpnImage": "qmcgaw/gluetun@sha256:" + "c" * 64,
+        "torrentImage": "lscr.io/linuxserver/qbittorrent@sha256:" + "d" * 64,
+    }
+    save_json(
+        tmp_path / "installation.json",
+        {"installation": spec().model_dump(), "resolvedImages": pins},
+    )
     runtime = ScopedDriver(SimpleNamespace(policy=lambda: policy), None, None)
     resolved, _ = runtime.binding()
     assert resolved.paths.vpnImage == pins["vpnImage"]
@@ -42,14 +51,21 @@ def test_warm_cache_still_pulls_upstream_and_resolves_new_digest(monkeypatch, tm
             generation += 1
             assert dict(request.url.params) == {"fromImage": "jellyfin/jellyfin", "tag": "latest"}
             return httpx.Response(200, text=json.dumps({"status": "Already exists"}) + "\n")
-        return httpx.Response(200, json={
-            "Id": "sha256:" + str(generation) * 64,
-            "RepoDigests": ["docker.io/jellyfin/jellyfin@sha256:" + str(generation) * 64],
-        })
+        return httpx.Response(
+            200,
+            json={
+                "Id": "sha256:" + str(generation) * 64,
+                "RepoDigests": ["docker.io/jellyfin/jellyfin@sha256:" + str(generation) * 64],
+            },
+        )
 
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(
-        **{**kwargs, "transport": httpx.MockTransport(handler)},
-    ))
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(
+            **{**kwargs, "transport": httpx.MockTransport(handler)},
+        ),
+    )
     for number in (1, 2):
         image = asyncio.run(pull_latest("unused", "jellyfin/jellyfin"))
         assert publisher_reference(image, "jellyfin/jellyfin").endswith(str(number) * 64)
@@ -57,11 +73,17 @@ def test_warm_cache_still_pulls_upstream_and_resolves_new_digest(monkeypatch, tm
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("body", [
-    '{"error":"private registry detail"}',
-    '{"errorDetail":{"message":"private registry detail"}}',
-    'broken JSON', '[]', 'x' * 65537,
-], ids=["error", "error-detail", "invalid-json", "invalid-type", "oversize"])
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"error":"private registry detail"}',
+        '{"errorDetail":{"message":"private registry detail"}}',
+        "broken JSON",
+        "[]",
+        "x" * 65537,
+    ],
+    ids=["error", "error-detail", "invalid-json", "invalid-type", "oversize"],
+)
 def test_failed_pull_does_not_use_cached_image(monkeypatch, body):
     original = httpx.AsyncClient
     calls = []
@@ -70,9 +92,13 @@ def test_failed_pull_does_not_use_cached_image(monkeypatch, body):
         calls.append(request)
         return httpx.Response(200, text=body)
 
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(
-        **{**kwargs, "transport": httpx.MockTransport(handler)},
-    ))
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(
+            **{**kwargs, "transport": httpx.MockTransport(handler)},
+        ),
+    )
     with pytest.raises(DomainError) as error:
         asyncio.run(pull_latest("unused", "jellyfin/jellyfin"))
     assert error.value.code == "install_image_download_failed"

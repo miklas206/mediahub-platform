@@ -10,13 +10,20 @@ from agent.plex_gpu_start import activate_relay, prepare_vendor
 
 def setup(enabled=True, exit_code=0):
     ram = {"Type": "volume", "Source": "plex-runtime", "Target": "/config", "ReadOnly": False}
-    plan = {"container": {"Labels": {"org.mediahub.plex.gpu.revision": "digest"} if enabled else {},
-                          "HostConfig": {"Mounts": [ram, {"Target": "/media/private"}]}}}
-    runtime = SimpleNamespace(policy=lambda: SimpleNamespace(uid=1000, gid=1000),
+    plan = {
+        "container": {
+            "Labels": {"org.mediahub.plex.gpu.revision": "digest"} if enabled else {},
+            "HostConfig": {"Mounts": [ram, {"Target": "/media/private"}]},
+        }
+    }
+    runtime = SimpleNamespace(
+        policy=lambda: SimpleNamespace(uid=1000, gid=1000),
         request=AsyncMock(side_effect=[{}, {}, {"StatusCode": exit_code}]),
-        remove_helper=AsyncMock())
-    policy = SimpleNamespace(container="plex-main", imageId="sha256:current-official",
-                             installationId="plex-main")
+        remove_helper=AsyncMock(),
+    )
+    policy = SimpleNamespace(
+        container="plex-main", imageId="sha256:current-official", installationId="plex-main"
+    )
     return runtime, policy, plan
 
 
@@ -63,4 +70,6 @@ def test_connection_uses_fixed_owned_plex_executable_and_checks_exit():
     first = runtime.request.call_args_list[0]
     assert first.args == ("POST", "/containers/plex-main/exec")
     assert first.kwargs["body"]["Cmd"] == [
-        "/usr/lib/plexmediaserver/Plex Transcoder", "--mediahub-check"]
+        "/usr/lib/plexmediaserver/Plex Transcoder",
+        "--mediahub-check",
+    ]

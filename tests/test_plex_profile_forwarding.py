@@ -9,17 +9,40 @@ from mediahub.plex_forwarding import PlexForwarding
 
 
 def fixture():
-    client = SimpleNamespace(request=AsyncMock(return_value={
-        "enabled": True, "publicPort": 50186, "identityHash": hashlib.sha256(b"owned").hexdigest()}))
+    client = SimpleNamespace(
+        request=AsyncMock(
+            return_value={
+                "enabled": True,
+                "publicPort": 50186,
+                "identityHash": hashlib.sha256(b"owned").hexdigest(),
+            }
+        )
+    )
     binding = {"id": "plex", "hostId": "local"}
-    shared = SimpleNamespace(bindings=lambda: [binding], target=lambda _: (binding, client),
-        peer_id=lambda _: "owned-peer", assignment=lambda _: "plex-profile",
-        assignment_pending=lambda _: False, vpn=AsyncMock(return_value={
-            "enabled": True, "ready": True, "profileId": "plex-profile", "publicIp": "8.8.8.8",
-            "forwardedPort": 50186, "plexPort": {"ready": True, "publicIp": "8.8.8.8", "publicPort": 50186}}))
+    shared = SimpleNamespace(
+        bindings=lambda: [binding],
+        target=lambda _: (binding, client),
+        peer_id=lambda _: "owned-peer",
+        assignment=lambda _: "plex-profile",
+        assignment_pending=lambda _: False,
+        vpn=AsyncMock(
+            return_value={
+                "enabled": True,
+                "ready": True,
+                "profileId": "plex-profile",
+                "publicIp": "8.8.8.8",
+                "forwardedPort": 50186,
+                "plexPort": {"ready": True, "publicIp": "8.8.8.8", "publicPort": 50186},
+            }
+        ),
+    )
     state = {"profileId": "web-profile", "plexPortEnabled": True}
-    gateway = SimpleNamespace(svc=SimpleNamespace(shared_vpn=shared), gateway={"providerReady": False},
-        state=lambda: state, vpn=AsyncMock(return_value={"profileId": "web-profile"}))
+    gateway = SimpleNamespace(
+        svc=SimpleNamespace(shared_vpn=shared),
+        gateway={"providerReady": False},
+        state=lambda: state,
+        vpn=AsyncMock(return_value={"profileId": "web-profile"}),
+    )
     service = PlexForwarding(gateway)
     service.probe = AsyncMock(return_value=True)
     return service, shared, client, state
@@ -30,8 +53,11 @@ def test_upgrade_migrates_inbound_to_assigned_profile_and_rechecks_port():
     old = {"plexPort": {"ready": True, "publicIp": "1.1.1.1", "publicPort": 40324}}
     asyncio.run(service.apply(state, old))
     shared.vpn.assert_awaited_with("PUT", "/profiles/plex-profile/plex", {"peerId": "owned-peer"})
-    client.request.assert_awaited_with("PUT", "/v1/plex/shared-remote-access", {
-        "enabled": True, "publicIp": "8.8.8.8", "publicPort": 50186})
+    client.request.assert_awaited_with(
+        "PUT",
+        "/v1/plex/shared-remote-access",
+        {"enabled": True, "publicIp": "8.8.8.8", "publicPort": 50186},
+    )
     assert state["plexPortStatus"]["publicPort"] == 50186
     assert service.public(state)["ready"]
     assert state["plexForwardingProfile"] == "plex-profile"
@@ -70,8 +96,11 @@ def test_fresh_dedicated_plex_does_not_require_a_default_or_web_profile(logged_i
     profile = "a" * 24
     monkeypatch.setattr(service.plex_forwarding, "target", AsyncMock())
     monkeypatch.setattr(service.plex_forwarding, "dedicated_profile", lambda _: profile)
-    monkeypatch.setattr(service.svc.shared_vpn, "vpn", AsyncMock(return_value={
-        "enabled": True, "ready": True, "profileId": profile}))
+    monkeypatch.setattr(
+        service.svc.shared_vpn,
+        "vpn",
+        AsyncMock(return_value={"enabled": True, "ready": True, "profileId": profile}),
+    )
     monkeypatch.setattr(service, "check_legacy_provider", AsyncMock())
     monkeypatch.setattr(service, "schedule", lambda: None)
     logged_in.portal.call(service.configure_plex_port, True)

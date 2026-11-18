@@ -183,7 +183,9 @@ class SharedVPN:
         profile = self.assignment(identifier)
         gateway = await self.vpn(path="/profiles/" + profile if profile else "")
         if any(peer.get("id") == identifier for peer in gateway.get("peers", [])):
-            await self.vpn("DELETE", ("/profiles/" + profile if profile else "") + "/peers/" + identifier)
+            await self.vpn(
+                "DELETE", ("/profiles/" + profile if profile else "") + "/peers/" + identifier
+            )
         if profile:
             await self.vpn("DELETE", "/app-peers/" + identifier)
         self.assignment(identifier, None, write=True)
@@ -246,6 +248,7 @@ class SharedVPN:
                 }
             )
         profile_requests = {}
+
         async def app_status(item):
             try:
                 _, client = self.target(item["id"])
@@ -254,7 +257,9 @@ class SharedVPN:
                 pending = self.assignment_pending(self.peer_id(item))
                 if profile and profile != gateway.get("profileId"):
                     if profile not in profile_requests:
-                        profile_requests[profile] = asyncio.create_task(self.vpn(path="/profiles/" + profile))
+                        profile_requests[profile] = asyncio.create_task(
+                            self.vpn(path="/profiles/" + profile)
+                        )
                     app_gateway = await profile_requests[profile]
                 else:
                     app_gateway = gateway
@@ -264,7 +269,8 @@ class SharedVPN:
                     "pending": pending,
                     "profileId": profile if state["enabled"] or pending else None,
                     "ready": bool(
-                        not pending and app_gateway["ready"]
+                        not pending
+                        and app_gateway["ready"]
                         and state.get(
                             "ready", state["handshakeVerified"] and state["phase"] == "ready"
                         )
@@ -275,6 +281,7 @@ class SharedVPN:
                 }
             except DomainError:
                 return {**item, "enabled": None, "ready": False, "phase": "unavailable"}
+
         apps.extend(await asyncio.gather(*(app_status(item) for item in self.bindings())))
         return {"gateway": gateway, "apps": apps, "orphans": self.orphan_bindings(gateway)}
 
@@ -302,7 +309,11 @@ class SharedVPN:
                 elif not enabled:
                     actual = await self.vpn(path="/status", shared=False)
                     if actual.get("enabled") and actual.get("profileId") != profile_id:
-                        raise DomainError("vpn_assignment_changed", "The app changed VPN profile; refresh before removing its assignment", 409)
+                        raise DomainError(
+                            "vpn_assignment_changed",
+                            "The app changed VPN profile; refresh before removing its assignment",
+                            409,
+                        )
                 await self.vpn(
                     "PUT",
                     "/settings",
@@ -316,8 +327,17 @@ class SharedVPN:
             identifier = hashlib.sha256((binding["hostId"] + ":" + app).encode()).hexdigest()[:40]
             previous = self.assignment(identifier)
             previous_profile = previous or (await self.vpn()).get("profileId")
-            if not enabled and profile_id and current.get("enabled") and previous_profile != profile_id:
-                raise DomainError("vpn_assignment_changed", "The app changed VPN profile; refresh before removing its assignment", 409)
+            if (
+                not enabled
+                and profile_id
+                and current.get("enabled")
+                and previous_profile != profile_id
+            ):
+                raise DomainError(
+                    "vpn_assignment_changed",
+                    "The app changed VPN profile; refresh before removing its assignment",
+                    409,
+                )
             previous_path = "/profiles/" + previous if previous else ""
             target_path = "/profiles/" + profile_id if profile_id else ""
             if enabled:
@@ -337,7 +357,9 @@ class SharedVPN:
                 }
                 # Persist routing intent before the Agent call: a timeout can occur
                 # after the Agent has accepted it. Its phase reports actual readiness.
-                self.assignment(identifier, profile_id or gateway["profileId"], write=True, pending=True)
+                self.assignment(
+                    identifier, profile_id or gateway["profileId"], write=True, pending=True
+                )
             await client.request("PUT", "/v1/shared-vpn/" + app, {"enabled": enabled, "peer": peer})
             if enabled:
                 self.assignment(identifier, profile_id or gateway["profileId"], write=True)

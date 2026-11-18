@@ -1,4 +1,5 @@
 """Serialize the supervisor and operator processes using the same private state."""
+
 import asyncio
 import os
 from pathlib import Path

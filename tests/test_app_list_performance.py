@@ -41,7 +41,9 @@ def test_app_list_lightweight_endpoint_skips_health(logged_in, monkeypatch):
     monkeypatch.setattr(svc.apps, "health", unexpected_health)
     response = logged_in.get("/api/v1/apps?include_health=false")
     assert response.status_code == 200
-    assert response.json()["data"] == [{**row, "externalUrl": "", "localUrl": None, "ssoSupported": False} for row in rows]
+    assert response.json()["data"] == [
+        {**row, "externalUrl": "", "localUrl": None, "ssoSupported": False} for row in rows
+    ]
     assert all("health" not in row for row in response.json()["data"])
 
 
@@ -61,9 +63,18 @@ def test_app_list_endpoint_includes_health_by_default(logged_in, monkeypatch, qu
     assert response.status_code == 200
     assert checked == [row["id"] for row in rows]
     assert response.json()["data"] == [
-        {**row, "externalUrl": "", "localUrl": None, "ssoSupported": False, "running": None, "startedAt": None, "runtimeAvailable": False,
-         "controls": {"actions": [], "logs": True, "updateCheck": True, "updatePath": None},
-         "health": reports[row["id"]].model_dump(mode="json")} for row in rows
+        {
+            **row,
+            "externalUrl": "",
+            "localUrl": None,
+            "ssoSupported": False,
+            "running": None,
+            "startedAt": None,
+            "runtimeAvailable": False,
+            "controls": {"actions": [], "logs": True, "updateCheck": True, "updatePath": None},
+            "health": reports[row["id"]].model_dump(mode="json"),
+        }
+        for row in rows
     ]
 
 
@@ -188,9 +199,13 @@ def test_app_list_uses_one_query_and_preserves_fields(logged_in):
     assert all(not row["isMock"] for row in svc.apps.list())
 
 
-@pytest.mark.parametrize("package,name", [("org.mediahub.mediaseed", "MediaSeed"), ("org.mediahub.mediavpn", "MediaVPN")])
+@pytest.mark.parametrize(
+    "package,name", [("org.mediahub.mediaseed", "MediaSeed"), ("org.mediahub.mediavpn", "MediaVPN")]
+)
 @pytest.mark.parametrize("healthy", [True, False])
-def test_connected_sso_app_has_overview_health_and_launch_url(logged_in, monkeypatch, healthy, package, name):
+def test_connected_sso_app_has_overview_health_and_launch_url(
+    logged_in, monkeypatch, healthy, package, name
+):
     from unittest.mock import AsyncMock
 
     svc = logged_in.app.state.services

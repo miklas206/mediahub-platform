@@ -252,7 +252,10 @@ def health():
         stamps = command("wg", "show", "wg-hub", "latest-handshakes").splitlines()
         # WireGuard rekeys after 120 seconds; its session keys expire at 180.
         # A 90-second cutoff falsely rejects a normal established session.
-        return any(int(line.split()[-1]) > 0 and 0 <= time.time() - int(line.split()[-1]) < 180 for line in stamps)
+        return any(
+            int(line.split()[-1]) > 0 and 0 <= time.time() - int(line.split()[-1]) < 180
+            for line in stamps
+        )
     except Exception:
         return False
 

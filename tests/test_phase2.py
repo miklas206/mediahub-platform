@@ -312,15 +312,21 @@ def test_setup_does_not_select_or_install_apps(setup_client):
     draft["selected_apps"] = ["org.mediahub.plex"]
     state = save(setup_client, draft)
     assert state["draft"]["selected_apps"] == []
-    denied = setup_client.post("/api/v1/plex/install", json={
-        "installation": {"moviesStorageIds": ["movies"], "appdataStorageId": "appdata"},
-        "reviewedPlanDigest": "a" * 64,
-    })
+    denied = setup_client.post(
+        "/api/v1/plex/install",
+        json={
+            "installation": {"moviesStorageIds": ["movies"], "appdataStorageId": "appdata"},
+            "reviewedPlanDigest": "a" * 64,
+        },
+    )
     assert denied.status_code == 409
     assert denied.json()["error"]["code"] == "setup_required"
     with pytest.raises(DomainError, match="Finish MediaHub setup"):
         svc.setup.require_complete()
-    assert setup_client.post("/api/v1/setup/apply", json={"revision": state["revision"]}).status_code == 200
+    assert (
+        setup_client.post("/api/v1/setup/apply", json={"revision": state["revision"]}).status_code
+        == 200
+    )
     svc.setup.require_complete()
     assert setup_client.get("/api/v1/apps").json()["data"] == []
     assert not any("/plex/" in path for _, path in svc.agent.calls)
@@ -629,18 +635,27 @@ def test_phase1_database_upgrade_preserves_user(tmp_path):
     migrate(url, "0001")
     engine, sessions = connect(url)
     with sessions.begin() as db:
-        db.execute(text(
-            "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "
-            "VALUES ('legacy-id', 'existing', 'test-hash', 'administrator', '2026-01-01', '2026-01-01')"
-        ))
-        db.execute(text(
-            "INSERT INTO settings (id, key, value, created_at, updated_at) "
-            "VALUES ('legacy-pref', 'user.preferences:legacy-id', :preferences, '2026-01-01', '2026-01-01')"
-        ), {"preferences": '{"language":"da","appearance":null}'})
+        db.execute(
+            text(
+                "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "
+                "VALUES ('legacy-id', 'existing', 'test-hash', 'administrator', '2026-01-01', '2026-01-01')"
+            )
+        )
+        db.execute(
+            text(
+                "INSERT INTO settings (id, key, value, created_at, updated_at) "
+                "VALUES ('legacy-pref', 'user.preferences:legacy-id', :preferences, '2026-01-01', '2026-01-01')"
+            ),
+            {"preferences": '{"language":"da","appearance":null}'},
+        )
     migrate(url)
     with sessions() as db:
         user = db.scalar(select(User))
-        assert (user.username, user.preferred_language, user.password_hash) == ("existing", "da", "test-hash")
+        assert (user.username, user.preferred_language, user.password_hash) == (
+            "existing",
+            "da",
+            "test-hash",
+        )
         assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"
     engine.dispose()
 
@@ -679,7 +694,10 @@ def test_mapping_edit_never_moves_files(setup_client):
 
 @pytest.mark.parametrize("language", ["en", "da"])
 def test_bootstrap_saves_chosen_account_language(setup_client, language):
-    response = setup_client.post("/api/v1/setup/administrator", json={"username": "owner", "password": "synthetic-test-password", "language": language})
+    response = setup_client.post(
+        "/api/v1/setup/administrator",
+        json={"username": "owner", "password": "synthetic-test-password", "language": language},
+    )
     assert response.status_code == 200
     assert response.json()["data"]["language"] == language
     assert setup_client.get("/api/v1/auth/me").json()["data"]["language"] == language

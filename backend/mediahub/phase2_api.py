@@ -234,7 +234,9 @@ async def setup_admin(body: Bootstrap, request: Request, response: Response):
     cookies = cookie_options(request, svc.config)
     svc.setup.bootstrap(body.username, body.password)
     token, user = svc.auth.login(body.username, body.password, "bootstrap")
-    preferences = svc.settings.save_user_preferences(user["id"], UserPreferences(language=body.language or svc.settings.default_language))
+    preferences = svc.settings.save_user_preferences(
+        user["id"], UserPreferences(language=body.language or svc.settings.default_language)
+    )
     response.set_cookie(
         COOKIE,
         token,

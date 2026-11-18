@@ -70,7 +70,9 @@ def main():
         print("Agent trust token and private sandbox initialized. Token was not printed.")
         return
     if args.command == "bootstrap-token":
-        print("Installation tokens are no longer used. Create your administrator in the setup wizard.")
+        print(
+            "Installation tokens are no longer used. Create your administrator in the setup wizard."
+        )
         return
     if args.command == "serve":
         import asyncio

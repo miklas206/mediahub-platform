@@ -99,7 +99,11 @@ class GitHubSourceProvider:
         self.transport = transport
         self.source_access = source_access
         self.metadata_cache = metadata_cache
-        if project_path not in {"pyproject.toml", "docker/bundled/mediaseed/pyproject.toml", "docker/bundled/mediavpn/pyproject.toml"}:
+        if project_path not in {
+            "pyproject.toml",
+            "docker/bundled/mediaseed/pyproject.toml",
+            "docker/bundled/mediavpn/pyproject.toml",
+        }:
             raise ValueError("Unsupported project metadata path")
         self.project_path = project_path
 
@@ -122,7 +126,11 @@ class GitHubSourceProvider:
             "updateMethod": "source",
             "sourceChannel": "main",
             "privateAccessConfigured": bool(
-                token or (self.source_access and getattr(self.source_access, "private_access_configured", True))
+                token
+                or (
+                    self.source_access
+                    and getattr(self.source_access, "private_access_configured", True)
+                )
             ),
             "sourceAccessMethod": getattr(self.source_access, "method", "deploy-key")
             if self.source_access
@@ -136,7 +144,13 @@ class GitHubSourceProvider:
             raise DomainError("invalid_repository", "Invalid GitHub repository", 422)
         try:
             if self.source_access:
-                commit, project = await self.source_access.metadata(repository) if self.project_path == "pyproject.toml" else await self.source_access.metadata(repository, project_path=self.project_path)
+                commit, project = (
+                    await self.source_access.metadata(repository)
+                    if self.project_path == "pyproject.toml"
+                    else await self.source_access.metadata(
+                        repository, project_path=self.project_path
+                    )
+                )
                 version = tomllib.loads(project.decode())["project"]["version"]
                 return self._checked(result, repository, commit, version)
             async with httpx.AsyncClient(
@@ -185,7 +199,9 @@ class GitHubSourceProvider:
             available = bool(self.commit and commit != self.commit)
         else:
             available = latest_version > current_version or (
-                latest_version == current_version and self.commit is not None and commit != self.commit
+                latest_version == current_version
+                and self.commit is not None
+                and commit != self.commit
             )
         return {
             **result,

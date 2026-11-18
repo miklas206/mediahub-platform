@@ -35,9 +35,10 @@ def sessions(value, limit):
 
 async def read_dashboard(url):
     try:
-        async with asyncio.timeout(4), httpx.AsyncClient(
-            timeout=3, trust_env=False, follow_redirects=False
-        ) as client:
+        async with (
+            asyncio.timeout(4),
+            httpx.AsyncClient(timeout=3, trust_env=False, follow_redirects=False) as client,
+        ):
             async with client.stream("GET", url + "/api/status") as response:
                 response.raise_for_status()
                 body = bytearray()
@@ -63,8 +64,9 @@ class PlexGPU:
         record = read_json(self.path)
         if not record.get("enabled"):
             return None
-        if (record.get("container") != NAME
-                or not re.fullmatch(r"sha256:[a-f0-9]{64}", record.get("imageId", ""))):
+        if record.get("container") != NAME or not re.fullmatch(
+            r"sha256:[a-f0-9]{64}", record.get("imageId", "")
+        ):
             raise DomainError("plex_gpu_policy_invalid", "Plex GPU registration is invalid", 409)
         return record
 
@@ -75,26 +77,44 @@ class PlexGPU:
         labels = row.get("Config", {}).get("Labels", {})
         host = row.get("HostConfig", {})
         install = self.runtime.policy()
-        if (row.get("Image") != record["imageId"]
-                or labels.get("org.mediahub.package") != PACKAGE
-                or labels.get("org.mediahub.plex.installation") != policy.installationId
-                or record.get("plexInstallationId") != policy.installationId
-                or not host.get("ReadonlyRootfs") or host.get("Privileged")
-                or row.get("Config", {}).get("User") != f"{install.uid}:{install.gid}"):
+        if (
+            row.get("Image") != record["imageId"]
+            or labels.get("org.mediahub.package") != PACKAGE
+            or labels.get("org.mediahub.plex.installation") != policy.installationId
+            or record.get("plexInstallationId") != policy.installationId
+            or not host.get("ReadonlyRootfs")
+            or host.get("Privileged")
+            or row.get("Config", {}).get("User") != f"{install.uid}:{install.gid}"
+        ):
             raise DomainError("plex_gpu_ownership", "Plex GPU runtime ownership changed", 409)
         current = await self.runtime.control.inspect(policy)
-        media = {(m["Source"], m["Destination"]) for m in current["Mounts"]
-                 if m["Destination"].startswith("/media/")}
-        granted = {(m["Source"], m["Destination"]) for m in row["Mounts"]
-                   if m["Destination"].startswith("/media/") and not m["RW"]}
-        if media != granted or any(
-            m["Destination"].startswith("/media/") and m["RW"] for m in row["Mounts"]
-        ) or any(m["Destination"] == "/var/run/docker.sock" for m in row["Mounts"]):
-            raise DomainError("plex_gpu_mounts", "Plex GPU media mappings require reconciliation", 409)
+        media = {
+            (m["Source"], m["Destination"])
+            for m in current["Mounts"]
+            if m["Destination"].startswith("/media/")
+        }
+        granted = {
+            (m["Source"], m["Destination"])
+            for m in row["Mounts"]
+            if m["Destination"].startswith("/media/") and not m["RW"]
+        }
+        if (
+            media != granted
+            or any(m["Destination"].startswith("/media/") and m["RW"] for m in row["Mounts"])
+            or any(m["Destination"] == "/var/run/docker.sock" for m in row["Mounts"])
+        ):
+            raise DomainError(
+                "plex_gpu_mounts", "Plex GPU media mappings require reconciliation", 409
+            )
         bindings = host.get("PortBindings", {}).get("8090/tcp", [])
-        if (len(bindings) != 1 or bindings[0].get("HostIp") != install.bindAddress
-                or not str(bindings[0].get("HostPort", "")).isdigit()):
-            raise DomainError("plex_gpu_port", "Plex GPU requires its registered private LAN port", 409)
+        if (
+            len(bindings) != 1
+            or bindings[0].get("HostIp") != install.bindAddress
+            or not str(bindings[0].get("HostPort", "")).isdigit()
+        ):
+            raise DomainError(
+                "plex_gpu_port", "Plex GPU requires its registered private LAN port", 409
+            )
         address = ipaddress.ip_address(install.bindAddress)
         if not address.is_private or address.is_unspecified or address.is_loopback:
             raise DomainError("plex_gpu_port", "Plex GPU requires a private LAN address", 409)
@@ -144,34 +164,53 @@ class PlexGPU:
         linked = observed.get("adapterInstalled") is True
         healthy = running and bool(gpu) and linked
         checks = [
-            {"name": "Container", "status": "healthy" if running else "unknown",
-             "message": "Running" if running else "Stopped"},
-            {"name": "NVIDIA GPU", "status": "healthy" if gpu else "degraded",
-             "message": "GPU observed" if gpu else "GPU status unavailable"},
-            {"name": "Plex connection", "status": "healthy" if linked else "degraded",
-             "message": "Connected" if linked else "Waiting for Plex connection"},
+            {
+                "name": "Container",
+                "status": "healthy" if running else "unknown",
+                "message": "Running" if running else "Stopped",
+            },
+            {
+                "name": "NVIDIA GPU",
+                "status": "healthy" if gpu else "degraded",
+                "message": "GPU observed" if gpu else "GPU status unavailable",
+            },
+            {
+                "name": "Plex connection",
+                "status": "healthy" if linked else "degraded",
+                "message": "Connected" if linked else "Waiting for Plex connection",
+            },
         ]
         return {
-            "installed": True, "installationId": record["installationId"],
-            "hostId": policy.hostId, "observedAt": time.time(), "agentOnline": True,
+            "installed": True,
+            "installationId": record["installationId"],
+            "hostId": policy.hostId,
+            "observedAt": time.time(),
+            "agentOnline": True,
             "dockerHealthy": state.get("Health", {}).get("Status") == "healthy",
-            "state": "running" if running else "stopped", "startedAt": state.get("StartedAt") if running else None,
+            "state": "running" if running else "stopped",
+            "startedAt": state.get("StartedAt") if running else None,
             "health": "healthy" if healthy else "degraded" if running else "unknown",
-            "healthVerified": bool(observed), "version": record.get("version", "unknown"),
-            "url": url, "checks": checks,
+            "healthVerified": bool(observed),
+            "version": record.get("version", "unknown"),
+            "url": url,
+            "checks": checks,
             "gpu": {
-                "name": str(gpu.get("name", ""))[:120], "linked": linked,
+                "name": str(gpu.get("name", ""))[:120],
+                "linked": linked,
                 "encoderPercent": number("encoder", 100),
                 "memoryUsedMiB": number("memoryUsed", 1048576),
                 "memoryTotalMiB": number("memoryTotal", 1048576),
                 "temperature": number("temperature", 150),
                 "activeJobs": active,
                 "activePlaybacks": playback_count,
-                "playbackAvailable": playback_available if isinstance(playback_available, bool) else None,
+                "playbackAvailable": playback_available
+                if isinstance(playback_available, bool)
+                else None,
                 "bufferSeconds": buffer_seconds,
                 "playbacks": sessions(observed.get("playbacks"), 80),
                 "jobs": sessions(observed.get("jobs"), 60),
-                "hdrToneMapping": isinstance(observed.get("capabilities"), dict) and observed["capabilities"].get("hdrToneMapping") is True,
+                "hdrToneMapping": isinstance(observed.get("capabilities"), dict)
+                and observed["capabilities"].get("hdrToneMapping") is True,
             },
         }
 
@@ -183,11 +222,25 @@ class PlexGPU:
             if record is None:
                 raise DomainError("plex_gpu_not_installed", "Install and link Plex GPU first", 409)
             row, _ = await self.owned(record)
-            if action != "stop" and not await self.runtime.control.storage_verified(self.runtime.control.policy()):
+            if action != "stop" and not await self.runtime.control.storage_verified(
+                self.runtime.control.policy()
+            ):
                 raise DomainError("storage_unavailable", "Plex storage is unavailable", 409)
-            endpoint = "stop?t=10" if action == "stop" else "restart?t=10" if action == "restart" else "start"
+            endpoint = (
+                "stop?t=10"
+                if action == "stop"
+                else "restart?t=10"
+                if action == "restart"
+                else "start"
+            )
             running = row["State"].get("Running")
-            if action == "restart" or action == "start" and not running or action == "stop" and running:
+            if (
+                action == "restart"
+                or action == "start"
+                and not running
+                or action == "stop"
+                and running
+            ):
                 await self.runtime.request("POST", f"/containers/{NAME}/{endpoint}")
             record["desiredRunning"] = action != "stop"
             save_json(self.path, record)
@@ -195,6 +248,15 @@ class PlexGPU:
 
     async def logs(self):
         report = await self.status()
-        return {"entries": [{"timestamp": time.time(), "hostId": report.get("hostId", "local"),
-                "app": PACKAGE, "severity": "info", "type": "plex_gpu.status",
-                "message": "GPU container " + report.get("state", "not installed")}]}
+        return {
+            "entries": [
+                {
+                    "timestamp": time.time(),
+                    "hostId": report.get("hostId", "local"),
+                    "app": PACKAGE,
+                    "severity": "info",
+                    "type": "plex_gpu.status",
+                    "message": "GPU container " + report.get("state", "not installed"),
+                }
+            ]
+        }

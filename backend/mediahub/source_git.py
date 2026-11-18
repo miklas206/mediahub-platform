@@ -178,9 +178,15 @@ class GitHubSSHSource:
                         process.kill()
                     process.wait(timeout=5)
 
-    def _operate(self, repository, action, commit=None, destination=None, project_path="pyproject.toml"):
+    def _operate(
+        self, repository, action, commit=None, destination=None, project_path="pyproject.toml"
+    ):
         self.require_repository(repository)
-        if project_path not in {"pyproject.toml", "docker/bundled/mediaseed/pyproject.toml", "docker/bundled/mediavpn/pyproject.toml"}:
+        if project_path not in {
+            "pyproject.toml",
+            "docker/bundled/mediaseed/pyproject.toml",
+            "docker/bundled/mediavpn/pyproject.toml",
+        }:
             raise DomainError("invalid_source_metadata", "Unsupported project metadata path", 422)
         if commit is not None and not SHA.fullmatch(commit):
             raise DomainError("invalid_source_metadata", "Invalid pinned source commit", 502)
@@ -266,7 +272,8 @@ class GitHubSSHSource:
             raise DomainError(
                 "source_git_unavailable",
                 getattr(
-                    self, "failure_message",
+                    self,
+                    "failure_message",
                     "GitHub source could not be read with the configured deploy key. "
                     "Check repository access, verified host key and available cache space.",
                 ),
@@ -279,7 +286,9 @@ class GitHubSSHSource:
         return await asyncio.to_thread(self._operate, repository, "head")
 
     async def metadata(self, repository, *, project_path="pyproject.toml"):
-        return await asyncio.to_thread(self._operate, repository, "metadata", project_path=project_path)
+        return await asyncio.to_thread(
+            self._operate, repository, "metadata", project_path=project_path
+        )
 
     async def archive(self, repository, commit, destination):
         return await asyncio.to_thread(self._operate, repository, "archive", commit, destination)

@@ -146,15 +146,32 @@ class SeedboxControl:
             removed = read_json(receipt)
             if removed.get("configurationReset"):
                 from urllib.parse import quote
-                filters = quote(json.dumps({"label": ["com.docker.compose.project=mediahub-" + removed["installationId"]]}))
-                remaining = (await self.driver.request("GET", "/containers/json?all=1&filters=" + filters)).json()
+
+                filters = quote(
+                    json.dumps(
+                        {
+                            "label": [
+                                "com.docker.compose.project=mediahub-" + removed["installationId"]
+                            ]
+                        }
+                    )
+                )
+                remaining = (
+                    await self.driver.request("GET", "/containers/json?all=1&filters=" + filters)
+                ).json()
                 if not remaining:
-                    return {"state": "succeeded", "installationId": removed["installationId"],
-                            "dataPreserved": True, "configurationReset": True}
+                    return {
+                        "state": "succeeded",
+                        "installationId": removed["installationId"],
+                        "dataPreserved": True,
+                        "configurationReset": True,
+                    }
         policy, spec = self.driver.binding()
         path = Path(policy.workRoot) / "runtime-removal.json"
         removed = read_json(path) if path.exists() else {}
-        if removed.get("installationId") == spec.installationId and removed.get("configurationReset"):
+        if removed.get("installationId") == spec.installationId and removed.get(
+            "configurationReset"
+        ):
             for service in ("torrent", "vpn"):
                 try:
                     await self.driver.container(service)
@@ -221,7 +238,10 @@ class SeedboxControl:
                 _, spec = self.driver.binding()
                 self.emit("seedbox.runtime_removed", "info")
                 await self.reset_configuration()
-                save_json(root / "runtime-removal.json", {"installationId": spec.installationId, "configurationReset": True})
+                save_json(
+                    root / "runtime-removal.json",
+                    {"installationId": spec.installationId, "configurationReset": True},
+                )
                 (root / "installation.json").unlink(missing_ok=True)
             self.operation.update(
                 state="succeeded",
@@ -241,16 +261,29 @@ class SeedboxControl:
         policy, _ = self.driver.binding()
         await self.driver.storage_guard()
         root = Path(policy.workRoot)
-        directories = [Path(policy.paths.appdata), Path(policy.paths.vpnState), root / "vault", root / "secrets"]
-        protected = [Path(policy.paths.downloads), *(Path(m.source) for m in policy.paths.extraStorage)]
+        directories = [
+            Path(policy.paths.appdata),
+            Path(policy.paths.vpnState),
+            root / "vault",
+            root / "secrets",
+        ]
+        protected = [
+            Path(policy.paths.downloads),
+            *(Path(m.source) for m in policy.paths.extraStorage),
+        ]
         for directory in directories:
-            if any(directory == media or directory in media.parents or media in directory.parents for media in protected):
+            if any(
+                directory == media or directory in media.parents or media in directory.parents
+                for media in protected
+            ):
                 raise ValueError("App configuration overlaps protected media")
         for row in (await self.driver.request("GET", "/containers/json?all=1")).json():
             item = (await self.driver.request("GET", "/containers/" + row["Id"] + "/json")).json()
             for mount in item.get("Mounts", []):
                 source = Path(mount["Source"])
-                if any(source == directory or directory in source.parents for directory in directories):
+                if any(
+                    source == directory or directory in source.parents for directory in directories
+                ):
                     raise ValueError("Another container uses app configuration")
         for directory in directories:
             await asyncio.to_thread(clear_directory, directory)

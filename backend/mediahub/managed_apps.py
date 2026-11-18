@@ -73,33 +73,56 @@ class ManagedAdapter:
 
     async def runtime_summary(self):
         rows = await self.observed_containers()
-        apps = [row for row in rows if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"]
+        apps = [
+            row
+            for row in rows
+            if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"
+        ]
         primary = apps[0] if len(apps) == 1 else None
         state = primary.get("State", {}) if primary else {}
-        running = bool(state.get("Running")) and not state.get("Restarting") and not state.get("Dead")
+        running = (
+            bool(state.get("Running")) and not state.get("Restarting") and not state.get("Dead")
+        )
         return {
-            "state": "running" if running else "restarting" if state.get("Restarting") else "stopped" if primary else "unknown",
+            "state": "running"
+            if running
+            else "restarting"
+            if state.get("Restarting")
+            else "stopped"
+            if primary
+            else "unknown",
             "startedAt": state.get("StartedAt") if running else None,
-            "containers": [{"name": (row.get("Name") or "").lstrip("/"),
-                "state": "running" if row.get("State", {}).get("Running") else "stopped",
-                "health": row.get("State", {}).get("Health", {}).get("Status"),
-                "startedAt": row.get("State", {}).get("StartedAt") if row.get("State", {}).get("Running") else None} for row in rows],
+            "containers": [
+                {
+                    "name": (row.get("Name") or "").lstrip("/"),
+                    "state": "running" if row.get("State", {}).get("Running") else "stopped",
+                    "health": row.get("State", {}).get("Health", {}).get("Status"),
+                    "startedAt": row.get("State", {}).get("StartedAt")
+                    if row.get("State", {}).get("Running")
+                    else None,
+                }
+                for row in rows
+            ],
         }
 
     async def start(self):
         from mediahub.managed_control import control
+
         return await control(self, "start")
 
     async def stop(self):
         from mediahub.managed_control import control
+
         return await control(self, "stop")
 
     async def restart(self):
         from mediahub.managed_control import control
+
         return await control(self, "restart")
 
     async def logs(self):
         from mediahub.managed_control import logs
+
         return logs(self)
 
     async def health(self):
@@ -109,28 +132,65 @@ class ManagedAdapter:
             # original isolated client is deliberately stopped; the owned
             # VPN-bound replacement is the active torrent service instead.
             active_clone = any(
-                row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox") == "mediaseed"
+                row.get("Config", {}).get("Labels", {}).get("org.mediahub.mediavpn.seedbox")
+                == "mediaseed"
                 and row.get("State", {}).get("Running")
                 for row in rows
             )
-            rows = [row for row in rows if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
-                    not in ({"client-init", "qbittorrent"} if active_clone else {"client-init"})]
-            has_app = any(row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app" for row in rows)
+            rows = [
+                row
+                for row in rows
+                if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+                not in ({"client-init", "qbittorrent"} if active_clone else {"client-init"})
+            ]
+            has_app = any(
+                row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"
+                for row in rows
+            )
             checks = []
             for row in rows:
                 state = row.get("State", {})
-                service = row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") or "runtime"
-                health = state.get("Health", {}).get("Status")
-                status = "unhealthy" if health == "unhealthy" or state.get("Dead") else (
-                    "degraded" if state.get("Restarting") or health == "starting" else
-                    "healthy" if state.get("Running") else "unknown"
+                service = (
+                    row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+                    or "runtime"
                 )
-                checks.append(HealthCheck(name=service, status=status,
-                    message="Container unhealthy" if status == "unhealthy" else
-                    "Container starting or restarting" if status == "degraded" else
-                    "Container running" if state.get("Running") else "Container stopped"))
-            running = has_app and bool(checks) and all(check.status == "healthy" for check in checks)
-            overall = "healthy" if running else "unhealthy" if any(check.status == "unhealthy" for check in checks) else "degraded" if any(check.status == "degraded" for check in checks) else "unknown"
+                health = state.get("Health", {}).get("Status")
+                status = (
+                    "unhealthy"
+                    if health == "unhealthy" or state.get("Dead")
+                    else (
+                        "degraded"
+                        if state.get("Restarting") or health == "starting"
+                        else "healthy"
+                        if state.get("Running")
+                        else "unknown"
+                    )
+                )
+                checks.append(
+                    HealthCheck(
+                        name=service,
+                        status=status,
+                        message="Container unhealthy"
+                        if status == "unhealthy"
+                        else "Container starting or restarting"
+                        if status == "degraded"
+                        else "Container running"
+                        if state.get("Running")
+                        else "Container stopped",
+                    )
+                )
+            running = (
+                has_app and bool(checks) and all(check.status == "healthy" for check in checks)
+            )
+            overall = (
+                "healthy"
+                if running
+                else "unhealthy"
+                if any(check.status == "unhealthy" for check in checks)
+                else "degraded"
+                if any(check.status == "degraded" for check in checks)
+                else "unknown"
+            )
             return Health(
                 status=overall,
                 summary="App containers running" if running else "Check app runtime",
@@ -147,14 +207,20 @@ class ManagedAdapter:
             bundled = root / "docker/bundled" / kind / "pyproject.toml"
         latest = tomllib.loads(bundled.read_text(encoding="utf-8"))["project"]["version"]
         rows = await self.manager.containers(self.package)
-        versions = [row.get("Config", {}).get("Labels", {}).get("org.mediahub.app.version") for row in rows
-                    if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"]
+        versions = [
+            row.get("Config", {}).get("Labels", {}).get("org.mediahub.app.version")
+            for row in rows
+            if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.service") == "app"
+        ]
         installed = versions[0] if len(versions) == 1 else None
         dependencies = getattr(self.manager.svc, "app_dependencies", None)
         state = dependencies.public() if dependencies else {}
-        return {"installedVersion": installed, "bundledVersion": latest,
-                "preparationState": state.get("state", "ready"),
-                "preparationMessage": state.get("message")}
+        return {
+            "installedVersion": installed,
+            "bundledVersion": latest,
+            "preparationState": state.get("state", "ready"),
+            "preparationMessage": state.get("message"),
+        }
 
     async def updateCheck(self):
         return await self.updater().check(self)
@@ -454,12 +520,22 @@ class ManagedApps:
         """Reset only config mounts from the host-approved immutable install recipe."""
         policy = self.policy[package]
         if not policy.installFile:
-            raise DomainError("reset_unavailable", "Prepare the app installer before removing its configuration", 409)
+            raise DomainError(
+                "reset_unavailable",
+                "Prepare the app installer before removing its configuration",
+                409,
+            )
         recipe = json.loads(policy.installFile.read_text())
-        if recipe.get("installationId") != policy.installationId or recipe.get("packageId") != package:
+        if (
+            recipe.get("installationId") != policy.installationId
+            or recipe.get("packageId") != package
+        ):
             raise DomainError("installation_changed", "App reset ownership changed", 409)
-        app = next(item for item in recipe["containers"]
-                   if item["spec"]["Labels"].get("com.docker.compose.service") == "app")
+        app = next(
+            item
+            for item in recipe["containers"]
+            if item["spec"]["Labels"].get("com.docker.compose.service") == "app"
+        )
         mounts = {}
         protected = []
         for item in recipe["containers"]:
@@ -477,16 +553,29 @@ class ManagedApps:
                     protected.append(source)
             for mount in spec.get("HostConfig", {}).get("Mounts") or []:
                 if mount["Target"] in {"/data", "/config", "/secrets"}:
-                    mounts[mount["Target"]] = {key: mount[key] for key in ("Type", "Source", "Target")}
+                    mounts[mount["Target"]] = {
+                        key: mount[key] for key in ("Type", "Source", "Target")
+                    }
                 else:
                     protected.append(mount["Source"])
-        if "/data" not in mounts or (package.endswith("mediaseed") and not {"/config", "/secrets"} <= mounts.keys()):
+        if "/data" not in mounts or (
+            package.endswith("mediaseed") and not {"/config", "/secrets"} <= mounts.keys()
+        ):
             raise DomainError("reset_unavailable", "App configuration mounts are incomplete", 409)
         for mount in mounts.values():
             source = Path(mount["Source"])
-            if (str(source) in protected or source == Path("/") or ".." in source.parts
-                    or any(source in Path(other).parents or Path(other) in source.parents for other in protected)):
-                raise DomainError("unsafe_storage", "App configuration overlaps protected storage", 409)
+            if (
+                str(source) in protected
+                or source == Path("/")
+                or ".." in source.parts
+                or any(
+                    source in Path(other).parents or Path(other) in source.parents
+                    for other in protected
+                )
+            ):
+                raise DomainError(
+                    "unsafe_storage", "App configuration overlaps protected storage", 409
+                )
         return {"image": app["spec"]["Image"], "mounts": list(mounts.values())}
 
     async def reset_configuration(self, package, plan):
@@ -497,13 +586,23 @@ class ManagedApps:
             inspected = await self.docker("GET", "/containers/" + row["Id"] + "/json")
             for mount in inspected.get("Mounts", []):
                 for target in plan["mounts"]:
-                    actual = mount.get("Name") if target["Type"] == "volume" else mount.get("Source")
+                    actual = (
+                        mount.get("Name") if target["Type"] == "volume" else mount.get("Source")
+                    )
                     source = target["Source"]
                     if actual and (actual == source or Path(source) in Path(actual).parents):
-                        raise DomainError("app_dependency", "Another container still uses the app configuration", 409)
-        await reset_mounts(self.docker, plan["image"], plan["mounts"],
-                           keep=("integrations",) if package.endswith("mediavpn") else (),
-                           initialize_seed=package.endswith("mediaseed"))
+                        raise DomainError(
+                            "app_dependency",
+                            "Another container still uses the app configuration",
+                            409,
+                        )
+        await reset_mounts(
+            self.docker,
+            plan["image"],
+            plan["mounts"],
+            keep=("integrations",) if package.endswith("mediavpn") else (),
+            initialize_seed=package.endswith("mediaseed"),
+        )
 
     async def disconnect_client(self, policy):
         if not policy.integrationUrl:
@@ -669,14 +768,18 @@ class ManagedApps:
                     raise DomainError(
                         "removal_unverified", "App containers remain after removal", 409
                     )
-                await self.reset_configuration(package, job.get("resetPlan") or self.reset_plan(package))
+                await self.reset_configuration(
+                    package, job.get("resetPlan") or self.reset_plan(package)
+                )
                 for volume in job["volumes"]:
                     await self.docker("GET", "/volumes/" + quote(volume, safe=""))
                 with self.svc.sessions.begin() as db:
                     app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == package))
                     if app:
                         app.state = "uninstalled"
-                    settings = db.scalar(select(AppConfiguration).where(AppConfiguration.package_id == package))
+                    settings = db.scalar(
+                        select(AppConfiguration).where(AppConfiguration.package_id == package)
+                    )
                     if settings:
                         db.delete(settings)
                 (
@@ -684,7 +787,9 @@ class ManagedApps:
                     / ("managed-install-" + package.rsplit(".", 1)[-1] + ".json")
                 ).unlink(missing_ok=True)
                 self.svc.events.record(
-                    "app.uninstalled", package, "Managed runtime and configuration removed; media and downloads preserved"
+                    "app.uninstalled",
+                    package,
+                    "Managed runtime and configuration removed; media and downloads preserved",
                 )
                 job.update(
                     state="succeeded",

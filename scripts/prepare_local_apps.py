@@ -347,8 +347,11 @@ def read_mount_snapshot(root, configured):
         compose = json.loads((root / "compose.json").read_text())
         services = compose["services"]
         runtime = services.get("agent", services["core"])
-        sources = [v.rsplit(":", 2)[0] for v in runtime.get("volumes", [])
-                   if isinstance(v, str) and v.endswith(":/host-evidence:ro")]
+        sources = [
+            v.rsplit(":", 2)[0]
+            for v in runtime.get("volumes", [])
+            if isinstance(v, str) and v.endswith(":/host-evidence:ro")
+        ]
         if len(sources) != 1 or not Path(sources[0]).is_absolute():
             raise ValueError("Media storage evidence mount is missing")
         snapshot_path = Path(sources[0]) / snapshot_path.name
@@ -442,9 +445,13 @@ def retained_media_storage(root, locations):
     if cfg.get("name") != "mediahub-mediaseed":
         raise ValueError("MediaSeed storage ownership changed")
     services = cfg["services"]
-    previous = json.loads(services["app"].get("environment", {}).get("MEDIASEED_STORAGE_ROOTS", "[]"))
+    previous = json.loads(
+        services["app"].get("environment", {}).get("MEDIASEED_STORAGE_ROOTS", "[]")
+    )
     known = {row["id"] for row in locations}
-    extras = [row for row in previous if row["id"] not in known and not row["id"].startswith("nas-")]
+    extras = [
+        row for row in previous if row["id"] not in known and not row["id"].startswith("nas-")
+    ]
     if not extras:
         return locations
     policy = json.loads((root / "agent/container-apps.json").read_text())
@@ -453,28 +460,56 @@ def retained_media_storage(root, locations):
     for row in extras:
         identifier = row["id"]
         target = "/downloads/media/" + identifier
-        if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", identifier) or row.get("path") != target or identifier in known:
+        if (
+            not re.fullmatch(r"[A-Za-z0-9-]{1,64}", identifier)
+            or row.get("path") != target
+            or identifier in known
+        ):
             raise ValueError("Invalid retained media storage identifier")
         mounts = []
         for service in ("app", "qbittorrent"):
-            matches = [v for v in services.get(service, {}).get("volumes", []) if isinstance(v, dict) and v.get("target") == target]
-            if len(matches) != 1 or matches[0].get("type") != "bind" or matches[0].get("read_only", False):
+            matches = [
+                v
+                for v in services.get(service, {}).get("volumes", [])
+                if isinstance(v, dict) and v.get("target") == target
+            ]
+            if (
+                len(matches) != 1
+                or matches[0].get("type") != "bind"
+                or matches[0].get("read_only", False)
+            ):
                 raise ValueError("Retained media storage requires matching writable owned binds")
             mounts.append(matches[0]["source"])
         source = Path(mounts[0])
-        if mounts[0] != mounts[1] or not source.is_absolute() or source.resolve(strict=True) != source or not source.is_dir() or not any(source.is_relative_to(Path(base)) for base in roots):
+        if (
+            mounts[0] != mounts[1]
+            or not source.is_absolute()
+            or source.resolve(strict=True) != source
+            or not source.is_dir()
+            or not any(source.is_relative_to(Path(base)) for base in roots)
+        ):
             raise ValueError("Retained media storage is outside verified host storage")
-        retained.append({"id": identifier, "label": row["label"], "path": target, "source": str(source)})
+        retained.append(
+            {"id": identifier, "label": row["label"], "path": target, "source": str(source)}
+        )
         known.add(identifier)
     return retained
 
 
 def owned_local_image(image, before, project, service):
     """Pin installed local helper images; they are not registry downloads."""
-    if not (image.startswith("mediahub-") and "/" not in image or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
+    if not (
+        image.startswith("mediahub-")
+        and "/" not in image
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", image)
+    ):
         return None
-    owners = [row for row in before if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.project") == project
-              and row["Config"]["Labels"].get("com.docker.compose.service") == service]
+    owners = [
+        row
+        for row in before
+        if row.get("Config", {}).get("Labels", {}).get("com.docker.compose.project") == project
+        and row["Config"]["Labels"].get("com.docker.compose.service") == service
+    ]
     if len(owners) != 1:
         raise ValueError("Local helper image requires an existing owned service")
     owner = owners[0]
@@ -717,7 +752,15 @@ def prepare_storage_host(root, lan, source, locations):
 
 
 def provision(
-    root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None, host_only=False
+    root,
+    lan,
+    source=SOURCE,
+    *,
+    app=None,
+    app_source=None,
+    app_commit=None,
+    app_repository=None,
+    host_only=False,
 ):
     if app not in {None, "mediaseed", "mediavpn"}:
         raise ValueError("Unsupported independent app")
@@ -968,8 +1011,14 @@ def provision(
             entry["managementTokenFile"] = "/data/app-integration/mediahub-vpn.token"
     private(policy_path, "{}", 10001, 10001)
     policy_path.write_text(json.dumps(policy))
-    prepare(policy_path, root / "data", Path("/data"), 10001, 10001,
-            "org.mediahub." + app if app else None)
+    prepare(
+        policy_path,
+        root / "data",
+        Path("/data"),
+        10001,
+        10001,
+        "org.mediahub." + app if app else None,
+    )
     private(marker, "{}")
     if not app:
         marker.write_text(json.dumps({"fingerprint": digest}))

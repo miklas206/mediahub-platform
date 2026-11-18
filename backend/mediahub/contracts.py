@@ -36,8 +36,13 @@ class AppearancePreferences(StrictModel):
     background: str = Field(strict=True, pattern=r"^#[0-9a-fA-F]{6}$")
     depth: int = Field(strict=True, ge=0, le=100)
     style: Literal[
-        "classic", "midnight-glass", "soft-orbit", "precision-terminal",
-        "floating-layers", "edge-signal", "duck-pond",
+        "classic",
+        "midnight-glass",
+        "soft-orbit",
+        "precision-terminal",
+        "floating-layers",
+        "edge-signal",
+        "duck-pond",
     ] = "classic"
     mode: Literal["inherit", "dark", "light", "system"] = "inherit"
     density: Literal["comfortable", "compact"] = "comfortable"

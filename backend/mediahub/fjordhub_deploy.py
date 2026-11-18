@@ -314,10 +314,15 @@ class FjordHubDeploy:
                         if self.integrations is not None:
                             try:
                                 from mediahub.fjordhub_pairing import pair_installed
-                                job["pairing"] = pair_installed(client, body.config, job, self.integrations)
+
+                                job["pairing"] = pair_installed(
+                                    client, body.config, job, self.integrations
+                                )
                             except Exception:
                                 job["pairing"] = "manual_required"
-                                job["message"] += " Automatic pairing unavailable; connect with an Access Token in Integrations."
+                                job["message"] += (
+                                    " Automatic pairing unavailable; connect with an Access Token in Integrations."
+                                )
                         break
                     elif not transport.is_active():
                         raise ConnectionError()

@@ -13,21 +13,28 @@ from agent.seedbox_install_driver import ProductionInstallDriver
 
 def test_new_install_pulls_both_publishers_before_storage_probe(tmp_path, monkeypatch):
     item = driver(tmp_path)
-    item.runtime.binding = lambda: (SimpleNamespace(workRoot=str(tmp_path)), spec(provider="protonvpn"))
+    item.runtime.binding = lambda: (
+        SimpleNamespace(workRoot=str(tmp_path)),
+        spec(provider="protonvpn"),
+    )
     item.runtime.socket = "test-socket"
     item.runtime.storage_guard = AsyncMock()
     item.runtime.device_guard = AsyncMock()
     item.runtime.container.side_effect = httpx.HTTPStatusError(
-        "missing", request=httpx.Request("GET", "http://docker/container"),
+        "missing",
+        request=httpx.Request("GET", "http://docker/container"),
         response=httpx.Response(404),
     )
     item.runtime.request.return_value = httpx.Response(200, json={"MemTotal": 8 * 1024**3})
     item.review = lambda: {"digest": "reviewed"}
     item.credentials = lambda: SimpleNamespace(vpnConfig="synthetic-wireguard")
     monkeypatch.setattr("agent.seedbox_install_driver.verify_ram_directory", lambda _: None)
-    monkeypatch.setattr("agent.seedbox_install_driver.VPNProfileRegistry", lambda: SimpleNamespace(
-        get=lambda _: SimpleNamespace(validate=lambda _: None),
-    ))
+    monkeypatch.setattr(
+        "agent.seedbox_install_driver.VPNProfileRegistry",
+        lambda: SimpleNamespace(
+            get=lambda _: SimpleNamespace(validate=lambda _: None),
+        ),
+    )
     pulled = []
 
     async def pull(socket, repository):
@@ -41,9 +48,14 @@ def test_new_install_pulls_both_publishers_before_storage_probe(tmp_path, monkey
     item.runtime.write_probe = probe
     monkeypatch.setattr("agent.seedbox_install_driver.pull_latest", pull)
     # Avoid binding a real host port in this synthetic preflight.
-    monkeypatch.setattr("agent.seedbox_install_driver.socket", SimpleNamespace(
-        socket=lambda *args: SimpleNamespaceContext(), AF_INET=2, SOCK_STREAM=1,
-    ))
+    monkeypatch.setattr(
+        "agent.seedbox_install_driver.socket",
+        SimpleNamespace(
+            socket=lambda *args: SimpleNamespaceContext(),
+            AF_INET=2,
+            SOCK_STREAM=1,
+        ),
+    )
     assert asyncio.run(item.preflight("reviewed"))["state"] == "passed"
 
 

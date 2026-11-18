@@ -25,17 +25,44 @@ async def overview_for(request, user, package):
     key = "sso:session:" + digest(token)
     try:
         from mediahub.sso import configured_app
+
         origin = configured_app(svc, package)
         svc.auth.app_role(user["id"], package)
         with svc.sessions.begin() as db:
-            db.execute(delete(Setting).where(Setting.key.like("sso:session:%"), Setting.value["scope"].as_string() == "overview", Setting.value["expires"].as_integer() <= int(time.time())))
-            parent = db.scalar(select(Session).where(Session.token_hash == digest(request.cookies.get(COOKIE, ""))))
+            db.execute(
+                delete(Setting).where(
+                    Setting.key.like("sso:session:%"),
+                    Setting.value["scope"].as_string() == "overview",
+                    Setting.value["expires"].as_integer() <= int(time.time()),
+                )
+            )
+            parent = db.scalar(
+                select(Session).where(Session.token_hash == digest(request.cookies.get(COOKIE, "")))
+            )
             if parent is None or parent.expires_at <= int(time.time()):
                 return {"status": "unavailable"}
-            db.add(Setting(key=key, value={"sessionId": parent.id, "packageId": package, "scope": "overview", "expires": min(parent.expires_at, int(time.time()) + 30)}))
-        verify = ssl.create_default_context(cafile=str(svc.config.agent_ca_file)) if svc.config.agent_ca_file else True
-        async with httpx.AsyncClient(timeout=12, follow_redirects=False, trust_env=False, verify=verify) as client:
-            async with client.stream("GET", origin + "/api/hub/overview", headers={"Authorization": "Bearer " + token}) as response:
+            db.add(
+                Setting(
+                    key=key,
+                    value={
+                        "sessionId": parent.id,
+                        "packageId": package,
+                        "scope": "overview",
+                        "expires": min(parent.expires_at, int(time.time()) + 30),
+                    },
+                )
+            )
+        verify = (
+            ssl.create_default_context(cafile=str(svc.config.agent_ca_file))
+            if svc.config.agent_ca_file
+            else True
+        )
+        async with httpx.AsyncClient(
+            timeout=12, follow_redirects=False, trust_env=False, verify=verify
+        ) as client:
+            async with client.stream(
+                "GET", origin + "/api/hub/overview", headers={"Authorization": "Bearer " + token}
+            ) as response:
                 response.raise_for_status()
                 content = bytearray()
                 async for chunk in response.aiter_bytes():
@@ -57,7 +84,9 @@ async def overview_for(request, user, package):
 
 @router.get("/app-overview")
 async def app_overview(request: Request, user=Depends(authenticated)):
-    seed, vpn = await asyncio.gather(*(overview_for(request, user, "org.mediahub." + app) for app in ("mediaseed", "mediavpn")))
+    seed, vpn = await asyncio.gather(
+        *(overview_for(request, user, "org.mediahub." + app) for app in ("mediaseed", "mediavpn"))
+    )
     return result({"mediaseed": seed, "mediavpn": vpn})
 
 
@@ -88,7 +117,9 @@ def app_origin(value):
 async def available(origin, ca_file=None):
     try:
         verify = ssl.create_default_context(cafile=str(ca_file)) if ca_file else True
-        async with httpx.AsyncClient(timeout=3, follow_redirects=False, trust_env=False, verify=verify) as client:
+        async with httpx.AsyncClient(
+            timeout=3, follow_redirects=False, trust_env=False, verify=verify
+        ) as client:
             async with client.stream("GET", origin + "/healthz") as response:
                 if response.status_code != 200:
                     return False
@@ -98,7 +129,11 @@ async def available(origin, ca_file=None):
                         return False
                     content.extend(chunk)
                 payload = json.loads(content)
-                return isinstance(payload, dict) and payload.get("status") == "healthy" and isinstance(payload.get("version"), str)
+                return (
+                    isinstance(payload, dict)
+                    and payload.get("status") == "healthy"
+                    and isinstance(payload.get("version"), str)
+                )
     except (httpx.HTTPError, ValueError):
         return False
 
@@ -113,9 +148,22 @@ async def status(request: Request, user=Depends(authenticated)):
     sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediaseed")
     if sso_origin:
         from mediahub.sso import configured_app
+
         sso_origin = configured_app(services(request), "org.mediahub.mediaseed")
-    health = await available(origin, services(request).config.agent_ca_file) if sso_origin else await available(origin)
-    return result({"configured": True, "available": health, "url": origin, **({"openUrl": sso_origin + "/auth/hub/start"} if sso_origin else {}), "preview": True})
+    health = (
+        await available(origin, services(request).config.agent_ca_file)
+        if sso_origin
+        else await available(origin)
+    )
+    return result(
+        {
+            "configured": True,
+            "available": health,
+            "url": origin,
+            **({"openUrl": sso_origin + "/auth/hub/start"} if sso_origin else {}),
+            "preview": True,
+        }
+    )
 
 
 @router.get("/mediavpn/status")
@@ -130,6 +178,19 @@ async def vpn_status(request: Request, user=Depends(authenticated)):
     sso_origin = services(request).config.sso_app_urls.get("org.mediahub.mediavpn")
     if sso_origin:
         from mediahub.sso import configured_app
+
         sso_origin = configured_app(services(request), "org.mediahub.mediavpn")
-    external = sso_origin + "/auth/hub/start" if sso_origin else saved_address(services(request), "org.mediahub.mediavpn")
-    return result({"configured": True, "available": await available(origin), "url": origin, **({"openUrl": external} if external else {}), "preview": True})
+    external = (
+        sso_origin + "/auth/hub/start"
+        if sso_origin
+        else saved_address(services(request), "org.mediahub.mediavpn")
+    )
+    return result(
+        {
+            "configured": True,
+            "available": await available(origin),
+            "url": origin,
+            **({"openUrl": external} if external else {}),
+            "preview": True,
+        }
+    )

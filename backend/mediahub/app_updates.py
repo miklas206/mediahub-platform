@@ -102,7 +102,9 @@ class AppUpdates:
             result = await GitHubSourceProvider(
                 valid_installed or "0.0.0",
                 labels.get("org.mediahub.app.commit"),
-                source_access=getattr(getattr(self.manager.svc, "updates", None), "git_checks", None),
+                source_access=getattr(
+                    getattr(self.manager.svc, "updates", None), "git_checks", None
+                ),
                 metadata_cache=getattr(
                     getattr(self.manager.svc, "updates", None), "github_metadata", None
                 ),
@@ -127,8 +129,12 @@ class AppUpdates:
             Version(valid_installed or "")
         except InvalidVersion:
             return {
-                **result, **local, "supported": True, "checkStatus": "failed",
-                "updateAvailable": False, "installReady": False,
+                **result,
+                **local,
+                "supported": True,
+                "checkStatus": "failed",
+                "updateAvailable": False,
+                "installReady": False,
                 "errorCode": "app_installed_version_unknown",
                 "message": "Installed app version could not be verified; no automatic update was selected.",
             }

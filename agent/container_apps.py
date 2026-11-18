@@ -94,7 +94,8 @@ class ContainerApps:
             if os.name == "posix" and os.geteuid() != 0:
                 values["uid"] = os.geteuid()
             values["storage"] = {
-                key: choice for key, choice in approved["storage"].items()
+                key: choice
+                for key, choice in approved["storage"].items()
                 if choice["kind"] in {"appdata", "movies", "tv", "downloads"}
             }
             return ContainerPolicy.model_validate(values)
@@ -125,9 +126,12 @@ class ContainerApps:
             from urllib.parse import parse_qs, urlsplit
 
             from agent.resource_control import apply_saved_resources
+
             package = body.get("Labels", {}).get("org.mediahub.package", "")
             kind = package.removeprefix("org.mediahub.")
-            if kind in CONTAINER_APPS and parse_qs(urlsplit(path).query).get("name") == ["mediahub-" + kind]:
+            if kind in CONTAINER_APPS and parse_qs(urlsplit(path).query).get("name") == [
+                "mediahub-" + kind
+            ]:
                 body = apply_saved_resources(body, self.state_dir, package)
         if not self.socket:
             raise DomainError("runtime_unavailable", "Docker socket is not configured", 503)
@@ -167,11 +171,28 @@ class ContainerApps:
         definition, policy = self.app(app), self.policy()
         gpu_choices = []
         if app == "jellyfin":
-            info = await self.request("GET", "/info") if any(g.vendor == "nvidia" for g in policy.gpus) else {}
+            info = (
+                await self.request("GET", "/info")
+                if any(g.vendor == "nvidia" for g in policy.gpus)
+                else {}
+            )
             for gpu in policy.gpus:
-                ready = gpu_available(gpu) and (gpu.vendor != "nvidia" or "nvidia" in info.get("Runtimes", {}))
-                gpu_choices.append({"id": gpu.id, "name": gpu.name, "vendor": gpu.vendor, "available": ready,
-                                    "method": {"nvidia": "NVIDIA NVENC", "intel": "Intel Quick Sync (QSV)", "amd": "VA-API"}[gpu.vendor]})
+                ready = gpu_available(gpu) and (
+                    gpu.vendor != "nvidia" or "nvidia" in info.get("Runtimes", {})
+                )
+                gpu_choices.append(
+                    {
+                        "id": gpu.id,
+                        "name": gpu.name,
+                        "vendor": gpu.vendor,
+                        "available": ready,
+                        "method": {
+                            "nvidia": "NVIDIA NVENC",
+                            "intel": "Intel Quick Sync (QSV)",
+                            "amd": "VA-API",
+                        }[gpu.vendor],
+                    }
+                )
         return {
             "gpus": gpu_choices,
             "hostId": policy.hostId,
@@ -276,18 +297,26 @@ class ContainerApps:
         if spec.gpuId:
             grant = next((g for g in policy.gpus if g.id == spec.gpuId), None)
             if spec.app != "jellyfin" or grant is None:
-                raise DomainError("gpu_not_approved", "Choose a GPU approved for this Jellyfin host", 403)
+                raise DomainError(
+                    "gpu_not_approved", "Choose a GPU approved for this Jellyfin host", 403
+                )
             if grant.vendor == "nvidia":
                 info = await self.request("GET", "/info")
                 if "nvidia" not in info.get("Runtimes", {}):
-                    raise DomainError("gpu_runtime_missing", "Prepare NVIDIA Container Toolkit on the MediaHub host first", 409)
+                    raise DomainError(
+                        "gpu_runtime_missing",
+                        "Prepare NVIDIA Container Toolkit on the MediaHub host first",
+                        409,
+                    )
             apply_gpu(container, grant)
         if linuxserver:
             container["HostConfig"]["Tmpfs"] = {
                 "/run": f"rw,exec,nosuid,nodev,size=64m,uid={policy.uid},gid={policy.gid}"
             }
         digest = hashlib.sha256(
-            json.dumps({"spec": spec.model_dump(exclude_none=True), "container": container}, sort_keys=True).encode()
+            json.dumps(
+                {"spec": spec.model_dump(exclude_none=True), "container": container}, sort_keys=True
+            ).encode()
         ).hexdigest()
         return {
             "name": name,
@@ -299,7 +328,9 @@ class ContainerApps:
 
     async def plan(self, spec):
         if spec.app not in INSTALLABLE_CONTAINER_APPS:
-            raise DomainError("app_retired", "This app is no longer available for installation", 409)
+            raise DomainError(
+                "app_retired", "This app is no longer available for installation", 409
+            )
         plan = await self.build_plan(spec)
         return {
             "planDigest": plan["planDigest"],
@@ -316,7 +347,9 @@ class ContainerApps:
     async def install(self, body):
         app = body.installation.app
         if app not in INSTALLABLE_CONTAINER_APPS:
-            raise DomainError("app_retired", "This app is no longer available for installation", 409)
+            raise DomainError(
+                "app_retired", "This app is no longer available for installation", 409
+            )
         if self.locks[app].locked():
             raise DomainError("operation_busy", "A container operation is running", 409)
         async with self.locks[app]:
@@ -332,7 +365,9 @@ class ContainerApps:
                     raise DomainError("container_conflict", "Container name is already in use", 409)
                 self.verify(existing, record)
                 if self.shared_vpn and not await self.shared_vpn.ready(app, existing):
-                    raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409)
+                    raise DomainError(
+                        "vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409
+                    )
                 record["desiredRunning"] = True
                 save_json(self.record_path(app), record)
                 if not existing["State"].get("Running"):
@@ -341,15 +376,23 @@ class ContainerApps:
                 return {"state": "installed", "url": plan["url"], "dataPreserved": True}
             previous = self.record(app)
             if previous and previous.get("resetRequired"):
-                raise DomainError("removal_incomplete", "Complete app removal and configuration reset before reinstalling", 409)
+                raise DomainError(
+                    "removal_incomplete",
+                    "Complete app removal and configuration reset before reinstalling",
+                    409,
+                )
             self.install_progress(app, "preparing", 5, "Preparing installation")
             self.tasks[app] = asyncio.create_task(self.provision(app, plan))
             return {"state": "accepted", "url": plan["url"], "dataPreserved": True}
 
     def install_progress(self, app, phase, progress, message, indeterminate=False):
-        self.operations[app] = {"state": "installing", "phase": phase,
-                                "progress": progress, "message": message,
-                                "indeterminate": indeterminate}
+        self.operations[app] = {
+            "state": "installing",
+            "phase": phase,
+            "progress": progress,
+            "message": message,
+            "indeterminate": indeterminate,
+        }
 
     async def prepare_storage(self, app, container, *, create_config=True):
         """Prepare only owned app directories on currently verified storage."""
@@ -360,7 +403,8 @@ class ContainerApps:
         config_mounts = [m for m in mounts if m["Target"] == "/config"]
         allowed = {
             Path(choice.path) / ("mediahub-" + app)
-            for choice in policy.storage.values() if choice.kind == "appdata"
+            for choice in policy.storage.values()
+            if choice.kind == "appdata"
         }
         if len(config_mounts) != 1 or Path(config_mounts[0]["Source"]) not in allowed:
             raise DomainError("unsafe_storage", "App configuration path is not approved", 409)
@@ -368,15 +412,21 @@ class ContainerApps:
         roots = [Path(root) for root in (*policy.requiredMounts, *policy.requiredFilesystemUuids)]
         for mount in mounts:
             path = Path(mount["Source"])
-            if path.resolve() != path or not any(path == root or root in path.parents for root in roots):
+            if path.resolve() != path or not any(
+                path == root or root in path.parents for root in roots
+            ):
                 raise DomainError("unsafe_storage", "App storage path changed", 409)
             if mount["Target"] == "/cache":
                 if app != "jellyfin" or path != config / "cache":
                     raise DomainError("unsafe_storage", "App cache path is not approved", 409)
             elif mount["Target"] != "/config" and not path.is_dir():
-                raise DomainError("storage_unavailable", "An app media directory is unavailable", 409)
+                raise DomainError(
+                    "storage_unavailable", "An app media directory is unavailable", 409
+                )
         if not config.is_dir() and not create_config:
-            raise DomainError("storage_unavailable", "App configuration directory is unavailable", 409)
+            raise DomainError(
+                "storage_unavailable", "App configuration directory is unavailable", 409
+            )
         for target in ("/config", "/cache"):
             for mount in mounts:
                 if mount["Target"] != target:
@@ -386,7 +436,9 @@ class ContainerApps:
                 if os.name == "posix" and os.geteuid() == 0:
                     os.chown(path, policy.uid, policy.gid)
                 elif os.name == "posix" and path.stat().st_uid != policy.uid:
-                    raise DomainError("storage_owner", "Configuration owner must match app UID", 409)
+                    raise DomainError(
+                        "storage_owner", "Configuration owner must match app UID", 409
+                    )
 
     async def provision(self, app, plan):
         try:
@@ -395,7 +447,9 @@ class ContainerApps:
                 repository = CONTAINER_APPS[app]["repository"]
                 self.install_progress(app, "download", 10, "Downloading app image", True)
                 image = await pull_latest(self.socket, repository)
-                self.install_progress(app, "storage", 65, "Checking storage and preparing container")
+                self.install_progress(
+                    app, "storage", 65, "Checking storage and preparing container"
+                )
                 plan["container"]["Image"] = publisher_reference(image, repository)
                 plan["imageId"] = image["Id"]
                 current = await self.build_plan(
@@ -444,14 +498,25 @@ class ContainerApps:
                 inspected = await self.request("GET", f"/containers/{plan['name']}/json")
                 self.verify(inspected, plan)
                 if not inspected.get("State", {}).get("Running"):
-                    raise DomainError("container_not_running", "App container did not stay running", 409)
-                self.operations[app].update(state="installed", phase="complete", progress=100,
-                                            indeterminate=False, message="Container started")
+                    raise DomainError(
+                        "container_not_running", "App container did not stay running", 409
+                    )
+                self.operations[app].update(
+                    state="installed",
+                    phase="complete",
+                    progress=100,
+                    indeterminate=False,
+                    message="Container started",
+                )
         except Exception as error:
             operation = self.operations.setdefault(app, {})
-            operation.update(state="failed", indeterminate=False,
-                             message=error.message if isinstance(error, DomainError)
-                             else "Installation failed; persistent data retained")
+            operation.update(
+                state="failed",
+                indeterminate=False,
+                message=error.message
+                if isinstance(error, DomainError)
+                else "Installation failed; persistent data retained",
+            )
 
     def verify(self, inspected, record):
         expected = record["container"]
@@ -471,7 +536,8 @@ class ContainerApps:
             or mounts != actual
             or inspected.get("Config", {}).get("User") != expected["User"]
             or inspected.get("HostConfig", {}).get("Privileged") is not False
-            or inspected.get("HostConfig", {}).get("NetworkMode") != expected["HostConfig"].get("NetworkMode", "mediahub-apps")
+            or inspected.get("HostConfig", {}).get("NetworkMode")
+            != expected["HostConfig"].get("NetworkMode", "mediahub-apps")
             or inspected.get("HostConfig", {}).get("CapDrop") != ["ALL"]
             or (inspected.get("HostConfig", {}).get("CapAdd") or [])
             or (inspected.get("HostConfig", {}).get("Tmpfs") or {})
@@ -490,7 +556,10 @@ class ContainerApps:
                 continue
             match = re.fullmatch(r"v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?", value.strip())
             if not match and key == "build_version":
-                match = re.match(r"Linuxserver\.io version:- v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?(?:\s|$)", value)
+                match = re.match(
+                    r"Linuxserver\.io version:- v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?(?:\s|$)",
+                    value,
+                )
             if match:
                 return match[1]
         return None
@@ -511,14 +580,33 @@ class ContainerApps:
                 self.verify(inspected, record)
                 runtime = inspected.get("State", {})
                 state = "running" if runtime.get("Running") else "stopped"
-                started_at = runtime.get("StartedAt") if state == "running" and not runtime.get("Restarting") else None
+                started_at = (
+                    runtime.get("StartedAt")
+                    if state == "running" and not runtime.get("Restarting")
+                    else None
+                )
                 observed = runtime.get("Health", {}).get("Status")
-                health = "critical" if runtime.get("Dead") or observed == "unhealthy" else (
-                    "degraded" if runtime.get("Restarting") or observed == "starting" or state == "stopped" else
-                    "healthy" if observed == "healthy" else "unknown")
-                verified = state == "running" and observed == "healthy" and not runtime.get("Restarting")
-                checks = [{"name": "container", "status": health,
-                           "message": "Docker healthcheck: " + (observed or state)}]
+                health = (
+                    "critical"
+                    if runtime.get("Dead") or observed == "unhealthy"
+                    else (
+                        "degraded"
+                        if runtime.get("Restarting") or observed == "starting" or state == "stopped"
+                        else "healthy"
+                        if observed == "healthy"
+                        else "unknown"
+                    )
+                )
+                verified = (
+                    state == "running" and observed == "healthy" and not runtime.get("Restarting")
+                )
+                checks = [
+                    {
+                        "name": "container",
+                        "status": health,
+                        "message": "Docker healthcheck: " + (observed or state),
+                    }
+                ]
                 labels = inspected.get("Config", {}).get("Labels", {}) or {}
                 version = self.image_version(labels)
             else:
@@ -548,19 +636,29 @@ class ContainerApps:
             raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
         mounts = record["container"]["HostConfig"]["Mounts"]
         configs = [m for m in mounts if m["Target"] == "/config"]
-        allowed = {Path(c.path) / ("mediahub-" + app) for c in policy.storage.values() if c.kind == "appdata"}
+        allowed = {
+            Path(c.path) / ("mediahub-" + app)
+            for c in policy.storage.values()
+            if c.kind == "appdata"
+        }
         if len(configs) != 1 or Path(configs[0]["Source"]) not in allowed:
             raise DomainError("unsafe_storage", "App configuration path is not approved", 409)
         root = Path(configs[0]["Source"])
         for mount in mounts:
             path = Path(mount["Source"])
-            if mount["Target"] not in {"/config", "/cache"} and (path == root or path in root.parents or root in path.parents):
+            if mount["Target"] not in {"/config", "/cache"} and (
+                path == root or path in root.parents or root in path.parents
+            ):
                 raise DomainError("unsafe_storage", "App configuration overlaps media", 409)
         for row in await self.request("GET", "/containers/json?all=1"):
             inspected = await self.request("GET", "/containers/" + row["Id"] + "/json")
-            if any(Path(m["Source"]) == root or root in Path(m["Source"]).parents
-                   for m in inspected.get("Mounts", [])):
-                raise DomainError("app_dependency", "Another container uses this app configuration", 409)
+            if any(
+                Path(m["Source"]) == root or root in Path(m["Source"]).parents
+                for m in inspected.get("Mounts", [])
+            ):
+                raise DomainError(
+                    "app_dependency", "Another container uses this app configuration", 409
+                )
         await asyncio.to_thread(clear_directory, root)
         # Keep the ownership receipt until the next install; it makes retries safe.
         record["configurationReset"] = True
@@ -600,9 +698,15 @@ class ContainerApps:
             self.verify(inspected, record)
             if action in {"start", "restart"}:
                 if not self.gpu_ready(record):
-                    raise DomainError("gpu_unavailable", "The installation GPU is no longer approved or accessible", 409)
+                    raise DomainError(
+                        "gpu_unavailable",
+                        "The installation GPU is no longer approved or accessible",
+                        409,
+                    )
                 if self.shared_vpn and not await self.shared_vpn.ready(app, inspected):
-                    raise DomainError("vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409)
+                    raise DomainError(
+                        "vpn_relay_unverified", "VPN relay is unavailable; app start blocked", 409
+                    )
                 if not await self.storage_control.storage_verified(self.policy()):
                     raise DomainError("storage_unverified", "Storage is not verified mounted", 409)
             record["desiredRunning"] = action in {"start", "restart"}
@@ -652,7 +756,9 @@ class ContainerApps:
                         if inspected is None:
                             continue
                         self.verify(inspected, record)
-                        ready = self.gpu_ready(record) and await self.storage_control.storage_verified(self.policy())
+                        ready = self.gpu_ready(
+                            record
+                        ) and await self.storage_control.storage_verified(self.policy())
                         if self.shared_vpn:
                             ready = ready and await self.shared_vpn.ready(app, inspected)
                         running = inspected["State"].get("Running")

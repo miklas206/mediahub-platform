@@ -26,8 +26,11 @@ def runtime(tmp_path):
 
     return SimpleNamespace(
         policy=lambda: SimpleNamespace(bindAddress="192.168.40.5"),
-        preferences=AsyncMock(return_value=f'<Preferences CertificateUUID="{CERTIFICATE}"/>'.encode()),
-        checkpoint=AsyncMock(), state_dir=tmp_path,
+        preferences=AsyncMock(
+            return_value=f'<Preferences CertificateUUID="{CERTIFICATE}"/>'.encode()
+        ),
+        checkpoint=AsyncMock(),
+        state_dir=tmp_path,
         control=SimpleNamespace(plex_get=AsyncMock(side_effect=plex_get)),
         values=values,
     )
@@ -107,7 +110,12 @@ def test_verified_public_url_rotates_without_removing_lan_or_user_urls(runtime):
 def test_publication_waits_for_the_servers_certificate(runtime):
     runtime.preferences.return_value = b"<Preferences/>"
     with pytest.raises(DomainError) as error:
-        asyncio.run(configure(runtime, SimpleNamespace(installationId="plex-main"),
-                              public_endpoint=("8.8.8.8", 50001)))
+        asyncio.run(
+            configure(
+                runtime,
+                SimpleNamespace(installationId="plex-main"),
+                public_endpoint=("8.8.8.8", 50001),
+            )
+        )
     assert error.value.code == "plex_certificate_pending"
     runtime.control.plex_get.assert_not_awaited()

@@ -66,10 +66,10 @@ class SetupService:
                     allowed_origins=svc.config.allowed_origins,
                     trusted_proxies=svc.config.trusted_proxies,
                 )
-                storage = [
-                    PlannedStorage(**item.model_dump()) for item in svc.config.setup_storage
-                ]
-                db.add(InstallationState(draft=Draft(network=network, storage=storage).model_dump()))
+                storage = [PlannedStorage(**item.model_dump()) for item in svc.config.setup_storage]
+                db.add(
+                    InstallationState(draft=Draft(network=network, storage=storage).model_dump())
+                )
 
     def state(self):
         with self.svc.sessions() as db:
@@ -104,9 +104,7 @@ class SetupService:
 
     def require_complete(self):
         if not self.state()["setup_completed"]:
-            raise DomainError(
-                "setup_required", "Finish MediaHub setup before installing apps", 409
-            )
+            raise DomainError("setup_required", "Finish MediaHub setup before installing apps", 409)
 
     def save(self, body: SaveDraft):
         if self.lock.locked():

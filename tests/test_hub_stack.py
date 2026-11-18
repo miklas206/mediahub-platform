@@ -13,14 +13,29 @@ def original_stack():
         "name": "mediahub-platform",
         "services": {
             "core": {
-                "image": "hub-image", "ports": ["192.168.1.111:18765:18765"],
-                "networks": ["control", "lan"], "environment": {"MEDIAHUB_BASE_URL": "https://192.168.1.111:18765"},
-                "volumes": ["/opt/mediahub/data:/data", "/opt/mediahub/tls-core:/tls:ro", "/storage:/storage:ro"],
+                "image": "hub-image",
+                "ports": ["192.168.1.111:18765:18765"],
+                "networks": ["control", "lan"],
+                "environment": {"MEDIAHUB_BASE_URL": "https://192.168.1.111:18765"},
+                "volumes": [
+                    "/opt/mediahub/data:/data",
+                    "/opt/mediahub/tls-core:/tls:ro",
+                    "/storage:/storage:ro",
+                ],
             },
             "agent": {
-                "image": "runtime-image", "group_add": ["999", "1000"],
-                "environment": {"MEDIAHUB_AGENT_STATE_DIR": "/state", "MEDIAHUB_AGENT_TOKEN_FILE": "/state/token"},
-                "volumes": ["/opt/mediahub/agent:/state", "/opt/mediahub/tls-agent:/tls:ro", "/storage:/storage", "/var/run/docker.sock:/var/run/docker.sock:ro"],
+                "image": "runtime-image",
+                "group_add": ["999", "1000"],
+                "environment": {
+                    "MEDIAHUB_AGENT_STATE_DIR": "/state",
+                    "MEDIAHUB_AGENT_TOKEN_FILE": "/state/token",
+                },
+                "volumes": [
+                    "/opt/mediahub/agent:/state",
+                    "/opt/mediahub/tls-agent:/tls:ro",
+                    "/storage:/storage",
+                    "/var/run/docker.sock:/var/run/docker.sock:ro",
+                ],
             },
         },
     }

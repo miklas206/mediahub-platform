@@ -176,19 +176,39 @@ def mutations(remote):
 
 
 @pytest.mark.parametrize("older", [False, True])
-def test_plex_port_works_without_domains_or_cloudflare_and_survives_reload(logged_in, gateway, monkeypatch, older):
+def test_plex_port_works_without_domains_or_cloudflare_and_survives_reload(
+    logged_in, gateway, monkeypatch, older
+):
     service, remote = gateway
     state = service.state()
     if older:
-        state.update(enabled=False, profileId=PROFILE, revision=12,
-                     routes=[{"id": "old-route", "packageId": "mediahub", "hostname": "hub.example.com", "zoneId": ZONE, "label": "hub"}],
-                     plexPortEnabled=False, plexPortManaged=True, plexPortApplied=False)
+        state.update(
+            enabled=False,
+            profileId=PROFILE,
+            revision=12,
+            routes=[
+                {
+                    "id": "old-route",
+                    "packageId": "mediahub",
+                    "hostname": "hub.example.com",
+                    "zoneId": ZONE,
+                    "label": "hub",
+                }
+            ],
+            plexPortEnabled=False,
+            plexPortManaged=True,
+            plexPortApplied=False,
+        )
         service.save(state)
     service.store.delete("api_token")
     target = {"address": "192.168.1.20", "port": 32400}
     monkeypatch.setattr(service.plex_forwarding, "target", AsyncMock(return_value=target))
     monkeypatch.setattr(service, "check_legacy_provider", AsyncMock())
-    monkeypatch.setattr(service.svc.shared_vpn, "vpn", AsyncMock(return_value={"enabled": True, "profileId": PROFILE}))
+    monkeypatch.setattr(
+        service.svc.shared_vpn,
+        "vpn",
+        AsyncMock(return_value={"enabled": True, "profileId": PROFILE}),
+    )
     apply = AsyncMock()
     monkeypatch.setattr(service.plex_forwarding, "apply", apply)
     original = service.vpn
@@ -196,7 +216,11 @@ def test_plex_port_works_without_domains_or_cloudflare_and_survives_reload(logge
     async def vpn(method="GET", body=None):
         reply = await original(method, body)
         machine = remote["machine"] or {}
-        return {**reply, "plex": machine.get("plex"), "plexPort": {"ready": True, "publicIp": "8.8.8.8", "publicPort": 50003}}
+        return {
+            **reply,
+            "plex": machine.get("plex"),
+            "plexPort": {"ready": True, "publicIp": "8.8.8.8", "publicPort": 50003},
+        }
 
     monkeypatch.setattr(service, "vpn", vpn)
     response = logged_in.put(BASE + "/plex-port", json={"enabled": True})
@@ -227,7 +251,9 @@ def test_apply_acknowledgement_is_not_used_as_provider_observation(logged_in, ga
     async def machine(method="GET", body=None):
         reply = await original(method, body)
         if method == "PUT":
-            reply.update(ready=False, providerReady=False, phase="applying", publicIp=None, publicPort=None)
+            reply.update(
+                ready=False, providerReady=False, phase="applying", publicIp=None, publicPort=None
+            )
         return reply
 
     monkeypatch.setattr(service, "vpn", machine)
@@ -239,11 +265,19 @@ def test_apply_acknowledgement_is_not_used_as_provider_observation(logged_in, ga
 
 
 @pytest.mark.parametrize("all_offline", [False, True])
-def test_app_restart_keeps_dns_selections_and_recovers_without_readding(logged_in, gateway, monkeypatch, all_offline):
+def test_app_restart_keeps_dns_selections_and_recovers_without_readding(
+    logged_in, gateway, monkeypatch, all_offline
+):
     service, remote = gateway
     origin = AsyncMock(return_value={"upstream": "http://192.168.1.50:18765"})
     monkeypatch.setattr(service, "upstream", origin)
-    body = {**BODY, "routes": [*BODY["routes"], {"packageId": "org.mediahub.mediavpn", "zoneId": ZONE, "label": "vpn"}]}
+    body = {
+        **BODY,
+        "routes": [
+            *BODY["routes"],
+            {"packageId": "org.mediahub.mediavpn", "zoneId": ZONE, "label": "vpn"},
+        ],
+    }
     configured = configure(logged_in, service, body)
     ids = [row["id"] for row in configured["routes"]]
     records = copy.deepcopy(remote["records"])
@@ -948,16 +982,26 @@ def test_media_domain_edit_preserves_other_app_routes(logged_in, gateway, monkey
     service, remote = gateway
     configure(logged_in, service)
     before = copy.deepcopy(service.state()["routes"][0])
-    monkeypatch.setattr(service.svc.apps, "get", Mock(return_value={"packageId":package,"isMock":False,"state":"running"}))
-    monkeypatch.setattr(service,"upstream",AsyncMock(return_value={"upstream":"http://192.168.1.50:32400"}))
-    response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"plex"})
+    monkeypatch.setattr(
+        service.svc.apps,
+        "get",
+        Mock(return_value={"packageId": package, "isMock": False, "state": "running"}),
+    )
+    monkeypatch.setattr(
+        service, "upstream", AsyncMock(return_value={"upstream": "http://192.168.1.50:32400"})
+    )
+    response = logged_in.put(
+        BASE + "/apps/installation-specific-id/domain", json={"zoneId": ZONE, "label": "plex"}
+    )
     assert response.status_code == 200, response.text
     routes = service.state()["routes"]
     assert routes[0]["id"] == before["id"]
     assert routes[0]["hostname"] == before["hostname"]
     assert routes[1]["hostname"] == "plex.example.com"
     assert routes[1]["packageId"] == package
-    response = logged_in.put(BASE+"/apps/installation-specific-id/domain",json={"zoneId":ZONE,"label":"movies"})
+    response = logged_in.put(
+        BASE + "/apps/installation-specific-id/domain", json={"zoneId": ZONE, "label": "movies"}
+    )
     assert response.status_code == 200
     assert service.state()["routes"][0]["id"] == before["id"]
     assert service.state()["routes"][1]["hostname"] == "movies.example.com"
@@ -967,29 +1011,63 @@ def test_domain_editor_rejects_concurrent_gateway_change(logged_in, gateway):
     service, _ = gateway
     configure(logged_in, service)
     before = service.state()
-    response = logged_in.put(BASE+"/config",json={**BODY,"expectedRevision":before.get("revision",0)-1})
+    response = logged_in.put(
+        BASE + "/config", json={**BODY, "expectedRevision": before.get("revision", 0) - 1}
+    )
     assert response.status_code == 409
     assert service.state() == before
 
 
 def test_plex_runtime_open_url_uses_saved_domain_and_local_server(logged_in, monkeypatch):
-    svc=logged_in.app.state.services
-    monkeypatch.setattr(svc.apps,"adapter",Mock(return_value=SimpleNamespace(
-        definition=SimpleNamespace(package_id="org.mediahub.plex",view_id="plex"),
-        status=AsyncMock(return_value={"url":"http://192.168.1.50:32400","available":True}))))
-    svc.config.operator_app_urls["org.mediahub.plex"]="https://app.plex.tv/desktop/#!/settings/web/general"
-    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "http://192.168.1.50:32400/web/index.html"
+    svc = logged_in.app.state.services
+    monkeypatch.setattr(
+        svc.apps,
+        "adapter",
+        Mock(
+            return_value=SimpleNamespace(
+                definition=SimpleNamespace(package_id="org.mediahub.plex", view_id="plex"),
+                status=AsyncMock(
+                    return_value={"url": "http://192.168.1.50:32400", "available": True}
+                ),
+            )
+        ),
+    )
+    svc.config.operator_app_urls["org.mediahub.plex"] = (
+        "https://app.plex.tv/desktop/#!/settings/web/general"
+    )
+    assert (
+        logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"]
+        == "http://192.168.1.50:32400/web/index.html"
+    )
     with svc.sessions.begin() as db:
-        db.add(Setting(key="app_address:org.mediahub.plex",value={"externalUrl":"https://plex.example.com"}))
-    assert logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"] == "https://plex.example.com/web/index.html"
+        db.add(
+            Setting(
+                key="app_address:org.mediahub.plex",
+                value={"externalUrl": "https://plex.example.com"},
+            )
+        )
+    assert (
+        logged_in.get("/api/v1/apps/install-id/runtime").json()["data"]["operatorUrl"]
+        == "https://plex.example.com/web/index.html"
+    )
 
 
-@pytest.mark.parametrize("published,enabled", [(True,True),(False,True),(True,False)])
-def test_startup_restores_only_approved_published_hub_origin(logged_in,gateway,published,enabled):
+@pytest.mark.parametrize("published,enabled", [(True, True), (False, True), (True, False)])
+def test_startup_restores_only_approved_published_hub_origin(
+    logged_in, gateway, published, enabled
+):
     service, _ = gateway
-    state=service.state()
-    state.update(enabled=enabled,routes=[{"id":"d"*32,"packageId":"mediahub","hostname":"hub.example.com"}],records={"d"*32:{"id":"record-id","applied":{"name":"hub.example.com"}}} if published else {})
+    state = service.state()
+    state.update(
+        enabled=enabled,
+        routes=[{"id": "d" * 32, "packageId": "mediahub", "hostname": "hub.example.com"}],
+        records={"d" * 32: {"id": "record-id", "applied": {"name": "hub.example.com"}}}
+        if published
+        else {},
+    )
     service.save(state)
-    service.svc.config.allowed_origins=[]
+    service.svc.config.allowed_origins = []
     VPNGateway(service.svc)
-    assert ("https://hub.example.com" in service.svc.config.allowed_origins) is (published and enabled)
+    assert ("https://hub.example.com" in service.svc.config.allowed_origins) is (
+        published and enabled
+    )

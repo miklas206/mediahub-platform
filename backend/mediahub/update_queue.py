@@ -161,9 +161,11 @@ class UpdateQueue:
                 if item["state"] == "pending":
                     checked = await self.check(item)
                     available = checked.get("updateAvailable") is True
-                    if (checked.get("supported") is False
+                    if (
+                        checked.get("supported") is False
                         or checked.get("checkStatus", "checked") != "checked"
-                        or checked.get("stale")):
+                        or checked.get("stale")
+                    ):
                         raise DomainError(
                             "update_unverified", "This update could not be verified", 409
                         )

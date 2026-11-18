@@ -107,9 +107,16 @@ async def test_status_enrichment_is_cached_and_filters_private_fields():
 
     async def enrich(host_id, agent, report):
         assert host_id == "test" and agent is client
-        return {**report, "vpn": {"mode": "shared", "verified": True, "privateKey": "secret"},
-                "portForwarding": {"status": "healthy", "currentPort": 48522,
-                                   "plexVerified": True, "token": "secret"}}
+        return {
+            **report,
+            "vpn": {"mode": "shared", "verified": True, "privateKey": "secret"},
+            "portForwarding": {
+                "status": "healthy",
+                "currentPort": 48522,
+                "plexVerified": True,
+                "token": "secret",
+            },
+        }
 
     hook = AsyncMock(side_effect=enrich)
     first = await cache.get("test", client, enrich=hook)

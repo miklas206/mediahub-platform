@@ -328,23 +328,41 @@ def test_plex_recovery_uses_saved_running_intent(tmp_path, desired):
     policy = SimpleNamespace(vpnEnabled=False)
     current = {"Id": "plex-created", "State": {"Running": False}}
     from unittest.mock import Mock
+
     control.plex = SimpleNamespace(
-        control=SimpleNamespace(lock=asyncio.Lock(), policy=lambda: policy,
-                                inspect=AsyncMock(return_value=current), intent=Mock(return_value=desired)),
-        start=AsyncMock(), stop=AsyncMock(),
+        control=SimpleNamespace(
+            lock=asyncio.Lock(),
+            policy=lambda: policy,
+            inspect=AsyncMock(return_value=current),
+            intent=Mock(return_value=desired),
+        ),
+        start=AsyncMock(),
+        stop=AsyncMock(),
     )
     original_request = control.request
+
     async def request(method, url, body=None, missing=False):
         if method == "GET" and url == "/containers/mediahub-plex-main/json":
             return current
         return await original_request(method, url, body, missing)
+
     control.request = request
     control.prepare = AsyncMock(return_value=record["container"])
     control.status = AsyncMock(return_value={"enabled": True})
-    save_json(control.path("plex"), {"enabled": True, "requestedEnabled": True,
-                                    "phase": "starting", "peer": peer, "desiredRunning": True})
+    save_json(
+        control.path("plex"),
+        {
+            "enabled": True,
+            "requestedEnabled": True,
+            "phase": "starting",
+            "peer": peer,
+            "desiredRunning": True,
+        },
+    )
+
     async def starting(_):
         assert control.state("plex")["phase"] == "starting"
+
     control.plex.start.side_effect = starting
     asyncio.run(control.configuration("plex", peer, True))
     assert control.plex.start.await_count == int(desired)
@@ -356,21 +374,42 @@ def test_plex_status_checks_installed_container_name(tmp_path):
     control, peer, events, path = controller(tmp_path)
     save_json(tmp_path / "plex-plan.json", {"name": "mediahub-plex-main"})
     save_json(control.path("plex"), {"enabled": True, "phase": "ready"})
-    control.owned_relay = AsyncMock(return_value={"State":{"Running":True,"Health":{"Status":"healthy"}}})
-    control.request = AsyncMock(return_value={"State":{"Running":True}})
+    control.owned_relay = AsyncMock(
+        return_value={"State": {"Running": True, "Health": {"Status": "healthy"}}}
+    )
+    control.request = AsyncMock(return_value={"State": {"Running": True}})
     control.ready = AsyncMock(return_value=True)
     result = asyncio.run(control.status("plex"))
     assert result["ready"] is True
-    control.request.assert_awaited_once_with("GET", "/containers/mediahub-plex-main/json", missing=True)
+    control.request.assert_awaited_once_with(
+        "GET", "/containers/mediahub-plex-main/json", missing=True
+    )
 
 
-@pytest.mark.parametrize("age,expected", [(0, True), (89, True), (120, True), (165, True), (179, True), (180, False), (181, False), (-1, False)])
+@pytest.mark.parametrize(
+    "age,expected",
+    [
+        (0, True),
+        (89, True),
+        (120, True),
+        (165, True),
+        (179, True),
+        (180, False),
+        (181, False),
+        (-1, False),
+    ],
+)
 def test_relay_health_respects_wireguard_session_window(monkeypatch, age, expected):
     from agent.relay_image import runtime as relay
+
     monkeypatch.setattr(relay, "CONFIG", SimpleNamespace(read_text=lambda: "{}"))
     monkeypatch.setattr(relay, "validate", lambda value: {"mode": "client"})
     monkeypatch.setattr(relay.time, "time", lambda: 1000)
-    monkeypatch.setattr(relay, "command", lambda *args: "synthetic-key " + str(1000 - age) if args[0] == "wg" else "")
+    monkeypatch.setattr(
+        relay,
+        "command",
+        lambda *args: "synthetic-key " + str(1000 - age) if args[0] == "wg" else "",
+    )
     assert relay.health() is expected
 
 
@@ -406,7 +445,9 @@ def test_reapplying_vpn_preserves_new_mounts_environment_and_migration_labels(tm
 def test_relay_address_requires_a_ready_owned_running_namespace(tmp_path):
     control, peer, _, _ = controller(tmp_path)
     save_json(control.path("jellyfin"), {"enabled": True, "phase": "ready", "peer": peer})
-    control.owned_relay = AsyncMock(return_value={"State": {"Running": True, "Health": {"Status": "healthy"}}})
+    control.owned_relay = AsyncMock(
+        return_value={"State": {"Running": True, "Health": {"Status": "healthy"}}}
+    )
     control.request = AsyncMock(return_value={"State": {"Running": True}})
     control.ready = AsyncMock(return_value=True)
     status = asyncio.run(control.status("jellyfin"))

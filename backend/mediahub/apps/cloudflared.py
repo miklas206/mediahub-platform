@@ -115,7 +115,11 @@ def register_cloudflared_app(svc):
 
     manifest = parse_manifest(svc.config.manifest_dir / "cloudflared" / "manifest.yaml")
     management = getattr(svc, "cloudflare_management", None)
-    configured = bool(svc.cloudflare_tunnel.status_url or svc.cloudflare_tunnel.probe_urls or (management and management.state()["tunnels"]))
+    configured = bool(
+        svc.cloudflare_tunnel.status_url
+        or svc.cloudflare_tunnel.probe_urls
+        or (management and management.state()["tunnels"])
+    )
     with svc.sessions.begin() as db:
         app = db.scalar(select(InstalledApp).where(InstalledApp.package_id == manifest.id))
         created = app is None
@@ -165,6 +169,7 @@ def should_register_cloudflared_app(svc):
         )
     management = getattr(svc, "cloudflare_management", None)
     return existing is not None or bool(
-        svc.cloudflare_tunnel.status_url or svc.cloudflare_tunnel.probe_urls
+        svc.cloudflare_tunnel.status_url
+        or svc.cloudflare_tunnel.probe_urls
         or (management and management.state()["tunnels"])
     )

@@ -11,7 +11,14 @@ def installation_language(db):
     key = "installation.language"
     row = db.scalar(select(Setting).where(Setting.key == key))
     if row is None:
-        locale = next((os.environ[k] for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG") if os.environ.get(k)), "")
+        locale = next(
+            (
+                os.environ[k]
+                for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG")
+                if os.environ.get(k)
+            ),
+            "",
+        )
         language = "da" if re.split(r"[-_.@]", locale.lower())[0] == "da" else "en"
         row = Setting(key=key, value={"language": language})
         db.add(row)
@@ -66,7 +73,12 @@ class SettingsService:
         with self.sessions() as db:
             row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
             user = db.get(User, user_id)
-            return UserPreferences.model_validate({**(row.value if row else {}), "language": user.preferred_language if user else "en"})
+            return UserPreferences.model_validate(
+                {
+                    **(row.value if row else {}),
+                    "language": user.preferred_language if user else "en",
+                }
+            )
 
     def save_user_preferences(self, user_id: str, preferences: UserPreferences):
         with self.sessions.begin() as db:
@@ -75,7 +87,11 @@ class SettingsService:
             # panel must not replace that account's existing choices.
             user = db.get(User, user_id)
             saved = UserPreferences.model_validate(
-                {**(row.value if row else {}), "language": user.preferred_language, **preferences.model_dump(exclude_unset=True)}
+                {
+                    **(row.value if row else {}),
+                    "language": user.preferred_language,
+                    **preferences.model_dump(exclude_unset=True),
+                }
             )
             user.preferred_language = saved.language
             if row:

@@ -155,8 +155,9 @@ def test_other_storage_is_inherited_only_from_verified_policy(tmp_path, monkeypa
     shared["hostMountSnapshot"] = "/host-evidence/" + evidence.name
     policy.write_text(json.dumps({**shared, "storage": {} if legacy else entry}))
     plex.write_text(json.dumps({**shared, "storage": entry}))
-    (root / "compose.json").write_text(json.dumps({"services": {"core": {
-        "volumes": [f"{evidence.parent}:/host-evidence:ro"]}}}))
+    (root / "compose.json").write_text(
+        json.dumps({"services": {"core": {"volumes": [f"{evidence.parent}:/host-evidence:ro"]}}})
+    )
     original = policy.read_bytes()
     locations = module.approved_media_storage(root)
     assert locations[0]["path"] == "/downloads/media/other"
@@ -536,12 +537,20 @@ def test_core_and_app_preparation_preserves_explicit_nas_roots_and_vpn_mappings(
 
 
 def test_local_helper_reuses_only_matching_owned_image(monkeypatch):
-    image = 'mediahub-mediaseed-converter:synthetic'
-    digest = 'sha256:' + 'a' * 64
-    owner = {'Image': digest, 'Config': {'Image': image, 'Labels': {
-        'com.docker.compose.project': 'mediahub-mediaseed',
-        'com.docker.compose.service': 'conversion-worker'}}}
+    image = "mediahub-mediaseed-converter:synthetic"
+    digest = "sha256:" + "a" * 64
+    owner = {
+        "Image": digest,
+        "Config": {
+            "Image": image,
+            "Labels": {
+                "com.docker.compose.project": "mediahub-mediaseed",
+                "com.docker.compose.service": "conversion-worker",
+            },
+        },
+    }
     calls = []
+
     def run(*args):
         calls.append(args)
         return json.dumps([{"Id": digest}])
@@ -622,7 +631,9 @@ def test_custom_seeding_roots_survive_updates_only_with_verified_binds(tmp_path,
 def test_embedded_bootstraps_host_without_building_optional_app_images(tmp_path, monkeypatch):
     root = tmp_path / "hub"
     (root / "data").mkdir(parents=True)
-    (root / "compose.json").write_text('{"name":"mediahub-platform","services":{"core":{"environment":{}}}}')
+    (root / "compose.json").write_text(
+        '{"name":"mediahub-platform","services":{"core":{"environment":{}}}}'
+    )
     prepared = []
     monkeypatch.setattr(module, "prepare_host_metrics", lambda *args: None)
     monkeypatch.setattr(module, "prepare_storage_host", lambda *args: prepared.append(args[0]))

@@ -72,7 +72,9 @@ def test_embedded_hub_starts_real_runtime_without_public_runtime_routes(tmp_path
     monkeypatch.setenv("MEDIAHUB_AGENT_STATE_DIR", str(state))
     monkeypatch.setenv("MEDIAHUB_AGENT_TOKEN_FILE", str(state / "token"))
     monkeypatch.setenv("MEDIAHUB_AGENT_DEV_MODE", "true")
-    config = Config(_env_file=None, runtime_mode="embedded", dev_mode=True, data_dir=tmp_path / "data")
+    config = Config(
+        _env_file=None, runtime_mode="embedded", dev_mode=True, data_dir=tmp_path / "data"
+    )
     with TestClient(create_app(config)) as client:
         services = client.app.state.services
         assert services.agent.local_app is not None

@@ -27,14 +27,21 @@ def icon_path(value, client, app_id=None):
         return None
     try:
         url, base = urlsplit(value), urlsplit(client.base_url)
-        if not url.scheme and not url.netloc and value.startswith("/") and not value.startswith("//"):
+        if (
+            not url.scheme
+            and not url.netloc
+            and value.startswith("/")
+            and not value.startswith("//")
+        ):
             url = urlsplit(client.base_url + value)
         if url.fragment or (url.query and not re.fullmatch(r"v=[A-Za-z0-9_.-]{1,80}", url.query)):
             return None
         if (url.scheme, url.netloc) == ("https", "raw.githubusercontent.com"):
             paths = [REGISTRY_ICONS.get(app_id)] if app_id else REGISTRY_ICONS.values()
             return value if url.path in paths else None
-        if (url.scheme, url.netloc) != (base.scheme, base.netloc) or not ICON_PATH.fullmatch(url.path):
+        if (url.scheme, url.netloc) != (base.scheme, base.netloc) or not ICON_PATH.fullmatch(
+            url.path
+        ):
             return None
         return url.path + ("?" + url.query if url.query else "")
     except ValueError:

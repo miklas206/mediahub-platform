@@ -27,15 +27,22 @@ def test_agent_diagnostics_survive_restart_and_async_cause(tmp_path):
 def test_agent_and_vpn_use_same_diagnostic_contract():
     root = Path(__file__).resolve().parents[1]
     assert (root / "agent/diagnostics.py").read_bytes().replace(b"\r\n", b"\n") == (
-        root / "docker/bundled/mediavpn/mediavpn/diagnostics.py").read_bytes().replace(b"\r\n", b"\n")
+        root / "docker/bundled/mediavpn/mediavpn/diagnostics.py"
+    ).read_bytes().replace(b"\r\n", b"\n")
 
 
 def test_core_logs_aggregate_persistent_agent_and_vpn(logged_in):
     svc = logged_in.app.state.services
-    entry = {"timestamp": 1792060000, "severity": "warning", "type": "plex.monitor.stop_requested",
-             "message": "storage_blocked operationId=synthetic"}
+    entry = {
+        "timestamp": 1792060000,
+        "severity": "warning",
+        "type": "plex.monitor.stop_requested",
+        "message": "storage_blocked operationId=synthetic",
+    }
     svc.agent = SimpleNamespace(request=AsyncMock(return_value={"entries": [entry]}))
-    svc.vpn_gateway.vpn = AsyncMock(return_value={"entries": [{**entry, "type": "vpn.provider.replace"}]})
+    svc.vpn_gateway.vpn = AsyncMock(
+        return_value={"entries": [{**entry, "type": "vpn.provider.replace"}]}
+    )
     response = logged_in.get("/api/v1/logs")
     assert response.status_code == 200
     rows = response.json()["data"]
@@ -46,8 +53,19 @@ def test_core_logs_aggregate_persistent_agent_and_vpn(logged_in):
 
 def test_logs_report_unavailable_old_component_without_losing_core(logged_in):
     svc = logged_in.app.state.services
-    svc.agent = SimpleNamespace(request=AsyncMock(side_effect=DomainError("old_agent", "unavailable", 404)))
+    svc.agent = SimpleNamespace(
+        request=AsyncMock(side_effect=DomainError("old_agent", "unavailable", 404))
+    )
     svc.vpn_gateway.vpn = AsyncMock(side_effect=DomainError("old_vpn", "unavailable", 404))
     response = logged_in.get("/api/v1/logs")
     assert response.status_code == 200
-    assert len([r for r in response.json()["data"] if "Persistent lifecycle diagnostics unavailable" in r["message"]]) == 2
+    assert (
+        len(
+            [
+                r
+                for r in response.json()["data"]
+                if "Persistent lifecycle diagnostics unavailable" in r["message"]
+            ]
+        )
+        == 2
+    )

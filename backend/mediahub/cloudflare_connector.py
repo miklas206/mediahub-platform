@@ -56,15 +56,17 @@ async def install(manager, tunnel):
     if directory.is_symlink():
         raise DomainError("connector_runtime", "Connector secrets need a private directory", 409)
     path = directory / (tunnel + ".token")
-    descriptor = os.open(
-        path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600
-    )
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(descriptor, "w") as stream:
         if hasattr(os, "fchown") and os.fstat(stream.fileno()).st_uid != 10001:
             try:
                 os.fchown(stream.fileno(), 10001, 10001)
             except PermissionError:
-                raise DomainError("connector_runtime", "The connector needs a private token file owned by UID 10001", 409) from None
+                raise DomainError(
+                    "connector_runtime",
+                    "The connector needs a private token file owned by UID 10001",
+                    409,
+                ) from None
         if hasattr(os, "fchmod"):
             os.fchmod(stream.fileno(), 0o600)
         stream.write(str(token))

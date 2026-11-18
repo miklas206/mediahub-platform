@@ -67,8 +67,11 @@ class PlexPolicy(StrictModel):
 class PlexControl:
     def __init__(self, policy_file, socket):
         self.policy_file, self.socket = policy_file, socket
-        self.lock = (PlexLifecycleLock(Path(policy_file).parent / "plex-lifecycle.lock")
-                     if policy_file else asyncio.Lock())
+        self.lock = (
+            PlexLifecycleLock(Path(policy_file).parent / "plex-lifecycle.lock")
+            if policy_file
+            else asyncio.Lock()
+        )
         self.events = []
         self.monitor_task = None
         self.storage_probe = None
@@ -117,8 +120,19 @@ class PlexControl:
                     if desired and mounted and self.runtime and policy.vpnEnabled:
                         vpn_ready = await self.runtime.vpn.reconcile(policy, running)
                     if running and (not mounted or not desired or not vpn_ready):
-                        self.diagnose("monitor.stop_requested", origin="supervisor", reason="storage_blocked" if not mounted else "vpn_blocked" if not vpn_ready else "desired_stopped",
-                                      desired=desired, mounted=mounted, vpnReady=vpn_ready, container=data.get("Id"))
+                        self.diagnose(
+                            "monitor.stop_requested",
+                            origin="supervisor",
+                            reason="storage_blocked"
+                            if not mounted
+                            else "vpn_blocked"
+                            if not vpn_ready
+                            else "desired_stopped",
+                            desired=desired,
+                            mounted=mounted,
+                            vpnReady=vpn_ready,
+                            container=data.get("Id"),
+                        )
                         if self.runtime:
                             await self.runtime.stop(policy)
                         else:
@@ -132,8 +146,14 @@ class PlexControl:
                         )
                         self.record(reason)
                     elif desired and mounted and vpn_ready and not running:
-                        self.diagnose("monitor.start_requested", origin="supervisor", reason="desired_running_container_stopped",
-                                      container=data.get("Id"), exitCode=data["State"].get("ExitCode"), oomKilled=data["State"].get("OOMKilled"))
+                        self.diagnose(
+                            "monitor.start_requested",
+                            origin="supervisor",
+                            reason="desired_running_container_stopped",
+                            container=data.get("Id"),
+                            exitCode=data["State"].get("ExitCode"),
+                            oomKilled=data["State"].get("OOMKilled"),
+                        )
                         if self.runtime:
                             await self.runtime.start(policy)
                         else:
@@ -148,9 +168,21 @@ class PlexControl:
 
                             try:
                                 prepared = await reconcile_lan(self.runtime)
-                                self.runtime.lan_status = {"state": "ready", "message": "Local Plex access prepared; reconnect existing clients to refresh their network classification."} if prepared else None
+                                self.runtime.lan_status = (
+                                    {
+                                        "state": "ready",
+                                        "message": "Local Plex access prepared; reconnect existing clients to refresh their network classification.",
+                                    }
+                                    if prepared
+                                    else None
+                                )
                             except (DomainError, OSError, ValueError) as error:
-                                self.runtime.lan_status = {"state": "blocked", "message": error.message if isinstance(error, DomainError) else "Local Plex network preparation is unavailable"}
+                                self.runtime.lan_status = {
+                                    "state": "blocked",
+                                    "message": error.message
+                                    if isinstance(error, DomainError)
+                                    else "Local Plex network preparation is unavailable",
+                                }
                                 self.diagnose("local_access.blocked", **error_fields(error))
                             from agent.plex_transcode import reconcile
 
@@ -158,11 +190,19 @@ class PlexControl:
                                 await reconcile(self.runtime, policy)
                             except (DomainError, OSError, ValueError) as error:
                                 self.runtime.transcode_status = {
-                                    "state": "blocked", "message": error.message if isinstance(error, DomainError) else "Plex temporary storage is unavailable; check writable storage and free space",
+                                    "state": "blocked",
+                                    "message": error.message
+                                    if isinstance(error, DomainError)
+                                    else "Plex temporary storage is unavailable; check writable storage and free space",
                                 }
                                 self.diagnose("temporary_storage.blocked", **error_fields(error))
             except (DomainError, OSError, ValueError, KeyError, TypeError) as error:
-                self.diagnose("monitor.error", origin="supervisor", reason="monitor_step_failed", **error_fields(error))
+                self.diagnose(
+                    "monitor.error",
+                    origin="supervisor",
+                    reason="monitor_step_failed",
+                    **error_fields(error),
+                )
                 # Never act on an unowned runtime or print raw responses/configuration.
                 pass
             await asyncio.sleep(5)
@@ -268,15 +308,25 @@ class PlexControl:
                     if policy.vpnEnabled and self.runtime
                     else await self.inspect(policy)
                 )
-                shared = inspected.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.namespace")
+                shared = (
+                    inspected.get("Config", {}).get("Labels", {}).get("org.mediahub.vpn.namespace")
+                )
                 if shared:
-                    relay = await self.runtime.shared_vpn.owned_relay("plex") if self.runtime and self.runtime.shared_vpn else None
+                    relay = (
+                        await self.runtime.shared_vpn.owned_relay("plex")
+                        if self.runtime and self.runtime.shared_vpn
+                        else None
+                    )
                     if not relay or relay["Id"] != shared:
-                        raise DomainError("vpn_relay_ownership", "Plex VPN relay no longer matches", 409)
+                        raise DomainError(
+                            "vpn_relay_ownership", "Plex VPN relay no longer matches", 409
+                        )
                     # The original LAN web endpoint stays stable across VPN changes.
                     api_url = policy.apiUrl
                 else:
-                    address = inspected["NetworkSettings"]["Networks"][policy.apiNetwork]["IPAddress"]
+                    address = inspected["NetworkSettings"]["Networks"][policy.apiNetwork][
+                        "IPAddress"
+                    ]
                     api_url = PlexPolicy.internal_api_only(f"http://{address}:32400")
             if self.runtime:
                 token = ET.fromstring(await self.runtime.preferences(policy)).get("PlexOnlineToken")
@@ -347,13 +397,22 @@ class PlexControl:
 
     async def status(self):
         operation = self.runtime.operation if self.runtime else {}
-        if (operation.get("action") == "install" and operation.get("state") in {"running", "failed"}
-                and (not self.policy_file or not Path(self.policy_file).exists())):
+        if (
+            operation.get("action") == "install"
+            and operation.get("state") in {"running", "failed"}
+            and (not self.policy_file or not Path(self.policy_file).exists())
+        ):
             return {
-                "installationId": operation["installationId"], "hostId": operation["hostId"],
-                "observedAt": time.time(), "health": "unknown", "agentOnline": True,
-                "dockerHealthy": False, "plex": {"running": False},
-                "operation": operation, "control": {"operation": operation}, "checks": [],
+                "installationId": operation["installationId"],
+                "hostId": operation["hostId"],
+                "observedAt": time.time(),
+                "health": "unknown",
+                "agentOnline": True,
+                "dockerHealthy": False,
+                "plex": {"running": False},
+                "operation": operation,
+                "control": {"operation": operation},
+                "checks": [],
             }
         policy = self.policy()
         data = await self.inspect(policy)
@@ -462,7 +521,9 @@ class PlexControl:
             raise DomainError("unsupported_action", "Unsupported Plex action", 400)
         async with self.lock:
             policy = self.policy()
-            self.diagnose("action.requested", origin="user", reason="explicit_plex_action", action=action)
+            self.diagnose(
+                "action.requested", origin="user", reason="explicit_plex_action", action=action
+            )
             await self.inspect(policy)
             if action != "stop" and not await self.storage_verified(policy):
                 self.diagnose("action.blocked", reason="storage_unavailable", action=action)

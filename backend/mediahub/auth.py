@@ -42,11 +42,24 @@ class AuthService:
         with self.sessions.begin() as db:
             if db.scalar(select(User.id).limit(1)):
                 raise DomainError("already_initialized", "An administrator already exists", 409)
-            db.add(User(username=username, password_hash=hasher.hash(password), preferred_language=installation_language(db)))
+            db.add(
+                User(
+                    username=username,
+                    password_hash=hasher.hash(password),
+                    preferred_language=installation_language(db),
+                )
+            )
 
     def users(self):
         with self.sessions() as db:
-            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": user.preferred_language} for user in db.scalars(select(User).order_by(User.username))]
+            return [
+                {
+                    **self.public_user(user),
+                    "appRoles": self.app_roles(db, user.id),
+                    "language": user.preferred_language,
+                }
+                for user in db.scalars(select(User).order_by(User.username))
+            ]
 
     @staticmethod
     def app_roles(db, user_id):
@@ -66,12 +79,24 @@ class AuthService:
 
     @staticmethod
     def public_user(user):
-        return {"id": user.id, "username": user.username, "role": user.role, "createdAt": user.created_at}
+        return {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "createdAt": user.created_at,
+        }
 
     def save_user(self, username, password, user_id=None, role=None, app_roles=None, language=None):
         username = username.strip()
-        if not username or len(username) > 80 or (password and not 12 <= len(password) <= 256) or (not user_id and not password):
-            raise DomainError("invalid_credentials", "Use a username and a 12-256 character password")
+        if (
+            not username
+            or len(username) > 80
+            or (password and not 12 <= len(password) <= 256)
+            or (not user_id and not password)
+        ):
+            raise DomainError(
+                "invalid_credentials", "Use a username and a 12-256 character password"
+            )
         with self.sessions.begin() as db:
             user = db.get(User, user_id) if user_id else None
             if user_id and user is None:
@@ -79,7 +104,11 @@ class AuthService:
             target_role = role or (user.role if user else "user")
             if target_role not in {"administrator", "user"}:
                 raise DomainError("invalid_role", "Invalid hub role")
-            if app_roles is not None and any(key not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"} or value not in {"administrator", "user", "viewer", "denied"} for key, value in app_roles.items()):
+            if app_roles is not None and any(
+                key not in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"}
+                or value not in {"administrator", "user", "viewer", "denied"}
+                for key, value in app_roles.items()
+            ):
                 raise DomainError("invalid_app_roles", "Invalid app permissions")
             if user and user.role == "administrator" and target_role != "administrator":
                 admins = list(db.scalars(select(User.id).where(User.role == "administrator")))
@@ -89,7 +118,12 @@ class AuthService:
             if duplicate and duplicate.id != user_id:
                 raise DomainError("username_exists", "Username already exists", 409)
             if user is None:
-                user = User(username=username, password_hash=hasher.hash(password), role=target_role, preferred_language=installation_language(db))
+                user = User(
+                    username=username,
+                    password_hash=hasher.hash(password),
+                    role=target_role,
+                    preferred_language=installation_language(db),
+                )
                 db.add(user)
             else:
                 user.username = username
@@ -117,7 +151,11 @@ class AuthService:
                 else:
                     db.add(Setting(key=key, value=app_roles))
                 db.flush()
-            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": user.preferred_language}
+            return {
+                **self.public_user(user),
+                "appRoles": self.app_roles(db, user.id),
+                "language": user.preferred_language,
+            }
 
     def delete_user(self, user_id, actor_id):
         with self.sessions.begin() as db:
@@ -126,7 +164,11 @@ class AuthService:
                 raise DomainError("user_not_found", "User not found", 404)
             administrators = list(db.scalars(select(User.id).where(User.role == "administrator")))
             if user_id == actor_id or (user.role == "administrator" and len(administrators) <= 1):
-                raise DomainError("protected_user", "Cannot delete your own account or the last administrator", 409)
+                raise DomainError(
+                    "protected_user",
+                    "Cannot delete your own account or the last administrator",
+                    409,
+                )
             db.execute(delete(Session).where(Session.user_id == user_id))
             db.execute(delete(UserSecurity).where(UserSecurity.user_id == user_id))
             db.execute(delete(Setting).where(Setting.key == "app_roles:" + user_id))
@@ -238,7 +280,9 @@ class AuthService:
         policy = db.scalar(select(Setting).where(Setting.key == "authentication_policy"))
         security = db.get(UserSecurity, user.id)
         if policy and policy.value.get("requireTotp") and not (security and security.enabled):
-            raise DomainError("enrollment_required", "Set up two-factor authentication to continue", 403)
+            raise DomainError(
+                "enrollment_required", "Set up two-factor authentication to continue", 403
+            )
 
     def logout(self, token: str):
         with self.sessions.begin() as db:

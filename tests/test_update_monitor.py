@@ -397,6 +397,7 @@ def test_version_refresh_skips_sso_only_app_without_lifecycle_adapter(logged_in,
     asyncio.run(svc.updates.refresh_managed_versions())
     assert not any(item["id"] == "external" for item in svc.updates.summary()["items"])
 
+
 def test_plex_update_summary_displays_versions_and_tracks_image_digest():
     from mediahub.update_monitor import UpdateMonitor
 

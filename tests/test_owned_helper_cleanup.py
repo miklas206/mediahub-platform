@@ -8,29 +8,68 @@ from scripts.platform_update_host import HostUpdater
 
 def fixture(tmp_path):
     images, calls = {}, []
-    ids = {name: "sha256:" + char * 64 for name, char in zip(
-        ("current", "previous", "rollback", "live", "stopped", "obsolete", "unlabelled", "foreign", "mismatch", "relay", "current_relay", "rollback_helper"),
-        "abcdef123456",
-    )}
+    ids = {
+        name: "sha256:" + char * 64
+        for name, char in zip(
+            (
+                "current",
+                "previous",
+                "rollback",
+                "live",
+                "stopped",
+                "obsolete",
+                "unlabelled",
+                "foreign",
+                "mismatch",
+                "relay",
+                "current_relay",
+                "rollback_helper",
+            ),
+            "abcdef123456",
+        )
+    }
     for name, identifier in ids.items():
         source = identifier[7:]
-        images[identifier] = {"Id": identifier, "RepoTags": ["mediahub-web-gateway:" + source[:16]],
-                              "Config": {"Labels": {"org.mediahub.gateway.source": source}}}
+        images[identifier] = {
+            "Id": identifier,
+            "RepoTags": ["mediahub-web-gateway:" + source[:16]],
+            "Config": {"Labels": {"org.mediahub.gateway.source": source}},
+        }
     images[ids["unlabelled"]]["Config"]["Labels"] = {}
     images[ids["foreign"]]["RepoTags"].append("foreign-caddy:keep")
     images[ids["mismatch"]]["Config"]["Labels"]["org.mediahub.gateway.source"] = "9" * 64
-    images[ids["relay"]].update(RepoTags=["mediahub-vpn-relay:1"], Config={"Labels": {
-        "org.mediahub.vpn.relay-source": ids["relay"][7:], "org.mediahub.managed-component": "vpn-relay"}})
+    images[ids["relay"]].update(
+        RepoTags=["mediahub-vpn-relay:1"],
+        Config={
+            "Labels": {
+                "org.mediahub.vpn.relay-source": ids["relay"][7:],
+                "org.mediahub.managed-component": "vpn-relay",
+            }
+        },
+    )
     containers = {"live-container": ids["live"], "stopped-container": ids["stopped"]}
-    (tmp_path / "compose.json").write_text(json.dumps({"services": {"core": {"image": ids["current"]}}}))
+    (tmp_path / "compose.json").write_text(
+        json.dumps({"services": {"core": {"image": ids["current"]}}})
+    )
     local = tmp_path / "local-apps"
     local.mkdir()
     registry = local / "vpn-helper-images.json"
-    registry.write_text(json.dumps({"images": {"gateway": ids["current"], "relay": ids["current_relay"]}, "previousImages": [ids["previous"]]}))
+    registry.write_text(
+        json.dumps(
+            {
+                "images": {"gateway": ids["current"], "relay": ids["current_relay"]},
+                "previousImages": [ids["previous"]],
+            }
+        )
+    )
     backup = tmp_path / "update-backups" / ("a" * 32)
     backup.mkdir(parents=True)
-    (backup / "compose.json").write_text(json.dumps({"services": {"old-helper": {"image": ids["rollback"]}}}))
-    (backup / "vpn-helper-images.json").write_text(json.dumps({"images": {"gateway": ids["rollback_helper"]}, "previousImages": []}))
+    (backup / "compose.json").write_text(
+        json.dumps({"services": {"old-helper": {"image": ids["rollback"]}}})
+    )
+    (backup / "vpn-helper-images.json").write_text(
+        json.dumps({"images": {"gateway": ids["rollback_helper"]}, "previousImages": []})
+    )
 
     def command(*args):
         calls.append(args)
@@ -134,4 +173,6 @@ def test_rollback_snapshot_preserves_helper_recipe_ledger(tmp_path, monkeypatch)
     monkeypatch.setattr(updater, "_state_directories", lambda: ())
     target = updater.backups / updater.operation
     updater._copy_configuration(target)
-    assert json.loads((target / "vpn-helper-images.json").read_text()) == json.loads(registry.read_text())
+    assert json.loads((target / "vpn-helper-images.json").read_text()) == json.loads(
+        registry.read_text()
+    )

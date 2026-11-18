@@ -44,7 +44,9 @@ def configured_app(svc, package_id, app_origin=None):
 
 
 @router.get("/sso/origin")
-def app_origin(request: Request, packageId: str, appOrigin: str | None = Query(default=None, max_length=2048)):
+def app_origin(
+    request: Request, packageId: str, appOrigin: str | None = Query(default=None, max_length=2048)
+):
     # Public configuration only; identities and grants remain authenticated.
     return result({"origin": configured_app(services(request), packageId, appOrigin)})
 
@@ -59,14 +61,26 @@ def identity(svc, db, grant):
     svc.auth.authenticate_session_policy(db, user)
     role = svc.auth.app_role(user.id, grant["packageId"])
     preferences = svc.settings.user_preferences(user.id)
-    return {"id": user.id, "username": user.username, "role": role,
-            "language": preferences.language,
-            "appearance": preferences.appearance.model_dump(mode="json") if preferences.appearance else None,
-            "theme": svc.settings.get().theme}
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": role,
+        "language": preferences.language,
+        "appearance": preferences.appearance.model_dump(mode="json")
+        if preferences.appearance
+        else None,
+        "theme": svc.settings.get().theme,
+    }
 
 
 @router.get("/sso/authorize")
-def authorize(request: Request, packageId: str, state: str = Query(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"), challenge: str = Query(pattern=r"^[A-Za-z0-9_-]{43}$"), appOrigin: str | None = Query(default=None, max_length=2048)):
+def authorize(
+    request: Request,
+    packageId: str,
+    state: str = Query(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"),
+    challenge: str = Query(pattern=r"^[A-Za-z0-9_-]{43}$"),
+    appOrigin: str | None = Query(default=None, max_length=2048),
+):
     svc = services(request)
     origin = configured_app(svc, packageId, appOrigin)
     try:
@@ -74,33 +88,78 @@ def authorize(request: Request, packageId: str, state: str = Query(min_length=43
     except DomainError as error:
         if error.status != 401 and error.code != "enrollment_required":
             raise
-        resume = "/api/v1/sso/authorize?" + urlencode({"packageId": packageId, "state": state, "challenge": challenge, **({"appOrigin": origin} if appOrigin is not None else {})})
+        resume = "/api/v1/sso/authorize?" + urlencode(
+            {
+                "packageId": packageId,
+                "state": state,
+                "challenge": challenge,
+                **({"appOrigin": origin} if appOrigin is not None else {}),
+            }
+        )
         return RedirectResponse("/?" + urlencode({"sso": resume}), status_code=303)
     svc.auth.app_role(user["id"], packageId)
     code = secrets.token_urlsafe(48)
     with svc.sessions.begin() as db:
-        parent = db.scalar(select(Session).where(Session.token_hash == digest(request.cookies[COOKIE])))
+        parent = db.scalar(
+            select(Session).where(Session.token_hash == digest(request.cookies[COOKIE]))
+        )
         if parent is None or parent.expires_at <= int(time.time()):
             raise DomainError("unauthorized", "Hub session expired", 401)
-        db.execute(delete(Setting).where(Setting.key.like("sso:%"), Setting.value["expires"].as_integer() <= int(time.time())))
-        db.add(Setting(key="sso:code:" + digest(code), value={"sessionId": parent.id, "packageId": packageId, "challenge": challenge, "expires": int(time.time()) + 60}))
-    return RedirectResponse(origin + "/auth/hub/callback?" + urlencode({"code": code, "state": state}), status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+        db.execute(
+            delete(Setting).where(
+                Setting.key.like("sso:%"), Setting.value["expires"].as_integer() <= int(time.time())
+            )
+        )
+        db.add(
+            Setting(
+                key="sso:code:" + digest(code),
+                value={
+                    "sessionId": parent.id,
+                    "packageId": packageId,
+                    "challenge": challenge,
+                    "expires": int(time.time()) + 60,
+                },
+            )
+        )
+    return RedirectResponse(
+        origin + "/auth/hub/callback?" + urlencode({"code": code, "state": state}),
+        status_code=303,
+        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+    )
 
 
 @router.post("/sso/exchange")
 def exchange(body: Exchange, request: Request):
     svc = services(request)
     configured_app(svc, body.packageId)
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(body.verifier.encode()).digest()).decode().rstrip("=")
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(body.verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
     token = secrets.token_urlsafe(48)
     with svc.sessions.begin() as db:
-        grant = db.execute(delete(Setting).where(Setting.key == "sso:code:" + digest(body.code), Setting.value["packageId"].as_string() == body.packageId, Setting.value["challenge"].as_string() == challenge, Setting.value["expires"].as_integer() > int(time.time())).returning(Setting.value)).scalar_one_or_none()
+        grant = db.execute(
+            delete(Setting)
+            .where(
+                Setting.key == "sso:code:" + digest(body.code),
+                Setting.value["packageId"].as_string() == body.packageId,
+                Setting.value["challenge"].as_string() == challenge,
+                Setting.value["expires"].as_integer() > int(time.time()),
+            )
+            .returning(Setting.value)
+        ).scalar_one_or_none()
         if grant is None:
             raise DomainError("invalid_sso_code", "Login code is invalid or expired", 401)
         public = identity(svc, db, grant)
         parent = db.get(Session, grant["sessionId"])
         expires = min(parent.expires_at, int(time.time()) + 43200)
-        db.add(Setting(key="sso:session:" + digest(token), value={"sessionId": parent.id, "packageId": body.packageId, "expires": expires}))
+        db.add(
+            Setting(
+                key="sso:session:" + digest(token),
+                value={"sessionId": parent.id, "packageId": body.packageId, "expires": expires},
+            )
+        )
     return result({"token": token, "expires": expires, "user": public})
 
 
@@ -113,7 +172,11 @@ def session_identity(request: Request, packageId: str):
         raise DomainError("unauthorized", "SSO session required", 401)
     with svc.sessions() as db:
         row = db.scalar(select(Setting).where(Setting.key == "sso:session:" + digest(token)))
-        if row is None or row.value["packageId"] != packageId or row.value["expires"] <= int(time.time()):
+        if (
+            row is None
+            or row.value["packageId"] != packageId
+            or row.value["expires"] <= int(time.time())
+        ):
             raise DomainError("unauthorized", "SSO session expired", 401)
         public = identity(svc, db, row.value)
         if row.value.get("scope"):

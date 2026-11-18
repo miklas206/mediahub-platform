@@ -241,10 +241,11 @@ def test_legacy_seedbox_reset_keeps_downloads_and_removes_private_setup(tmp_path
 def test_old_completed_plex_removal_offers_configuration_reset(tmp_path):
     from agent.install_files import save_json
     from agent.plex_runtime import PlexRuntime
-    policy = SimpleNamespace(installationId='plex-test', vpnEnabled=False)
+
+    policy = SimpleNamespace(installationId="plex-test", vpnEnabled=False)
     runtime = PlexRuntime(SimpleNamespace(policy=lambda: policy), None, tmp_path)
-    runtime.operation = {'action': 'remove-runtime', 'state': 'succeeded'}
-    save_json(tmp_path / 'plex-removal.json', {'installationId': 'plex-test'})
+    runtime.operation = {"action": "remove-runtime", "state": "succeeded"}
+    save_json(tmp_path / "plex-removal.json", {"installationId": "plex-test"})
     report = asyncio.run(runtime.uninstall_status())
-    assert report['state'] == 'ready'
-    assert report['installationId'] == 'plex-test'
+    assert report["state"] == "ready"
+    assert report["installationId"] == "plex-test"

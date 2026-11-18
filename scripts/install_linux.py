@@ -75,9 +75,19 @@ def main():
     parser.add_argument("--root", default="/opt/mediahub")
     parser.add_argument("--lan-ip")
     parser.add_argument("--storage")
-    parser.add_argument("--gpu-policy", type=Path, help="Root-owned inventory of explicitly shared GPUs (optional)")
-    parser.add_argument("--yes", action="store_true", help="Confirm new installation and use default storage folders")
-    parser.add_argument("--storage-identities", type=Path, help="Root-owned Proxmox-generated disk identity file for this LXC")
+    parser.add_argument(
+        "--gpu-policy", type=Path, help="Root-owned inventory of explicitly shared GPUs (optional)"
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm new installation and use default storage folders",
+    )
+    parser.add_argument(
+        "--storage-identities",
+        type=Path,
+        help="Root-owned Proxmox-generated disk identity file for this LXC",
+    )
     parser.add_argument(
         "--release-image-prefix",
         default="ghcr.io/miklas206/mediahub-platform",
@@ -87,7 +97,11 @@ def main():
         "--device-snapshot", help="Optional existing host-generated metadata file for an LXC"
     )
     parser.add_argument("--source-repository", help="Trusted GitHub owner/repo for source updates")
-    parser.add_argument("--hub-stack", action="store_true", help="Install the integrated Core/Agent runtime and TLS proxy")
+    parser.add_argument(
+        "--hub-stack",
+        action="store_true",
+        help="Install the integrated Core/Agent runtime and TLS proxy",
+    )
     args = parser.parse_args()
     if os.name != "posix" or os.geteuid() != 0:
         raise ValueError("Run on the new Linux Docker host as root")
@@ -114,12 +128,15 @@ def main():
             raise ValueError(f"Install prerequisite first: {executable}")
     command("docker", "compose", "version")
     from gpu_setup import compose_gpu, read_inventory, validate_devices
+
     gpus = read_inventory(args.gpu_policy) if args.gpu_policy else []
     validate_devices(gpus)
     if any(g["vendor"] == "nvidia" for g in gpus):
         info = json.loads(command("docker", "info", "--format", "{{json .}}"))
         if "nvidia" not in info.get("Runtimes", {}):
-            raise ValueError("Prepare NVIDIA Container Toolkit with scripts/gpu_setup.py before installing")
+            raise ValueError(
+                "Prepare NVIDIA Container Toolkit with scripts/gpu_setup.py before installing"
+            )
     if not Path("/sys/fs/cgroup/cgroup.controllers").exists():
         raise ValueError("A cgroup v2 host is required for swap and resource limits")
     root = safe_path(args.root)
@@ -152,7 +169,12 @@ def main():
         from agent.device_snapshot import apply_mount_identities
 
         identities = safe_path(args.storage_identities)
-        observation = {"path": mount["target"], "source": mount["source"], "root": "/", "uuid": mount.get("uuid")}
+        observation = {
+            "path": mount["target"],
+            "source": mount["source"],
+            "root": "/",
+            "uuid": mount.get("uuid"),
+        }
         apply_mount_identities([observation], identities)
         mount["uuid"] = observation["uuid"]
     if Path(mount["target"]) != storage or not mount.get("uuid"):
@@ -160,7 +182,10 @@ def main():
     print(
         f"Data filesystem: {mount['fstype']}; UUID: {mount['uuid']}. No formatting or media migration."
     )
-    if not args.yes and input("Create a new MediaHub installation using this disk? Type YES: ").strip() != "YES":
+    if (
+        not args.yes
+        and input("Create a new MediaHub installation using this disk? Type YES: ").strip() != "YES"
+    ):
         return
     # All persistent writes below target this new installation or new subfolders.
     root.mkdir(mode=0o700)
@@ -348,9 +373,15 @@ def main():
     }
     new_file(root / "agent/plex-install.json", json.dumps(policy), 0o600, 10001, 10001)
     container_policy = {
-        key: policy[key] for key in (
-            "hostId", "bindAddress", "uid", "gid", "hostMountSnapshot",
-            "requiredFilesystemUuids", "storageMarkers",
+        key: policy[key]
+        for key in (
+            "hostId",
+            "bindAddress",
+            "uid",
+            "gid",
+            "hostMountSnapshot",
+            "requiredFilesystemUuids",
+            "storageMarkers",
         )
     }
     container_policy["uid"] = 10001
@@ -358,7 +389,8 @@ def main():
     container_policy["gpus"] = gpus
     container_policy["storage"] = {
         kind: {"label": kind.title(), "kind": kind, "path": str(path)}
-        for kind, path in folders.items() if kind in {"appdata", "movies", "tv", "downloads", "other"}
+        for kind, path in folders.items()
+        if kind in {"appdata", "movies", "tv", "downloads", "other"}
     }
     new_file(root / "agent/container-apps.json", json.dumps(container_policy), 0o600, 10001, 10001)
     common = {
@@ -420,22 +452,42 @@ def main():
             "MEDIAHUB_AGENT_URL": "https://agent:18767",
             "MEDIAHUB_AGENT_TOKEN_FILE": "/agent-token",
             "MEDIAHUB_AGENT_CA_FILE": "/trust/ca.pem",
-            "MEDIAHUB_HOST_LOCALE": next((os.environ[k] for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG") if os.environ.get(k)), "C"),
+            "MEDIAHUB_HOST_LOCALE": next(
+                (
+                    os.environ[k]
+                    for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG")
+                    if os.environ.get(k)
+                ),
+                "C",
+            ),
             "MEDIAHUB_BASE_URL": f"https://{address}:18765",
             "MEDIAHUB_ALLOWED_ORIGINS": json.dumps([f"https://{address}:18765"]),
             "MEDIAHUB_BROWSER_TLS_CERT": "/tls/server.pem",
             "MEDIAHUB_BROWSER_TLS_KEY": "/tls/server.key",
             "MEDIAHUB_STORAGE_ROOTS": json.dumps([str(storage)]),
-            "MEDIAHUB_SETUP_STORAGE": json.dumps([
-                {"name": kind.title(), "kind": kind, "path": str(path)}
-                for kind, path in folders.items() if kind != "other"
-            ]),
+            "MEDIAHUB_SETUP_STORAGE": json.dumps(
+                [
+                    {"name": kind.title(), "kind": kind, "path": str(path)}
+                    for kind, path in folders.items()
+                    if kind != "other"
+                ]
+            ),
             "MEDIAHUB_SEEDBOX_REQUIRES_REMOTE_HOST": "true",
             "MEDIAHUB_PLATFORM_UPDATE_SPOOL": "/updates",
             "MEDIAHUB_MANAGED_APPS_POLICY_FILE": "/data/managed-apps.json",
             "MEDIAHUB_MANAGED_APPS_DOCKER_SOCKET": "/var/run/docker.sock",
-            "MEDIAHUB_OPERATOR_APP_URLS": json.dumps({"org.mediahub.mediaseed": f"https://{address}:18800", "org.mediahub.mediavpn": f"http://{address}:18802"}),
-            "MEDIAHUB_SSO_APP_URLS": json.dumps({"org.mediahub.mediaseed": f"https://{address}:18800", "org.mediahub.mediavpn": f"https://{address}:18803"}),
+            "MEDIAHUB_OPERATOR_APP_URLS": json.dumps(
+                {
+                    "org.mediahub.mediaseed": f"https://{address}:18800",
+                    "org.mediahub.mediavpn": f"http://{address}:18802",
+                }
+            ),
+            "MEDIAHUB_SSO_APP_URLS": json.dumps(
+                {
+                    "org.mediahub.mediaseed": f"https://{address}:18800",
+                    "org.mediahub.mediavpn": f"https://{address}:18803",
+                }
+            ),
         },
         "healthcheck": {
             "test": [
@@ -466,6 +518,7 @@ def main():
         0o644,
     )
     from prepare_local_apps import provision
+
     provision(root, address, SOURCE, host_only=args.hub_stack)
     command(sys.executable, root / "storage_host.py", "--root", root, "--install", capture=False)
     new_file(root / "installed-version", project_version + "\n", 0o600)
@@ -520,7 +573,18 @@ def main():
     )
     command("systemctl", "daemon-reload")
     command("systemctl", "enable", "--now", updater_name + ".path")
-    command("docker", "compose", "-f", root / "compose.json", "up", "-d", "--wait", "--wait-timeout", "180", capture=False)
+    command(
+        "docker",
+        "compose",
+        "-f",
+        root / "compose.json",
+        "up",
+        "-d",
+        "--wait",
+        "--wait-timeout",
+        "180",
+        capture=False,
+    )
     print(f"Open https://{address}:18765 after importing ONLY {root}/trust/ca.pem on your client.")
     print("Never copy authority/ca.key or disable certificate validation.")
     print(
