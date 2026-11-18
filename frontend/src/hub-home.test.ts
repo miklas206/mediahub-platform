@@ -532,3 +532,22 @@ describe("installed app address fallback", () => {
     ).toMatchObject({ path: app.detailPath, external: undefined });
   });
 });
+
+it("puts the installed GPU transcoder on Home with a link to its internal status", () => {
+  const id = "org.mediahub.plex-gpu-transcoder";
+  const transcoder = {
+    ...seedbox,
+    id: "gpu-real",
+    packageId: id,
+    name: "Plex GPU Transcoder",
+    detailPath: "/apps/gpu-real",
+    localUrl: "http://192.168.1.10:8090",
+  };
+  expect(buildHubEntries(input).some((entry) => entry.id === id)).toBe(false);
+  expect(buildHubEntries({ ...input, apps: [transcoder] })[0]).toMatchObject({
+    id,
+    path: "/apps/gpu-real",
+    action: "View transcoder status",
+    configured: true,
+  });
+});

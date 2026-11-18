@@ -1,4 +1,6 @@
 {
+  "Live Plex playbacks and GPU transcode jobs.": "Plex-afspilninger og aktive GPU-job.",
+  "View transcoder status": "Se transcoderstatus",
   "Plex playbacks": "Plex-afspilninger",
   "Recent playbacks": "Seneste afspilninger",
   "Active playbacks: {count}": "Aktive afspilninger: {count}",

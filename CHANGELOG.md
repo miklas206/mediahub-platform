@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.86
+
+- Add an installed Plex GPU Transcoder card to Home that links to status inside MediaHub.
+
 ## 0.6.85
 
 - Show active Plex playbacks, recent playback history and transcode job details inside the authenticated MediaHub GPU page.

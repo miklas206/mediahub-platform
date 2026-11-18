@@ -144,6 +144,7 @@ export function buildHubEntries({
           "org.mediahub.cloudflared",
           "org.mediahub.mediavpn",
           "org.mediahub.mediaseed",
+          "org.mediahub.plex-gpu-transcoder",
         ].includes(entry.id),
     )
     .map((entry) => {
@@ -333,6 +334,25 @@ export function buildHubEntries({
             ? appStatusLabel(installed.health.status)
             : "Not set up",
       action: installed ? "Open app" : "Set up",
+    });
+  }
+  const transcoder = apps?.find(
+    (app) => !app.isMock && app.packageId === "org.mediahub.plex-gpu-transcoder",
+  );
+  if (transcoder) {
+    const path = transcoder.detailPath || `/apps/${transcoder.id}`;
+    const status = appsError ? "unknown" : transcoder.health.status;
+    entries.unshift({
+      id: transcoder.packageId,
+      name: transcoder.name,
+      description: "Live Plex playbacks and GPU transcode jobs.",
+      category: "Media",
+      path,
+      settingsPath: path,
+      configured: true,
+      status,
+      statusLabel: appStatusLabel(status),
+      action: "View transcoder status",
     });
   }
   return entries
