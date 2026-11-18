@@ -460,7 +460,7 @@ def main():
     compose_gpu(compose, gpus)
     new_file(root / "compose.json", json.dumps(compose, indent=2))
     from prepare_local_apps import provision
-    provision(root, address, SOURCE)
+    provision(root, address, SOURCE, host_only=args.hub_stack)
     command(sys.executable, root / "storage_host.py", "--root", root, "--install", capture=False)
     new_file(root / "installed-version", project_version + "\n", 0o600)
     new_file(

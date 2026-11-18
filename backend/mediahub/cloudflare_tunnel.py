@@ -43,7 +43,7 @@ class CloudflareTunnelMonitor:
         self.release_cache_seconds = release_cache_seconds
         self.release_lock = asyncio.Lock()
         self.release_cached = None
-        self.release_cached_at = 0.0
+        self.release_cached_at = float("-inf")
         self.release_retry_at = 0.0
         self.release_limit_message = ""
         self.release_retry_epoch = 0.0

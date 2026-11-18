@@ -713,7 +713,7 @@ def prepare_storage_host(root, lan, source, locations):
 
 
 def provision(
-    root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None
+    root, lan, source=SOURCE, *, app=None, app_source=None, app_commit=None, app_repository=None, host_only=False
 ):
     if app not in {None, "mediaseed", "mediavpn"}:
         raise ValueError("Unsupported independent app")
@@ -744,6 +744,10 @@ def provision(
     locations = retained_media_storage(root, approved_media_storage(root))
     if not app:
         prepare_storage_host(root, lan, source, locations)
+        if host_only:
+            # Core reads the policy at startup and prepares optional app recipes in the background.
+            private(root / "data/managed-apps.json", "{}", 10001, 10001)
+            return
     # Domain changes must invalidate the marker too, without changing internal API URLs.
     digest = hashlib.sha256(
         (

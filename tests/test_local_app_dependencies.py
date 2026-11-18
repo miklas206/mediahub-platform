@@ -577,3 +577,20 @@ def test_custom_seeding_roots_survive_updates_only_with_verified_binds(tmp_path,
         assert module.retained_media_storage(root,[])==expected
         assert module.retained_media_storage(root,expected)==expected
         assert json.loads((folder/'compose.json').read_text())==cfg
+
+def test_embedded_bootstraps_host_without_building_optional_app_images(tmp_path, monkeypatch):
+    root = tmp_path / "hub"
+    (root / "data").mkdir(parents=True)
+    (root / "compose.json").write_text('{"name":"mediahub-platform","services":{"core":{"environment":{}}}}')
+    prepared = []
+    monkeypatch.setattr(module, "prepare_host_metrics", lambda *args: None)
+    monkeypatch.setattr(module, "prepare_storage_host", lambda *args: prepared.append(args[0]))
+    monkeypatch.setattr(module.os, "chown", lambda *args: None)
+    module.provision(root, "192.168.1.50", tmp_path, host_only=True)
+    assert prepared == [root]
+    policy = root / "data/managed-apps.json"
+    assert json.loads(policy.read_text()) == {}
+    assert not (root / "local-apps").exists()
+    policy.write_text('{"existing":true}')
+    module.provision(root, "192.168.1.50", tmp_path, host_only=True)
+    assert json.loads(policy.read_text()) == {"existing": True}

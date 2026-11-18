@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import json
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -62,7 +63,7 @@ def test_installation_rejects_arbitrary_apps_fields_and_timezones():
             ContainerInstallation(**values)
 
 
-def runtime_and_spec(tmp_path, app="radarr"):
+def runtime_and_spec(tmp_path, app="radarr", *, uid=1000):
     storage = {}
     for kind in ("appdata", "movies", "tv", "downloads"):
         directory = tmp_path / kind
@@ -73,6 +74,7 @@ def runtime_and_spec(tmp_path, app="radarr"):
         json.dumps(
             {
                 "hostId": "test",
+                "uid": uid,
                 "bindAddress": "192.168.1.110",
                 "storage": storage,
                 "hostMountSnapshot": str(tmp_path / "snapshot.json"),
@@ -109,7 +111,7 @@ def inspected_container(plan):
 
 
 def test_vpn_recreation_restores_only_missing_owned_jellyfin_cache(tmp_path):
-    runtime, spec = runtime_and_spec(tmp_path, "jellyfin")
+    runtime, spec = runtime_and_spec(tmp_path, "jellyfin", uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000)
     plan = asyncio.run(runtime.build_plan(spec))
     config = tmp_path / "appdata" / "mediahub-jellyfin"
     config.mkdir()
@@ -305,7 +307,7 @@ def test_owned_existing_container_can_resume_after_failed_install(tmp_path):
 
 
 def test_provision_records_ownership_before_creating_and_starting(tmp_path, monkeypatch):
-    runtime, spec = runtime_and_spec(tmp_path)
+    runtime, spec = runtime_and_spec(tmp_path, uid=os.geteuid() if os.name == "posix" and os.geteuid() else 1000)
     plan = asyncio.run(runtime.build_plan(spec))
     calls = []
     publisher = "linuxserver/radarr@sha256:" + "b" * 64

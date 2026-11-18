@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.90
+
+- Open the embedded Hub after host storage is prepared. Optional download and VPN app prerequisites continue in the background and report status in the App Store.
+- Fix the Cloudflare release-cache expiry calculation on recently booted hosts.
+
 ## 0.6.89
 
 - Show the optional GPU transcoder under its installed Plex server. Guard Plex removal while the GPU extension is linked.
