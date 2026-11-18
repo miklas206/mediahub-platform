@@ -168,6 +168,20 @@ if [ -f /etc/mediahub-gpus.json ]; then
 fi
 python3 "$INSTALL_SOURCE/source/scripts/install_linux.py" --root /opt/mediahub --lan-ip "$ADDRESS" \
     --storage /storage --storage-identities /etc/mediahub-storage-identities.json --hub-stack --yes "${GPU_ARGS[@]}"
+# Record the exact revision of the fresh official checkout for main-channel updates.
+python3 - "$INSTALL_SOURCE/source" <<'MEDIAHUB_SOURCE_MARKER'
+import json, os, re, subprocess, sys
+from pathlib import Path
+source = Path(sys.argv[1])
+commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+if not re.fullmatch(r"[0-9a-f]{40}", commit):
+    raise SystemExit("Could not identify the installed MediaHub revision.")
+path = Path("/opt/mediahub/updates/installed-source.json")
+fd = os.open(path, os.O_WRONLY | os.O_EXCL | os.O_CREAT | os.O_NOFOLLOW, 0o644)
+with os.fdopen(fd, "w") as stream:
+    json.dump({"repository": "miklas206/mediahub-platform", "commit": commit}, stream)
+    os.fchmod(stream.fileno(), 0o644)
+MEDIAHUB_SOURCE_MARKER
 python3 - "$INSTALL_SOURCE" <<'MEDIAHUB_INSTALL_CLEANUP'
 import re, shutil, sys
 from pathlib import Path

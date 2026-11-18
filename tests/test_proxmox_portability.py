@@ -49,3 +49,8 @@ def test_invalid_resource_override_stops_before_guest_creation():
     result = shell('nproc() { echo 2; }\nawk() { echo 4096; }\n' + code, stdin="8\n16384\n")
     assert result.returncode != 0
     assert "available CPU cores" in result.stderr
+
+
+def test_fresh_updater_metadata_precedes_storage_capability_merge():
+    source = (Path(__file__).resolve().parents[1] / "scripts/install_linux.py").read_text()
+    assert source.index('root / "updates/host-capabilities.json"') < source.index("    provision(root, address")

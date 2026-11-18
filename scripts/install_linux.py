@@ -49,7 +49,8 @@ def new_file(path, content, mode=0o600, uid=0, gid=0):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), mode)
     with os.fdopen(fd, "w") as stream:
         stream.write(content)
-    os.chown(path, uid, gid)
+        os.fchown(stream.fileno(), uid, gid)
+        os.fchmod(stream.fileno(), mode)
 
 
 def choose_directory(label, default, root, use_default=False):
@@ -459,6 +460,11 @@ def main():
         new_file(root / "hub-proxy.json", json.dumps(routing, indent=2), 0o644)
     compose_gpu(compose, gpus)
     new_file(root / "compose.json", json.dumps(compose, indent=2))
+    new_file(
+        root / "updates/host-capabilities.json",
+        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true, "maintenance": true, "ownedHelperCleanup": true, "cacheCleanup": true}\n',
+        0o644,
+    )
     from prepare_local_apps import provision
     provision(root, address, SOURCE, host_only=args.hub_stack)
     command(sys.executable, root / "storage_host.py", "--root", root, "--install", capture=False)
@@ -483,11 +489,6 @@ def main():
         0o700,
     )
     updater_name = "mediahub-platform-update"
-    new_file(
-        root / "updates/host-capabilities.json",
-        '{"sourceBuild": true, "automaticFastUpdate": true, "mainBranchUpdates": true, "maintenance": true, "ownedHelperCleanup": true, "cacheCleanup": true}\n',
-        0o644,
-    )
     new_file(
         Path("/etc/systemd/system") / (updater_name + ".service"),
         "[Unit]\n"
