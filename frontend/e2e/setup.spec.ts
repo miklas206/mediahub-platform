@@ -282,7 +282,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
         const accepted = await route.fetch();
         expect(accepted.ok()).toBe(true);
         await route.abort();
-      } else await route.continue();
+      } else await route.fulfill({ response: await route.fetch() });
     });
     await page.getByRole("button", { name: "Upload", exact: true }).click();
     await expect(

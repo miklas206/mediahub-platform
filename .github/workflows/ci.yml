@@ -21,6 +21,7 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: pnpm --dir frontend lint && pnpm --dir frontend typecheck && pnpm --dir frontend test
       - run: pnpm --dir frontend build
+      - run: pnpm --dir frontend exec playwright install chromium
       - run: python scripts/qa.py
       - run: python scripts/qa.py --phase2
       - run: python scripts/export_contracts.py && git diff --exit-code packages/contracts
