@@ -899,7 +899,7 @@ function Shell({
         <ShellNavigation placement="dock" visible={visibleNavigation}/>
         <main className="main-content">
           {(runtimePage || windowsSharePage || storePage || location.pathname.startsWith("/integrations/")) && <Link className="hub-back-link" to="/">← {t("Back to MediaHub")}</Link>}
-          {!runtimePage && !location.pathname.startsWith("/app-settings/") && location.pathname !== "/" && (
+          {!runtimePage && !location.pathname.startsWith("/app-settings/") && !["/", "/apps", "/store"].includes(location.pathname) && (
             <div className="page-heading">
               <div>
                 <span className="eyebrow">

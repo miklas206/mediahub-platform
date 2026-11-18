@@ -458,9 +458,9 @@ export function HubHome({
       action: "Open healthcheck",
     },
   ];
-  const visible = cards.filter(
+  const listed = store ? cards.filter((entry) => entry.id !== "healthcheck") : cards;
+  const visible = listed.filter(
     (entry) =>
-      (!store || entry.id !== "healthcheck") &&
       (filter === "all" ||
         (filter === "running"
           ? entry.configured && entry.status === "healthy"
@@ -511,7 +511,7 @@ export function HubHome({
               {t(label)}
               <span>
                 {
-                  cards.filter(
+                  listed.filter(
                     (entry) =>
                       key === "all" ||
                       (key === "running"
