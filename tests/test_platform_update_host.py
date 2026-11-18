@@ -1239,6 +1239,7 @@ def test_cache_prune_uses_disposable_client_state_under_protect_home(monkeypatch
 def test_retention_keeps_operator_and_unmarked_backups(tmp_path, monkeypatch):
     updater = HostUpdater(tmp_path)
     updater.backups.mkdir()
+    monkeypatch.setattr(updater, "status", lambda *args: None)
     monkeypatch.setattr(updater, "_trusted_file", lambda path, limit: path.read_text())
     monkeypatch.setattr(updater, "_cleanup_update_images", lambda: None)
     monkeypatch.setattr(updater, "_cleanup_helper_images", lambda: None)
