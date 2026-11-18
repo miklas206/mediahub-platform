@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.84
+
+- Show live Plex GPU job activity in the signed-in MediaHub view, including remote access through MediaHub.
+
 ## 0.6.83
 
 - Show installed and available Plex server versions in MediaHub. Docker digests still determine whether a publisher image is newer.

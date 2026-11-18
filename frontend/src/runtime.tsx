@@ -35,6 +35,7 @@ import {
 } from "./plex-install-progress";
 
 export type Runtime = {
+  state?: string;
   url?: string | null;
   gpu?: {
     name: string; linked: boolean; hdrToneMapping?: boolean; encoderPercent?: number | null;
