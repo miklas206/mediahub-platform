@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { textOutsideCards } from "./text-containment";
 for (const app of ["mediaseed", "mediavpn"])
@@ -8,17 +8,24 @@ for (const app of ["mediaseed", "mediavpn"])
       test(`app text audit ${app} ${width} ${language}`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await page.setViewportSize({ width, height: 1000 });
-        const root = resolve(
-          import.meta.dirname,
-          "../../../..",
-          app,
-          app,
-          "static",
-        );
+        const workspace =
+          process.env.MEDIAHUB_QA_APP_SOURCES ||
+          resolve(import.meta.dirname, "../../../..");
+        const projectName = app === "mediaseed" ? "MediaSeed" : "MediaVPN";
+        const root = [projectName, app]
+          .map((name) => resolve(workspace, name, app, "static"))
+          .find((path) => existsSync(resolve(path, "index.html")));
+        if (!root)
+          throw new Error("Missing standalone app checkout for " + projectName);
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         await page.route("https://audit.example/**", async (route) => {
           const path = new URL(route.request().url()).pathname;
+          if (path === "/healthz") {
+            return route.fulfill({
+              json: { status: "healthy", version: "0.2.37" },
+            });
+          }
           if (path.startsWith("/api/")) {
             let data: unknown = [];
             if (path === "/api/auth/status")
@@ -56,7 +63,7 @@ for (const app of ["mediaseed", "mediavpn"])
               ];
             else if (path === "/api/hub-apps")
               data = {
-                apps: [],
+                apps: [{ id: "mediaseed", name: "MediaSeed", enabled: false }],
                 gateway: { enabled: false, ready: false, profiles: [] },
               };
             else if (path === "/api/hub-web-gateway")
@@ -121,7 +128,7 @@ for (const app of ["mediaseed", "mediavpn"])
                 '[data-view="trackers"]',
                 '[data-view="vpn"]',
               ]
-            : ["#tab-connection", "#tab-apps", "#tab-cloudflare"];
+            : ["#tab-connection", "#tab-cloudflare"];
         for (const tab of tabs) {
           await page.locator(tab).click();
           await page.waitForLoadState("networkidle");
@@ -165,6 +172,28 @@ for (const app of ["mediaseed", "mediavpn"])
             path: test.info().outputPath("profile-dialog.png"),
             fullPage: true,
           });
+          const form = page.locator("#profile-form");
+          await form.locator('[name="name"]').fill("QA");
+          await page.locator("#configuration").setInputFiles({
+            name: "qa.conf",
+            mimeType: "text/plain",
+            buffer: Buffer.from("[Interface]"),
+          });
+          await form
+            .getByRole("button", {
+              name: language === "da" ? "Næste" : "Next",
+              exact: true,
+            })
+            .click();
+          await expect(
+            form.getByRole("checkbox", { name: "MediaSeed" }),
+          ).toBeVisible();
+          expect(await textOutsideCards(page), "VPN app selection").toEqual([]);
+          expect(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth + 1,
+            ),
+          ).toBe(true);
         }
         expect(errors).toEqual([]);
       });
