@@ -203,3 +203,14 @@ def test_real_docker_https_installation(tmp_path):
         assert "healthy" in docker("compose", "-f", compose_path, "ps")
     finally:
         docker("compose", "-f", compose_path, "stop")
+
+
+def test_downloaded_installers_use_the_release_repository_for_fresh_and_update():
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    windows = (scripts / "install-docker.ps1").read_text()
+    linux = (scripts / "install-docker.sh").read_text()
+    assert "https://github.com/miklas206/mediahub-platform/archive/refs/heads/main.zip" in windows
+    assert windows.count("-Uri $sourceArchive") == 2
+    assert "mediahub-platform-main" in windows
+    assert "https://github.com/miklas206/mediahub-platform.git" in linux
+    assert "fjordcopy" not in windows + linux

@@ -41,7 +41,7 @@ router.include_router(plex_media_router)
 
 
 class Bootstrap(StrictModel):
-    language: Literal["en", "da"] = "en"
+    language: Literal["en", "da"] | None = None
     username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=12, max_length=256)
 
@@ -201,7 +201,7 @@ async def setup_status(request: Request):
     state = svc.setup.state()
     return result(
         {key: state[key] for key in ["setup_required", "setup_completed", "setup_version"]}
-        | {"hasAdmin": not svc.auth.needs_setup()}
+        | {"hasAdmin": not svc.auth.needs_setup(), "defaultLanguage": svc.settings.default_language}
     )
 
 
@@ -234,7 +234,7 @@ async def setup_admin(body: Bootstrap, request: Request, response: Response):
     cookies = cookie_options(request, svc.config)
     svc.setup.bootstrap(body.username, body.password)
     token, user = svc.auth.login(body.username, body.password, "bootstrap")
-    preferences = svc.settings.save_user_preferences(user["id"], UserPreferences(language=body.language))
+    preferences = svc.settings.save_user_preferences(user["id"], UserPreferences(language=body.language or svc.settings.default_language))
     response.set_cookie(
         COOKIE,
         token,

@@ -1,4 +1,4 @@
-import { translateText, t, setLanguage } from "./i18n";
+import { translateText, t, setLanguage, useLanguage } from "./i18n";
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -53,6 +53,7 @@ export function SetupWizard({
   onSignedIn: (user: User) => void;
   onComplete: () => void;
 }) {
+  const language = useLanguage();
   const [draft, setDraft] = useState<SetupDraft>(defaultDraft);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
@@ -315,7 +316,7 @@ export function SetupWizard({
                 </p>
               ) : (
                 <form className="admin-form" onSubmit={administrator}>
-                  {!hasAdmin && <label>{t("Language")}<select name="language" defaultValue="en" onChange={event => setLanguage(event.target.value === "da" ? "da" : "en")}><option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>}
+                  {!hasAdmin && <label>{t("Language")}<select name="language" value={language} onChange={event => setLanguage(event.target.value === "da" ? "da" : "en")}><option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>}
                   <label>
                     {t("Username")}
                     <input

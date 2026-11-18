@@ -1,3 +1,4 @@
+import type { AppInfo } from "./contracts";
 import { AppSettingsPage } from "./app-settings";
 import { PlexGPUPanel } from "./plex-gpu-runtime";
 import { useConfirm } from "./confirmation-dialog";
@@ -996,7 +997,8 @@ export function RemoteRuntimeLogs({ appId }: { appId: string }) {
     </Panel>
   );
 }
-export function AppRuntimePage() {
+export function AppRuntimePage({ apps, appsError }: { apps?: AppInfo[]; appsError?: string }) {
+  const gpuExtension = apps?.find((app) => !app.isMock && app.packageId === "org.mediahub.plex-gpu-transcoder");
   const confirm = useConfirm();
   const { appId } = useParams();
   const [searchParams] = useSearchParams();
@@ -1120,6 +1122,16 @@ export function AppRuntimePage() {
     <LayoutGroup id="runtime-AppRuntimePage-1" className="runtime-panels">
       {data?.view === "plex" && (
         <AppSettingsPage packageId="org.mediahub.plex" embedded />
+      )}
+      {data?.view === "plex" && (
+        <Panel title={t("Plex extensions")}>
+          <h3>Plex GPU Transcoder</h3>
+          {appsError || !apps ? <p>{t("Status unavailable")}</p> : gpuExtension ? (
+            <Link to={`/apps/${encodeURIComponent(gpuExtension.id)}`}>{t("View transcoder status")}</Link>
+          ) : (
+            <p>{t("Optional GPU acceleration requires a compatible NVIDIA GPU. A server administrator can install the extension on this Plex host. Plex can also run on its own.")}</p>
+          )}
+        </Panel>
       )}
       {data?.view === "plex" && <PlexAccountSetup />}
       {data?.view === "plex" && data.report.lanAccess && (

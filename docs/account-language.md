@@ -1,6 +1,6 @@
 # Account language
 
-MediaHub stores `en` or `da` in the authenticated user's preferences. The initial administrator wizard and managed-user editor accept a language; changing only a name, role or password preserves the saved language. Language changes preserve appearance settings. Ordinary users can change their own language from their app page.
+MediaHub stores `en` or `da` in each user's `preferred_language` database column. On first startup, the host language selects the initial default. Danish selects Danish, and all other or unknown locales select English. The installation retains that default on restart. A database migration preserves existing choices. Administrators can change their own language under **Settings → User settings → Language**. The initial administrator wizard and managed-user editor accept a language; changing only a name, role or password preserves the saved language. Language changes preserve appearance settings. Ordinary users can change their own language from their app page.
 
 Hub SSO returns the account language on both exchange and session validation. MediaSeed and MediaVPN use that identity rather than the browser locale or an administrator-wide setting. Open app pages recheck the identity on focus and once per minute; subsequent UI refreshes use the current language. An unavailable identity request never changes an existing account's saved preference.
 

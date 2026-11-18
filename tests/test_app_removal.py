@@ -219,6 +219,17 @@ def test_failed_plex_install_can_be_removed_without_managed_policy(tmp_path, par
     asyncio.run(run())
 
 
+def test_linked_gpu_extension_blocks_plex_removal_before_any_runtime_changes(tmp_path):
+    runtime = PlexRuntime(SimpleNamespace(lock=asyncio.Lock()), None, tmp_path)
+    runtime.removal_identity = lambda: ("plex-owned", object())
+    runtime.request = AsyncMock()
+    (tmp_path / "plex-plan.json").write_text('{"container":{"Labels":{"org.mediahub.plex.gpu.revision":"owned"}}}')
+    with pytest.raises(DomainError, match="Disconnect the GPU Transcoder"):
+        asyncio.run(runtime.uninstall("plex-owned"))
+    runtime.request.assert_not_awaited()
+    assert runtime.operation["state"] == "idle"
+
+
 def test_failed_plex_removal_does_not_guess_identity_or_interrupt_installer(tmp_path):
     async def run():
         control = SimpleNamespace(

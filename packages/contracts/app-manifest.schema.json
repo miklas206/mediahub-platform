@@ -874,6 +874,27 @@
       "title": "Recommendedisolation",
       "type": "string"
     },
+    "lifecycle": {
+      "default": "adapter",
+      "enum": [
+        "adapter",
+        "managed-compose"
+      ],
+      "title": "Lifecycle",
+      "type": "string"
+    },
+    "supportedLanguages": {
+      "default": [],
+      "items": {
+        "enum": [
+          "en",
+          "da"
+        ],
+        "type": "string"
+      },
+      "title": "Supportedlanguages",
+      "type": "array"
+    },
     "hostCapabilities": {
       "default": [],
       "items": {

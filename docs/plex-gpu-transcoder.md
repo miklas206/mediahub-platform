@@ -8,7 +8,7 @@ The operator installer registers the exact image ID and Plex installation in
 `plex-gpu-transcoder.json` in private Agent state and the paired host binding
 `plex_gpu_installation`. A fresh hub without this explicit registration creates
 no GPU app and makes no GPU requests. At startup, an installed component is
-registered idempotently with its observed state. The app shows GPU measurements,
+registered idempotently with its observed state. Open Plex in MediaHub and select **Plex extensions → View transcoder status**. The extension shows GPU measurements,
 connection status, a LAN dashboard link, and start/stop/restart controls which
 address only the owned GPU container. Media files are mounted read-only.
 

@@ -77,7 +77,7 @@ def test_new_commit_triggers_shared_verified_check_but_unchanged_does_not():
             release_credentials=SimpleNamespace(token=lambda: None),
         )
         monitor = UpdateMonitor(svc)
-        monitor._load = lambda: {"items": [{"id": "mediahub-core", "latestVersion": "a" * 40}]}
+        monitor._load = lambda: {"items": [{"id": "mediahub-core", "latestVersion": "0.1.2", "latestCommit": "a" * 40}]}
         monitor.main_watch.check = AsyncMock(return_value="a" * 40)
         monitor.check_all = AsyncMock()
         await monitor.check_main_change()

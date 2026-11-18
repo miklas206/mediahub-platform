@@ -17,6 +17,8 @@ class Catalog:
             manifest = parse_manifest(file)
             if manifest.availability == "development" and not config.dev_mode:
                 continue
+            if manifest.id in self.manifests:
+                raise DomainError("invalid_manifest", "Duplicate catalog app identifier")
             self.manifests[manifest.id] = manifest
         key_file = config.data_dir / "secrets.key"
         if not key_file.exists():

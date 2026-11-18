@@ -268,6 +268,8 @@ def test_fresh_setup_and_default_catalog_no_mock(setup_client):
     catalog = setup_client.get("/api/v1/catalog").json()["data"]
     assert {a["name"] for a in catalog} == {
         "FjordHub",
+        "MediaSeed",
+        "MediaVPN",
         "Plex",
         "Seedbox",
         "Windows folder access",
@@ -627,11 +629,19 @@ def test_phase1_database_upgrade_preserves_user(tmp_path):
     migrate(url, "0001")
     engine, sessions = connect(url)
     with sessions.begin() as db:
-        db.add(User(username="existing", password_hash="test-hash", role="administrator"))
+        db.execute(text(
+            "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "
+            "VALUES ('legacy-id', 'existing', 'test-hash', 'administrator', '2026-01-01', '2026-01-01')"
+        ))
+        db.execute(text(
+            "INSERT INTO settings (id, key, value, created_at, updated_at) "
+            "VALUES ('legacy-pref', 'user.preferences:legacy-id', :preferences, '2026-01-01', '2026-01-01')"
+        ), {"preferences": '{"language":"da","appearance":null}'})
     migrate(url)
     with sessions() as db:
-        assert db.scalar(select(User)).username == "existing"
-        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
+        user = db.scalar(select(User))
+        assert (user.username, user.preferred_language, user.password_hash) == ("existing", "da", "test-hash")
+        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"
     engine.dispose()
 
 

@@ -8,6 +8,10 @@ from test_cloudflare_management import BASE, TUNNEL, managed  # noqa: F401
 def test_local_connector_uses_protected_token_file_and_no_extra_lxc(
     logged_in, managed, monkeypatch, tmp_path
 ):
+    import os
+    if hasattr(os, "fchown"):
+        # The unit test runs outside the container that supplies UID 10001.
+        monkeypatch.setattr(os, "fchown", lambda fd, uid, gid: None)
     svc, manager, _ = managed
     svc.config.managed_apps_docker_socket = tmp_path / "synthetic.sock"
     monkeypatch.setenv("HOSTNAME", "synthetic-core")

@@ -1,0 +1,25 @@
+schemaVersion: 1
+id: org.mediahub.mediavpn
+name: MediaVPN
+description: Manage WireGuard profiles and verify VPN connections.
+category: network
+version: 0.2.32
+maintainer: {name: MediaHub contributors}
+icon: mediavpn
+repository: https://github.com/miklas206/mediavpn
+availability: available
+requiredRuntime: docker
+coreCompatibility: ">=0.6.89,<1"
+lifecycle: managed-compose
+supportedLanguages: [da, en]
+hostCapabilities: [docker, compose, hub-sso, persistent-storage, tun]
+# Images, networks, volumes and service configurations are bound to a verified host recipe.
+images: {}
+services: {}
+storageRequirements: [{id: appdata, type: appdata, access: rw}]
+secrets: []
+dependencies: []
+healthChecks: [{id: app, check: /healthz, type: adapter}]
+capabilities: []
+updateSource: {type: catalog, channel: main, package: miklas206/mediavpn}
+adapter: {id: org.mediahub.mediavpn, protocolVersion: 1}

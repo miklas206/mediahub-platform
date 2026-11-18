@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.89
+
+- Show the optional GPU transcoder under its installed Plex server. Guard Plex removal while the GPU extension is linked.
+
+- Use the release repository on guided Windows installs, Windows updates and Linux downloads. Run guest creation with standard system directory permissions and verify DNS as the APT user before installing packages.
+- Record the installation language once, preserve individual account languages on upgrade and expose personal language and appearance together under User settings.
+- Restore an addressable App Store and validate first-party catalog metadata before executing host-approved app installation recipes.
+
 ## 0.6.88
 
 - Keep the Plex GPU page and expanded history in place when refreshing its playback status.

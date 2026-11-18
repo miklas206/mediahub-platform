@@ -91,6 +91,7 @@ export type HubEntry = {
   external?: boolean;
   settingsPath?: string;
   removableApp?: InstalledAppInfo;
+  extensionPath?: string;
   runtimeAppId?: string;
   canStop?: boolean;
   canStart?: boolean;
@@ -336,25 +337,7 @@ export function buildHubEntries({
       action: installed ? "Open app" : "Set up",
     });
   }
-  const transcoder = apps?.find(
-    (app) => !app.isMock && app.packageId === "org.mediahub.plex-gpu-transcoder",
-  );
-  if (transcoder) {
-    const path = transcoder.detailPath || `/apps/${transcoder.id}`;
-    const status = appsError ? "unknown" : transcoder.health.status;
-    entries.unshift({
-      id: transcoder.packageId,
-      name: transcoder.name,
-      description: "Live Plex playbacks and GPU transcode jobs.",
-      category: "Media",
-      path,
-      settingsPath: path,
-      configured: true,
-      status,
-      statusLabel: appStatusLabel(status),
-      action: "View transcoder status",
-    });
-  }
+  const gpu = apps?.find((app) => !app.isMock && app.packageId === "org.mediahub.plex-gpu-transcoder");
   return entries
     .map((entry) => {
       const app = apps?.find(
@@ -383,6 +366,7 @@ export function buildHubEntries({
             : undefined),
         localUrl: app?.localUrl || separate?.url || integration?.baseUrl,
         externalUrl: app?.externalUrl,
+        extensionPath: app?.packageId === "org.mediahub.plex" && gpu ? `/apps/${encodeURIComponent(gpu.id)}` : undefined,
         runtimeAppId: app?.id,
         canStop: app?.controls?.actions.includes("stop"),
         canStart: app?.controls?.actions.includes("start"),
@@ -409,6 +393,7 @@ export function HubHome({
   integrations,
   integrationsError,
   live,
+  store = false,
 }: {
   apps: AppInfo[] | undefined;
   appsError: string;
@@ -416,6 +401,7 @@ export function HubHome({
   integrationsError: string;
   updates: number | undefined;
   live: boolean;
+  store?: boolean;
 }) {
   const appearance = useAppearance();
   const onAppRemoved = useCallback(() => {
@@ -474,6 +460,7 @@ export function HubHome({
   ];
   const visible = cards.filter(
     (entry) =>
+      (!store || entry.id !== "healthcheck") &&
       (filter === "all" ||
         (filter === "running"
           ? entry.configured && entry.status === "healthy"
@@ -490,8 +477,9 @@ export function HubHome({
   return (
     <div className="hub-home">
       <header className="reference-page-title">
-        <h1>{t("Apps & Services")}</h1>
-        <p>{t("Install, configure and manage your media stack.")}</p>
+        <h1>{store ? t("App Store") : t("Apps & Services")}</h1>
+        <p>{store ? t("Find apps to install or manage on this server.") : t("Install, configure and manage your media stack.")}</p>
+        {store ? <Link to="/settings?section=Updates">{t("Updates")}</Link> : <Link to="/store">{t("App Store")}</Link>}
       </header>
       <section className="hub-app-section" aria-label={t("Apps & Services")}>
         <label className="hub-search">
@@ -667,6 +655,9 @@ export function HubHome({
                     </Link>
                   )}
                 </div>
+                {entry.extensionPath && (
+                  <Link to={entry.extensionPath}>{t("Plex extension: GPU Transcoder")}</Link>
+                )}
                 {entry.removableApp && (
                   <AppUninstall
                     app={entry.removableApp}

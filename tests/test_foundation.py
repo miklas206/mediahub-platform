@@ -286,7 +286,7 @@ def test_migrations_are_repeatable_and_schema_complete(client):
         "alembic_version",
     } <= tables
     with svc.engine.connect() as db:
-        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
+        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"
         assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
 
 

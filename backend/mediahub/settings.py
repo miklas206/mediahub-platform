@@ -1,12 +1,29 @@
+import os
+import re
+
 from sqlalchemy import select
 
 from mediahub.contracts import PlatformSettings, UserPreferences
-from mediahub.db import Setting
+from mediahub.db import Setting, User
+
+
+def installation_language(db):
+    key = "installation.language"
+    row = db.scalar(select(Setting).where(Setting.key == key))
+    if row is None:
+        locale = next((os.environ[k] for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG") if os.environ.get(k)), "")
+        language = "da" if re.split(r"[-_.@]", locale.lower())[0] == "da" else "en"
+        row = Setting(key=key, value={"language": language})
+        db.add(row)
+        db.flush()
+    return row.value["language"]
 
 
 class SettingsService:
     def __init__(self, sessions):
         self.sessions = sessions
+        with sessions.begin() as db:
+            self.default_language = installation_language(db)
         self._add_store_navigation_once()
 
     def _add_store_navigation_once(self):
@@ -48,16 +65,19 @@ class SettingsService:
     def user_preferences(self, user_id: str) -> UserPreferences:
         with self.sessions() as db:
             row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
-            return UserPreferences.model_validate(row.value) if row else UserPreferences()
+            user = db.get(User, user_id)
+            return UserPreferences.model_validate({**(row.value if row else {}), "language": user.preferred_language if user else "en"})
 
     def save_user_preferences(self, user_id: str, preferences: UserPreferences):
         with self.sessions.begin() as db:
             row = db.scalar(select(Setting).where(Setting.key == f"user.preferences:{user_id}"))
             # Each preferences panel submits its own fields. Defaults from an omitted
             # panel must not replace that account's existing choices.
+            user = db.get(User, user_id)
             saved = UserPreferences.model_validate(
-                {**(row.value if row else {}), **preferences.model_dump(exclude_unset=True)}
+                {**(row.value if row else {}), "language": user.preferred_language, **preferences.model_dump(exclude_unset=True)}
             )
+            user.preferred_language = saved.language
             if row:
                 row.value = saved.model_dump()
             else:

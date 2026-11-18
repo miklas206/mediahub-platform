@@ -259,10 +259,11 @@ export function Application() {
     try {
       const [status, installation] = await Promise.all([
         api<{ needsSetup: boolean }>("/auth/status"),
-        api<{ setup_required: boolean }>("/setup/status"),
+        api<{ setup_required: boolean; defaultLanguage?: "da" | "en" }>("/setup/status"),
       ]);
       setSetupRequired(installation.setup_required);
       setNeedsSetup(status.needsSetup);
+      if (status.needsSetup) setLanguage(installation.defaultLanguage || "en");
       if (!status.needsSetup) {
         try {
           const me = await api<User>("/auth/me");
@@ -622,7 +623,7 @@ function Shell({
         <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
-            .filter(([path]) => ["/", "/overview", "/settings"].includes(path))
+            .filter(([path]) => ["/", "/store", "/overview", "/settings"].includes(path))
             .filter(([path]) => visibleNavigation.includes(path) || (path === "/apps" && (runtimePage || location.pathname.startsWith("/integrations/"))))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
@@ -856,7 +857,7 @@ function Shell({
                 ...navigation
                   .filter(
                     ([path]) =>
-                      ["/", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
+                      ["/", "/store", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
                       (advancedMode || path !== "/hosts"),
                   )
                   .map(([path, label]) => ({ path, label: t(label) })),
@@ -955,7 +956,7 @@ function Shell({
                     path="/apps/:appId/install"
                     element={<SeedboxInstallPage />}
                   />
-                  <Route path="/apps/:appId" element={<AppRuntimePage />} />
+                  <Route path="/apps/:appId" element={<AppRuntimePage apps={navigationApps} appsError={navigationAppsError} />} />
                   <Route
                     path="/apps/windows-share"
                     element={<Navigate to="/" replace />}
@@ -976,7 +977,7 @@ function Shell({
                     path="/store/fjordhub/uninstall"
                     element={<FjordHubUninstallPage />}
                   />
-                  <Route path="/store" element={<Navigate to="/" replace />} />
+                  <Route path="/store" element={<HubHome key="store" store apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />} />
                   <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
                   <Route path="/store/mediaseed" element={<ManagedAppInstallPage kind="mediaseed" />} />
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
@@ -1023,19 +1024,13 @@ function Shell({
                         general={
                           <LayoutGroup id="settings-general-layout" className="settings-general-compact stack">
                             <LayoutGroup id="settings-general-cards">
-                              <div
-                                className="dashboard-card"
-                                data-layout-title="Language"
-                              >
-                                <LanguageSettings compact />
-                              </div>
                               {user.role === "administrator" && (
                                 <div data-layout-title="GPU setup"><GPUSetupCard /></div>
                               )}
                             </LayoutGroup>
                           </LayoutGroup>
                         }
-                        appearance={<AppearanceSettings compact />}
+                        appearance={<><LanguageSettings /><AppearanceSettings compact /></>}
                         maintenance={<MaintenancePage />}
                         security={<SecuritySettings />}
                         sections={{
@@ -1647,7 +1642,7 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="choice-grid">
-              {navigation.filter(([path]) => ["/", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
+              {navigation.filter(([path]) => ["/", "/store", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
                 const required = path === "/" || path === "/settings";
                 return (
                   <label className="choice-card" key={path}>

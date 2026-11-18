@@ -19,6 +19,8 @@ RUN groupadd --gid 1000 media && groupadd --gid 10001 mediahub \
 COPY pyproject.toml README.md LICENSE ./
 COPY backend/ ./backend/
 COPY agent/ ./agent/
+# Root-owned source must be readable even when checked out with a private umask.
+RUN chmod -R a+rX /app/backend /app/agent
 # Resolve the primary media GID AND supplementary private-state GID from the
 # image account. An explicit :1000 would discard its mediahub group membership.
 ARG MEDIAHUB_SOURCE_COMMIT=""

@@ -1,0 +1,25 @@
+schemaVersion: 1
+id: org.mediahub.mediaseed
+name: MediaSeed
+description: Manage torrents, RSS feeds and tracker accounts.
+category: downloads
+version: 0.1.26
+maintainer: {name: MediaHub contributors}
+icon: mediaseed
+repository: https://github.com/miklas206/mediaseed
+availability: available
+requiredRuntime: docker
+coreCompatibility: ">=0.6.89,<1"
+lifecycle: managed-compose
+supportedLanguages: [da, en]
+hostCapabilities: [docker, compose, hub-sso, persistent-storage]
+# Images, networks, volumes and service configurations are bound to a verified host recipe.
+images: {}
+services: {}
+storageRequirements: [{id: appdata, type: appdata, access: rw}]
+secrets: []
+dependencies: []
+healthChecks: [{id: app, check: /healthz, type: adapter}]
+capabilities: []
+updateSource: {type: catalog, channel: main, package: miklas206/mediaseed}
+adapter: {id: org.mediahub.mediaseed, protocolVersion: 1}

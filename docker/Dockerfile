@@ -47,6 +47,7 @@ COPY docker/runtime-scripts/ ./scripts/
 COPY docker/bundled/ ./bundled/
 COPY alembic.ini ./
 COPY --from=frontend /build/frontend/dist ./frontend/dist
+RUN chmod -R a+rX /app/backend /app/agent /app/apps /app/scripts /app/bundled /app/frontend /app/alembic.ini /app/pyproject.toml
 USER 10001
 EXPOSE 18765
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/api/health',timeout=4)"

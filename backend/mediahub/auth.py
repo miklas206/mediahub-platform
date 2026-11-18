@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from mediahub.db import Session, Setting, User, UserSecurity
 from mediahub.errors import DomainError
 from mediahub.mfa import MFAService
+from mediahub.settings import installation_language
 
 hasher = PasswordHasher()
 # Runtime-generated dummy hash equalizes the expensive path for unknown usernames.
@@ -41,16 +42,11 @@ class AuthService:
         with self.sessions.begin() as db:
             if db.scalar(select(User.id).limit(1)):
                 raise DomainError("already_initialized", "An administrator already exists", 409)
-            db.add(User(username=username, password_hash=hasher.hash(password)))
+            db.add(User(username=username, password_hash=hasher.hash(password), preferred_language=installation_language(db)))
 
     def users(self):
         with self.sessions() as db:
-            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": self.account_language(db, user.id)} for user in db.scalars(select(User).order_by(User.username))]
-
-    @staticmethod
-    def account_language(db, user_id):
-        row = db.scalar(select(Setting).where(Setting.key == "user.preferences:" + user_id))
-        return row.value.get("language", "en") if row else "en"
+            return [{**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": user.preferred_language} for user in db.scalars(select(User).order_by(User.username))]
 
     @staticmethod
     def app_roles(db, user_id):
@@ -93,7 +89,7 @@ class AuthService:
             if duplicate and duplicate.id != user_id:
                 raise DomainError("username_exists", "Username already exists", 409)
             if user is None:
-                user = User(username=username, password_hash=hasher.hash(password), role=target_role)
+                user = User(username=username, password_hash=hasher.hash(password), role=target_role, preferred_language=installation_language(db))
                 db.add(user)
             else:
                 user.username = username
@@ -105,6 +101,7 @@ class AuthService:
             if language is not None:
                 if language not in {"en", "da"}:
                     raise DomainError("invalid_language", "Choose Danish or English", 422)
+                user.preferred_language = language
                 key = "user.preferences:" + user.id
                 row = db.scalar(select(Setting).where(Setting.key == key))
                 if row:
@@ -120,7 +117,7 @@ class AuthService:
                 else:
                     db.add(Setting(key=key, value=app_roles))
                 db.flush()
-            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": self.account_language(db, user.id)}
+            return {**self.public_user(user), "appRoles": self.app_roles(db, user.id), "language": user.preferred_language}
 
     def delete_user(self, user_id, actor_id):
         with self.sessions.begin() as db:

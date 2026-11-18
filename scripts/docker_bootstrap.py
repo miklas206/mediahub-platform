@@ -45,6 +45,7 @@ def compose_config(project, address):
         ],
         "environment": {
             "MEDIAHUB_BASE_URL": origin,
+            "MEDIAHUB_HOST_LOCALE": os.environ.get("MEDIAHUB_HOST_LOCALE", "C"),
             "MEDIAHUB_ALLOWED_ORIGINS": json.dumps([origin]),
             "MEDIAHUB_BROWSER_TLS_CERT": "/tls/server.pem",
             "MEDIAHUB_BROWSER_TLS_KEY": "/tls/server.key",

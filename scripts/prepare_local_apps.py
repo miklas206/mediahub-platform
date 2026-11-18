@@ -336,13 +336,28 @@ def hub_browser_origin(hub_compose, lan):
     return value.rstrip("/")
 
 
+def read_mount_snapshot(root, configured):
+    snapshot_path = Path(configured)
+    # Host provisioning and the dependency container have different views of the same read-only evidence.
+    if snapshot_path.parent == Path("/host-evidence") and not snapshot_path.exists():
+        compose = json.loads((root / "compose.json").read_text())
+        services = compose["services"]
+        runtime = services.get("agent", services["core"])
+        sources = [v.rsplit(":", 2)[0] for v in runtime.get("volumes", [])
+                   if isinstance(v, str) and v.endswith(":/host-evidence:ro")]
+        if len(sources) != 1 or not Path(sources[0]).is_absolute():
+            raise ValueError("Media storage evidence mount is missing")
+        snapshot_path = Path(sources[0]) / snapshot_path.name
+    return json.loads(snapshot_path.read_text())
+
+
 def approved_media_storage(root):
     """Read only the administrator's host policy; verify the live mount identity."""
     path = root / "agent/container-apps.json"
     if not path.exists():
         return []  # Standalone installations keep their existing local volume.
     policy = json.loads(path.read_text())
-    snapshot = json.loads(Path(policy["hostMountSnapshot"]).read_text())
+    snapshot = read_mount_snapshot(root, policy["hostMountSnapshot"])
     required = policy.get("requiredMounts", {})
     uuids = policy.get("requiredFilesystemUuids", {})
     if (
@@ -625,7 +640,7 @@ def prepare_storage_host(root, lan, source, locations):
     approved = json.loads(policy_path.read_text()) if policy_path.exists() else {}
     required = approved.get("requiredMounts", {})
     snapshot = (
-        json.loads(Path(approved["hostMountSnapshot"]).read_text())
+        read_mount_snapshot(root, approved["hostMountSnapshot"])
         if approved.get("hostMountSnapshot")
         else {}
     )

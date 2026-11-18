@@ -12,6 +12,8 @@ import "./managed-app-setup.css";
 
 type Plan = {
   planDigest: string;
+  bundledVersion: string;
+  repository: string;
   alreadyRunning: boolean;
   operation: {
     state: string;
@@ -94,10 +96,10 @@ export function ManagedAppInstallPage({
     connectionLost: !!error && running,
   };
   useEffect(() => {
-    if (!running) return;
+    if (!running || preparing) return;
     const timer = window.setInterval(poll, 3500);
     return () => window.clearInterval(timer);
-  }, [running, poll]);
+  }, [running, preparing, poll]);
   useEffect(() => {
     if (succeeded) window.dispatchEvent(new Event("apps-changed"));
   }, [succeeded]);
@@ -144,6 +146,13 @@ export function ManagedAppInstallPage({
             "Install the app on this MediaHub host. Existing accounts, settings, VPN profiles and downloads are preserved. Hub login and your theme are available in the app.",
           )}
         </p>
+        {data?.repository && <p>
+          {t("Included version: {version}", { version: data.bundledVersion })} ·{" "}
+          <a href={data.repository} target="_blank" rel="noreferrer">{t("Source repository")}</a>
+        </p>}
+        {prerequisite?.message && prerequisite.state === "failed" && (
+          <p role="status">{translateText(prerequisite.message)}</p>
+        )}
         {preparing && (
           <div role="status">
             <p>{t("Preparing app prerequisites")}</p>

@@ -8,10 +8,13 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
+from packaging.specifiers import SpecifierSet
 from pydantic import Field
 from sqlalchemy import select
 
 from agent.install_files import read_json, save_json
+from mediahub import __version__
+from mediahub.app_updates import REPOSITORIES
 from mediahub.api import administrator, result, services
 from mediahub.contracts import StrictModel
 from mediahub.db import InstalledApp
@@ -51,6 +54,13 @@ class ManagedInstaller:
     def recipe(self, package):
         if package not in PACKAGES:
             raise DomainError("not_found", "App is not supported", 404)
+        manifest = self.svc.catalog.get(package)
+        repository = REPOSITORIES[package.rsplit(".", 1)[-1]]
+        if (manifest.lifecycle != "managed-compose" or manifest.adapter.id != package
+                or manifest.repository != f"https://github.com/{repository}"
+                or manifest.updateSource.package != repository
+                or __version__ not in SpecifierSet(manifest.coreCompatibility)):
+            raise DomainError("invalid_manifest", "The app catalog is incompatible with this MediaHub version", 409)
         policy = self.manager.policy.get(package)
         if not policy or not policy.installFile:
             raise DomainError(
@@ -110,6 +120,8 @@ class ManagedInstaller:
         return {
             "planDigest": digest,
             "name": PACKAGES[package],
+            "repository": self.svc.catalog.get(package).repository,
+            "bundledVersion": self.svc.catalog.get(package).version,
             "alreadyRunning": bool(rows) and all(row["State"].get("Running") for row in rows),
             "dataPreserved": True,
             "operation": self.status(package),

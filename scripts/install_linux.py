@@ -86,7 +86,7 @@ def main():
         "--device-snapshot", help="Optional existing host-generated metadata file for an LXC"
     )
     parser.add_argument("--source-repository", help="Trusted GitHub owner/repo for source updates")
-    parser.add_argument("--hub-stack", action="store_true", help="Install the beta single-hub runtime and TLS proxy")
+    parser.add_argument("--hub-stack", action="store_true", help="Install the integrated Core/Agent runtime and TLS proxy")
     args = parser.parse_args()
     if os.name != "posix" or os.geteuid() != 0:
         raise ValueError("Run on the new Linux Docker host as root")
@@ -419,6 +419,7 @@ def main():
             "MEDIAHUB_AGENT_URL": "https://agent:18767",
             "MEDIAHUB_AGENT_TOKEN_FILE": "/agent-token",
             "MEDIAHUB_AGENT_CA_FILE": "/trust/ca.pem",
+            "MEDIAHUB_HOST_LOCALE": next((os.environ[k] for k in ("MEDIAHUB_HOST_LOCALE", "LC_ALL", "LC_MESSAGES", "LANG") if os.environ.get(k)), "C"),
             "MEDIAHUB_BASE_URL": f"https://{address}:18765",
             "MEDIAHUB_ALLOWED_ORIGINS": json.dumps([f"https://{address}:18765"]),
             "MEDIAHUB_BROWSER_TLS_CERT": "/tls/server.pem",

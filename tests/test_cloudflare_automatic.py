@@ -1,6 +1,7 @@
 import asyncio
 import copy
-from unittest.mock import AsyncMock, Mock
+import os
+from unittest.mock import ANY, AsyncMock, Mock
 
 import httpx
 import pytest
@@ -406,10 +407,13 @@ def test_connector_token_is_readable_only_by_its_container_user(logged_in, monke
         ),
     )
     chown = Mock()
-    monkeypatch.setattr("mediahub.cloudflare_connector.os.chown", chown, raising=False)
+    monkeypatch.setattr("mediahub.cloudflare_connector.os.fchown", chown, raising=False)
     logged_in.portal.call(install, manager, TUNNEL)
     path = manager.svc.config.data_dir / "cloudflare-connectors" / (TUNNEL + ".token")
-    chown.assert_called_once_with(path, 10001, 10001, follow_symlinks=False)
+    if path.stat().st_uid != 10001:
+        chown.assert_called_once_with(ANY, 10001, 10001)
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
     assert created[0]["User"] == "10001:10001"
     assert created[0]["Image"] == "sha256:" + "f" * 64
     assert [request.method for request in pulls] == ["POST", "GET"]

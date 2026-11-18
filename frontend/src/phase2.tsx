@@ -1861,7 +1861,7 @@ export function SettingsExtensions({
             key={tabName}
             onClick={() => setTab(tabName)}
           >
-            <NavIcon name={tabName} size={18}/>{t(tabName)}
+            <NavIcon name={tabName} size={18}/>{tabName === "Appearance" ? t("User settings") : t(tabName)}
           </button>
         ))}
       </div>

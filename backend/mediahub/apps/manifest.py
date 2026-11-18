@@ -241,6 +241,8 @@ class Manifest(StrictModel):
     availability: Literal["coming-soon", "development", "available"] = "development"
     requiredRuntime: Literal["none", "docker"] = "none"
     recommendedIsolation: Literal["shared-host", "dedicated-host"] = "shared-host"
+    lifecycle: Literal["adapter", "managed-compose"] = "adapter"
+    supportedLanguages: list[Literal["en", "da"]] = []
     hostCapabilities: list[str] = []
     configFields: list[ConfigField] = []
     installGuide: list[InstallGuideStep] = []

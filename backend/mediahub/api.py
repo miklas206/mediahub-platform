@@ -170,16 +170,19 @@ async def cloudflare_status(
     return result(await services(request).cloudflare_tunnel.status(force=refresh))
 
 
-async def _apps_with_health(svc):
+async def _apps_with_health(svc, listing=None, *, include_runtime=False):
     slots = asyncio.Semaphore(8)
 
     async def with_health(app):
         async with slots:
-            from mediahub.app_settings import controls, runtime_summary
-            summary = await runtime_summary(svc, app)
-            return {**app, **summary, "controls": controls(svc, app), "health": (await svc.apps.health(app["id"])).model_dump()}
+            details = {}
+            if include_runtime:
+                from mediahub.app_settings import controls, runtime_summary
 
-    return await asyncio.gather(*(with_health(app) for app in svc.apps.list() if app.get("packageId") != "org.mediahub.cloudflared"))
+                details = {**await runtime_summary(svc, app), "controls": controls(svc, app)}
+            return {**app, **details, "health": (await svc.apps.health(app["id"])).model_dump()}
+
+    return await asyncio.gather(*(with_health(app) for app in (svc.apps.list() if listing is None else listing) if app.get("packageId") != "org.mediahub.cloudflared"))
 
 
 @router.get("/apps")
@@ -193,6 +196,7 @@ async def apps(
     from mediahub.app_settings import saved_address
 
     listing = [{**app, "externalUrl": saved_address(svc, app["packageId"]), "localUrl": svc.config.operator_app_urls.get(app["packageId"])} for app in listing]
+    registered_apps = listing
     registered = {app["packageId"] for app in listing}
     listing = [{**app, "ssoSupported": app["packageId"] in svc.config.sso_app_urls} for app in listing]
     for package_id, origin in svc.config.sso_app_urls.items():
@@ -232,7 +236,7 @@ async def apps(
             visible.append(app)
         return result(visible)
     if include_health:
-        health = {app["id"]: app for app in await _apps_with_health(svc)}
+        health = {app["id"]: app for app in await _apps_with_health(svc, registered_apps, include_runtime=True)}
         listing = [{**app, **health.get(app["id"], {})} for app in listing]
     return result(listing)
 

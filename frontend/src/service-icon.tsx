@@ -52,7 +52,7 @@ export function ServiceIcon({
         {...props}
       />
     );
-  if (["fjord3d", "jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"].includes(appId))
+  if (appId === "fjord3d")
     return (
       <svg
         width={size}

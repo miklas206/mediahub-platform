@@ -1,5 +1,6 @@
 param([string]$InstallDirectory = (Join-Path $HOME 'MediaHub-Guided'), [switch]$Update)
 $ErrorActionPreference = 'Stop'
+$sourceArchive = 'https://github.com/miklas206/mediahub-platform/archive/refs/heads/main.zip'
 $InstallDirectory = [System.IO.Path]::GetFullPath($InstallDirectory)
 if ($InstallDirectory.Contains(',')) { throw 'The installation folder must not contain commas.' }
 
@@ -29,7 +30,7 @@ if ($Update) {
     $updateSource = Join-Path $InstallDirectory ('update-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $updateSource | Out-Null
     $archive = Join-Path $updateSource 'source.zip'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/fjordcopy/archive/refs/heads/main.zip' -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Uri $sourceArchive -OutFile $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $updateSource
     $source = Join-Path $updateSource 'mediahub-platform-main'
     Invoke-Docker build -f (Join-Path $source 'docker/Agent.Dockerfile') -t mediahub-guided-agent:local $source
@@ -56,7 +57,7 @@ if (Test-Path (Join-Path $localSource 'docker/Dockerfile')) {
     $source = $localSource
 } else {
     $archive = Join-Path $InstallDirectory 'source.zip'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/miklas206/fjordcopy/archive/refs/heads/main.zip' -OutFile $archive
+    Invoke-WebRequest -UseBasicParsing -Uri $sourceArchive -OutFile $archive
     Expand-Archive -LiteralPath $archive -DestinationPath $source
     $source = Join-Path $source 'mediahub-platform-main'
 }
@@ -69,7 +70,7 @@ foreach ($volume in $volumes) {
     $mounts += @('--mount', "type=volume,src=mediahub-guided-$volume,dst=/bootstrap/$volume")
 }
 $helper = Join-Path $source 'scripts/docker_bootstrap.py'
-Invoke-Docker run --rm --network none --user 0 --entrypoint python @mounts --mount "type=bind,src=$helper,dst=/bootstrap.py,readonly" --mount "type=bind,src=$InstallDirectory,dst=/output" mediahub-guided-agent:local /bootstrap.py
+Invoke-Docker run --rm --network none --env "MEDIAHUB_HOST_LOCALE=$((Get-UICulture).Name)" --user 0 --entrypoint python @mounts --mount "type=bind,src=$helper,dst=/bootstrap.py,readonly" --mount "type=bind,src=$InstallDirectory,dst=/output" mediahub-guided-agent:local /bootstrap.py
 $compose = Join-Path $InstallDirectory 'compose.json'
 Invoke-Docker compose -f $compose config --quiet
 Invoke-Docker compose -f $compose up -d --wait --wait-timeout 180

@@ -5,6 +5,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.MEDIAHUB_QA_URL || "http://127.0.0.1:18766",
     trace: "off",
-    channel: "chrome",
+    ...(process.env.MEDIAHUB_QA_BROWSER
+      ? { launchOptions: { executablePath: process.env.MEDIAHUB_QA_BROWSER } }
+      : { channel: "chrome" }),
   },
 });

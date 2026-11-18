@@ -22,7 +22,7 @@ export function UsersPage({ currentUserId }: { currentUserId: string }) {
     setBusy(true);
     setFailure("");
     try {
-      await api(editing.id ? `/users/${editing.id}` : "/users", editing.id ? "PUT" : "POST", { username: editing.username, password, role: editing.role || "user", appRoles: editing.appRoles || {}, language: editing.language || "en" });
+      await api(editing.id ? `/users/${editing.id}` : "/users", editing.id ? "PUT" : "POST", { username: editing.username, password, role: editing.role || "user", appRoles: editing.appRoles || {}, language: editing.language });
       if (editing.id === currentUserId) setLanguage(editing.language || "en");
       setEditing(null);
       setPassword("");
@@ -46,7 +46,7 @@ export function UsersPage({ currentUserId }: { currentUserId: string }) {
     <div className="panel-heading"><h2>{t("Users")}</h2><button disabled={busy} onClick={() => { setEditing({ username: "", role: "user", appRoles: {} }); setPassword(""); }}><Plus size={16} /> {t("Add user")}</button></div>
     {(error || failure) && <NotificationPopup tone="danger">{error || failure}</NotificationPopup>}
     {editing && <form className="settings-form" onSubmit={save}>
-      <label>{t("Language")}<select value={editing.language || "en"} onChange={event => setEditing({...editing, language: event.target.value as "en" | "da"})}><option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>
+      <label>{t("Language")}<select value={editing.language || ""} onChange={event => setEditing({...editing, language: (event.target.value || undefined) as ManagedUser["language"] | undefined})}>{!editing.id && <option value="">{t("Installation default")}</option>}<option value="da">{t("Dansk")}</option><option value="en">{t("English")}</option></select></label>
       <label>{t("Username")}<input required maxLength={80} autoComplete="off" value={editing.username || ""} onChange={event => setEditing({ ...editing, username: event.target.value })} /></label>
       <label>{t("Password")}<input type="password" autoComplete="new-password" required={!editing.id} minLength={12} maxLength={256} value={password} onChange={event => setPassword(event.target.value)} /></label>
       <label>{t("Hub role")}<select value={editing.role || "user"} onChange={event => setEditing({ ...editing, role: event.target.value })}><option value="user">{t("User")}</option><option value="administrator">{t("Administrator")}</option></select></label>

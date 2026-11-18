@@ -94,11 +94,15 @@ PCT_CREATE_HELP=$(pct help create 2>&1 || true)
 if [[ "$PCT_CREATE_HELP" == *'--dev'* ]]; then
     TUN_ARGS=(--dev0 path=/dev/net/tun,uid=0,gid=0,mode=0600)
 fi
+# Proxmox may create implicit template directories with the caller's umask.
+# Keep private temporary files at 077 and use the system default for guest creation.
+(umask 022
 pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" --hostname "$HOSTNAME" \
     --arch "$MEDIAHUB_ARCH" --unprivileged 1 --features nesting=1,keyctl=1,fuse=1 --cores "$CT_CORES" --memory "$CT_MEMORY" --swap 0 \
     --rootfs "$STORAGE:32" --mp0 "$STORAGE:32,mp=/storage,backup=1" \
     "${TUN_ARGS[@]}" \
     --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,ip6=manual,firewall=1" --onboot 1
+)
 if [ "${#TUN_ARGS[@]}" -eq 0 ]; then
     # Older PVE device syntax: only this just-created container is amended.
     CT_CONFIG="/etc/pve/lxc/$CTID.conf"
@@ -118,7 +122,12 @@ pct exec "$CTID" -- sh -c 'test -c /dev/net/tun && test -r /dev/net/tun && test 
     echo 'The new MediaHub LXC cannot access TUN. Installation stopped before installing apps; inspect its device configuration.' >&2
     exit 1
 }
-pct exec "$CTID" -- sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y python3 iproute2'
+# A new guest can report started before DHCP and the resolver are usable.
+pct exec "$CTID" -- timeout 90 sh -c 'until ip -4 route show default | grep -q . && runuser -u _apt -- getent ahostsv4 deb.debian.org >/dev/null && runuser -u _apt -- getent ahostsv4 download.docker.com >/dev/null; do sleep 2; done' || {
+    echo "The new guest $CTID could not reach DHCP/DNS within 90 seconds. Check the selected bridge, gateway and DNS access for the APT user before installing packages." >&2
+    exit 1
+}
+pct exec "$CTID" -- sh -c 'export DEBIAN_FRONTEND=noninteractive; apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && apt-get install -y python3 iproute2'
 pct exec "$CTID" -- python3 -c 'import os; fd=os.open("/dev/net/tun",os.O_RDWR); os.close(fd)' || {
     echo 'TUN is mounted but cannot be opened by the new LXC. Check the host device policy before continuing.' >&2
     exit 1
@@ -136,20 +145,20 @@ if [ -z "$DATA_UUID" ] && [ -d "$DATA_DEVICE" ] && command -v zfs >/dev/null; th
 fi
 [ -n "$DATA_UUID" ] || { echo 'The new data volume has no verifiable filesystem UUID or ZFS dataset GUID. Use a supported block-volume or ZFS dataset storage; the new guest was kept for inspection.' >&2; exit 1; }
 pct exec "$CTID" -- python3 -c 'import json,os,sys; from pathlib import Path; p=Path("/etc/mediahub-storage-identities.json"); source=json.loads(os.popen("findmnt --json --target /storage --output SOURCE,TARGET").read())["filesystems"][0]; assert source["target"]=="/storage"; fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); os.write(fd,json.dumps([{"path":"/storage","source":source["source"],"uuid":sys.argv[1]}]).encode()); os.close(fd)' "$DATA_UUID"
-pct exec "$CTID" -- bash -s <<'MEDIAHUB_GUEST'
+pct exec "$CTID" -- env "MEDIAHUB_HOST_LOCALE=${MEDIAHUB_HOST_LOCALE:-${LC_ALL:-${LC_MESSAGES:-${LANG:-C}}}}" bash -s <<'MEDIAHUB_GUEST'
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
+apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
 apt-get install -y ca-certificates curl git python3 openssl iproute2
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 chmod 0644 /etc/apt/keyrings/docker.asc
 printf 'deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable\n' > /etc/apt/sources.list.d/docker.list
-apt-get update
+apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker
 INSTALL_SOURCE=$(mktemp -d /var/tmp/mediahub-install.XXXXXXXX)
-git clone --depth 1 https://github.com/miklas206/mediahub-platform.git "$INSTALL_SOURCE/source"
+(umask 022; git clone --depth 1 https://github.com/miklas206/mediahub-platform.git "$INSTALL_SOURCE/source")
 ADDRESS=$(ip -4 -o addr show dev eth0 scope global | awk '{split($4, address, "/"); print address[1]; exit}')
 [ -n "$ADDRESS" ] || { echo 'DHCP did not provide an IPv4 address.' >&2; exit 1; }
 GPU_ARGS=()
@@ -158,7 +167,7 @@ if [ -f /etc/mediahub-gpus.json ]; then
     GPU_ARGS=(--gpu-policy /etc/mediahub-gpus.json)
 fi
 python3 "$INSTALL_SOURCE/source/scripts/install_linux.py" --root /opt/mediahub --lan-ip "$ADDRESS" \
-    --storage /storage --storage-identities /etc/mediahub-storage-identities.json --yes "${GPU_ARGS[@]}"
+    --storage /storage --storage-identities /etc/mediahub-storage-identities.json --hub-stack --yes "${GPU_ARGS[@]}"
 python3 - "$INSTALL_SOURCE" <<'MEDIAHUB_INSTALL_CLEANUP'
 import re, shutil, sys
 from pathlib import Path

@@ -121,6 +121,11 @@ class PlexRuntime:
                 or (self.install_task and not self.install_task.done())
                 or (self.account_task and not self.account_task.done())):
             raise DomainError("operation_busy", "Another Plex operation is running", 409)
+        plan_path = self.state_dir / "plex-plan.json"
+        if plan_path.exists():
+            labels = read_json(plan_path).get("container", {}).get("Labels", {})
+            if labels.get("org.mediahub.plex.gpu.revision"):
+                raise DomainError("plex_extension_linked", "Disconnect the GPU Transcoder extension before uninstalling Plex.", 409)
         failed_install = policy is None or self.operation.get("failedInstallation") or (
             self.operation.get("action") == "install" and self.operation.get("state") == "failed")
         receipt = self.state_dir / "plex-removal.json"

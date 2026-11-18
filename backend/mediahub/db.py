@@ -30,6 +30,7 @@ class Record:
 
 class User(Record, Base):
     __tablename__ = "users"
+    preferred_language: Mapped[str] = mapped_column(String, server_default="en")
     username: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String, default="administrator")

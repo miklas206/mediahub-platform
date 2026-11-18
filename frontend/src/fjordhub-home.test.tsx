@@ -128,11 +128,11 @@ it("uses verified MIT official artwork and non-logo fallbacks for unlicensed mar
     );
 });
 
-it("uses official local artwork for each container app", () => {
+it("uses the shared Prisme artwork for each container app", () => {
   for (const id of ["jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"])
     for (const packageId of [id, `org.mediahub.${id}`]) {
       const markup = renderToStaticMarkup(<ServiceIcon packageId={packageId} />);
-      expect(markup).toContain(`/assets/services/${id}.png`);
+      expect(markup).toContain(`data-brand="${id}"`);
       expect(markup).not.toContain("data-brand-fallback");
     }
 });

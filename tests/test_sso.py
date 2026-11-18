@@ -74,8 +74,8 @@ def test_actual_app_hub_roundtrip(logged_in, tmp_path, monkeypatch, module, pref
     import httpx
     from fastapi.testclient import TestClient
 
-    roots = (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[3])
-    app_root = next(root / module for root in roots if (root / module / module / "app.py").exists())
+    hub_root = Path(__file__).resolve().parents[1]
+    app_root = hub_root / "docker" / "bundled" / module
     monkeypatch.syspath_prepend(str(app_root))
     create_app = importlib.import_module(module + ".app").create_app
 

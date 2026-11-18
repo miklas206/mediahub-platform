@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
+  Store,
   Activity,
   Settings2,
   Menu,
@@ -18,6 +19,7 @@ export function ShellNavigation({
 }) {
   const links = [
     ["/", "Apps", LayoutDashboard],
+    ["/store", "App Store", Store],
     ["/overview", "Overview", Activity],
     ["/settings", "Settings", Settings2],
   ] as const;

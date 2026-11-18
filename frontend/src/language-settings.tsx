@@ -34,8 +34,8 @@ export function LanguageSettings({ compact = false }: { compact?: boolean }) {
           disabled={busy}
           onChange={(event) => void save(event.target.value as Language)}
         >
-          <option value="da">{t("Dansk")}</option>
-          <option value="en">{t("English")}</option>
+          <option value="da">Dansk</option>
+          <option value="en">English</option>
         </select>
       </label>
       {!compact && <p className="muted">{t("Saved for your account on all devices.")}</p>}

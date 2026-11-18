@@ -151,6 +151,12 @@ def test_other_storage_is_inherited_only_from_verified_policy(tmp_path, monkeypa
     policy.write_text(json.dumps({**shared, "storage": {} if legacy else entry}))
     plex = root / "agent/plex-install.json"
     plex.write_text(json.dumps({**shared, "storage": entry}))
+    # The host installer reads the same file that the agent sees through its read-only mount.
+    shared["hostMountSnapshot"] = "/host-evidence/" + evidence.name
+    policy.write_text(json.dumps({**shared, "storage": {} if legacy else entry}))
+    plex.write_text(json.dumps({**shared, "storage": entry}))
+    (root / "compose.json").write_text(json.dumps({"services": {"core": {
+        "volumes": [f"{evidence.parent}:/host-evidence:ro"]}}}))
     original = policy.read_bytes()
     locations = module.approved_media_storage(root)
     assert locations[0]["path"] == "/downloads/media/other"

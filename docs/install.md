@@ -139,20 +139,11 @@ storage settings, extend pools or remove old guests to make room.
 6. Open the printed HTTPS address and create the administrator as in the Windows
 	steps. Keep the installation private until the first administrator is created.
 
-The installer creates a **new data disk mounted at `/storage`** and selects its
-Appdata, Movies, TV and Downloads folders automatically. It prepares approved
-Plex and Jellyfin host policies, Docker access for Agent only, live disk evidence,
-HTTPS and the platform updater. Core never receives the Docker socket.
-The Agent's Docker access is root-equivalent inside this guest; it is not a
-read-only security boundary even though the socket mount is marked read-only.
-No existing media disk is attached. The dedicated Seedbox host and verified NFS
-Downloads storage are still separate prerequisites, not automatically provisioned here.
-Adding existing media needs an explicit mount/access plan. Do not attach a raw
-disk twice or recursively change its permissions.
+The Proxmox installer creates a new filesystem at `/storage` and prepares the media and app-data directories. It deploys MediaHub with an embedded Agent, a local HTTPS proxy, mount verification and the platform updater. The Hub uses the guest's Docker socket to manage approved local apps. Access to that socket grants control of the guest's containers.
 
-Proxmox status: shell syntax is checked; **this new end-to-end Proxmox installer
-has not been run on a live host**. A failure retains the new guest and data for
-inspection; no automatic destructive cleanup runs.
+After creating an administrator, open **App Store** to choose Plex or Jellyfin. Installing MediaHub sets up their installation policies. The optional GPU Transcoder requires a separately installed, managed Plex server and compatible NVIDIA hardware. Its status appears under Plex after registration. Local MediaSeed and MediaVPN use their own Compose projects. Adding an existing media disk or importing a previous seedbox requires an explicit storage plan.
+
+If setup fails, keep the new guest and its volumes for diagnosis. Inspect the reported dependency or service before retrying.
 
 ### If either script fails
 
