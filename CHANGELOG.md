@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.91
+
+- Update an individual app when its sibling has been uninstalled. Keep the verified reinstall recipe for an intentionally removed app during host preparation.
+
 ## 0.6.90
 
 - Open the embedded Hub after host storage is prepared. Optional download and VPN app prerequisites continue in the background and report status in the App Store.

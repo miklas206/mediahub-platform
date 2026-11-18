@@ -7,11 +7,12 @@ This is operator preparation, never an HTTP-controlled command or Docker spec.
 import argparse
 import json
 import os
+import stat
 import subprocess
 from pathlib import Path
 
 
-def prepare(policy_path, data_dir, container_data_dir, uid, gid):
+def prepare(policy_path, data_dir, container_data_dir, uid, gid, selected=None):
     policy = json.loads(policy_path.read_text())
     destination = data_dir / "managed-install-recipes"
     destination.mkdir(mode=0o700, exist_ok=True)
@@ -70,6 +71,11 @@ def prepare(policy_path, data_dir, container_data_dir, uid, gid):
     }
     for package, entry in policy.items():
         assert package in {"org.mediahub.mediaseed", "org.mediahub.mediavpn"}
+        if selected is not None and package != selected:
+            continue
+        filename = package.rsplit(".", 1)[-1] + ".json"
+        path = destination / filename
+        install_file = str(container_data_dir / "managed-install-recipes" / filename)
         ids = (
             subprocess.check_output(
                 [
@@ -84,6 +90,18 @@ def prepare(policy_path, data_dir, container_data_dir, uid, gid):
             .split()
         )
         if not ids:
+            # An intentionally removed app keeps its approved reinstall recipe.
+            if selected is None and entry.get("installFile") == install_file and path.exists():
+                info = path.lstat()
+                if stat.S_ISREG(info.st_mode) and info.st_uid == uid and not info.st_mode & 0o077:
+                    saved = json.loads(path.read_text())
+                    if (
+                        saved.get("packageId") == package
+                        and saved.get("installationId") == entry["installationId"]
+                        and isinstance(saved.get("containers"), list)
+                        and saved["containers"]
+                    ):
+                        continue
             raise RuntimeError("Prepare the approved Compose app before exporting its installer")
         containers = json.loads(subprocess.check_output(["docker", "inspect", *ids]))
         recipes = []
@@ -119,13 +137,11 @@ def prepare(policy_path, data_dir, container_data_dir, uid, gid):
             "installationId": entry["installationId"],
             "containers": recipes,
         }
-        filename = package.rsplit(".", 1)[-1] + ".json"
-        path = destination / filename
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as stream:
             json.dump(value, stream)
         os.chown(path, uid, gid)
-        entry["installFile"] = str(container_data_dir / "managed-install-recipes" / filename)
+        entry["installFile"] = install_file
         print(package, "approved services:", len(recipes))
     backup = policy_path.with_suffix(policy_path.suffix + ".before-install")
     if not backup.exists():

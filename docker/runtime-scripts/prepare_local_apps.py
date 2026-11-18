@@ -968,7 +968,8 @@ def provision(
             entry["managementTokenFile"] = "/data/app-integration/mediahub-vpn.token"
     private(policy_path, "{}", 10001, 10001)
     policy_path.write_text(json.dumps(policy))
-    prepare(policy_path, root / "data", Path("/data"), 10001, 10001)
+    prepare(policy_path, root / "data", Path("/data"), 10001, 10001,
+            "org.mediahub." + app if app else None)
     private(marker, "{}")
     if not app:
         marker.write_text(json.dumps({"fingerprint": digest}))
