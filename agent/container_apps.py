@@ -555,7 +555,7 @@ class ContainerApps:
             value = labels.get(key)
             if not isinstance(value, str):
                 continue
-            match = re.fullmatch(r"v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?", value.strip())
+            match = re.fullmatch(r"v?(\d+\.\d+(?:\.\d+){0,2})(?:-ls\d+)?", value.strip())
             if not match and key == "build_version":
                 match = re.match(
                     r"Linuxserver\.io version:- v?(\d+\.\d+\.\d+(?:\.\d+)?)(?:-ls\d+)?(?:\s|$)",

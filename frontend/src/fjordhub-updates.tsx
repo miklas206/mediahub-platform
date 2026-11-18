@@ -224,15 +224,21 @@ export function FjordHubUpdates({
   return (
     <section
       className="fjordhub-update-panel stack"
-      aria-label="FjordHub-opdateringer"
+      aria-label={t("FjordHub updates")}
     >
       <h3>{t("App information and updates")}</h3>
       <p className="muted">
-        {t(" Status is checked every 45 seconds and every 5 seconds during updates. Installation starts only when you choose it. ")}</p>
+        {t(
+          " Status is checked every 45 seconds and every 5 seconds during updates. Installation starts only when you choose it. ",
+        )}
+      </p>
       {error && <NotificationPopup tone="danger">{error}</NotificationPopup>}
       {!ids.length && (
         <p>
-          {t(" App information or update access is unavailable. Enable access on the existing FjordHub token; older servers may lack API support. ")}</p>
+          {t(
+            " App information or update access is unavailable. Enable access on the existing FjordHub token; older servers may lack API support. ",
+          )}
+        </p>
       )}
       {ids.map((id) => {
         const info = metadata[id],
@@ -257,17 +263,21 @@ export function FjordHubUpdates({
             </div>
             <small>
               {info?.installed
-                ? `Installeret${info.port ? ` · Port ${info.port}` : ""}`
+                ? `${t("Installed")}${info.port ? ` · ${t("Port {port}", { port: info.port })}` : ""}`
                 : t("Installation not confirmed")}
-              {!info?.permissions.updates && " · Ingen opdateringsrettighed"}
+              {!info?.permissions.updates && ` · ${t("No update permission")}`}
             </small>
             {status && (
               <>
                 <small>
-                  {t(" Installed revision: ")}{status.current_rev || t("Unknown")} {t(" · Latest revision: ")}{status.remote_rev || t("Unknown")}
+                  {t(" Installed revision: ")}
+                  {status.current_rev || t("Unknown")}{" "}
+                  {t(" · Latest revision: ")}
+                  {status.remote_rev || t("Unknown")}
                 </small>
                 <small>
-                  {t(" Version check: ")}{stamp(status.checked_at)} {t(" · Started:")}{" "}
+                  {t(" Version check: ")}
+                  {stamp(status.checked_at)} {t(" · Started:")}{" "}
                   {stamp(status.started_at)} {t(" · Finished:")}{" "}
                   {stamp(status.finished_at)}
                 </small>
@@ -275,7 +285,10 @@ export function FjordHubUpdates({
             )}
             {status?.accepted && status.running && (
               <p role="status">
-                {t(" Start accepted (202) — not finished. Waiting for a confirmed result. ")}</p>
+                {t(
+                  " Start accepted (202) — not finished. Waiting for a confirmed result. ",
+                )}
+              </p>
             )}
             {administrator && info?.permissions.updates && (
               <div className="button-row">
@@ -285,7 +298,8 @@ export function FjordHubUpdates({
                   }
                   onClick={() => void act(id, "check")}
                 >
-                  {t(" Check version ")}</button>
+                  {t(" Check version ")}
+                </button>
                 <button
                   disabled={!!busy || !canStart(info, status, stale)}
                   onClick={() => void act(id, "start")}
@@ -298,7 +312,8 @@ export function FjordHubUpdates({
         );
       })}
       <small className="muted">
-        {t(" Last status poll: ")}{stamp(view.polled_at)}
+        {t(" Last status poll: ")}
+        {stamp(view.polled_at)}
       </small>
     </section>
   );

@@ -181,7 +181,24 @@ class SharedVPN:
             :40
         ]
         profile = self.assignment(identifier)
-        gateway = await self.vpn(path="/profiles/" + profile if profile else "")
+        try:
+            gateway = await self.vpn(path="/profiles/" + profile if profile else "")
+        except DomainError as error:
+            # Host preparation can leave a policy for an optional VPN with no runtime.
+            if error.code != "vpn_unavailable" or profile or self.assignment_pending(identifier):
+                raise
+            vpn_package = "org.mediahub.mediavpn"
+            with self.svc.sessions() as db:
+                registered = db.scalar(
+                    select(InstalledApp.id).where(
+                        InstalledApp.package_id == vpn_package,
+                        InstalledApp.is_mock.is_(False),
+                        InstalledApp.state != "uninstalled",
+                    )
+                )
+            if registered or await self.svc.managed_apps.containers(vpn_package):
+                raise
+            return
         if any(peer.get("id") == identifier for peer in gateway.get("peers", [])):
             await self.vpn(
                 "DELETE", ("/profiles/" + profile if profile else "") + "/peers/" + identifier

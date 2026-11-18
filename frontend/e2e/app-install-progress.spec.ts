@@ -37,6 +37,9 @@ async function mockHub(
       },
       "/updates/summary": { count: 0, items: [], notifications: [] },
       "/fjordhub/deployment": null,
+      "/plex/account": {claimed:false,operation:{state:"idle",message:"Plex account setup is required"}},
+      "/shared-vpn": {gateway:{enabled:false,ready:false,profiles:[],profileId:null,publicIp:null,message:null},apps:[]},
+      "/vpn-gateway": {configured:false,enabled:false,zones:[],routes:[]},
       "/hosts": [{ id: "local", name: "Local host" }],
     };
     const data = await handler(path, route);
@@ -104,7 +107,7 @@ for (const language of ["en", "da"])
       );
       await page.goto("/apps/install/plex");
       await page.getByRole("checkbox").check();
-      await page.getByRole("combobox").selectOption("config");
+      await page.getByRole("combobox", {name:language === "da" ? "Lager til appdata" : "App data storage", exact:true}).selectOption("config");
       await page
         .getByRole("button", {
           name:
@@ -144,7 +147,8 @@ for (const language of ["en", "da"])
         progress: 100,
         message: "Plex started; account and libraries are being checked",
       };
-      await expect(bar).toHaveAttribute("aria-valuenow", "100");
+      await expect(page.getByRole("heading",{name:"Installation",exact:true})).toBeVisible({timeout:12000});
+      await expect(bar).toHaveCount(0);
       expect(posts).toBe(1);
       expect(
         await page.evaluate(
@@ -221,7 +225,8 @@ for (const app of ["jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"]) {
     await page.reload();
     await expect(bar).toBeVisible();
     phase = "complete";
-    await expect(bar).toHaveAttribute("aria-valuenow", "100");
+    await expect(page.getByText("Container running", {exact:true})).toBeVisible({timeout:12000});
+    await expect(bar).toHaveCount(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -273,11 +278,8 @@ for (const app of ["mediaseed", "mediavpn"]) {
     await expect(page.getByRole("progressbar")).toBeVisible();
     await expect.poll(() => failures).toBe(3);
     complete = true;
-    await expect(page.getByRole("progressbar")).toHaveAttribute(
-      "aria-valuenow",
-      "100",
-      { timeout: 12000 },
-    );
+    await expect(page.getByRole("link", {name:"Back to apps"})).toBeVisible({timeout:12000});
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
   });
 }
 

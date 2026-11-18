@@ -72,7 +72,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
-      const data = path === "/auth/status" ? { needsSetup: false } : path === "/setup/status" ? { setup_required: false } : path === "/auth/me" ? { id: "member", username: "member", role: "user", csrf: "synthetic" } : [{ id: "seed", name: "MediaSeed", openUrl: "https://seed.example/auth/hub/start" }];
+      const data = path === "/auth/status" ? { needsSetup: false } : path === "/setup/status" ? { setup_required: false } : path === "/auth/me" ? { id: "member", username: "member", role: "user", language: "da", csrf: "synthetic" } : [{ id: "seed", name: "MediaSeed", openUrl: "https://seed.example/auth/hub/start" }];
       await route.fulfill({ json: { data, error: null, metadata: {} } });
     });
     await page.goto("/");

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.75"
+    "version": "0.6.95"
   },
   "paths": {
     "/api/v1/users": {
@@ -8645,13 +8645,19 @@
       "Bootstrap": {
         "properties": {
           "language": {
-            "type": "string",
-            "enum": [
-              "en",
-              "da"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "en",
+                  "da"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Language",
-            "default": "en"
+            "title": "Language"
           },
           "username": {
             "type": "string",

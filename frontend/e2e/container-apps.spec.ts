@@ -124,21 +124,27 @@ for (const width of [1440, 390]) {
     });
     await page.goto("/store");
     for (const id of ["jellyfin", "prowlarr", "radarr", "sonarr", "autobrr"]) {
-      await expect(page.locator(`image[href="/assets/services/${id}.png"]`)).toBeVisible();
-      expect(await page.evaluate(async (name) => {
-        const image = new Image();
-        image.src = `/assets/services/${name}.png`;
-        await image.decode();
-        return image.naturalWidth > 0 && image.naturalHeight > 0;
-      }, id)).toBe(true);
+      const mark = page.locator(
+        `[data-app-id="org.mediahub.${id}"] svg[data-brand="${id}"]`,
+      );
+      await expect(mark).toBeVisible();
+      expect(await mark.locator("path").count()).toBeGreaterThan(0);
+      expect(await mark.evaluate((el) => el.getBBox().width)).toBeGreaterThan(
+        0,
+      );
     }
-    await page.screenshot({ path: `../.qa/app-icons-${width}.png`, fullPage: true });
+    await page.screenshot({
+      path: `../.qa/app-icons-${width}.png`,
+      fullPage: true,
+    });
     for (const name of ["Jellyfin", "Prowlarr", "Radarr", "Sonarr", "autobrr"])
       await expect(
-        page.getByRole("link", { name: `Install ${name} →`, exact: true }),
+        page.locator(
+          `[data-app-id="org.mediahub.${name.toLowerCase()}"] .hub-card-action`,
+        ),
       ).toBeVisible();
     await page
-      .getByRole("link", { name: "Install Radarr →", exact: true })
+      .locator('[data-app-id="org.mediahub.radarr"] .hub-card-action')
       .click();
     await expect(
       page.getByRole("heading", { name: "Radarr", exact: true }),

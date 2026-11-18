@@ -1,10 +1,23 @@
-import type { Page } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
 import { join } from "node:path";
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdir } from "node:fs/promises";
+
 export async function prepareCompatibilityPages(page: Page) {
+  let components = process.env.MEDIAHUB_QA_COMPONENTS;
+  if (!components) {
+    components = test.info().outputPath("compatibility");
+    await mkdir(components, { recursive: true });
+    await promisify(execFile)(process.execPath, [
+      "e2e/compatibility.mjs",
+      components,
+    ]);
+  }
   await page.route("**/__qa-components.js", (route) =>
     route.fulfill({
-      path: join(process.env.MEDIAHUB_QA_COMPONENTS!, "components.js"),
+      path: join(components, "components.js"),
       contentType: "application/javascript; charset=utf-8",
     }),
   );

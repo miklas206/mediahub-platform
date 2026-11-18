@@ -426,3 +426,35 @@ def test_upgrade_cleans_old_uninstalled_settings_only(logged_in, state):
     reconcile_removed_settings(svc)
     with svc.sessions() as db:
         assert db.scalar(select(Setting).where(Setting.key == "vpn-web-gateway")).value == before
+
+
+@pytest.mark.parametrize(
+    "profile,pending,containers,blocked",
+    [
+        (None, False, [], False),
+        ("a" * 24, False, [], True),
+        (None, True, [], True),
+        (None, False, [{"Id": "stopped-owned-container"}], True),
+    ],
+)
+def test_remove_without_reachable_optional_vpn(
+    logged_in, monkeypatch, profile, pending, containers, blocked
+):
+    svc = logged_in.app.state.services
+    shared = svc.shared_vpn
+    monkeypatch.setitem(
+        svc.managed_apps.policy, "org.mediahub.mediavpn", SimpleNamespace(managementTokenFile=True)
+    )
+    monkeypatch.setattr(svc.managed_apps, "containers", AsyncMock(return_value=containers))
+    monkeypatch.setattr(
+        shared, "vpn", AsyncMock(side_effect=DomainError("vpn_unavailable", "offline", 503))
+    )
+    monkeypatch.setattr(shared, "assignment", lambda identifier: profile)
+    monkeypatch.setattr(shared, "assignment_pending", lambda identifier: pending)
+    run = shared.forget_peer("org.mediahub.jellyfin", "local-agent")
+    if blocked:
+        with pytest.raises(DomainError, match="offline"):
+            asyncio.run(run)
+    else:
+        asyncio.run(run)
+        svc.managed_apps.containers.assert_awaited_once_with("org.mediahub.mediavpn")

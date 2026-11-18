@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.95
+
+- Complete Plex and Jellyfin removal when the optional VPN is absent and no profile assignment is pending. Keep removal blocked for an unavailable configured VPN.
+- Recognize two-part image versions when comparing installed apps with official releases.
+- Display FjordHub update status, permissions and port information in the signed-in user’s language.
+- Refresh the published API contract and verify current Hub routes and retained integration components in browser tests.
+
 ## 0.6.94
 
 - Show registered apps in the Hub while full health checks are pending. Wait for the registry before offering setup, and show unknown health until the status is available.

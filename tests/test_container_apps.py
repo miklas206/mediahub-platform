@@ -497,6 +497,7 @@ def test_container_status_passes_shared_adapter_schema_without_claiming_health(t
 @pytest.mark.parametrize(
     "labels,expected",
     [
+        ({"org.opencontainers.image.version": "12.4"}, "12.4"),
         ({"org.opencontainers.image.version": "10.11.1"}, "10.11.1"),
         (
             {"build_version": "Linuxserver.io version:- 4.0.15.2941-ls284 Build-date:- 2026-01-01"},

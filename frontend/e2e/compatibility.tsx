@@ -1,6 +1,13 @@
+import {
+  IntegrationAppLinks,
+  IntegrationAppCard,
+  FjordHubHome,
+  type Integration,
+} from "../src/integrations";
+import { FjordFlixDashboardCard } from "../src/fjordflix-dashboard";
 // Browser-only entry for retained components which have no public route.
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, Routes, Route } from "react-router-dom";
 import { api, setCsrf } from "../src/api";
 import { Apps, SettingsPage } from "../src/ui";
 import { useData } from "../src/use-data";
@@ -20,7 +27,31 @@ function MockApps() {
   const { data, error, reload } = useData<AppInfo[]>("/apps");
   return <Apps data={data} error={error} reload={reload} integrations={[]} />;
 }
+function IntegrationCards() {
+  const { data } = useData<Integration[]>("/integrations");
+  if (!data) return null;
+  return (
+    <>
+      <IntegrationAppLinks items={data} />
+      {data.map((row) => (
+        <section key={row.id}>
+          <IntegrationAppCard row={row} title={row.name} />
+          <FjordFlixDashboardCard row={row} />
+        </section>
+      ))}
+    </>
+  );
+}
 const views = {
+  integrations: <IntegrationCards />,
+  readOnlyIntegration: (
+    <Routes>
+      <Route
+        path="/integrations/:integrationId"
+        element={<FjordHubHome administrator={false} username="viewer" />}
+      />
+    </Routes>
+  ),
   cloudflare: <CloudflareSetupManager onSaved={() => {}} />,
   catalog: <CatalogPage />,
   files: <MediaFiles />,
@@ -39,11 +70,18 @@ const view = new URLSearchParams(location.search).get(
 ) as keyof typeof views;
 api<{ csrf: string }>("/auth/me").then((me) => {
   setCsrf(me.csrf);
+  const content = (
+    <NotificationProvider>
+      <ConfirmationProvider>{views[view]}</ConfirmationProvider>
+    </NotificationProvider>
+  );
   createRoot(document.getElementById("root")!).render(
-    <BrowserRouter>
-      <NotificationProvider>
-        <ConfirmationProvider>{views[view]}</ConfirmationProvider>
-      </NotificationProvider>
-    </BrowserRouter>,
+    view === "integrations" || view === "readOnlyIntegration" ? (
+      <MemoryRouter initialEntries={["/integrations/hub"]}>
+        {content}
+      </MemoryRouter>
+    ) : (
+      <BrowserRouter>{content}</BrowserRouter>
+    ),
   );
 });

@@ -1,3 +1,4 @@
+import { prepareCompatibilityPages } from "./compatibility-page";
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390]) {
@@ -174,12 +175,16 @@ for (const width of [1440, 390]) {
     const input = form.locator("input");
     await input.fill("https://192.168.50.20:9000/movies");
     await form.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(form.getByRole("status")).toHaveText("App launch URL saved");
+    await expect(
+      page.getByText("App launch URL saved", { exact: true }),
+    ).toHaveText("App launch URL saved");
     await expect(
       page
         .locator(".workspace")
         .getByRole("link", { name: "Open app", exact: true }),
     ).toHaveAttribute("href", "https://192.168.50.20:9000/movies");
+    await prepareCompatibilityPages(page);
+    await page.goto("/__qa-components?view=integrations");
     const nav = page.locator(".fjordhub-app-navigation").first();
     await expect(nav.locator(":scope > a")).toHaveAttribute(
       "href",
@@ -195,20 +200,22 @@ for (const width of [1440, 390]) {
     await expect(
       nav.getByRole("link", { name: "UrbanExplorer", exact: true }),
     ).toHaveAttribute("title", "Manage in FjordHub (app address unavailable)");
+    await page.goto("/integrations/hub");
     await input.fill("https://evil.example/?token=do-not-reflect");
     await form.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(form.getByRole("alert")).toContainText("same-host");
+    await expect(
+      page.getByRole("alert").filter({ hasText: "same-host" }).first(),
+    ).toContainText("same-host");
     await expect(input).toHaveValue("https://192.168.50.20:9000/movies");
     await page.reload();
     await expect(input).toHaveValue("https://192.168.50.20:9000/movies");
-    await page.goto("/");
+    await page.goto("/__qa-components?view=integrations");
     await expect(
       page
         .locator(".fjordflix-service-tile")
         .first()
         .getByRole("link", { name: "Open FjordFlix" }),
     ).toHaveAttribute("href", "https://192.168.50.20:9000/movies");
-    await page.goto("/apps");
     await expect(
       page.getByRole("link", { name: "FjordHub overview" }).first(),
     ).toHaveAttribute("href", "/integrations/hub");
@@ -220,29 +227,30 @@ for (const width of [1440, 390]) {
         .locator(".workspace")
         .getByRole("link", { name: "Open app", exact: true }),
     ).toHaveAttribute("href", "https://192.168.50.20:9234/");
-    const updates = page.getByRole("region", { name: "FjordHub-opdateringer" });
+    const updates = page.getByRole("region", { name: "FjordHub updates" });
     const childUpdate = updates
       .locator("article")
       .filter({ has: page.getByText("FjordFlix", { exact: true }) });
     await expect(
-      childUpdate.getByRole("button", { name: "Opdatér app" }),
+      childUpdate.getByRole("button", { name: "Update app" }),
     ).toBeEnabled();
+    await expect(childUpdate).toContainText("Installed · Port 9234");
     expect(starts).toBe(0);
-    await childUpdate.getByRole("button", { name: "Opdatér app" }).click();
+    await childUpdate.getByRole("button", { name: "Update app" }).click();
     const confirmation = page.getByRole("dialog");
     await expect(confirmation).toContainText("FjordFlix");
     expect(starts).toBe(0);
     await confirmation.getByRole("button", { name: /Install/ }).click();
     await expect(childUpdate.getByRole("status")).toContainText(
-      "Start accepteret (202)",
+      "Start accepted (202)",
     );
     await expect(
-      childUpdate.getByRole("button", { name: "Opdatér app" }),
+      childUpdate.getByRole("button", { name: "Update app" }),
     ).toBeDisabled();
     updateRunning = false;
     updateFinished = true;
     await expect(
-      childUpdate.getByText("Ingen opdatering tilgængelig", { exact: true }),
+      childUpdate.getByText("No update available", { exact: true }),
     ).toBeVisible({ timeout: 10000 });
     expect(starts).toBe(1);
     await page.screenshot({
@@ -256,11 +264,14 @@ for (const width of [1440, 390]) {
     ).toBe(true);
     viewer = true;
     await page.reload();
+    await expect(page.getByRole("heading", { name: "My apps" })).toBeVisible();
+    await page.goto("/__qa-components?view=readOnlyIntegration");
     await expect(
       page.getByText("Only administrators can change app launch URLs."),
     ).toBeVisible();
     await expect(input).toHaveCount(0);
     await expect(updates.getByRole("button")).toHaveCount(0);
+    viewer = false;
     await page.goto("/integrations/missing");
     await expect(page.getByText("Integration not found")).toBeVisible();
     expect(writes).toHaveLength(3);

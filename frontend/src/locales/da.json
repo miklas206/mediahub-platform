@@ -1,4 +1,7 @@
 {
+  "No update permission": "Ingen opdateringsrettighed",
+  "Port {port}": "Port {port}",
+  "FjordHub updates": "FjordHub-opdateringer",
   "Disconnect the GPU Transcoder extension before uninstalling Plex.": "Frakobl GPU-transcoderen, før du afinstallerer Plex.",
   "Plex extensions": "Plex-udvidelser",
   "Plex extension: GPU Transcoder": "Plex-udvidelse: GPU-transcoder",

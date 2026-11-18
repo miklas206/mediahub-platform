@@ -24,7 +24,7 @@ jobs:
       - run: pnpm --dir frontend exec playwright install chromium
       - run: python scripts/qa.py
       - run: python scripts/qa.py --phase2
-      - run: python scripts/export_contracts.py && git diff --exit-code packages/contracts
+      - run: python -m scripts.export_contracts && git diff --exit-code packages/contracts
       - name: Build both production images from the actual source archive
         shell: bash
         run: |
