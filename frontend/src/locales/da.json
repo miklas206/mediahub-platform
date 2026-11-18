@@ -1,4 +1,13 @@
 {
+  "Updated at {time}": "Opdateret kl. {time}",
+  "Active playbacks": "Afspilninger",
+  "Active GPU jobs": "GPU-job",
+  "Transcoder views": "Transcoder-visninger",
+  "Now playing": "Lige nu",
+  "History": "Historik",
+  "Live Plex playbacks": "Aktive afspilninger",
+  "No history available": "Ingen historik tilgængelig",
+  "Show more": "Vis flere",
   "Live Plex playbacks and GPU transcode jobs.": "Plex-afspilninger og aktive GPU-job.",
   "View transcoder status": "Se transcoderstatus",
   "Plex playbacks": "Plex-afspilninger",

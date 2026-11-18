@@ -994,3 +994,51 @@ th[aria-sort] .torrent-column-sort {
   width: min(22rem, 100%);
   accent-color: var(--accent);
 }
+
+.plex-gpu-overview,
+.plex-gpu-navigation {
+  display: flex;
+  gap: 0.45rem;
+  margin: 0;
+}
+.plex-gpu-overview > div,
+.plex-gpu-navigation > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.plex-gpu-overview > div {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+}
+.plex-gpu-overview dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.plex-gpu-overview dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.plex-gpu-navigation > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding-inline: 0.35rem;
+}
+.plex-gpu-navigation > button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--raised);
+}
+.plex-gpu-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin: 0.5rem 0;
+}

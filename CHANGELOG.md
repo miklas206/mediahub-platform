@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.87
+
+- Organize Plex GPU into live playback, paged history and GPU views with a compact activity summary and playback times.
+
 ## 0.6.86
 
 - Add an installed Plex GPU Transcoder card to Home that links to status inside MediaHub.

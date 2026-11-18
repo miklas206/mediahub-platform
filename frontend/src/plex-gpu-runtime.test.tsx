@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PlexGPUPanel } from "./plex-gpu-runtime";
+import { PlexGPUHistory } from "./plex-gpu-sessions";
 import type { Runtime } from "./runtime";
 
 const report: Runtime = { health: "healthy", available: true, cached: false,
@@ -66,8 +67,18 @@ it("shows live playback and job details only for a fresh observation", () => {
   const live = renderToStaticMarkup(<PlexGPUPanel report={{ ...report, gpu }} />);
   expect(live).toContain("Example film");
   expect(live).toContain("Direct Play");
-  expect(live).toContain("Previous film");
-  expect(live).toContain("Buffer: 42 sec.");
+  expect(live).not.toContain("Previous film");
+  expect(live).not.toContain("Buffer: 42 sec.");
+  const history = renderToStaticMarkup(
+    <PlexGPUHistory
+      playbacks={[...gpu.playbacks, { ...gpu.jobs[0], live: false }]}
+      jobs={gpu.jobs}
+      fresh
+    />,
+  );
+  expect(history).toContain("Previous film");
+  expect(history).toContain("Buffer: 42 sec.");
+  expect(history).not.toContain("Example film");
   const stale = renderToStaticMarkup(
     <PlexGPUPanel report={{ ...report, gpu, observationHealth: "healthy" }} />,
   );

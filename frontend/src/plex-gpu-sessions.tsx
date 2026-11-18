@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { t } from "./i18n";
 import { Panel } from "./phase2";
 
@@ -45,6 +46,15 @@ const states: Record<string, string> = {
   fallback: "Plex fallback",
 };
 
+function playbackTime(milliseconds: number) {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  return minutes < 60
+    ? `${minutes}:${rest}`
+    : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}`;
+}
+
 function SessionDetails({ row }: { row: PlexGPUSession }) {
   const state = row.paused
     ? "Paused"
@@ -79,11 +89,17 @@ function SessionDetails({ row }: { row: PlexGPUSession }) {
       </div>
       {details.length > 0 && <p className="muted">{details.join(" · ")}</p>}
       {row.duration != null && row.duration > 0 && row.position != null && (
-        <progress
-          aria-label={t("Playback progress")}
-          value={Math.min(row.position, row.duration)}
-          max={row.duration}
-        />
+        <div className="plex-gpu-progress">
+          <progress
+            aria-label={t("Playback progress")}
+            value={Math.min(row.position, row.duration)}
+            max={row.duration}
+          />
+          <small className="muted">
+            {playbackTime(Math.min(row.position, row.duration))} /{" "}
+            {playbackTime(row.duration)}
+          </small>
+        </div>
       )}
       {row.bufferSeconds != null && (
         <p>
@@ -112,71 +128,97 @@ function SessionDetails({ row }: { row: PlexGPUSession }) {
 
 export function PlexGPUSessions({
   playbacks = [],
-  jobs = [],
   count,
   available,
   fresh,
-  buffer,
 }: {
   playbacks?: PlexGPUSession[];
-  jobs?: PlexGPUSession[];
   count?: number | null;
   available?: boolean | null;
   fresh: boolean;
-  buffer?: number | null;
 }) {
   const active = playbacks.filter((row) => row.live);
-  const recent = playbacks.filter((row) => !row.live);
-  const render = (rows: PlexGPUSession[]) =>
-    rows.map((row) => <SessionDetails key={row.id} row={row} />);
-
   return (
-    <Panel title={t("Plex playbacks")}>
+    <Panel title="Live Plex playbacks">
+      {!fresh ? (
+        <p>{t("Status unavailable")}</p>
+      ) : available !== true ? (
+        <p>{t("Plex playback details are unavailable")}</p>
+      ) : active.length ? (
+        active.map((row) => <SessionDetails key={row.id} row={row} />)
+      ) : (
+        <p>
+          {t(
+            count === 0
+              ? "No active playbacks"
+              : "No playback details available",
+          )}
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+export function PlexGPUHistory({
+  playbacks = [],
+  jobs = [],
+  fresh,
+}: {
+  playbacks?: PlexGPUSession[];
+  jobs?: PlexGPUSession[];
+  fresh: boolean;
+}) {
+  const [showJobs, setShowJobs] = useState(false);
+  const [limit, setLimit] = useState(10);
+  const rows = (showJobs ? jobs : playbacks.filter((row) => !row.live))
+    .slice()
+    .sort((first, second) => (second.started ?? 0) - (first.started ?? 0));
+  return (
+    <Panel title="History">
       {!fresh ? (
         <p>{t("Status unavailable")}</p>
       ) : (
         <div className="stack">
-          {available === true ? (
-            <>
-              {count != null && (
-                <strong>{t("Active playbacks: {count}", { count })}</strong>
-              )}
-              {!active.length && (
-                <p>
-                  {t(
-                    count === 0
-                      ? "No active playbacks"
-                      : "No playback details available",
-                  )}
-                </p>
-              )}
-              {render(active)}
-            </>
+          <div
+            className="plex-gpu-navigation"
+            role="group"
+            aria-label={t("History")}
+          >
+            <button
+              type="button"
+              aria-pressed={!showJobs}
+              onClick={() => {
+                setShowJobs(false);
+                setLimit(10);
+              }}
+            >
+              {t("Recent playbacks")}
+            </button>
+            <button
+              type="button"
+              aria-pressed={showJobs}
+              onClick={() => {
+                setShowJobs(true);
+                setLimit(10);
+              }}
+            >
+              {t("Transcode jobs")}
+            </button>
+          </div>
+          {rows.length ? (
+            rows
+              .slice(0, limit)
+              .map((row) => <SessionDetails key={row.id} row={row} />)
           ) : (
-            <p>{t("Plex playback details are unavailable")}</p>
+            <p>{t("No history available")}</p>
           )}
-          {buffer != null && (
-            <p className="muted">
-              {t("Starting buffer: {seconds} sec.", {
-                seconds: Math.round(buffer),
-              })}
-            </p>
-          )}
-          {!!recent.length && (
-            <details>
-              <summary>
-                {t("Recent playbacks")} · {recent.length}
-              </summary>
-              {render(recent)}
-            </details>
-          )}
-          {!!jobs.length && (
-            <details>
-              <summary>
-                {t("Transcode jobs")} · {jobs.length}
-              </summary>
-              {render(jobs)}
-            </details>
+          {rows.length > limit && (
+            <button
+              type="button"
+              onClick={() => setLimit((current) => current + 10)}
+            >
+              {t("Show more")}
+            </button>
           )}
         </div>
       )}
