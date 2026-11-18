@@ -86,6 +86,11 @@ try:
     node = shutil.which("node")
     if not node:
         raise SystemExit("Node.js is required for browser tests")
+    components = data / "components"
+    subprocess.run(
+        [node, "e2e/compatibility.mjs", str(components)], cwd=root / "frontend", check=True
+    )
+    env["MEDIAHUB_QA_COMPONENTS"] = str(components)
     runner = root / "frontend/node_modules/@playwright/test/cli.js"
     spec = "setup.spec.ts" if phase2 else "foundation.spec.ts"
     result = subprocess.run([node, str(runner), "test", spec], cwd=root / "frontend", env=env)

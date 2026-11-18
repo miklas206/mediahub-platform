@@ -57,6 +57,10 @@ for (const viewport of [
     const healthGate = new Promise<void>((resolve) => {
       releaseHealth = resolve;
     });
+    let releaseCatalog!: () => void;
+    const catalogGate = new Promise<void>((resolve) => {
+      releaseCatalog = resolve;
+    });
     const metadataGate = new Promise<void>((resolve) => {
       releaseMetadata = resolve;
     });
@@ -89,8 +93,10 @@ for (const viewport of [
         }
       } else if (path === "/integrations") {
         await integrationsGate;
-      } else if (path === "/catalog") data = catalog;
-      else if (path === "/auth/status") data = { needsSetup: false };
+      } else if (path === "/catalog") {
+        await catalogGate;
+        data = catalog;
+      } else if (path === "/auth/status") data = { needsSetup: false };
       else if (path === "/setup/status") data = { setup_required: false };
       else if (path === "/auth/me")
         data = {
@@ -123,33 +129,28 @@ for (const viewport of [
     });
     try {
       await page.goto("/store");
-      await expect(page.getByLabel("Loading App Store")).toBeVisible();
+      await expect(page.getByLabel("Loading apps…")).toBeVisible();
+      await expect(page.locator("[data-app-id]")).toHaveCount(0);
       await expect.poll(() => fullRequests).toBeGreaterThan(0);
-      expect(fullCompleted).toBe(false);
-      await expect(
-        page.getByRole("link", { name: "Install Seedbox →", exact: true }),
-      ).toHaveCount(0);
+      releaseCatalog();
+      await expect(page.getByLabel("Loading apps…")).toBeVisible();
+      const plex = page.locator('[data-app-id="org.mediahub.plex"]');
+      const seed = page.locator('[data-app-id="org.mediahub.seedbox"]');
+      await expect(plex).toHaveCount(0);
       releaseMetadata();
-      await expect(page.getByLabel("Loading App Store")).toBeVisible();
+      await expect(plex.getByRole("heading", { name: "Plex" })).toBeVisible();
+      await expect(plex).toHaveClass(/configured/);
       await expect(
-        page.getByRole("link", { name: "Open Plex →", exact: true }),
-      ).toHaveCount(0);
+        plex.getByRole("link", { name: "Open app · Plex" }),
+      ).toHaveAttribute("href", "/apps/plex");
+      await expect(
+        seed.getByRole("heading", { name: "MediaSeed" }),
+      ).toBeVisible();
+      await expect(
+        seed.getByRole("link", { name: /Set up|View setup/ }),
+      ).toBeVisible();
       releaseIntegrations();
-      await expect(
-        page.getByRole("link", { name: "Open Plex →", exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("link", { name: "Install Seedbox →", exact: true }),
-      ).toBeVisible();
-      await expect(page.getByLabel("Loading App Store")).toHaveCount(0);
-      await expect(
-        page
-          .locator(".store-card")
-          .filter({
-            has: page.getByRole("heading", { name: "Plex", exact: true }),
-          })
-          .getByText("Installed", { exact: true }),
-      ).toBeVisible();
+      await expect(page.getByLabel("Loading apps…")).toHaveCount(0);
       expect(fullCompleted).toBe(false);
       expect(
         await page.evaluate(
@@ -159,6 +160,7 @@ for (const viewport of [
       expect(mutations).toEqual([]);
       expect(errors).toEqual([]);
     } finally {
+      releaseCatalog();
       releaseHealth();
       releaseMetadata();
       releaseIntegrations();

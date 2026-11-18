@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.94
+
+- Show registered apps in the Hub while full health checks are pending. Wait for the registry before offering setup, and show unknown health until the status is available.
+- Allow a running managed app to recover from early failed health probes during cold startup. Fail immediately for exited containers and keep the installation deadline bounded.
+
 ## 0.6.93
 
 - Wait for optional app preparation to release the host update lock before processing a queued platform update. This keeps the systemd path watcher available during long first-install builds.

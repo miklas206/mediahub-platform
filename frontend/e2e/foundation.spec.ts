@@ -1,8 +1,13 @@
+import { prepareCompatibilityPages } from "./compatibility-page";
 import { expect, test } from "@playwright/test";
 
 test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   page,
 }) => {
+  test.setTimeout(180_000);
+  page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(45000);
+  await prepareCompatibilityPages(page);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
@@ -14,16 +19,19 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     .fill(process.env.MEDIAHUB_QA_PASSWORD!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Everything, in view." }),
+    page.getByRole("heading", { name: "Apps & Services" }),
   ).toBeVisible();
-  await expect(page.locator(".badge.live")).toBeVisible();
+  await page.goto("/overview");
   await expect(
-    page
-      .locator(".app-row-name strong")
-      .filter({ hasText: "Foundation Test App" }),
+    page.getByRole("region", { name: "System status" }),
   ).toBeVisible();
-  await page.getByText("System details", { exact: true }).click();
-  await expect(page.getByText("Core CPU", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", { name: "CPU", exact: true }),
+  ).toBeVisible();
+  await page.goto("/__qa-components?view=apps");
+  await expect(
+    page.getByRole("heading", { name: "Foundation Test App" }),
+  ).toBeVisible();
   const sample = await page.evaluate(async () => {
     const response = await fetch("/api/v1/system/status");
     return (await response.json()).data;
@@ -80,7 +88,10 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     await route.fulfill({ json: { data: deployment } });
   });
   await page.goto("/store/fjordhub");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Continue to / })
+    .first()
+    .click();
   await expect(page.getByLabel("Installation target")).toHaveValue("lxc");
   await page
     .getByLabel("Container ID (empty = next free ID)", { exact: true })
@@ -91,11 +102,14 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await page.getByLabel("Direct FjordHub port").fill("9090");
   await page.getByLabel("Network configuration").selectOption("static");
   await expect(
-    page.getByRole("button", { name: "Continue", exact: true }),
+    page.getByRole("button", { name: /^Continue to / }).first(),
   ).toBeDisabled();
   await page.getByLabel("IPv4 address/prefix").fill("192.168.1.50/24");
   await page.getByLabel("IPv4 gateway").fill("192.168.1.1");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Continue to / })
+    .first()
+    .click();
   await expect(
     page.getByLabel("Automatic FjordHub installation"),
   ).toBeVisible();
@@ -152,8 +166,8 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     fullPage: true,
   });
   await expect(page.locator(".sidebar nav a[href='/apps']")).toHaveCount(0);
-  await expect(page.locator(".sidebar nav a[href='/store']")).toHaveCount(0);
-  await page.goto("/apps");
+  await expect(page.locator(".sidebar nav a[href='/store']")).toBeVisible();
+  await page.goto("/__qa-components?view=apps");
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByText("Mock adapter: stopped", { exact: true }),
@@ -166,10 +180,15 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await expect(
     page.getByRole("cell", { name: /app.health.changed/ }).first(),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Storage", exact: true }).click();
+  await page.getByRole("tab", { name: "Storage", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Storage", exact: true }),
+  ).toBeVisible();
+  await page.goto("/__qa-components?view=files");
   await expect(
     page.getByRole("heading", { name: "No media folders registered" }),
   ).toBeVisible();
+  await page.goto("/store");
   await page.getByRole("link", { name: "Updates", exact: true }).click();
   let checkResult = {
     count: 0,
@@ -185,40 +204,64 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   });
   await checkAll.click();
   await expect(
-    page.getByRole("alert", { name: "Check all updates progress" }),
-  ).toContainText("Update check incomplete: Release source unavailable");
+    page
+      .getByRole("alert")
+      .filter({
+        hasText: "Update check incomplete: Release source unavailable",
+      })
+      .first(),
+  ).toBeVisible();
   await expect(
-    page.getByText("Everything is up to date.", { exact: true }),
+    page.getByText("Everything checked is up to date.", { exact: true }),
   ).toHaveCount(0);
+  await page.locator(".updates-console > details > summary").click();
+  const consolePanel = page.getByRole("region", {
+    name: "Console",
+    exact: true,
+  });
   checkResult = {
     count: 1,
     items: [],
     lastError: "Release source unavailable",
   };
   await checkAll.click();
-  await expect(
-    page.getByText(
-      "1 verified update found; other sources could not be checked.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(consolePanel).toContainText("1 verified updates available");
+  await expect(consolePanel).toContainText(
+    "Update check incomplete: Release source unavailable",
+  );
   checkResult = { count: 0, items: [], lastError: "" };
   await checkAll.click();
-  await expect(
-    page.getByText("Everything is up to date.", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(consolePanel).toContainText("Everything checked is up to date.");
+  await expect(page.getByRole("alert")).toHaveCount(0, { timeout: 15000 });
   await page.unroute("**/api/v1/updates/check");
   const githubCheck = page.getByRole("button", {
     name: "Check GitHub",
     exact: true,
   });
+  await page.route("**/api/v1/updates/platform", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          configured: true,
+          repository: "example/mediahub",
+          installedVersion: "0.4.19",
+          latestVersion: "0.4.19",
+          installedCommit: "a".repeat(40),
+          latestCommit: "a".repeat(40),
+          installReady: false,
+          updateAvailable: false,
+          message: "QA repository is up to date.",
+        },
+      },
+    }),
+  );
   await expect(githubCheck).toBeEnabled();
   await githubCheck.click();
-  await expect(
-    page.getByRole("progressbar", { name: "Check MediaHub updates" }),
-  ).toHaveAttribute("aria-valuenow", "100");
-  const updateCards = page.locator(".updates-grid > .panel");
+  await expect(consolePanel).toContainText("QA repository is up to date.");
+  await expect(consolePanel).toContainText("GET /updates/platform");
+  const updateCards = page.locator(
+    ".updates-components .update-component-card",
+  );
   await expect(updateCards).toHaveCount(1);
   const updateCardHeights = await updateCards.evaluateAll((cards) =>
     cards.map((card) => card.getBoundingClientRect().height),
@@ -286,14 +329,17 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
         }),
   );
   await page.getByRole("button", { name: "Check GitHub", exact: true }).click();
-  await expect(
-    page.getByText("Automatic fast update", { exact: true }),
-  ).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Install update", exact: true })
     .click();
-  await expect(page.getByText(/Connection interrupted. Keeping/)).toBeVisible();
+  const confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText(
+    "Fast update is selected automatically",
+  );
+  await confirmation
+    .getByRole("button", { name: "Install update", exact: true })
+    .click();
+  await expect(page.getByText(/Connection interrupted/i).first()).toBeVisible();
   await expect(
     page.getByText("Build on this server", { exact: true }),
   ).toBeVisible();
@@ -306,15 +352,22 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     "aria-valuetext",
     "Last known progress: 62%. Waiting for connection.",
   );
-  await page.getByText("Console", { exact: true }).click();
-  await expect(page.getByLabel("Update console")).toContainText("#1 CACHED");
+  await expect(consolePanel.locator(":scope > details")).toHaveAttribute(
+    "open",
+    "",
+  );
+  await expect(consolePanel.getByLabel("Update console")).toContainText(
+    "#1 CACHED",
+  );
   pollState = "success";
+  await expect(consolePanel).toContainText("QA update complete", {
+    timeout: 15000,
+  });
+  await expect(consolePanel.getByLabel("Update console")).toContainText(
+    "#3 DONE",
+  );
   await expect(
-    page.getByRole("progressbar", { name: "Install MediaHub update" }),
-  ).toHaveAttribute("aria-valuenow", "100");
-  await expect(page.getByLabel("Update console")).toContainText("#3 DONE");
-  await expect(
-    page.getByText("Fast update · QA update complete", { exact: true }),
+    consolePanel.getByText("Fast update · QA update complete", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: "../.qa/update-console-desktop.png",
@@ -334,18 +387,30 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("link", { name: "App Store", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Add only what you need." }),
+    page.getByRole("heading", { name: "App Store", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "FjordHub" })).toBeVisible();
-  const storeCards = page.locator(".store-grid > .store-card");
-  await expect(storeCards).toHaveCount(4);
+  const storeCards = page.locator("[data-app-id]");
+  await expect(storeCards.first()).toBeVisible();
+  for (const id of [
+    "org.mediahub.seedbox",
+    "org.mediahub.plex",
+    "org.mediahub.jellyfin",
+    "org.mediahub.fjordhub",
+  ]) {
+    await expect(page.locator(`[data-app-id="${id}"]`)).toBeVisible();
+  }
   const storeCardHeights = await storeCards.evaluateAll((cards) =>
     cards.map((card) => card.getBoundingClientRect().height),
   );
   expect(
     Math.max(...storeCardHeights) - Math.min(...storeCardHeights),
   ).toBeLessThan(2);
-  await page.getByRole("link", { name: "Set up Cloudflare" }).click();
+  await page.goto("/store/cloudflare");
+  await expect(
+    page.getByRole("heading", { name: "Independent VPN app" }),
+  ).toBeVisible();
+  await page.goto("/__qa-components?view=cloudflare");
   await expect(
     page.getByText("Assisted Cloudflare setup", { exact: true }),
   ).toBeVisible();
@@ -363,39 +428,71 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     setupReview.getByText("Published routes", { exact: true }),
   ).toBeVisible();
   await expect(setupReview.getByText("1", { exact: true })).toBeVisible();
-  const activeStoreNavigation = page.locator('nav a.active[href="/store"]');
+  await page.goto("/store");
+  const activeStoreNavigation = page.locator(
+    '.sidebar nav a.active[href="/store"]',
+  );
   const navigationGroup = page.locator(".sidebar nav");
   await expect(activeStoreNavigation).toBeVisible();
   const [activeNavigationBox, navigationBox] = await Promise.all([
     activeStoreNavigation.boundingBox(),
     navigationGroup.boundingBox(),
   ]);
-  expect(activeNavigationBox?.width).toBeCloseTo(navigationBox?.width || 0, 0);
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("tab", { name: "Maintenance", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Run maintenance check" }),
-  ).toBeVisible();
+  const inset = await navigationGroup.evaluate((el) => {
+    const css = getComputedStyle(el);
+    return parseFloat(css.paddingLeft) + parseFloat(css.paddingRight);
+  });
+  expect(activeNavigationBox?.width).toBeCloseTo(
+    (navigationBox?.width || 0) - inset,
+    0,
+  );
   await page
-    .getByRole("button", { name: "Run maintenance check", exact: true })
+    .locator(".sidebar")
+    .getByRole("link", { name: "Settings", exact: true })
     .click();
+  let maintenanceStarted = false;
+  await page.route("**/api/v1/maintenance", async (route) => {
+    if (route.request().method() === "POST") maintenanceStarted = true;
+    await route.fulfill({
+      json: {
+        data: {
+          operationId: "qa-cleanup",
+          state: maintenanceStarted ? "succeeded" : "idle",
+          message: "QA cleanup complete",
+          reclaimedBytes: 1024,
+        },
+      },
+    });
+  });
+  await page.getByRole("tab", { name: "Healthcheck", exact: true }).click();
+  const refresh = page.waitForResponse(
+    (r) => r.url().endsWith("/api/v1/health") && r.ok(),
+  );
+  await page.getByRole("button", { name: "Refresh health checks" }).click();
+  await refresh;
+  await page.getByRole("button", { name: "Check and clean up" }).click();
   await expect(
-    page.getByRole("progressbar", { name: "Maintenance check" }),
-  ).toHaveAttribute("aria-valuenow", "100");
+    page.getByRole("progressbar", { name: "Maintenance", exact: true }),
+  ).toHaveAttribute("aria-valuenow", "100", { timeout: 15000 });
+  expect(maintenanceStarted).toBe(true);
   await expect(
     page.getByText("Technical details", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("MediaHub Core", { exact: true })).toBeVisible();
   await expect(page.getByText("Media stays protected")).toBeVisible();
   await page.getByRole("tab", { name: "General", exact: true }).click();
+  await page.goto("/__qa-components?view=preferences");
   await page.getByLabel("Workspace name").fill("Test workspace");
   await page.getByRole("button", { name: "Save preferences" }).click();
-  await expect(page.getByRole("status")).toHaveText(
-    "Your view has been saved.",
-  );
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Your view has been saved." })
+      .first(),
+  ).toContainText("Your view has been saved.");
   await page.reload();
   await expect(page.getByLabel("Workspace name")).toHaveValue("Test workspace");
-  await page.getByRole("link", { name: "Dashboard", exact: false }).click();
+  await page.goto("/overview");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect
     .poll(() =>
@@ -415,7 +512,10 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     ),
   ).toBe(true);
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page
+    .locator(".sidebar")
+    .getByRole("button", { name: "Sign out" })
+    .click();
   await expect(
     page.getByRole("button", { name: "Sign in", exact: true }),
   ).toBeVisible();

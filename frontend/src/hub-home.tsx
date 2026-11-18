@@ -218,7 +218,7 @@ export function buildHubEntries({
       const status = statusUnavailable
         ? "unknown"
         : installed
-          ? installed.health.status
+          ? (installed.health?.status || "unknown")
           : integration
             ? integration.snapshot.stale
               ? "unknown"
@@ -264,7 +264,7 @@ export function buildHubEntries({
                   ? "Connected"
                   : "Check connection"
                 : "Complete setup",
-        statusDetail: statusUnavailable ? undefined : installed?.health.summary,
+        statusDetail: statusUnavailable ? undefined : installed?.health?.summary,
         action:
           appAddress || installed?.detailPath || integration
             ? "Open app"
@@ -327,12 +327,12 @@ export function buildHubEntries({
       status:
         appsError || mediavpnError
           ? "unknown"
-          : installed?.health.status || "unknown",
+          : installed?.health?.status || "unknown",
       statusLabel:
         appsError || mediavpnError
           ? "Status unavailable"
           : installed
-            ? appStatusLabel(installed.health.status)
+            ? appStatusLabel((installed.health?.status || "unknown"))
             : "Not set up",
       action: installed ? "Open app" : "Set up",
     });
@@ -408,6 +408,9 @@ export function HubHome({
     window.dispatchEvent(new Event("apps-changed"));
   }, []);
   const catalog = usePageSnapshot<CatalogApp[]>("/catalog");
+  const metadata = usePageSnapshot<AppInfo[]>("/apps?include_health=false");
+  const reloadMetadata = metadata.reload;
+  const registeredApps = apps ?? metadata.data;
   const deployment = usePageSnapshot<FjordHubInstallation | null>(
     "/fjordhub/deployment",
   );
@@ -420,6 +423,7 @@ export function HubHome({
   const [filter, setFilter] = useState("all");
   useEffect(() => {
     const refresh = () => {
+      reloadMetadata();
       reloadDeployment();
       reloadMediaSeed();
       reloadMediaVPN();
@@ -430,10 +434,10 @@ export function HubHome({
       window.removeEventListener("apps-changed", refresh);
       window.removeEventListener("integrations-changed", refresh);
     };
-  }, [reloadDeployment, reloadMediaSeed, reloadMediaVPN]);
+  }, [reloadMetadata, reloadDeployment, reloadMediaSeed, reloadMediaVPN]);
   const entries = buildHubEntries({
     catalog: catalog.data || [],
-    apps,
+    apps: registeredApps,
     appsError: appsError || (!live ? t("Reconnecting") : ""),
     integrations,
     integrationsError,
@@ -547,7 +551,7 @@ export function HubHome({
             </button>
           </div>
         )}
-        {!catalog.data && !catalog.error ? (
+        {(!catalog.data && !catalog.error) || (!registeredApps && !metadata.error && !appsError) ? (
           <div
             className="hub-app-grid"
             aria-busy="true"

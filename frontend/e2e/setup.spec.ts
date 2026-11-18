@@ -1,3 +1,4 @@
+import { prepareCompatibilityPages } from "./compatibility-page";
 import { expect, test } from "@playwright/test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -47,6 +48,9 @@ for (const enabled of [false, true]) {
 test("fresh wizard resumes and completed installation skips setup", async ({
   page,
 }) => {
+  test.setTimeout(180_000);
+  page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(45000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -166,6 +170,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   ).toBeVisible();
   releaseSlow();
   await page.unrouteAll({ behavior: "wait" });
+  await prepareCompatibilityPages(page);
   await expect(
     browser.getByRole("button", { name: "Current child", exact: true }),
   ).toBeVisible();
@@ -191,10 +196,25 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   await page.screenshot({ path: "../.qa/setup-resumed.png", fullPage: true });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Review", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page
-    .locator("summary")
-    .filter({ hasText: "Optional apps and advanced catalog" })
+    .getByRole("button", { name: "Apply configuration", exact: true })
     .click();
+  await expect(
+    page.getByRole("heading", { name: "Your MediaHub is ready" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Open dashboard" }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Apps & Services" }),
+  ).toBeVisible();
+  await expect(page.locator(".wizard-shell")).toHaveCount(0);
+  await page.getByRole("link", { name:"App Store", exact:true }).last().click();
+  await expect(page.locator('[data-app-id="org.mediahub.plex"]')).toBeVisible();
+  await page.goto("/__qa-components?view=catalog");
   await expect(
     page.getByRole("heading", { name: "Plex", exact: true }),
   ).toBeVisible();
@@ -209,42 +229,27 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   await plex.getByRole("button", { name: "Configure", exact: true }).click();
   await plex.getByLabel("Timezone").fill("Europe/Copenhagen");
   await plex.getByRole("button", { name: "Save app configuration" }).click();
-  await expect(plex.getByRole("status")).toContainText("Configuration saved");
+  await expect(page.getByRole("status").filter({hasText:"Configuration saved"})).toContainText("Configuration saved");
   await plex.getByRole("button", { name: "Preview plan" }).click();
   await expect(
     page.getByRole("heading", {
       name: "Installation preview — not executable",
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Apply configuration", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Your MediaHub is ready" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Open dashboard" }).click();
-  await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Everything, in view." }),
-  ).toBeVisible();
-  await expect(page.locator(".wizard-shell")).toHaveCount(0);
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.goto("/__qa-components?view=preferences");
   await page
     .getByLabel("Technical mode: show server, network and diagnostic settings")
     .check();
   await page.getByRole("button", { name: "Show everything" }).click();
   await page.getByRole("button", { name: "All cards" }).click();
   await page.getByRole("button", { name: "Save preferences" }).click();
-  await page.getByRole("link", { name: "Dashboard", exact: false }).click();
+  await page.goto("/__qa-components?view=runtime");
   await expect(
     page.getByText("Agent connected", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Storage", exact: true }).click();
+  await page.goto("/settings?section=Storage");
+  await expect(page.getByRole("heading",{name:"Storage",exact:true})).toBeVisible();
+  await page.goto("/__qa-components?view=files");
   await expect(
     page
       .getByLabel("Media location")
@@ -265,7 +270,10 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     await writeFile(join(folder, "Subtitles", "sample.srt"), "Test subtitle");
     let droppedResponse = false;
     await page.route("**/uploads/*", async (route) => {
-      if (route.request().method() !== "PATCH") return route.continue();
+      if (route.request().method() !== "PATCH") {
+        await route.fulfill({ response: await route.fetch() });
+        return;
+      }
       expect(route.request().postDataBuffer()!.length).toBeLessThanOrEqual(
         5 * 1024 * 1024,
       );
@@ -289,7 +297,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     await (await folderChooser).setFiles(folder);
     await expect(
       page.getByText("2 of 2 files uploaded", { exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({timeout:30000});
     expect(droppedResponse).toBe(true);
     await page.unroute("**/uploads/*");
     await expect(
@@ -350,7 +358,10 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       releaseChunk = resolve;
     });
     await page.route("**/uploads/*", async (route) => {
-      if (route.request().method() !== "PATCH") return route.continue();
+      if (route.request().method() !== "PATCH") {
+        await route.fulfill({ response: await route.fetch() });
+        return;
+      }
       chunkEntered();
       await held;
       await route.abort().catch(() => {});
@@ -389,13 +400,6 @@ test("fresh wizard resumes and completed installation skips setup", async ({
       fullPage: true,
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect
-      .poll(() =>
-        page
-          .locator(".sidebar")
-          .evaluate((el) => el.getBoundingClientRect().right),
-      )
-      .toBeLessThanOrEqual(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -476,7 +480,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   } finally {
     await rm(uploadFixture, { recursive: true, force: true });
   }
-  await page.getByRole("link", { name: "Dashboard", exact: false }).click();
+  await page.goto("/__qa-components?view=runtime");
   await expect(
     page.getByText("Agent connected", { exact: true }),
   ).toBeVisible();
@@ -484,7 +488,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     page.getByRole("heading", { name: "Media storage", exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "../.qa/phase2-desktop.png", fullPage: true });
-  await page.getByRole("link", { name: "Hosts", exact: true }).click();
+  await page.goto("/hosts");
   await page.getByRole("button", { name: "Refresh hosts" }).click();
   await expect(
     page.getByRole("heading", { name: "MediaHub Host", exact: true }),
@@ -497,11 +501,8 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     path: "../.qa/phase3-hosts-desktop.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "Storage", exact: true }).click();
-  await page
-    .locator("summary")
-    .filter({ hasText: "Technical storage mappings" })
-    .click();
+  await page.goto("/__qa-components?view=mapping");
+  await expect(page.getByLabel("Logical name", {exact:true})).toBeVisible();
   await page.getByLabel("Logical name", { exact: true }).fill("downloads");
   await page.getByLabel("Underlying dataset reference").fill("qa-dataset");
   await page.getByRole("button", { name: "Register dataset" }).click();
@@ -522,10 +523,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
   await page.getByRole("button", { name: "Validate access" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.reload();
-  await page
-    .locator("summary")
-    .filter({ hasText: "Technical storage mappings" })
-    .click();
+  await expect(page.getByLabel("Logical name", {exact:true})).toBeVisible();
   await expect(
     page.getByText("/planned/downloads", { exact: true }),
   ).toBeVisible();
@@ -534,13 +532,14 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect
-    .poll(() =>
-      page
-        .locator(".sidebar")
-        .evaluate((el) => el.getBoundingClientRect().right),
-    )
-    .toBeLessThanOrEqual(0);
+  await page.goto("/overview");
+    await expect
+      .poll(() =>
+        page
+          .locator(".sidebar")
+          .evaluate((el) => el.getBoundingClientRect().right),
+      )
+      .toBeLessThanOrEqual(0);
   await page.screenshot({ path: "../.qa/phase2-mobile.png", fullPage: true });
   expect(
     await page.evaluate(

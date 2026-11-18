@@ -257,7 +257,9 @@ class ManagedInstaller:
                     save_json(self.journal(package), job)
                 job.update(phase="health", progress=75, message="Checking app health")
                 save_json(self.journal(package), job)
-                for _ in range(45):
+                # A cold first launch can briefly exhaust Docker's initial probes.
+                # Preserve the deadline while allowing a running service to recover.
+                for _ in range(90):
                     rows = await self.manager.containers(package)
                     if len(rows) >= len(recipe["containers"]) and all(
                         r["State"].get("Running")
@@ -265,7 +267,7 @@ class ManagedInstaller:
                         for r in rows
                     ):
                         break
-                    if any(r["State"].get("Health", {}).get("Status") == "unhealthy" for r in rows):
+                    if any(r["State"].get("Status") in {"exited", "dead"} for r in rows):
                         raise DomainError(
                             "install_health_failed",
                             "App health check failed; app data was preserved",

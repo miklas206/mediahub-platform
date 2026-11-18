@@ -98,10 +98,16 @@ def test_install_reuses_approved_data_and_clears_removal_state(
 
     monkeypatch.setattr(svc.managed_apps, "docker", docker)
 
+    first_probe = True
+
     async def healthy_rows(package):
+        nonlocal first_probe
         if installer.journal(PACKAGE).exists():
             progress.append(installer.status(PACKAGE).get("progress", 0))
-        return [{"State": {"Running": True}}]
+            if first_probe and progress[-1] == 75:
+                first_probe = False
+                return [{"State": {"Running": True, "Health": {"Status": "unhealthy"}}}]
+        return [{"State": {"Running": True, "Health": {"Status": "healthy"}}}]
 
     monkeypatch.setattr(svc.managed_apps, "containers", healthy_rows)
     svc.managed_apps.journal(PACKAGE).write_text(json.dumps({"state": "succeeded"}))
@@ -115,6 +121,7 @@ def test_install_reuses_approved_data_and_clears_removal_state(
     assert installer.status(PACKAGE)["state"] == "succeeded"
     assert installer.status(PACKAGE)["progress"] == 100
     assert installer.status(PACKAGE)["phase"] == "complete"
+    assert not first_probe
     assert 75 in progress
     assert progress == sorted(progress)
     assert not svc.managed_apps.journal(PACKAGE).exists()
