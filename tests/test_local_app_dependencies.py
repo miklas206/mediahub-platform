@@ -565,7 +565,8 @@ def test_local_helper_reuses_only_matching_owned_image(monkeypatch):
         with pytest.raises(ValueError):
             module.owned_local_image(image, owners, project, service)
     monkeypatch.setattr(module, "run", lambda *args: json.dumps([{"Id": "sha256:" + "b" * 64}]))
-    with pytest.raises(ValueError):module.owned_local_image(image,[owner],'mediahub-mediaseed','conversion-worker')
+    with pytest.raises(ValueError):
+        module.owned_local_image(image, [owner], "mediahub-mediaseed", "conversion-worker")
 
 
 @pytest.mark.parametrize("fault", [None, "missing", "different", "readonly", "outside"])
