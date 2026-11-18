@@ -49,9 +49,7 @@ FIELDS.update({"sourceTimestamp", "selectedServer", "expectedGeneration"})
 
 @contextlib.contextmanager
 def cause(origin, reason):
-    token = operation.set(
-        {"operationId": uuid.uuid4().hex, "origin": origin, "reason": reason}
-    )
+    token = operation.set({"operationId": uuid.uuid4().hex, "origin": origin, "reason": reason})
     try:
         yield
     finally:
@@ -112,9 +110,7 @@ class Diagnostics:
                 continue
             if isinstance(value, (bool, int, float)):
                 safe[key] = value
-            elif isinstance(value, str) and re.fullmatch(
-                r"[A-Za-z0-9_.:, -]{1,180}", value
-            ):
+            elif isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:, -]{1,180}", value):
                 safe[key] = value
         if not re.fullmatch(r"[a-z][a-z0-9_.]{1,80}", event):
             return
@@ -123,9 +119,7 @@ class Diagnostics:
             now = time.monotonic()
             if now - self.repeated.get(marker, -60) < 60:
                 return
-            self.repeated = {
-                key: stamp for key, stamp in self.repeated.items() if now - stamp < 60
-            }
+            self.repeated = {key: stamp for key, stamp in self.repeated.items() if now - stamp < 60}
             self.repeated[marker] = now
         entry = {
             "timestamp": time.time(),
@@ -156,9 +150,7 @@ class Diagnostics:
         try:
             with self.connect() as db:
                 db.execute("INSERT INTO entries(body) VALUES (?)", (json.dumps(entry),))
-                db.execute(
-                    "DELETE FROM entries WHERE id <= (SELECT MAX(id)-2000 FROM entries)"
-                )
+                db.execute("DELETE FROM entries WHERE id <= (SELECT MAX(id)-2000 FROM entries)")
         except (OSError, sqlite3.Error):
             # Observability failure must not prevent a safety stop.
             logging.getLogger("mediahub.diagnostics").error(
@@ -276,7 +268,9 @@ class DockerObserver:
         }
         try:
             row = self.runtime.docker().containers.get(actor["ID"])
-            fields.update({key: value for key, value in container_fields(row).items() if value is not None})
+            fields.update(
+                {key: value for key, value in container_fields(row).items() if value is not None}
+            )
             if attrs.get("exitCode") is not None:
                 fields["exitCode"] = attrs["exitCode"]
             if attrs.get("org.mediahub.vpn.relay") in {
@@ -285,14 +279,9 @@ class DockerObserver:
             } and action.startswith("health_status:"):
                 result = row.exec_run(["wg", "show", "wg-hub", "latest-handshakes"])
                 if result.exit_code == 0:
-                    stamps = [
-                        int(line.split()[-1])
-                        for line in result.output.decode().splitlines()
-                    ]
+                    stamps = [int(line.split()[-1]) for line in result.output.decode().splitlines()]
                     fields["handshakeAge"] = (
-                        round(time.time() - max(stamps), 2)
-                        if stamps and max(stamps) > 0
-                        else -1
+                        round(time.time() - max(stamps), 2) if stamps and max(stamps) > 0 else -1
                     )
         except Exception:
             pass  # die/destroy attributes still survive a removal race.
@@ -312,7 +301,10 @@ class DockerObserver:
                     since=since,
                     until=int(time.time()) + 15,
                     decode=True,
-                    filters={"type": "container", "event": [*sorted(self.actions), "health_status"]},
+                    filters={
+                        "type": "container",
+                        "event": [*sorted(self.actions), "health_status"],
+                    },
                 )
                 for event in self.stream:
                     if stopping.is_set():

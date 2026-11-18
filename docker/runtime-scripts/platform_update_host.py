@@ -379,7 +379,11 @@ class HostUpdater:
                 try:
                     details = candidate.lstat()
                 except FileNotFoundError:
-                    if candidate.name in {"mediahub.db-wal", "mediahub.db-shm", "mediahub.db-journal"}:
+                    if candidate.name in {
+                        "mediahub.db-wal",
+                        "mediahub.db-shm",
+                        "mediahub.db-journal",
+                    }:
                         continue
                     raise
                 if stat.S_ISLNK(details.st_mode):
@@ -978,7 +982,9 @@ class HostUpdater:
             if time.monotonic() >= deadline:
                 raise TimeoutError("Database snapshot timed out")
 
-        with contextlib.closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as incoming:
+        with contextlib.closing(
+            sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
+        ) as incoming:
             with contextlib.closing(sqlite3.connect(target)) as outgoing:
                 incoming.backup(outgoing, pages=256, progress=progress, sleep=0.1)
                 outgoing.execute("PRAGMA journal_mode=DELETE")
@@ -1194,8 +1200,10 @@ class HostUpdater:
             shutil.rmtree(stage)
             backups = sorted(
                 (
-                    path for path in self.backups.iterdir()
-                    if not path.is_symlink() and path.is_dir()
+                    path
+                    for path in self.backups.iterdir()
+                    if not path.is_symlink()
+                    and path.is_dir()
                     and re.fullmatch(r"[a-f0-9]{32}(?:-attempt-[2-9][0-9]*)?", path.name)
                     and not (path / ".mediahub-rollback").is_symlink()
                     and (path / ".mediahub-rollback").is_file()
@@ -1408,14 +1416,22 @@ class HostUpdater:
         if isinstance(error, (HealthVerificationError, subprocess.SubprocessError, TimeoutError)):
             return True
         if isinstance(error, sqlite3.OperationalError):
-            return getattr(error, "sqlite_errorcode", None) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+            return getattr(error, "sqlite_errorcode", None) in (
+                sqlite3.SQLITE_BUSY,
+                sqlite3.SQLITE_LOCKED,
+            )
         return isinstance(error, OSError) and error.errno in {
-            errno.ENOENT, errno.EBUSY, errno.EAGAIN, errno.ETIMEDOUT, errno.ECONNRESET,
+            errno.ENOENT,
+            errno.EBUSY,
+            errno.EAGAIN,
+            errno.ETIMEDOUT,
+            errno.ECONNRESET,
         }
 
     def _retry_notice(self):
         self.status(
-            "building", 60,
+            "building",
+            60,
             f"Attempt {self.attempt}/{self.max_attempts} failed. "
             f"Retrying automatically ({self.attempt + 1}/{self.max_attempts}) in {10 * self.attempt} seconds",
         )
@@ -1489,7 +1505,9 @@ class HostUpdater:
             self._backup_preflight()
             services_stopped = True
             self._compose_command("stop", "-t", "30", *self.changed_roles, capture=False)
-            backup_destination = self.backups / (self.operation if self.attempt == 1 else f"{self.operation}-attempt-{self.attempt}")
+            backup_destination = self.backups / (
+                self.operation if self.attempt == 1 else f"{self.operation}-attempt-{self.attempt}"
+            )
             self._copy_configuration(backup_destination)
             backup = backup_destination
             self.steps[1 + offset]["state"] = "complete"
