@@ -51,12 +51,12 @@ describe("Plex GPU activity", () => {
       "Stopped",
     );
     const staleHtml = renderToStaticMarkup(<PlexGPUPanel report={stale} />);
-    expect(staleHtml).toContain("Status unavailable");
+    expect(staleHtml).toContain("Last observation");
     expect(staleHtml).not.toContain("Encoding now");
   });
 });
 
-it("shows live playback and job details only for a fresh observation", () => {
+it("retains playback details while marking the observation stale", () => {
   const gpu = {
     ...report.gpu!,
     activePlaybacks: 1,
@@ -73,7 +73,7 @@ it("shows live playback and job details only for a fresh observation", () => {
     <PlexGPUHistory
       playbacks={[...gpu.playbacks, { ...gpu.jobs[0], live: false }]}
       jobs={gpu.jobs}
-      fresh
+      hasObservation
     />,
   );
   expect(history).toContain("Previous film");
@@ -82,6 +82,7 @@ it("shows live playback and job details only for a fresh observation", () => {
   const stale = renderToStaticMarkup(
     <PlexGPUPanel report={{ ...report, gpu, observationHealth: "healthy" }} />,
   );
-  expect(stale).not.toContain("Example film");
+  expect(stale).toContain("Example film");
+  expect(stale).toContain("Last observation");
   expect(stale).not.toContain("Previous film");
 });

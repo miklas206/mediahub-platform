@@ -1,4 +1,5 @@
 {
+  "Last observation": "Seneste måling",
   "Updated at {time}": "Opdateret kl. {time}",
   "Active playbacks": "Afspilninger",
   "Active GPU jobs": "GPU-job",

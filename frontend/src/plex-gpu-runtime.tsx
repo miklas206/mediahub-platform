@@ -17,27 +17,31 @@ export function PlexGPUPanel({
   const [view, setView] = useState<"live" | "history" | "gpu">("live");
   const gpu = report.gpu;
   const url = safeAppUrl(report.url, "org.mediahub.plex-gpu-transcoder");
-  const fresh = report.available && !report.observationHealth;
-  const jobs = fresh ? gpu?.activeJobs : null;
-  const stopped = fresh && report.state === "stopped";
-  const encoding = !stopped && (jobs ?? 0) > 0;
-  const activity = stopped
-    ? t("Stopped")
-    : encoding
-      ? t("Encoding now")
-      : jobs === 0 && gpu?.linked
-        ? t("Ready · no active jobs")
-        : t("Status unavailable");
+  // Expiry and the next poll happen together. Retain the last layout while fetching.
+  const hasObservation = report.available;
+  const stale = hasObservation && !!report.observationHealth;
+  const jobs = hasObservation ? gpu?.activeJobs : null;
+  const stopped = hasObservation && report.state === "stopped";
+  const encoding = !stale && !stopped && (jobs ?? 0) > 0;
+  const activity = stale
+    ? t("Last observation")
+    : stopped
+      ? t("Stopped")
+      : encoding
+        ? t("Encoding now")
+        : jobs === 0 && gpu?.linked
+          ? t("Ready · no active jobs")
+          : t("Status unavailable");
   const checked =
-    fresh && report.observedAt
+    hasObservation && report.observedAt
       ? new Date(report.observedAt * 1000).toLocaleTimeString()
       : null;
   const value = (number: number | null | undefined, suffix = "") =>
     number == null ? t("Not observed") : `${Math.round(number)}${suffix}`;
   const overview = [
-    ["Active playbacks", fresh ? gpu?.activePlaybacks : null, ""],
+    ["Active playbacks", hasObservation ? gpu?.activePlaybacks : null, ""],
     ["Active GPU jobs", jobs, ""],
-    ["GPU encoder", fresh ? gpu?.encoderPercent : null, " %"],
+    ["GPU encoder", hasObservation ? gpu?.encoderPercent : null, " %"],
   ] as const;
   return (
     <div className="stack plex-gpu-view">
@@ -89,14 +93,14 @@ export function PlexGPUPanel({
           playbacks={gpu?.playbacks}
           count={gpu?.activePlaybacks}
           available={gpu?.playbackAvailable}
-          fresh={fresh}
+          hasObservation={hasObservation}
         />
       )}
       {view === "history" && (
         <PlexGPUHistory
           playbacks={gpu?.playbacks}
           jobs={gpu?.jobs}
-          fresh={fresh}
+          hasObservation={hasObservation}
         />
       )}
       <div hidden={view !== "gpu"}>
@@ -110,18 +114,22 @@ export function PlexGPUPanel({
                 </div>
                 <div className="runtime-row">
                   <dt>{t("GPU encoder")}</dt>
-                  <dd>{value(fresh ? gpu?.encoderPercent : null, " %")}</dd>
+                  <dd>
+                    {value(hasObservation ? gpu?.encoderPercent : null, " %")}
+                  </dd>
                 </div>
                 <div className="runtime-row">
                   <dt>{t("Graphics memory")}</dt>
                   <dd>
-                    {value(fresh ? gpu?.memoryUsedMiB : null)} /{" "}
-                    {value(fresh ? gpu?.memoryTotalMiB : null, " MiB")}
+                    {value(hasObservation ? gpu?.memoryUsedMiB : null)} /{" "}
+                    {value(hasObservation ? gpu?.memoryTotalMiB : null, " MiB")}
                   </dd>
                 </div>
                 <div className="runtime-row">
                   <dt>{t("Temperature")}</dt>
-                  <dd>{value(fresh ? gpu?.temperature : null, " °C")}</dd>
+                  <dd>
+                    {value(hasObservation ? gpu?.temperature : null, " °C")}
+                  </dd>
                 </div>
               </dl>
               <p className="muted">
@@ -143,7 +151,7 @@ export function PlexGPUPanel({
                   <dd>{jobs ?? t("Not observed")}</dd>
                 </div>
               </dl>
-              {fresh && gpu?.bufferSeconds != null && (
+              {hasObservation && gpu?.bufferSeconds != null && (
                 <p>
                   {t("Starting buffer: {seconds} sec.", {
                     seconds: Math.round(gpu.bufferSeconds),

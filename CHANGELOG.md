@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.88
+
+- Keep the Plex GPU page and expanded history in place when refreshing its playback status.
+
 ## 0.6.87
 
 - Organize Plex GPU into live playback, paged history and GPU views with a compact activity summary and playback times.

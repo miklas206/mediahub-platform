@@ -130,17 +130,17 @@ export function PlexGPUSessions({
   playbacks = [],
   count,
   available,
-  fresh,
+  hasObservation,
 }: {
   playbacks?: PlexGPUSession[];
   count?: number | null;
   available?: boolean | null;
-  fresh: boolean;
+  hasObservation: boolean;
 }) {
   const active = playbacks.filter((row) => row.live);
   return (
     <Panel title="Live Plex playbacks">
-      {!fresh ? (
+      {!hasObservation ? (
         <p>{t("Status unavailable")}</p>
       ) : available !== true ? (
         <p>{t("Plex playback details are unavailable")}</p>
@@ -162,11 +162,11 @@ export function PlexGPUSessions({
 export function PlexGPUHistory({
   playbacks = [],
   jobs = [],
-  fresh,
+  hasObservation,
 }: {
   playbacks?: PlexGPUSession[];
   jobs?: PlexGPUSession[];
-  fresh: boolean;
+  hasObservation: boolean;
 }) {
   const [showJobs, setShowJobs] = useState(false);
   const [limit, setLimit] = useState(10);
@@ -175,7 +175,7 @@ export function PlexGPUHistory({
     .sort((first, second) => (second.started ?? 0) - (first.started ?? 0));
   return (
     <Panel title="History">
-      {!fresh ? (
+      {!hasObservation ? (
         <p>{t("Status unavailable")}</p>
       ) : (
         <div className="stack">

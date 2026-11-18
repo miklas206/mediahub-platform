@@ -1348,7 +1348,7 @@ export function AppRuntimePage() {
         )}
       </div>
       <ErrorBox error={error} />
-      {data && stale && (
+      {data && stale && data.view !== "plex-gpu" && (
         <p role="status">
           {t(
             refreshing
