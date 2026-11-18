@@ -758,7 +758,7 @@
       "title": "Homepage"
     },
     "coreCompatibility": {
-      "default": ">=0.1.0.dev0,<0.2.0",
+      "default": ">=0.1.0.dev0,<1",
       "title": "Corecompatibility",
       "type": "string"
     },

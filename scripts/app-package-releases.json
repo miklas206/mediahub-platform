@@ -1,0 +1,20 @@
+{
+  "mediaupload": {
+    "app": "mediaupload",
+    "sha256": "006df7490bda4b38a22007bdab913acfdd15ebbab76479833fc74d25e09d0cc1",
+    "sourceCommit": "0281bfc40bf3ff8bb956ab17c066a423322ee3ec",
+    "version": "0.1.40"
+  },
+  "plex-gpu-transcoder": {
+    "app": "plex-gpu-transcoder",
+    "sha256": "a1621b92bf424c8e308e5b72e2b52f9010d1afbd5156b4fcc3559cbd4be19a4d",
+    "sourceCommit": "0cd5bb05c625cb2edc450d145cdf94d32d1f3040",
+    "version": "0.4.4"
+  },
+  "video-downloader": {
+    "app": "video-downloader",
+    "sha256": "0e9bae3bd427fe55138ff11e49bc09033f6721357fc84391329e1b55a3ba86a4",
+    "sourceCommit": "8666ffe39864f6d5d98815bcd9cd7a74334b54a0",
+    "version": "1.4.5"
+  }
+}

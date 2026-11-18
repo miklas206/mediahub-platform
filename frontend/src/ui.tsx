@@ -135,6 +135,7 @@ const ContainerAppPage = lazy(() =>
 const SecuritySettings = lazy(() =>
   import("./security").then((module) => ({ default: module.SecuritySettings })),
 );
+const PackageSetup = lazy(() => import("./app-package").then(module => ({ default: module.PackageSetup })));
 const FjordHubStorePage = lazy(() =>
   import("./store").then((module) => ({ default: module.FjordHubStorePage })),
 );
@@ -978,6 +979,8 @@ function Shell({
                     element={<FjordHubUninstallPage />}
                   />
                   <Route path="/store" element={<HubHome key="store" store apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />} />
+                  <Route path="/store/mediaupload" element={<PackageSetup app="mediaupload" />} />
+                  <Route path="/store/video-downloader" element={<PackageSetup app="video-downloader" />} />
                   <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
                   <Route path="/store/mediaseed" element={<ManagedAppInstallPage kind="mediaseed" />} />
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />

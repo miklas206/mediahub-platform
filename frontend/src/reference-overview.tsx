@@ -1,3 +1,4 @@
+import { safeAppUrl } from "./app-uptime";
 import { AppResourceOverview } from "./app-resources";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -118,7 +119,7 @@ export function ReferenceOverview({
   const seedApp = apps?.find((app) =>
     /org\.mediahub\.(mediaseed|seedbox)$/.test(app.packageId),
   );
-  const seedUrl = seedApp?.openUrl || seedApp?.externalUrl;
+  const seedUrl = safeAppUrl(seedApp?.openUrl) || safeAppUrl(seedApp?.externalUrl);
   return (
     <div className="reference-overview">
       <section className="overview-status" aria-label={t("System status")}>
@@ -189,19 +190,15 @@ export function ReferenceOverview({
             </div>
             {seedUrl ? (
               <a href={seedUrl} target="_blank" rel="noopener noreferrer">
-                {t("View all")} &rarr;
+                {t("Open MediaSeed")} &rarr;
               </a>
-            ) : (
-              <Link
-                to={
-                  seedApp
-                    ? `${seedApp.detailPath || `/apps/${seedApp.id}`}?section=torrents`
-                    : "/"
-                }
-              >
-                {t("View all")} &rarr;
+            ) : seedApp ? (
+              <Link to={`${seedApp.detailPath || `/apps/${seedApp.id}`}?section=torrents`}>
+                {t("View torrents")} &rarr;
               </Link>
-            )}
+            ) : apps && !failed ? (
+              <Link to="/store/mediaseed">{t("Set up MediaSeed")} &rarr;</Link>
+            ) : null}
           </header>
           <div className="overview-downloads">
             {downloads?.map((row) => (

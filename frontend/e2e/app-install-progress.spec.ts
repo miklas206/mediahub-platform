@@ -413,3 +413,37 @@ for (const language of ["en", "da"]) for (const width of [1440, 320]) test(`Unin
   expect(writes).toEqual(["/shared-vpn/orphans/verified-peer/cleanup"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
+
+for (const language of ["en", "da"])
+  for (const width of [320, 390, 1440]) {
+    test(`server package setup, translated controls and first login (${language}, ${width})`, async ({page}) => {
+      let queued = false, revealed = false;
+      await page.setViewportSize({width,height:850});
+      await mockHub(page, (path, route) => {
+        if (path === "/storage-control") return {locations:[{id:"movies",label:"Films",ready:true}]};
+        if (path === "/app-packages/mediaupload/first-login") {
+          expect(route.request().method()).toBe("POST");
+          revealed = true;
+          return {username:"admin",password:"fixture-password"};
+        }
+        if (path === "/app-packages/mediaupload") {
+          if (route.request().method() === "POST") {
+            expect(route.request().postDataJSON()).toEqual({location:"movies"});
+            queued = true;
+            return {state:"queued",operationId:"fixture"};
+          }
+          return {available:true,state:queued?"succeeded":"ready",operationId:queued?"fixture":"",version:queued?"0.1.40":"",firstLogin:queued&&!revealed};
+        }
+      },language);
+      await page.goto("/store/mediaupload");
+      await page.locator("main select").last().selectOption("movies");
+      const install = page.getByRole("button",{name:language==="da"?"Installer eller opdater MediaUpload":"Install or update MediaUpload",exact:true});
+      await install.focus();
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog").getByRole("button",{name:language==="da"?"Fortsæt":"Continue",exact:true}).click();
+      await expect(page.getByText(/0\.1\.40/)).toBeVisible();
+      await page.getByRole("button",{name:language==="da"?"Vis oplysninger til første login":"Show first login details"}).click();
+      await expect(page.getByText("fixture-password")).toBeVisible();
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+    });
+  }

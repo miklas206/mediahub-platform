@@ -196,6 +196,16 @@ def test_registry_duplicates_and_missing_dependency():
         registry.validate_dependencies()
 
 
+def test_registry_checks_installed_core_version():
+    registry = Registry()
+    for package in ("mediaseed", "mediavpn"):
+        registry.register(parse_manifest(ROOT / f"apps/{package}/manifest.yaml"))
+    data = manifest_data()
+    data["coreCompatibility"] = ">=99"
+    with pytest.raises(DomainError, match="incompatible"):
+        registry.register(Manifest.model_validate(data))
+
+
 def test_registry_cycle():
     registry = Registry()
     for name, dependency in [("one", "two"), ("two", "one")]:

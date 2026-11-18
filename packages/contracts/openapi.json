@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MediaHub API",
-    "version": "0.6.95"
+    "version": "0.6.96"
   },
   "paths": {
     "/api/v1/users": {
@@ -4179,7 +4179,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Selection"
+                "$ref": "#/components/schemas/mediahub__seedbox_rss_feeds__Selection"
               }
             }
           }
@@ -6257,6 +6257,140 @@
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/app-packages/{app}": {
+      "get": {
+        "summary": "Details",
+        "operationId": "details_api_v1_app_packages__app__get",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "plex-gpu-transcoder",
+                "video-downloader",
+                "mediaupload"
+              ],
+              "type": "string",
+              "title": "App"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Queue",
+        "operationId": "queue_api_v1_app_packages__app__post",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "plex-gpu-transcoder",
+                "video-downloader",
+                "mediaupload"
+              ],
+              "type": "string",
+              "title": "App"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/mediahub__app_packages__Selection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/app-packages/{app}/first-login": {
+      "post": {
+        "summary": "First Login",
+        "operationId": "first_login_api_v1_app_packages__app__first_login_post",
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "plex-gpu-transcoder",
+                "video-downloader",
+                "mediaupload"
+              ],
+              "type": "string",
+              "title": "App"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -11162,30 +11296,6 @@
         ],
         "title": "SeedboxInstallation"
       },
-      "Selection": {
-        "properties": {
-          "ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 20,
-            "minItems": 1,
-            "title": "Ids"
-          },
-          "startImmediately": {
-            "type": "boolean",
-            "title": "Startimmediately",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "ids"
-        ],
-        "title": "Selection"
-      },
       "ShareInput": {
         "properties": {
           "name": {
@@ -11759,6 +11869,20 @@
         ],
         "title": "Credentials"
       },
+      "mediahub__app_packages__Selection": {
+        "properties": {
+          "location": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_-]*$",
+            "title": "Location",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Selection"
+      },
       "mediahub__cloudflare_management__Credentials": {
         "properties": {
           "accountId": {
@@ -11782,6 +11906,30 @@
           "token"
         ],
         "title": "Credentials"
+      },
+      "mediahub__seedbox_rss_feeds__Selection": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Ids"
+          },
+          "startImmediately": {
+            "type": "boolean",
+            "title": "Startimmediately",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "Selection"
       },
       "mediahub__vpn_gateway__Credentials": {
         "properties": {

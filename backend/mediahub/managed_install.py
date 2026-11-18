@@ -61,6 +61,7 @@ class ManagedInstaller:
             or manifest.adapter.id != package
             or manifest.repository != f"https://github.com/{repository}"
             or manifest.updateSource.package != repository
+            or "coreCompatibility" not in manifest.model_fields_set
             or __version__ not in SpecifierSet(manifest.coreCompatibility)
         ):
             raise DomainError(

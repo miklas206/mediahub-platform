@@ -226,7 +226,7 @@ class Manifest(StrictModel):
     icon: str
     repository: str | None = None
     homepage: str | None = None
-    coreCompatibility: str = ">=0.1.0.dev0,<0.2.0"
+    coreCompatibility: str = ">=0.1.0.dev0,<1"
     settingsSchema: str | None = None
     images: dict[str, Image]
     services: dict[str, Service]

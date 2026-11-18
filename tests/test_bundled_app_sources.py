@@ -41,6 +41,9 @@ def test_reviewed_bundle_matches_manifest_and_relay_protocol():
 def test_compatibility_runtime_scripts_match_reviewed_host_helpers():
     root = Path(__file__).resolve().parents[1]
     for name in (
+        "app_package_fetch.py",
+        "app_package_host.py",
+        "app-package-releases.json",
         "prepare_local_apps.py",
         "prepare_managed_install.py",
         "platform_update_host.py",

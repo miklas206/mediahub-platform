@@ -4,6 +4,7 @@ from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from sqlalchemy import select
 
+from mediahub import __version__
 from mediahub.apps.manifest import Manifest, parse_manifest
 from mediahub.contracts import Health, HealthCheck
 from mediahub.db import InstalledApp
@@ -31,7 +32,7 @@ class Registry:
     def register(self, manifest: Manifest):
         if manifest.id in self.manifests:
             raise DomainError("duplicate_app", "App identifier is already registered")
-        if Version("0.1.0.dev0") not in SpecifierSet(manifest.coreCompatibility):
+        if Version(__version__) not in SpecifierSet(manifest.coreCompatibility):
             raise DomainError("incompatible_core", "App is incompatible with this Core version")
         self.manifests[manifest.id] = manifest
 

@@ -3,6 +3,7 @@ import { AppSettingsPage } from "./app-settings";
 import { PlexGPUPanel } from "./plex-gpu-runtime";
 import { useConfirm } from "./confirmation-dialog";
 import { translateText, getLocale, t } from "./i18n";
+import { PackageSetup } from "./app-package";
 import { NotificationPopup } from "./notification-popup";
 import { useRuntimeSnapshot } from "./use-service-snapshot";
 
@@ -1131,6 +1132,7 @@ export function AppRuntimePage({ apps, appsError }: { apps?: AppInfo[]; appsErro
           ) : (
             <p>{t("Optional GPU acceleration requires a compatible NVIDIA GPU. A server administrator can install the extension on this Plex host. Plex can also run on its own.")}</p>
           )}
+          {!!apps && !appsError && <PackageSetup app="plex-gpu-transcoder" installed={!!gpuExtension} />}
         </Panel>
       )}
       {data?.view === "plex" && <PlexAccountSetup />}

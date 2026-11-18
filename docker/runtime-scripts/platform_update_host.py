@@ -152,13 +152,18 @@ class HostUpdater:
 
     @staticmethod
     def _run_command(args, capture, environment):
+        timeout = 1800 if args[:2] == ["docker", "build"] else 600
+        if args[:4] == ["systemd-run", "--quiet", "--wait", "--collect"] and args[4].startswith(
+            "--unit=mediahub-app-package-"
+        ):
+            timeout = 3000
         result = subprocess.run(
             args,
             check=True,
             text=True,
             stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
             stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
-            timeout=1800 if args[:2] == ["docker", "build"] else 600,
+            timeout=timeout,
             env=environment,
         )
         output = result.stdout or ""
@@ -1353,6 +1358,56 @@ class HostUpdater:
         finally:
             running.unlink(missing_ok=True)
 
+    def _app_package(self, request):
+        app = request.get("app")
+        operation = request.get("operationId")
+        location = request.get("location")
+        if (
+            set(request) != {"action", "app", "operationId", "location"}
+            or app not in ("plex-gpu-transcoder", "video-downloader", "mediaupload")
+            or not isinstance(operation, str)
+            or not re.fullmatch(r"[0-9a-f]{32}", operation)
+            or not isinstance(location, str)
+            or not re.fullmatch(r"[a-zA-Z0-9_-]{0,100}", location)
+        ):
+            raise ValueError("Invalid app package request")
+        script = self.root / "app_package_host.py"
+        for name in ("app_package_host.py", "app_package_fetch.py", "app-package-releases.json"):
+            path = self.root / name
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                raise ValueError("App package controller ownership changed")
+        running = self.updates / ("package-running-" + operation + ".json")
+        os.replace(self.updates / "request.json", running)
+        try:
+            self.command(
+                "systemd-run",
+                "--quiet",
+                "--wait",
+                "--collect",
+                "--unit=mediahub-app-package-" + app,
+                "/usr/bin/python3",
+                str(script),
+                str(self.root),
+                app,
+                operation,
+                location,
+            )
+        except subprocess.SubprocessError:
+            status_path = self.updates / ("package-" + app + ".json")
+            status = self._read_json(status_path) if status_path.exists() else {}
+            if status.get("operationId") != operation or status.get("state") != "failed":
+                self._atomic_json(
+                    status_path,
+                    {
+                        "state": "failed",
+                        "operationId": operation,
+                        "message": "The host could not start the installer.",
+                    },
+                )
+        finally:
+            running.unlink(missing_ok=True)
+
     def _prepare_storage(self, request):
         if (
             set(request) != {"action", "operationId"}
@@ -1400,6 +1455,9 @@ class HostUpdater:
             fcntl.flock(lock, fcntl.LOCK_EX)
             request_path = self.updates / "request.json"
             request_data = self._read_json(request_path, 65536) if request_path.exists() else {}
+            if request_data.get("action") == "app_package":
+                self._app_package(request_data)
+                return
             if request_data.get("action") == "storage_prepare":
                 self._prepare_storage(request_data)
                 return

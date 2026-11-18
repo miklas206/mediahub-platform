@@ -80,6 +80,14 @@ def fingerprint(source=SOURCE):
             source / "scripts/prepare_managed_install.py",
             source / "scripts/platform_update_host.py",
             source / "scripts/storage_host.py",
+            *(
+                source / "scripts" / name
+                for name in (
+                    "app_package_host.py",
+                    "app_package_fetch.py",
+                    "app-package-releases.json",
+                )
+            ),
             source / "scripts/app_storage_host.py",
         )
         if p.is_file()
@@ -744,6 +752,20 @@ def prepare_storage_host(root, lan, source, locations):
     if capabilities.is_symlink():
         raise ValueError("Unsafe host capability metadata")
     value = json.loads(capabilities.read_text()) if capabilities.exists() else {}
+    for name in ("app_package_host.py", "app_package_fetch.py", "app-package-releases.json"):
+        package_source = source / "scripts" / name
+        if not package_source.is_file() or package_source.is_symlink():
+            break
+        fd, temporary = tempfile.mkstemp(prefix=".app-package-", dir=root)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(package_source.read_bytes())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, root / name)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+    else:
+        value["publicAppPackages"] = True
     value["storageController"] = True
     value["storageControllerRevision"] = hashlib.sha256(content + module_content).hexdigest()
     capabilities.write_text(json.dumps(value))

@@ -450,6 +450,10 @@ export function HubHome({
   });
   const cards: HubEntry[] = [
     ...entries,
+    ...(store ? [
+      {id: "org.mediahub.mediaupload", name: "MediaUpload", description: "Prepare media and upload attachments from a read-only library.", category: "Media", path: "/store/mediaupload"},
+      {id: "org.mediahub.video-downloader", name: "Video Downloader", description: "Download videos to a folder on your server.", category: "Downloads", path: "/store/video-downloader"},
+    ].map(entry => ({...entry, configured:false, status:"available", statusLabel:"Server package", action:"Install and update"})) : []),
     {
       id: "healthcheck",
       name: "Healthcheck",
@@ -660,7 +664,9 @@ export function HubHome({
                   )}
                 </div>
                 {entry.extensionPath && (
-                  <Link to={entry.extensionPath}>{t("Plex extension: GPU Transcoder")}</Link>
+                  <Link className="hub-card-extension" to={entry.extensionPath}>
+                    {t("Plex extension: GPU Transcoder")}
+                  </Link>
                 )}
                 {entry.removableApp && (
                   <AppUninstall

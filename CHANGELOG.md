@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.96
+
+- Add install and update actions for verified MediaUpload and Video Downloader server packages and the optional NVIDIA extension on an installed Plex server.
+- Improve translated card actions, keyboard focus and the MediaSeed overview link.
+- Check app manifests against the installed Core version and require managed recipes to declare compatibility.
+
 ## 0.6.95
 
 - Complete Plex and Jellyfin removal when the optional VPN is absent and no profile assignment is pending. Keep removal blocked for an unavailable configured VPN.
