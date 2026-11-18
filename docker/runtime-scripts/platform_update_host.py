@@ -1395,7 +1395,9 @@ class HostUpdater:
         self.backups.mkdir(mode=0o700, exist_ok=True)
         lock_path = self.updates / "host-updater.lock"
         with lock_path.open("a+") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # Optional app preparation also holds this lock during image builds.
+            # Keep the path-triggered request pending until its owner finishes.
+            fcntl.flock(lock, fcntl.LOCK_EX)
             request_path = self.updates / "request.json"
             request_data = self._read_json(request_path, 65536) if request_path.exists() else {}
             if request_data.get("action") == "storage_prepare":

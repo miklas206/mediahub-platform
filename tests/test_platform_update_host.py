@@ -357,6 +357,33 @@ def test_unrelated_version_mismatch_is_actionable_and_never_stops_services(tmp_p
     assert not any("stop" in args for args in commands)
 
 
+def test_update_waits_for_app_preparation_then_consumes_request(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    fcntl = pytest.importorskip("fcntl")
+    updater, root, commands = fixture(tmp_path, monkeypatch)
+    waiting = Event()
+
+    def acquire(handle, flags):
+        assert flags == fcntl.LOCK_EX
+        waiting.set()
+        fcntl.flock(handle, flags)
+
+    monkeypatch.setattr(host_module.fcntl, "flock", acquire)
+    monkeypatch.setattr(host_module.fcntl, "LOCK_EX", fcntl.LOCK_EX)
+    monkeypatch.setattr(host_module.fcntl, "LOCK_NB", fcntl.LOCK_NB)
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        with (updater.updates / "host-updater.lock").open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            job = workers.submit(updater.process)
+            assert waiting.wait(timeout=5)
+            assert not commands
+        job.result(timeout=10)
+    assert (root / "installed-version").read_text().strip() == "0.4.0"
+    assert json.loads((updater.updates / "status.json").read_text())["state"] == "succeeded"
+
+
 def test_successful_transaction_updates_both_images_and_trusted_version(tmp_path, monkeypatch):
     updater, root, commands = fixture(tmp_path, monkeypatch)
     updater.process()

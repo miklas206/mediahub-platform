@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.93
+
+- Wait for optional app preparation to release the host update lock before processing a queued platform update. This keeps the systemd path watcher available during long first-install builds.
+
 ## 0.6.92
 
 - Jellyfin installation now accepts fresh and existing shared storage policies containing the Other media category. The installer offers only supported Jellyfin slots and retains the existing mount and access checks.
