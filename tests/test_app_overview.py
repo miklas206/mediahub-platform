@@ -2,9 +2,8 @@ import json
 import time
 
 import httpx
-from sqlalchemy import select
-
 from mediahub.db import Setting
+from sqlalchemy import select
 from test_sso import configure
 
 
@@ -37,7 +36,6 @@ def test_overview_uses_short_lived_scoped_grant_and_cleans_it_up(logged_in, monk
 
 def test_denied_app_never_requested(logged_in, monkeypatch):
     configure(logged_in)
-    svc = logged_in.app.state.services
     own = logged_in.get("/api/auth/me").json()["data"]["id"]
     logged_in.put(f"/api/users/{own}", json={"username": "tester", "appRoles": {"org.mediahub.mediaseed": "denied"}}).raise_for_status()
     def no_client(**kwargs):

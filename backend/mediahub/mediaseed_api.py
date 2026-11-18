@@ -1,5 +1,5 @@
-import json
 import asyncio
+import json
 import secrets
 import ssl
 import time
@@ -8,13 +8,13 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import delete, select
 
 from mediahub.api import authenticated, result, services
-from mediahub.managed_apps import unavailable
 from mediahub.auth import COOKIE, digest
 from mediahub.db import Session, Setting
 from mediahub.errors import DomainError
-from sqlalchemy import delete, select
+from mediahub.managed_apps import unavailable
 
 router = APIRouter()
 

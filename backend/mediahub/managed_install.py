@@ -14,8 +14,8 @@ from sqlalchemy import select
 
 from agent.install_files import read_json, save_json
 from mediahub import __version__
-from mediahub.app_updates import REPOSITORIES
 from mediahub.api import administrator, result, services
+from mediahub.app_updates import REPOSITORIES
 from mediahub.contracts import StrictModel
 from mediahub.db import InstalledApp
 from mediahub.errors import DomainError

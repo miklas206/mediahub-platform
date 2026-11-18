@@ -6,9 +6,10 @@ from sqlalchemy import select
 
 
 def test_runtime_summary_exposes_start_and_addresses(logged_in):
+    from datetime import datetime, timedelta, timezone
     from unittest.mock import AsyncMock
+
     from mediahub.contracts import Health
-    from datetime import datetime, timezone, timedelta
 
     svc = logged_in.app.state.services
     app = svc.apps.list()[0]
@@ -39,6 +40,7 @@ def test_runtime_summary_exposes_start_and_addresses(logged_in):
 def test_invalid_runtime_start_is_unknown(logged_in, start):
     import asyncio
     from unittest.mock import AsyncMock
+
     from mediahub.app_settings import runtime_summary
 
     svc = logged_in.app.state.services
