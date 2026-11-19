@@ -166,7 +166,8 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     fullPage: true,
   });
   await expect(page.locator(".sidebar nav a[href='/apps']")).toHaveCount(0);
-  await expect(page.locator(".sidebar nav a[href='/store']")).toBeVisible();
+  await expect(page.locator(".sidebar nav a[href='/store']")).toHaveCount(0);
+  await expect(page.locator(".sidebar nav a[href='/']").first()).toBeVisible();
   await page.goto("/__qa-components?view=apps");
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
@@ -423,13 +424,13 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   ).toBeVisible();
   await expect(setupReview.getByText("1", { exact: true })).toBeVisible();
   await page.goto("/store");
-  const activeStoreNavigation = page.locator(
-    '.sidebar nav a.active[href="/store"]',
-  );
+  const activeAppsNavigation = page.locator(
+    '.sidebar nav a.active[href="/"]',
+  ).first();
   const navigationGroup = page.locator(".sidebar nav");
-  await expect(activeStoreNavigation).toBeVisible();
+  await expect(activeAppsNavigation).toBeVisible();
   const [activeNavigationBox, navigationBox] = await Promise.all([
-    activeStoreNavigation.boundingBox(),
+    activeAppsNavigation.boundingBox(),
     navigationGroup.boundingBox(),
   ]);
   const inset = await navigationGroup.evaluate((el) => {

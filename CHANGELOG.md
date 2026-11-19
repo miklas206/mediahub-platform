@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.97
+## 0.6.98
 
 - Combine installed applications and installation options on the Apps page. Existing setup links continue to work.
 - Show catalog cards while installation metadata and health checks load. Keep card order stable as status changes.
