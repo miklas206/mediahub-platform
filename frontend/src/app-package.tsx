@@ -12,7 +12,7 @@ const names = {
   mediaupload: "MediaUpload",
   "video-downloader": "Video Downloader",
 };
-type Status = {
+export type PackageStatus = {
   firstLogin?: boolean;
   url?: string;
   available: boolean;
@@ -36,7 +36,7 @@ export function PackageSetup({
   installed?: boolean;
 }) {
   const endpoint = "/app-packages/" + app;
-  const state = usePageSnapshot<Status>(endpoint, 3000);
+  const state = usePageSnapshot<PackageStatus>(endpoint, 3000);
   const confirm = useConfirm();
   const [location, setLocation] = useState("");
   const [sending, setSending] = useState(false);

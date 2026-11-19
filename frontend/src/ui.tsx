@@ -61,7 +61,6 @@ import {
   Server,
   Settings2,
   ShieldCheck,
-  Store,
   Terminal,
   Wrench,
   X,
@@ -146,9 +145,8 @@ const FjordHubUninstallPage = lazy(() =>
 );
 
 const navigation = [
-  ["/", "Home", LayoutDashboard],
+  ["/", "Apps", LayoutDashboard],
   ["/apps", "Apps", Box],
-  ["/store", "App Store", Store],
   ["/overview", "Overview", ActivityIcon],
   ["/maintenance", "Healthcheck", ShieldCheck],
   ["/storage", "Storage", HardDrive],
@@ -163,7 +161,6 @@ const navigation = [
 
 const simpleNavigation: NavigationPath[] = [
   "/",
-  "/store",
   "/storage",
   "/maintenance",
   "/updates",
@@ -605,7 +602,7 @@ function Shell({
       : runtimePage
         ? activeApp?.name || "App runtime"
         : storePage
-          ? "App Store"
+          ? "Apps"
           : location.pathname.startsWith("/app-settings/") ? "App status" : "Home");
   return (
     <div className="app-shell">
@@ -624,7 +621,7 @@ function Shell({
         <p className="nav-label">MEDIAHUB</p>
         <nav>
           {navigation
-            .filter(([path]) => ["/", "/store", "/overview", "/settings"].includes(path))
+            .filter(([path]) => ["/", "/overview", "/settings"].includes(path))
             .filter(([path]) => visibleNavigation.includes(path) || (path === "/apps" && (runtimePage || location.pathname.startsWith("/integrations/"))))
             .filter(([path]) => advancedMode || path !== "/hosts")
             .map(([path, label, Icon]) =>
@@ -660,7 +657,7 @@ function Shell({
                           (app) =>
                             app.detailPath &&
                             !app.isMock &&
-                            app.packageId !== "org.mediahub.windows-share",
+                            !["org.mediahub.windows-share", "org.mediahub.plex-gpu-transcoder"].includes(app.packageId),
                         )
                         .sort((left, right) =>
                           left.name.localeCompare(right.name),
@@ -858,12 +855,12 @@ function Shell({
                 ...navigation
                   .filter(
                     ([path]) =>
-                      ["/", "/store", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
+                      ["/", "/overview", "/settings"].includes(path) && visibleNavigation.includes(path) &&
                       (advancedMode || path !== "/hosts"),
                   )
                   .map(([path, label]) => ({ path, label: t(label) })),
                 ...(navigationApps || [])
-                  .filter((a) => a.detailPath)
+                  .filter((a) => a.detailPath && a.packageId !== "org.mediahub.plex-gpu-transcoder")
                   .map((a) => ({
                     path: a.detailPath!,
                     label: translateText(a.name),
@@ -978,7 +975,7 @@ function Shell({
                     path="/store/fjordhub/uninstall"
                     element={<FjordHubUninstallPage />}
                   />
-                  <Route path="/store" element={<HubHome key="store" store apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />} />
+                  <Route path="/store" element={<Navigate to="/" replace />} />
                   <Route path="/store/mediaupload" element={<PackageSetup app="mediaupload" />} />
                   <Route path="/store/video-downloader" element={<PackageSetup app="video-downloader" />} />
                   <Route path="/store/mediavpn" element={<MediaVPNSetupPage />} />
@@ -986,7 +983,7 @@ function Shell({
                   <Route path="/app-settings/:packageId" element={<AppSettingsPage />} />
                   <Route
                     path="/"
-                    element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} updates={updateSummary?.count} live={live} />}
+                    element={<HubHome apps={navigationApps} appsError={navigationAppsError} integrations={navigationIntegrations} integrationsError={navigationIntegrationState.error} live={live} />}
                   />
                   <Route path="/maintenance" element={<Navigate to="/settings?section=Healthcheck" replace />} />
                   <Route
@@ -1438,7 +1435,7 @@ function Logs() {
         <select value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="core">{t("MediaHub Core")}</option>
           {apps
-            ?.filter((a) => a.detailPath)
+            ?.filter((a) => a.detailPath && a.packageId !== "org.mediahub.plex-gpu-transcoder")
             .map((a) => (
               <option value={a.id} key={a.id}>
                 {a.name}
@@ -1645,7 +1642,7 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="choice-grid">
-              {navigation.filter(([path]) => ["/", "/store", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
+              {navigation.filter(([path]) => ["/", "/overview", "/settings"].includes(path)).map(([path, label, Icon]) => {
                 const required = path === "/" || path === "/settings";
                 return (
                   <label className="choice-card" key={path}>

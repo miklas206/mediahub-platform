@@ -1,3 +1,4 @@
+import type { PackageStatus } from "./app-package";
 import { usePageSnapshot } from "./use-service-snapshot";
 import { StopAppButton } from "./app-controls";
 import { useCallback, useEffect, useState } from "react";
@@ -274,8 +275,7 @@ export function buildHubEntries({
                 ? "View setup"
                 : "Set up",
       };
-    })
-    .sort((left, right) => Number(right.configured) - Number(left.configured));
+    });
   if (mediavpn?.configured && mediavpn.url && URL.canParse(mediavpn.url)) {
     const address = new URL(mediavpn.url);
     if (
@@ -383,8 +383,7 @@ export function buildHubEntries({
         startedAt: app?.startedAt,
         observedAt: app?.observedAt,
       };
-    })
-    .sort((left, right) => Number(right.configured) - Number(left.configured));
+    });
 }
 
 export function HubHome({
@@ -393,15 +392,12 @@ export function HubHome({
   integrations,
   integrationsError,
   live,
-  store = false,
 }: {
   apps: AppInfo[] | undefined;
   appsError: string;
   integrations: Integration[];
   integrationsError: string;
-  updates: number | undefined;
   live: boolean;
-  store?: boolean;
 }) {
   const appearance = useAppearance();
   const onAppRemoved = useCallback(() => {
@@ -416,6 +412,8 @@ export function HubHome({
   );
   const mediaseed = usePageSnapshot<MediaSeedStatus>("/mediaseed/status");
   const mediavpn = usePageSnapshot<MediaSeedStatus>("/mediavpn/status");
+  const mediaUpload = usePageSnapshot<PackageStatus>("/app-packages/mediaupload");
+  const videoDownloader = usePageSnapshot<PackageStatus>("/app-packages/video-downloader");
   const reloadDeployment = deployment.reload;
   const reloadMediaSeed = mediaseed.reload;
   const reloadMediaVPN = mediavpn.reload;
@@ -450,10 +448,25 @@ export function HubHome({
   });
   const cards: HubEntry[] = [
     ...entries,
-    ...(store ? [
-      {id: "org.mediahub.mediaupload", name: "MediaUpload", description: "Prepare media and upload attachments from a read-only library.", category: "Media", path: "/store/mediaupload"},
-      {id: "org.mediahub.video-downloader", name: "Video Downloader", description: "Download videos to a folder on your server.", category: "Downloads", path: "/store/video-downloader"},
-    ].map(entry => ({...entry, configured:false, status:"available", statusLabel:"Server package", action:"Install and update"})) : []),
+    ...([
+      ["mediaupload", "MediaUpload", "Prepare media and upload attachments from a read-only library.", "Media", mediaUpload],
+      ["video-downloader", "Video Downloader", "Download videos to a folder on your server.", "Downloads", videoDownloader],
+    ] as const).map(([id, name, description, category, snapshot]) => {
+      const url = safeAppUrl(snapshot.data?.url);
+      const configured = snapshot.data?.state === "succeeded" && Boolean(url);
+      return {
+        id: "org.mediahub." + id,
+        name,
+        description,
+        category,
+        path: "/store/" + id,
+        configured,
+        localUrl: configured ? url : undefined,
+        status: configured ? "builtin" : "unknown",
+        statusLabel: configured ? "Installed" : snapshot.error ? "Status unavailable" : "Server package",
+        action: configured ? "Manage app" : "Install and update",
+      };
+    }),
     {
       id: "healthcheck",
       name: "Healthcheck",
@@ -466,7 +479,7 @@ export function HubHome({
       action: "Open healthcheck",
     },
   ];
-  const listed = store ? cards.filter((entry) => entry.id !== "healthcheck") : cards;
+  const listed = cards.sort((left, right) => left.name.localeCompare(right.name, "en") || left.id.localeCompare(right.id));
   const visible = listed.filter(
     (entry) =>
       (filter === "all" ||
@@ -485,9 +498,9 @@ export function HubHome({
   return (
     <div className="hub-home">
       <header className="reference-page-title">
-        <h1>{store ? t("App Store") : t("Apps & Services")}</h1>
-        <p>{store ? t("Find apps to install or manage on this server.") : t("Install, configure and manage your media stack.")}</p>
-        {store ? <Link to="/settings?section=Updates">{t("Updates")}</Link> : <Link to="/store">{t("App Store")}</Link>}
+        <h1>{t("Apps & Services")}</h1>
+        <p>{t("Install, configure and manage your media stack.")}</p>
+        <Link to="/settings?section=Updates">{t("Updates")}</Link>
       </header>
       <section className="hub-app-section" aria-label={t("Apps & Services")}>
         <label className="hub-search">
@@ -547,6 +560,8 @@ export function HubHome({
                 deployment.reload();
                 mediaseed.reload();
                 mediavpn.reload();
+                mediaUpload.reload();
+                videoDownloader.reload();
                 window.dispatchEvent(new Event("apps-changed"));
                 window.dispatchEvent(new Event("integrations-changed"));
               }}
@@ -555,7 +570,7 @@ export function HubHome({
             </button>
           </div>
         )}
-        {(!catalog.data && !catalog.error) || (!registeredApps && !metadata.error && !appsError) ? (
+        {!catalog.data && !catalog.error ? (
           <div
             className="hub-app-grid"
             aria-busy="true"

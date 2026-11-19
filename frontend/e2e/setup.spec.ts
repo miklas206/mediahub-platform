@@ -212,7 +212,7 @@ test("fresh wizard resumes and completed installation skips setup", async ({
     page.getByRole("heading", { name: "Apps & Services" }),
   ).toBeVisible();
   await expect(page.locator(".wizard-shell")).toHaveCount(0);
-  await page.getByRole("link", { name:"App Store", exact:true }).last().click();
+  await page.getByRole("link", { name:"Apps", exact:true }).last().click();
   await expect(page.locator('[data-app-id="org.mediahub.plex"]')).toBeVisible();
   await page.goto("/__qa-components?view=catalog");
   await expect(

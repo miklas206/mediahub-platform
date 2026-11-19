@@ -183,7 +183,7 @@ export function ControlSummary({
       detail: qbit
         ? `${bytes(qbit.downloadSpeed)}/s`
         : t(seedbox ? "Waiting for service status" : "Seedbox not installed"),
-      to: seedbox ? `/apps/${seedbox.id}?section=torrents` : "/store",
+      to: seedbox ? `/apps/${seedbox.id}?section=torrents` : "/",
       status:
         seedbox && qbit
           ? effectiveServiceStatus(

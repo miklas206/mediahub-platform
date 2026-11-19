@@ -1494,7 +1494,8 @@ test("saved appearance survives navigation reload and language changes in dark l
   });
   await page
     .locator(".sidebar")
-    .getByRole("link", { name: translated("App Store"), exact: true })
+    .getByRole("link", { name: translated("Apps"), exact: true })
+    .first()
     .click();
   await expect.poll(() => appearanceColors(page)).toEqual(dark);
   await page.goto("/settings");

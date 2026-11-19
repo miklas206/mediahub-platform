@@ -65,7 +65,6 @@ function home(apps: AppInfo[]) {
         appsError=""
         integrations={[]}
         integrationsError=""
-        updates={0}
         live
       />
     </MemoryRouter>,

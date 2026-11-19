@@ -260,7 +260,7 @@ test("discard restores saved theme and palette changes retain its layout and mot
     .locator(".theme-choice")
     .filter({ hasText: "Midnight Glass" })
     .click();
-  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await page.getByRole("link", { name: "Apps", exact: true }).first().click();
   await expect(page.locator("html")).toHaveAttribute("data-look", "soft-orbit");
   await expect(page.locator("html")).toHaveAttribute(
     "data-reduced-motion",

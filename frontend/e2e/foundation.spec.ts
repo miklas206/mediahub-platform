@@ -385,9 +385,9 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
     ),
   ).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole("link", { name: "App Store", exact: true }).click();
+  await page.getByRole("link", { name: "Apps", exact: true }).first().click();
   await expect(
-    page.getByRole("heading", { name: "App Store", exact: true }),
+    page.getByRole("heading", { name: "Apps & Services", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "FjordHub" })).toBeVisible();
   const storeCards = page.locator("[data-app-id]");
@@ -400,12 +400,6 @@ test("login, dashboard, SSE, mock lifecycle, settings and logout", async ({
   ]) {
     await expect(page.locator(`[data-app-id="${id}"]`)).toBeVisible();
   }
-  const storeCardHeights = await storeCards.evaluateAll((cards) =>
-    cards.map((card) => card.getBoundingClientRect().height),
-  );
-  expect(
-    Math.max(...storeCardHeights) - Math.min(...storeCardHeights),
-  ).toBeLessThan(2);
   await page.goto("/store/cloudflare");
   await expect(
     page.getByRole("heading", { name: "Independent VPN app" }),

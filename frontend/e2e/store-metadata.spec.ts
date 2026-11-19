@@ -42,7 +42,7 @@ for (const viewport of [
   { width: 1440, height: 1000 },
   { width: 390, height: 844 },
 ]) {
-  test(`store metadata renders while full health is pending (${viewport.width}px)`, async ({
+  test(`app order holds as metadata and health arrive (${viewport.width}px)`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -83,6 +83,7 @@ for (const viewport of [
           fullCompleted = true;
           data = installed.map((app) => ({
             ...app,
+            localUrl: "https://plex.example.test:32400",
             health: {
               status: "healthy",
               summary: "Ready",
@@ -133,10 +134,16 @@ for (const viewport of [
       await expect(page.locator("[data-app-id]")).toHaveCount(0);
       await expect.poll(() => fullRequests).toBeGreaterThan(0);
       releaseCatalog();
-      await expect(page.getByLabel("Loading apps…")).toBeVisible();
+      await expect(page).toHaveURL(/\/$/);
       const plex = page.locator('[data-app-id="org.mediahub.plex"]');
       const seed = page.locator('[data-app-id="org.mediahub.seedbox"]');
-      await expect(plex).toHaveCount(0);
+      await expect(plex).toBeVisible();
+      await expect(seed).toBeVisible();
+      await expect(page.getByRole("link", { name: "App Store", exact: true })).toHaveCount(0);
+      const order = () => page.locator("[data-app-id]").evaluateAll(cards => cards.map(card => card.getAttribute("data-app-id")));
+      const initialOrder = await order();
+      expect(initialOrder).toContain("org.mediahub.video-downloader");
+      expect(initialOrder).toContain("org.mediahub.mediaupload");
       releaseMetadata();
       await expect(plex.getByRole("heading", { name: "Plex" })).toBeVisible();
       await expect(plex).toHaveClass(/configured/);
@@ -152,6 +159,11 @@ for (const viewport of [
       releaseIntegrations();
       await expect(page.getByLabel("Loading apps…")).toHaveCount(0);
       expect(fullCompleted).toBe(false);
+      expect(await order()).toEqual(initialOrder);
+      releaseHealth();
+      await expect.poll(() => fullCompleted).toBe(true);
+      await expect(plex.getByRole("link", { name: "Open app · Plex" })).toHaveAttribute("href", "https://plex.example.test:32400/web/index.html");
+      expect(await order()).toEqual(initialOrder);
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
